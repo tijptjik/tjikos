@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+import os
+from pathlib import Path
+import sys
+
+root = Path(__file__).resolve().parent.parent
+if not (root / "qml/shell.qml").exists():
+    root = Path(os.environ.get("NOTJIK_HOME", str(Path.home() / ".local/lib/notjik")))
+sys.path.insert(0, str(root))
+from notjik import launch
+
+raise SystemExit(launch(root, sys.argv[1:]))

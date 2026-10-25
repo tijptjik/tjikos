@@ -1,0 +1,14 @@
+[Unit]
+Description=notjik Quickshell notification system
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.Notifications
+ExecStart=%h/.local/bin/notjik
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
