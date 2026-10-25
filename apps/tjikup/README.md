@@ -96,8 +96,22 @@ Commands receive `TJIKUP_REPORT_FILE` (a temporary TSV report), `TJIKUP_COLUMNS`
 `stage<TAB>icon<TAB>subject<TAB>note<NEWLINE>` records. Use `✓` for completion,
 `!` for a warning, and `✗` for failure. Never put tabs/newlines or credentials
 into those fields. The runner owns report creation, summary, one completion
-notification and cleanup. Notifications include subjects, never raw command
-output or notes. Set `TJIKUP_NOTIFY=0` to disable them. Direct Kitty SSH
+notification and cleanup. Notifications include subjects and structured dirty-file
+counts, never raw command output or other notes. Local runs prefer a native Notjik
+status card with failure/warning counts and elapsed time/stage count. Up to three
+issues list their stage and tool in the card body, failures first, followed by a
+count of any remaining issues. Dirty repositories use friendly names and file
+counts (for example, `Dirty Chezmoi — 48 files`); this is a warning, not a failed
+tool. A single dirty repository instead places its name at the left of the status
+row and its file count at the right, with elapsed time and stage count in the body.
+The generic runner failure summary is omitted when specific failures are
+available. On Hyprland, a Show window action
+returns to the launching window captured from process ancestry before the run.
+Lua dispatch is detected, with the legacy dispatcher retained for older releases.
+This activates the application window, not a particular editor panel or terminal
+tab. Ambiguous or unavailable windows omit the action. Clean cards expire after ten
+seconds; issue cards remain until dismissed. `notify-send` is the fallback when
+Notjik is unavailable. Set `TJIKUP_NOTIFY=0` to disable them. Direct Kitty SSH
 sessions notify the originating desktop; detached/headless jobs stay silent.
 
 Python scripts optionally import `tjikup.runtime` (the runner exposes its own
@@ -113,7 +127,8 @@ no change to tjikup is required.
 ## Notifications over SSH
 
 A direct Kitty SSH terminal receives completion notifications on the computer
-running Kitty. Remote titles include the hostname. Use `ssh -t HOST tjikup`
+running Kitty. Remote titles include the hostname; the Focus button activates
+the originating Kitty terminal. Use `ssh -t HOST tjikup`
 for one-line commands; interactive SSH sessions already allocate a terminal.
 The connection must remain open until completion. The local installation
 provides the `tjikup-notification` icon. No remote `notify-send`, reverse SSH,

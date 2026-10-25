@@ -41,11 +41,13 @@ class SSHNotificationTests(unittest.TestCase):
     def test_remote_result_is_encoded_and_host_labelled(self):
         output = self.capture()
         frames = re.findall(r'\x1b\]99;([^;]*);([A-Za-z0-9+/=]*)\x1b\\', output)
-        self.assertEqual(len(frames), 2)
+        self.assertEqual(len(frames), 3)
         metadata = [dict(field.split('=', 1) for field in row[0].split(':')) for row in frames]
         self.assertEqual(metadata[0]['i'], metadata[1]['i'])
         self.assertEqual(metadata[0]['d'], '0')
-        self.assertEqual(metadata[1]['d'], '1')
+        self.assertEqual(metadata[1]['d'], '0')
+        self.assertEqual(metadata[2]['d'], '1')
+        self.assertEqual(base64.b64decode(frames[2][1]), b'Focus')
         self.assertEqual(metadata[0]['a'], '-report')
         self.assertEqual(metadata[0]['u'], '1')
         self.assertEqual(base64.b64decode(metadata[0]['n']), b'tjikup-notification')

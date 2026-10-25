@@ -235,11 +235,12 @@ def main():
 
 def cli():
     global ACTIVE_REPORT_FILE
-    from .notifications import notify_completion
+    from .notifications import capture_focus_command, notify_completion
 
     ACTIVE_REPORT_FILE = None
     previous_report = os.environ.get("TJIKUP_REPORT_FILE")
     started = time.monotonic()
+    focus_command = capture_focus_command()
     interrupted = False
     try:
         result = main()
@@ -271,6 +272,7 @@ def cli():
                 time.monotonic() - started,
                 dry_run="--dry-run" in sys.argv[1:],
                 interrupted=interrupted,
+                focus_command=focus_command,
             )
     finally:
         if ACTIVE_REPORT_FILE:
