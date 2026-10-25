@@ -80,7 +80,7 @@ def fixtures(root, name):
             filename, format, media_kind = {
                 "sticker":("demo-sticker.png","png","sticker"),
                 "animated-sticker":("demo-animated-sticker.gif","gif","sticker"),
-                "gif":("demo-animation.mp4","video","animation"),
+                "gif":("demo-robot-dog.gif","gif","animation"),
                 "animated-emoji":("demo-animated-sticker.gif","gif","emoji"),
             }[kind]
             data.update(kind=media_kind,source=(root/"examples"/filename).as_uri(),format=format,width=128,height=128)
