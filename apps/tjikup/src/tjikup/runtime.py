@@ -298,7 +298,7 @@ def report_summary(report_file, *, dry_run=False):
                 f"\033[1;38;2;{colors[index % len(colors)]}m{character}\033[0m"
                 for index, character in enumerate(message)
             )
-    print(f"\n{padding}{message}", flush=True)
+    print(f"\n{padding}{message}\n", flush=True)
     if issues:
         section_header("Preview issues" if dry_run else "Issues")
         # Do not append the summary to its own report.

@@ -29,6 +29,7 @@ class RuntimeTests(unittest.TestCase):
                                 runtime.report_summary(report)
                             lines = output.getvalue().splitlines()
                             banner = lines[1]
+                            self.assertEqual(lines[2], "")
                             plain = re.sub(r"\x1b\[[0-9;]*m", "", banner)
                             message = "NEEDS ATTENTION" if content else "ALL SYSTEMS GO"
                             self.assertEqual(plain, " " * ((width - len(message)) // 2) + message)
