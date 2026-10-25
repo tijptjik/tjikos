@@ -1,0 +1,47 @@
+{
+  "theme": "monochrome",
+  "style": {},
+  "placement": {
+    "monitors": "primary",
+    "edge": "b",
+    "position": "c",
+    "offsetX": 0,
+    "offsetY": -24,
+    "margin": 16,
+    "perMonitor": {
+      "2": {
+        "edge": "t",
+        "position": "r",
+        "offsetX": "-2%",
+        "offsetY": "2%"
+      }
+    },
+    "primaryMonitor": ""
+  },
+  "timeouts": {
+    "low": 5,
+    "normal": 8,
+    "critical": 0
+  },
+  "pauseOnHover": true,
+  "maxVisible": 5,
+  "maxQueued": 100,
+  "history": {
+    "enabled": true,
+    "maxEvents": 10000,
+    "logTransient": false,
+    "drawerLimit": 100
+  },
+  "components": {},
+  "grouping": {
+    "enabled": true,
+    "windowSeconds": 120
+  },
+  "privacy": {
+    "lockScreen": "hide"
+  },
+  "stack": {
+    "animationMs": 220,
+    "heightPercent": 75
+  }
+}

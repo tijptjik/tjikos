@@ -1,0 +1,622 @@
+{
+  "generator": "Built-in image_gen",
+  "style": "Square full-bleed cover illustration for an 80px-wide left strip in a desktop notification. Original robot HEAD AND SHOULDERS PORTRAIT, large central head and upper torso. CRITICAL: robot faces SCREEN RIGHT, nose/visor pointing to the right edge, gaze directed right toward notification text; show its left cheek and left side in a clear right-facing three-quarter/profile view, NEVER facing left or staring at viewer. Keep the face within the central 60% so a narrow portrait crop preserves the eye and nose. Same cohesive art style across collection: Moebius-inspired 1960s/1970s French science-fiction bande dessinee, delicate confident black ink contours, FLAT hand-coloured shapes, sparse fine hatching, subtle paper grain, simplified elegant forms, quiet surreal charm. Strong readable silhouette at thumbnail size. No painterly brushwork, 3D render, shiny photographic lighting, gradients, bloom, dense greebles, text, logos, frame or watermark. Background a very spare alien horizon in dark muted tones compatible with a plum-purple desktop, subordinate to the portrait. No weapons. Subject and palette for this unique image: ",
+  "robots": [
+    {
+      "id": "01",
+      "name": "bronze-age",
+      "description": "Bronze Age imagined automaton; hammered bronze ceremonial head, turquoise enamel eye, lapis inlays, simple squared jaw",
+      "palette": "oxidized teal, bronze, parchment and midnight plum",
+      "file": "robot-01-bronze-age.png"
+    },
+    {
+      "id": "02",
+      "name": "greek",
+      "description": "ancient Greek Talos-inspired bronze guardian; strong geometric brow, sculpted cheek, narrow luminous eye slit, no human skin",
+      "palette": "verdigris, terracotta, pale gold and aubergine",
+      "file": "robot-02-greek.png"
+    },
+    {
+      "id": "03",
+      "name": "roman",
+      "description": "Roman aqueduct maintenance automaton; riveted rounded iron head, architectural brow, ivory ceramic cheek plates",
+      "palette": "iron blue, ivory, muted brick and dark violet",
+      "file": "robot-03-roman.png"
+    },
+    {
+      "id": "04",
+      "name": "astronomer",
+      "description": "medieval astronomical clock automaton; brass crescent brow, circular mechanical eye, tiny engraved star markings",
+      "palette": "antique brass, ink blue, parchment and muted coral",
+      "file": "robot-04-astronomer.png"
+    },
+    {
+      "id": "05",
+      "name": "renaissance",
+      "description": "Renaissance workshop mechanical scholar; wooden and brass head, simple hinged jaw, elegant articulated neck",
+      "palette": "walnut brown, warm cream, verdigris and plum",
+      "file": "robot-05-renaissance.png"
+    },
+    {
+      "id": "06",
+      "name": "porcelain",
+      "description": "eighteenth-century porcelain automaton; ivory enamel face shell, delicate cobalt edging, brass ear mechanism",
+      "palette": "ivory, cobalt, dusty rose and deep indigo",
+      "file": "robot-06-porcelain.png"
+    },
+    {
+      "id": "07",
+      "name": "clockwork",
+      "description": "Victorian clockwork messenger; rounded copper head, monocular glass eye, visible single clockwork neck gear",
+      "palette": "copper, bottle green, pale mint and purple-black",
+      "file": "robot-07-clockwork.png"
+    },
+    {
+      "id": "08",
+      "name": "steam",
+      "description": "Victorian steam-era station porter; chunky boiler-shaped head, little chimney-like crown, kind oval optical window",
+      "palette": "soot navy, muted ochre, pale turquoise and maroon",
+      "file": "robot-08-steam.png"
+    },
+    {
+      "id": "09",
+      "name": "art-nouveau",
+      "description": "1900 Art Nouveau garden automaton; smooth elongated head, sweeping botanical metal contours, almond eye",
+      "palette": "sage green, cream, mauve and dark aubergine",
+      "file": "robot-09-art-nouveau.png"
+    },
+    {
+      "id": "10",
+      "name": "telegraph",
+      "description": "1900 telegraph operator robot; wood-and-bakelite rectangular head, large brass receiver ear, simple glass lens",
+      "palette": "oxblood, ochre, buff cream and ink purple",
+      "file": "robot-10-telegraph.png"
+    },
+    {
+      "id": "11",
+      "name": "silent-cinema",
+      "description": "1920s silent-cinema robot; angular silver head, sculptural cheek planes, expressionless round optical eye",
+      "palette": "silver gray, dusty lilac, pale yellow and midnight blue",
+      "file": "robot-11-silent-cinema.png"
+    },
+    {
+      "id": "12",
+      "name": "art-deco",
+      "description": "1920s Art Deco elevator attendant; stepped geometric helmet, streamlined bronze nose ridge, oval eye",
+      "palette": "champagne gold, petrol teal, cream and dark plum",
+      "file": "robot-12-art-deco.png"
+    },
+    {
+      "id": "13",
+      "name": "dieselpunk",
+      "description": "1930s diesel-era mechanic robot; heavy rounded steel head, enamel patches, thick collar, no weapons",
+      "palette": "slate blue, mustard, pale salmon and charcoal violet",
+      "file": "robot-13-dieselpunk.png"
+    },
+    {
+      "id": "14",
+      "name": "bakelite",
+      "description": "1930s bakelite radio robot; glossy-form but flat-coloured walnut head shell, broad speaker jaw, amber dial eye",
+      "palette": "warm brown, faded orange, mint cream and deep purple",
+      "file": "robot-14-bakelite.png"
+    },
+    {
+      "id": "15",
+      "name": "streamliner",
+      "description": "1930s streamliner conductor robot; aerodynamic teardrop helmet, sweeping cheek trim, one bright eye",
+      "palette": "cream, burgundy, silver blue and ink navy",
+      "file": "robot-15-streamliner.png"
+    },
+    {
+      "id": "16",
+      "name": "expedition",
+      "description": "1930s polar expedition robot; rounded insulated head casing, single oversized goggle lens, sturdy collar",
+      "palette": "ice blue, orange ochre, off-white and dusk purple",
+      "file": "robot-16-expedition.png"
+    },
+    {
+      "id": "17",
+      "name": "riveter",
+      "description": "1940s factory riveting assistant; simple riveted forehead plate, broad square jaw, circular optic",
+      "palette": "steel gray, rust red, pale sage and midnight violet",
+      "file": "robot-17-riveter.png"
+    },
+    {
+      "id": "18",
+      "name": "vacuum-tube",
+      "description": "1940s vacuum-tube computing robot; clear dome crown with three broad tube shapes, blocky ceramic face",
+      "palette": "amber, celadon, warm ivory and aubergine",
+      "file": "robot-18-vacuum-tube.png"
+    },
+    {
+      "id": "19",
+      "name": "submarine",
+      "description": "1940s deep-sea exploration robot; brass diving-bell head, round side porthole eye, heavy neck ring",
+      "palette": "oxidized copper, pale aqua, coral and deep indigo",
+      "file": "robot-19-submarine.png"
+    },
+    {
+      "id": "20",
+      "name": "railway",
+      "description": "1940s railway signal technician robot; angular enamel head, large green optical lens, stout iron collar",
+      "palette": "muted forest green, cream, brick red and slate violet",
+      "file": "robot-20-railway.png"
+    },
+    {
+      "id": "21",
+      "name": "tin-toy",
+      "description": "1950s tin toy-inspired robot, dignified rather than childish; box head with rounded corners, simple circular eye, striped neck joint",
+      "palette": "faded red, pale turquoise, butter yellow and dark plum",
+      "file": "robot-21-tin-toy.png"
+    },
+    {
+      "id": "22",
+      "name": "atomic",
+      "description": "1950s atomic-age service robot; round bubble helmet, smiling geometric mouth slot, broad shoulders",
+      "palette": "turquoise, ivory, atomic orange and navy purple",
+      "file": "robot-22-atomic.png"
+    },
+    {
+      "id": "23",
+      "name": "raygun",
+      "description": "1950s pulp-space explorer robot; streamlined finned helmet, narrow visor, conical neck collar, no weapons",
+      "palette": "lavender, pale gold, dusty coral and dark teal",
+      "file": "robot-23-raygun.png"
+    },
+    {
+      "id": "24",
+      "name": "diner",
+      "description": "1950s roadside diner helper robot; smooth enamel dome, chrome-trimmed optical eye, scalloped collar",
+      "palette": "mint, cream, cherry red and charcoal plum",
+      "file": "robot-24-diner.png"
+    },
+    {
+      "id": "25",
+      "name": "sputnik",
+      "description": "1950s orbital research robot; spherical metallic head with side optic and short swept-back aerials",
+      "palette": "pale silver, faded saffron, petrol blue and violet",
+      "file": "robot-25-sputnik.png"
+    },
+    {
+      "id": "26",
+      "name": "lunar",
+      "description": "1960s lunar survey robot; rounded ivory head, gold visor slit, accordion neck, simple crater horizon",
+      "palette": "chalk ivory, dusty orange, moon gray and deep purple",
+      "file": "robot-26-lunar.png"
+    },
+    {
+      "id": "27",
+      "name": "space-age",
+      "description": "1960s space-age domestic robot; oval pale shell, large dark faceplate, asymmetrical circular ear",
+      "palette": "pale peach, turquoise, marigold and ink indigo",
+      "file": "robot-27-space-age.png"
+    },
+    {
+      "id": "28",
+      "name": "mod",
+      "description": "1960s mod-design courier robot; bold geometric head, circular optic within clean black surround, sculptural neck",
+      "palette": "cream, vermilion, cobalt and dark plum",
+      "file": "robot-28-mod.png"
+    },
+    {
+      "id": "29",
+      "name": "mainframe",
+      "description": "1960s mainframe librarian robot; rectangular cream head, magnetic-reel side ear, fine horizontal mouth grille",
+      "palette": "warm cream, sage, orange rust and midnight blue",
+      "file": "robot-29-mainframe.png"
+    },
+    {
+      "id": "30",
+      "name": "psychedelic",
+      "description": "1960s psychedelic exploration robot; organic rounded head with two simple flowing enamel bands, calm optical eye",
+      "palette": "soft magenta, apricot, pale cyan and deep violet",
+      "file": "robot-30-psychedelic.png"
+    },
+    {
+      "id": "31",
+      "name": "desert",
+      "description": "1970s desert wandering robot; elongated ceramic head, weathered cheek panel, fabric-like collar drawn in ink",
+      "palette": "sand cream, terracotta, faded turquoise and plum",
+      "file": "robot-31-desert.png"
+    },
+    {
+      "id": "32",
+      "name": "cassette",
+      "description": "1970s cassette-futurist technician; boxy olive head, orange optical eye, one simple tape-window temple",
+      "palette": "olive, ochre, burnt orange and dark violet",
+      "file": "robot-32-cassette.png"
+    },
+    {
+      "id": "33",
+      "name": "orbital",
+      "description": "1970s orbital station custodian; bulky rounded orange head shell, dark wide visor, chunky ivory collar",
+      "palette": "burnt orange, cream, sage and deep indigo",
+      "file": "robot-33-orbital.png"
+    },
+    {
+      "id": "34",
+      "name": "botanical",
+      "description": "1970s ecological research robot; gently curved green shell, clear round optical eye, leaf-shaped side panel",
+      "palette": "moss green, pale pink, cream and aubergine",
+      "file": "robot-34-botanical.png"
+    },
+    {
+      "id": "35",
+      "name": "ceramic",
+      "description": "1970s avant-garde ceramic robot; sculptural asymmetrical ivory head, black optical aperture, coral ear disc",
+      "palette": "ivory, coral, pale blue and plum black",
+      "file": "robot-35-ceramic.png"
+    },
+    {
+      "id": "36",
+      "name": "analog-synth",
+      "description": "1970s analog synthesizer robot; dark wood-sided rectangular head, amber optic, two broad dial shapes at temple",
+      "palette": "walnut, amber, desaturated teal and deep violet",
+      "file": "robot-36-analog-synth.png"
+    },
+    {
+      "id": "37",
+      "name": "crt",
+      "description": "1980s CRT terminal robot; chunky monitor-shaped head with glass-green faceplate, side-mounted luminous eye",
+      "palette": "gray beige, phosphor green, rose and ink purple",
+      "file": "robot-37-crt.png"
+    },
+    {
+      "id": "38",
+      "name": "industrial-arm",
+      "description": "1980s industrial assembly robot; compact angular head, yellow enamel casing, large single camera eye",
+      "palette": "mustard yellow, graphite, pale salmon and indigo",
+      "file": "robot-38-industrial-arm.png"
+    },
+    {
+      "id": "39",
+      "name": "cassette-walkman",
+      "description": "1980s portable-audio courier robot; compact blue shell, large circular headphone-like ear, orange visor",
+      "palette": "cobalt, apricot, pale mint and midnight plum",
+      "file": "robot-39-cassette-walkman.png"
+    },
+    {
+      "id": "40",
+      "name": "arcade",
+      "description": "1980s arcade maintenance robot; angular magenta cheek shell, black faceplate, simple cyan eye",
+      "palette": "dusty magenta, cyan, ivory and navy purple",
+      "file": "robot-40-arcade.png"
+    },
+    {
+      "id": "41",
+      "name": "rescue",
+      "description": "1980s rescue robot; broad red protective helmet-shaped casing, large optical lens, cream segmented neck",
+      "palette": "faded red, cream, steel turquoise and dark violet",
+      "file": "robot-41-rescue.png"
+    },
+    {
+      "id": "42",
+      "name": "orbital-shuttle",
+      "description": "1980s space-shuttle assistant; white tile-like helmet segments, charcoal faceplate, small amber eye",
+      "palette": "white ivory, charcoal blue, muted coral and plum",
+      "file": "robot-42-orbital-shuttle.png"
+    },
+    {
+      "id": "43",
+      "name": "beige-computer",
+      "description": "1990s desktop-computer assistant robot; beige plastic wedge-shaped head, friendly rectangular eye display, vented side panel",
+      "palette": "beige, muted blue, terracotta and dark plum",
+      "file": "robot-43-beige-computer.png"
+    },
+    {
+      "id": "44",
+      "name": "translucent",
+      "description": "1990s translucent-plastic robot; simplified translucent teal head casing in flat colour, violet internal silhouette, one amber optic",
+      "palette": "sea-glass teal, lilac, pale apricot and deep purple",
+      "file": "robot-44-translucent.png"
+    },
+    {
+      "id": "45",
+      "name": "mecha-civilian",
+      "description": "1990s civilian construction mecha robot; strong angular helmet, broad white cheek plates, bright single eye, no weapons",
+      "palette": "cream, cobalt, muted yellow and aubergine",
+      "file": "robot-45-mecha-civilian.png"
+    },
+    {
+      "id": "46",
+      "name": "portable-console",
+      "description": "1990s handheld-electronics robot; rounded lilac head, small green optical panel, circular charcoal ear",
+      "palette": "lilac, sage, graphite and pale peach",
+      "file": "robot-46-portable-console.png"
+    },
+    {
+      "id": "47",
+      "name": "y2k",
+      "description": "2000 Y2K exploration robot; smooth sculpted silver shell, cobalt cheek inset, thin amber eye slit",
+      "palette": "silver lavender, cobalt, pale orange and dark plum",
+      "file": "robot-47-y2k.png"
+    },
+    {
+      "id": "48",
+      "name": "rover",
+      "description": "2000s Mars rover-inspired upright robot; compact camera-mast head, two optical housings facing right, cable-like neck",
+      "palette": "rust orange, ivory, cool gray and violet night",
+      "file": "robot-48-rover.png"
+    },
+    {
+      "id": "49",
+      "name": "humanoid",
+      "description": "2000s research humanoid; rounded white polymer head, large dark eye visor, simple blue ear disc",
+      "palette": "chalk white, dusty blue, salmon and aubergine",
+      "file": "robot-49-humanoid.png"
+    },
+    {
+      "id": "50",
+      "name": "solar",
+      "description": "2000s solar field caretaker; yellow ceramic face casing, broad indigo visor, small panel-textured collar",
+      "palette": "ochre, indigo, pale teal and cream",
+      "file": "robot-50-solar.png"
+    },
+    {
+      "id": "51",
+      "name": "maker",
+      "description": "2010s maker-built robot; layered plywood cheek shells, simple round camera eye, exposed but sparse brass joint",
+      "palette": "plywood cream, coral, teal and midnight plum",
+      "file": "robot-51-maker.png"
+    },
+    {
+      "id": "52",
+      "name": "medical",
+      "description": "2010s medical helper robot; soft rounded mint shell, warm oval eye, white articulated neck",
+      "palette": "mint, warm ivory, peach and deep indigo",
+      "file": "robot-52-medical.png"
+    },
+    {
+      "id": "53",
+      "name": "underwater",
+      "description": "2010s ocean conservation robot; smooth coral-orange head casing, wide circular blue lens, shell-like collar",
+      "palette": "coral orange, seafoam, pale lavender and dark navy",
+      "file": "robot-53-underwater.png"
+    },
+    {
+      "id": "54",
+      "name": "delivery",
+      "description": "2020s city delivery robot imagined upright; compact rounded charcoal head, amber eye bar, pale protective cheek bumper",
+      "palette": "charcoal violet, apricot, pale sage and cream",
+      "file": "robot-54-delivery.png"
+    },
+    {
+      "id": "55",
+      "name": "soft-robot",
+      "description": "2020s soft-robotics assistant; rounded flexible ivory head with broad pleated cheek, almond optic",
+      "palette": "ivory, dusty rose, sage and deep purple",
+      "file": "robot-55-soft-robot.png"
+    },
+    {
+      "id": "56",
+      "name": "recycled",
+      "description": "2020s recycled-material robot; mismatched but elegant broad enamel head plates, single large lens, kind silhouette",
+      "palette": "rust, muted turquoise, cream and aubergine",
+      "file": "robot-56-recycled.png"
+    },
+    {
+      "id": "57",
+      "name": "solarpunk",
+      "description": "near-future solarpunk gardener robot; smooth terracotta head with green enamel brow, elegant lens eye",
+      "palette": "terracotta, leaf green, pale peach and violet",
+      "file": "robot-57-solarpunk.png"
+    },
+    {
+      "id": "58",
+      "name": "arctic-future",
+      "description": "near-future arctic science robot; tall insulated lavender-white head, narrow amber optic, broad collar",
+      "palette": "ice lavender, butter yellow, slate blue and plum",
+      "file": "robot-58-arctic-future.png"
+    },
+    {
+      "id": "59",
+      "name": "interstellar",
+      "description": "far-future interstellar navigator; long elegant ivory head, dark celestial-blue faceplate, golden eye",
+      "palette": "ivory, ultramarine, pale gold and muted rose",
+      "file": "robot-59-interstellar.png"
+    },
+    {
+      "id": "60",
+      "name": "monastic",
+      "description": "far-future monastic archive robot; serene elongated ceramic face, narrow lens eye, layered hood-like metal crown",
+      "palette": "dusty violet, parchment, turquoise and deep brown",
+      "file": "robot-60-monastic.png"
+    },
+    {
+      "id": "61",
+      "name": "biomorphic",
+      "description": "far-future biomorphic robot; smooth seashell-shaped head, asymmetric curved cheek, luminous oval eye",
+      "palette": "pale coral, lavender gray, sea green and plum",
+      "file": "robot-61-biomorphic.png"
+    },
+    {
+      "id": "62",
+      "name": "crystalline",
+      "description": "far-future crystalline survey robot; broad faceted translucent-looking head rendered in flat planes, single dark optical eye",
+      "palette": "pale jade, lilac, gold ochre and deep indigo",
+      "file": "robot-62-crystalline.png"
+    },
+    {
+      "id": "63",
+      "name": "ancient-future",
+      "description": "ancient far-future archaeological robot; weathered blue ceramic face, repaired gold seams, large gentle dark optic",
+      "palette": "faded cobalt, sandstone, antique gold and aubergine",
+      "file": "robot-63-ancient-future.png"
+    },
+    {
+      "id": "64",
+      "name": "cosmic",
+      "description": "very distant future cosmic messenger; impossibly elegant ring-backed oval head, small amber eye, floating-looking neck segments",
+      "palette": "pearl ivory, muted mauve, petrol teal and midnight violet",
+      "file": "robot-64-cosmic.png"
+    },
+    {
+      "id": "65",
+      "name": "alert-bronze",
+      "urgency": "critical",
+      "file": "robot-65-alert-bronze.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: bronze sentinel with turquoise inlays. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "66",
+      "name": "alert-clockwork",
+      "urgency": "critical",
+      "file": "robot-66-alert-clockwork.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: Victorian copper clockwork messenger. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "67",
+      "name": "alert-art-deco",
+      "urgency": "critical",
+      "file": "robot-67-alert-art-deco.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: Art Deco champagne-gold elevator robot. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "68",
+      "name": "alert-atomic",
+      "urgency": "critical",
+      "file": "robot-68-alert-atomic.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1950s turquoise atomic-age robot. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "69",
+      "name": "alert-lunar",
+      "urgency": "critical",
+      "file": "robot-69-alert-lunar.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1960s ivory lunar survey robot. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "70",
+      "name": "alert-orbital",
+      "urgency": "critical",
+      "file": "robot-70-alert-orbital.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1970s orange orbital custodian. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "71",
+      "name": "alert-crt",
+      "urgency": "critical",
+      "file": "robot-71-alert-crt.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1980s blue CRT terminal robot. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "72",
+      "name": "alert-translucent",
+      "urgency": "critical",
+      "file": "robot-72-alert-translucent.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1990s translucent teal robot. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "73",
+      "name": "alert-medical",
+      "urgency": "critical",
+      "file": "robot-73-alert-medical.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: white and mint medical helper. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "74",
+      "name": "alert-solarpunk",
+      "urgency": "critical",
+      "file": "robot-74-alert-solarpunk.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: terracotta solarpunk gardener. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "75",
+      "name": "alert-archive",
+      "urgency": "critical",
+      "file": "robot-75-alert-archive.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: violet ceramic archive keeper. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "76",
+      "name": "alert-cosmic",
+      "urgency": "critical",
+      "file": "robot-76-alert-cosmic.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: pearl ring-headed cosmic messenger. URGENT STATE: visibly alerted, wide optical eye, tense forward lean, looking SCREEN RIGHT toward message. Scarlet emergency beacon and flat crimson warning-light shapes in dark aubergine control room; red alert atmosphere."
+    },
+    {
+      "id": "77",
+      "name": "dream-bronze",
+      "urgency": "low",
+      "file": "robot-77-dream-bronze.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: bronze sentinel with turquoise inlays. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "78",
+      "name": "dream-clockwork",
+      "urgency": "low",
+      "file": "robot-78-dream-clockwork.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: Victorian copper clockwork messenger. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "79",
+      "name": "dream-art-deco",
+      "urgency": "low",
+      "file": "robot-79-dream-art-deco.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: Art Deco champagne-gold elevator robot. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "80",
+      "name": "dream-atomic",
+      "urgency": "low",
+      "file": "robot-80-dream-atomic.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1950s turquoise atomic-age robot. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "81",
+      "name": "dream-lunar",
+      "urgency": "low",
+      "file": "robot-81-dream-lunar.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1960s ivory lunar survey robot. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "82",
+      "name": "dream-orbital",
+      "urgency": "low",
+      "file": "robot-82-dream-orbital.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1970s orange orbital custodian. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "83",
+      "name": "dream-crt",
+      "urgency": "low",
+      "file": "robot-83-dream-crt.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1980s blue CRT terminal robot. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "84",
+      "name": "dream-translucent",
+      "urgency": "low",
+      "file": "robot-84-dream-translucent.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: 1990s translucent teal robot. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "85",
+      "name": "dream-medical",
+      "urgency": "low",
+      "file": "robot-85-dream-medical.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: white and mint medical helper. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "86",
+      "name": "dream-solarpunk",
+      "urgency": "low",
+      "file": "robot-86-dream-solarpunk.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: terracotta solarpunk gardener. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "87",
+      "name": "dream-archive",
+      "urgency": "low",
+      "file": "robot-87-dream-archive.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: violet ceramic archive keeper. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    },
+    {
+      "id": "88",
+      "name": "dream-cosmic",
+      "urgency": "low",
+      "file": "robot-88-dream-cosmic.png",
+      "prompt": "Square full-bleed head-and-shoulders robot portrait for an 80px-wide notification strip. Moebius-inspired 1960s/1970s French science fiction bande dessinee illustration, delicate black ink contours, flat hand-coloured shapes, sparse hatching, subtle paper grain. Bold readable silhouette, large central head with face inside central 60 percent for narrow crop. Muted colours compatible with dark plum desktop. No text, logos, borders, weapons, gradients, photorealism or 3D. Subject: pearl ring-headed cosmic messenger. DREAMING STATE: peacefully daydreaming, closed optical eyelids, relaxed head tilted upward and SCREEN LEFT, looking AWAY from notification text on right. Quiet surreal alien night garden, floating tiny moons, gentle lavender, muted teal and cream, restful whimsical atmosphere. No alert lights."
+    }
+  ]
+}

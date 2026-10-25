@@ -1,0 +1,19 @@
+{
+  "background": "#1f1d2e",
+  "surface": "#26233a",
+  "border": "#393546",
+  "text": "#e5e5e5",
+  "muted": "#a5a0ba",
+  "accent": "#ff53a6",
+  "critical": "#eb6f92",
+  "success": "#9ccfd8",
+  "font": "tijpset",
+  "fontSize": 14,
+  "radius": 14,
+  "padding": 16,
+  "gap": 10,
+  "borderWidth": 1,
+  "iconSize": 56,
+  "width": 420,
+  "maxBodyLines": 6
+}

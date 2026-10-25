@@ -1,0 +1,19 @@
+{
+  "background": "#191919",
+  "surface": "#242424",
+  "border": "#353535",
+  "text": "#eeeeee",
+  "muted": "#aaaaaa",
+  "accent": "#ffffff",
+  "critical": "#ffffff",
+  "success": "#cccccc",
+  "font": "monospace",
+  "fontSize": 14,
+  "radius": 14,
+  "padding": 16,
+  "gap": 10,
+  "borderWidth": 1,
+  "iconSize": 56,
+  "width": 420,
+  "maxBodyLines": 6
+}
