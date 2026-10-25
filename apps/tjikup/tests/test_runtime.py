@@ -2,6 +2,7 @@ import contextlib
 import io
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
@@ -10,6 +11,40 @@ from tjikup import runtime
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_completion_banner_colors_and_centering(self):
+        warning = "WARN\t!\tExample warning\tdetail\n"
+        failure = "FAILED\t✗\tExample failure\tdetail\n"
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report"
+            for width in (24, 80, 103, 120):
+                for color in ("0", "1"):
+                    for content in ("", warning, failure):
+                        with self.subTest(width=width, color=color, content=content):
+                            report.write_text(content * 2)
+                            with (
+                                patch.dict(os.environ, {"TJIKUP_COLUMNS": str(width),
+                                                        "TJIKUP_COLOR": color}),
+                                contextlib.redirect_stdout(io.StringIO()) as output,
+                            ):
+                                runtime.report_summary(report)
+                            lines = output.getvalue().splitlines()
+                            banner = lines[1]
+                            plain = re.sub(r"\x1b\[[0-9;]*m", "", banner)
+                            message = "NEEDS ATTENTION" if content else "ALL SYSTEMS GO"
+                            self.assertEqual(plain, " " * ((width - len(message)) // 2) + message)
+                            if color == "0":
+                                self.assertNotIn("\x1b", output.getvalue())
+                            elif content:
+                                self.assertIn("\x1b[31;1mNEEDS ATTENTION\x1b[0m", banner)
+                            else:
+                                colors = set(re.findall(r"\x1b\[1;38;2;([0-9;]+)m", banner))
+                                self.assertEqual(len(colors), 6)
+                                self.assertTrue(banner.endswith("\x1b[0m"))
+                            # Rendering must not duplicate issues or modify the report.
+                            self.assertEqual(report.read_text(), content * 2)
+                            if content:
+                                self.assertEqual(output.getvalue().count("detail"), 1)
+
     def test_unicode_fragments_and_exit_failure(self):
         output = io.StringIO()
         with (

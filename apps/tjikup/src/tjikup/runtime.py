@@ -284,7 +284,21 @@ def report_summary(report_file, *, dry_run=False):
     except OSError:
         print("\nReport unavailable")
         return
-    print("\n" + ("NEEDS ATTENTION" if issues else "ALL SYSTEMS GO"))
+    message = "NEEDS ATTENTION" if issues else "ALL SYSTEMS GO"
+    padding = " " * max(0, (terminal_columns() - display_width(message)) // 2)
+    if use_color():
+        if issues:
+            message = f"\033[31;1m{message}\033[0m"
+        else:
+            # Preserve the original Fish banner's six-colour wave palette.
+            colors = ("255;95;95", "255;175;0", "95;255;135",
+                      "95;215;255", "95;135;255", "215;135;255")
+            message = "".join(
+                character if character == " " else
+                f"\033[1;38;2;{colors[index % len(colors)]}m{character}\033[0m"
+                for index, character in enumerate(message)
+            )
+    print(f"\n{padding}{message}", flush=True)
     if issues:
         section_header("Preview issues" if dry_run else "Issues")
         # Do not append the summary to its own report.
