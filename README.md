@@ -1,11 +1,73 @@
 # tooltjik
 
-![Turborepo](https://img.shields.io/badge/Turborepo-EF4444?style=flat-square&logo=turborepo&logoColor=white)
-![Bun](https://img.shields.io/badge/Bun-14151A?style=flat-square&logo=bun&logoColor=white)
-![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white)
-![Charm](https://img.shields.io/badge/Charm-terminal_tools-FF75B5?style=flat-square)
+Desktop and terminal tools, led by **Notjik**, a notification system for Hyprland.
 
-A Turborepo for personal terminal tools.
+## Notjik
+
+**Notifications you can act on: live status, progress, timers, grouped history,
+and Telegram replies, with a robot for every feeling.**
+
+[![Watch Dunst vs Notjik](apps/notjik/docs/showcase.png)](apps/notjik/docs/showcase.mp4)
+
+[Watch the full Dunst vs Notjik video](apps/notjik/docs/showcase.mp4) ·
+[Installation](apps/notjik/README.md#install-and-start) ·
+[Card types and calling the API](apps/notjik/docs/cards.md) ·
+[Configuration and full documentation](apps/notjik/README.md)
+
+Both sides receive the same messages and artwork, including the same robot
+selection. Telegram replies and voice recording are simulated in the demo;
+real Telegram integration is optional.
+
+- Receives ordinary desktop notifications through `org.freedesktop.Notifications`.
+- Shows command buttons, sender artwork, live progress, status and countdown cards.
+- Updates one card in place with a stable sender ID, instead of adding a new card.
+- Groups conversations and keeps searchable local notification history.
+- Supports Telegram text, photos, voice and animated media through an optional bridge.
+- Offers robot artwork, rose-punk and monochrome themes, and configurable placement.
+
+### Install Notjik
+
+Requires Hyprland, Quickshell 0.3.2+, Qt Quick/Controls, Qt5Compat GraphicalEffects,
+Python 3 and `busctl`. Bun builds the workspace. Qt Multimedia is needed for media;
+see the [installation guide](apps/notjik/README.md#install-and-start) for session
+startup, optional Telegram dependencies, and switching from another daemon.
+
+```sh
+git clone https://github.com/tijptjik/tooltjik.git
+cd tooltjik
+bun install
+bun run --filter @tooltjik/notjik build
+bash scripts/install.sh notjik
+notjikctl init --theme rose-punk
+# Stop your existing notification daemon/autostart before starting Notjik.
+notjik
+```
+
+The installer does not stop your current notification daemon or start Notjik.
+`init` preserves existing configuration. Commands install to `~/.local/bin`;
+ensure that directory is on your PATH.
+
+### Send a card
+
+```sh
+notjikctl send 'Flight recorder secured' 'Black box synced.'
+notjikctl send 'Star chart transfer' --app navigation --id sector-map \
+  --type progress --data '{"value":35,"label":"Receiving star charts"}' --timeout never
+notjikctl send 'Star chart transfer' --app navigation --id sector-map \
+  --type progress --data '{"value":80,"label":"Resolving jump coordinates"}' --timeout never
+notjikctl history toggle
+```
+
+| What you need | Documentation |
+| --- | --- |
+| Standard notifications, icons and artwork | [Standard cards](apps/notjik/docs/cards.md#standard-cards-and-artwork) |
+| Status and errors | [Status cards](apps/notjik/docs/cards.md#status-and-errors) |
+| Progress and updates | [Persistent IDs](apps/notjik/docs/cards.md#update-one-card-in-place) |
+| Timers and buttons | [Timers](apps/notjik/docs/cards.md#timers) · [Actions](apps/notjik/docs/cards.md#action-buttons) |
+| Grouping and notification history | [Grouping](apps/notjik/docs/cards.md#grouping-and-history) |
+| Telegram text, photos, voice and GIFs | [Telegram setup](apps/notjik/README.md#telegram-photos-and-voice-messages) |
+| Run or record the showcase | [Demo commands](apps/notjik/README.md#directed-comparison-cycle-and-recording) |
+| Dunst compatibility and differences | [Comparison guide](apps/notjik/docs/comparison.md) |
 
 ## mailtjik
 
@@ -27,7 +89,7 @@ bun install
 bun run install:local
 ```
 
-Requires Bun, Go, Python, age, zstd and rclone; see the [application installation guide](apps/mailtjik/README.md#install).
+Mailtjik requires Bun, Go, Python, age, zstd and rclone; see the [mailtjik installation guide](apps/mailtjik/README.md#install). Notjik requires Quickshell, Qt Quick and Python; see the [notjik installation guide](apps/notjik/README.md#install-and-start).
 
 ## Setup
 
@@ -59,3 +121,16 @@ Requires only Python 3.10+. Workflows and fleet policy live in their own repos.
 bash apps/tjikup/scripts/install.sh
 tjikup --config /path/to/workflow.json --check
 ```
+
+## bartjik
+
+[Configurable Quickshell bars](apps/bartjik/README.md) with monitor-local islands,
+16 providers, themes, live configuration and `bartjikctl` diagnostics.
+
+```sh
+bun run --filter @tooltjik/bartjik build
+bash scripts/install.sh bartjik
+```
+
+Installation does not start a desktop session or replace Waybar/notjik. See the app
+guide for synthetic previews and deliberate switch-over/rollback.

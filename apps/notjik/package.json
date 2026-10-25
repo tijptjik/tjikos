@@ -1,0 +1,11 @@
+{
+  "name": "@tooltjik/notjik",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "check": "python3 -B scripts/check.py",
+    "test": "python3 -B -m unittest discover -s tests -v",
+    "demo": "dbus-run-session --config-file tests/bus.conf -- python3 -B tests/render.py docs --demo"
+  }
+}

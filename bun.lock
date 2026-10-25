@@ -16,10 +16,16 @@
       "name": "@tooltjik/mailtjik",
       "version": "0.1.0",
     },
+    "apps/notjik": {
+      "name": "@tooltjik/notjik",
+      "version": "0.1.0",
+    },
   },
   "packages": {
     "@tooltjik/tjikup": ["@tooltjik/tjikup@workspace:apps/tjikup"],
     "@tooltjik/mailtjik": ["@tooltjik/mailtjik@workspace:apps/mailtjik"],
+
+    "@tooltjik/notjik": ["@tooltjik/notjik@workspace:apps/notjik"],
 
     "turbo": ["turbo@2.5.8", "", { "optionalDependencies": { "turbo-darwin-64": "2.5.8", "turbo-darwin-arm64": "2.5.8", "turbo-linux-64": "2.5.8", "turbo-linux-arm64": "2.5.8", "turbo-windows-64": "2.5.8", "turbo-windows-arm64": "2.5.8" }, "bin": { "turbo": "bin/turbo" } }, "sha512-5c9Fdsr9qfpT3hA0EyYSFRZj1dVVsb6KIWubA9JBYZ/9ZEAijgUEae0BBR/Xl/wekt4w65/lYLTFaP3JmwSO8w=="],
 
