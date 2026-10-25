@@ -416,6 +416,12 @@ def main(root):
                 os.execv(str(runtime), [str(runtime), "-B", str(root / "telegram_bridge.py"), *arguments])
         from telegram_bridge import main as telegram_main
         return telegram_main(root, arguments)
+    if len(sys.argv) > 1 and sys.argv[1] == "demo":
+        from demo import main as demo_main
+        return demo_main(root, sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "compare":
+        from comparison import main as compare_main
+        return compare_main(root, sys.argv[2:])
     parser = argparse.ArgumentParser(prog="notjikctl")
     sub = parser.add_subparsers(dest="op", required=True)
     for name in ("pause", "resume", "toggle", "status", "list", "monitors", "reload"):
