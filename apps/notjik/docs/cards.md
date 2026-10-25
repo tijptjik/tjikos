@@ -19,6 +19,7 @@ need structured status, timers, progress or explicit command buttons.
 | Icon / artwork | Any type with `--icon` or `--image` | Icon name, or local image path |
 | Status / error | `--type status` | `state`, optional `detail`, `tone` |
 | Progress / update | `--type progress` | `value` from 0 to 100, optional `label` |
+| Results table | `--type results-table` | `results` rows, optional `state`, `tone`, `duration` |
 | Countdown | `--type timer` | `seconds`, optional `label`, `doneLabel` |
 | Multiple actions | Any type with `--actions` | JSON array of labels and command argument arrays |
 | Urgency | Any type with `--urgency` | `low`, `normal`, `critical` |
@@ -138,3 +139,21 @@ See [configuration](../README.md#configuration),
 [keyboard and history controls](../README.md#history-and-keyboard-navigation),
 [custom QML components](../README.md#styling-and-components), and
 [D-Bus compatibility](comparison.md) for the full contracts and current limits.
+
+## Results tables
+
+`results-table` is built into Notjik and needs no `components` registration.
+Each row in `results` has a `label`, `value`, optional `tone`, and optional
+`ingredients`: secondary rows with `label` and `value`. The footer accepts
+`state` (defaults to `Running`), `tone`, and `duration`. Critical row values use
+the error accent; other values use the theme accent. Footer tone supports
+`critical`, `success`, or the theme accent. Text is rendered literally.
+
+```sh
+notjikctl send 'Surface survey complete' --app survey --id sector-report \
+  --type results-table --timeout never \
+  --data '{"results":[{"label":"Sectors mapped","value":"12","ingredients":[{"label":"New signals","value":"3"}]}],"state":"Complete","tone":"success","duration":"42s"}'
+```
+
+Sending the same application and ID again updates the table in place. The QML
+component ships at `qml/components/ResultsTable.qml` in the Notjik package.

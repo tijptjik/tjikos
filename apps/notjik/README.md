@@ -312,6 +312,7 @@ Built-in card types:
 | `progress` | `value` (0–100), optional `label` |
 | `status` | `state`, optional `detail`, `tone` (`critical`, `success`, or accent) |
 | `timer` | `seconds`, optional `label`, `doneLabel` |
+| `results-table` | `results` rows with optional `ingredients`; footer `state`, `tone`, `duration`. See [results tables](docs/cards.md#results-tables). |
 | `telegram` | Bridge-managed text, photo, voice, sticker, emoji and animation data; see [Telegram setup](#telegram-photos-and-voice-messages) |
 
 Register a QML detail component in `components`, e.g.

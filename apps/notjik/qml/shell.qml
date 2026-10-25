@@ -245,7 +245,7 @@ ShellRoot {
     function send(n) {
         Logic.validateNotice(n);
         const kind = n.type || "standard";
-        if (!["standard", "progress", "status", "timer", "telegram"].includes(kind) && !config.components[kind]) throw Error("Unknown component: " + kind);
+        if (!["standard", "progress", "status", "timer", "telegram", "results-table"].includes(kind) && !config.components[kind]) throw Error("Unknown component: " + kind);
         if (n.replace && (!find(n.replace) || nativeNotices[n.replace])) throw Error("--replace requires an existing local notification ID");
         const app = n.app || "notjikctl";
         const senderId = n.id || "";

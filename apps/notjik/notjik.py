@@ -430,7 +430,7 @@ def main(root):
     send.add_argument("title")
     send.add_argument("body", nargs="?", default="")
     send.add_argument("--app", default="notjikctl")
-    send.add_argument("--type", default="standard", help="standard, progress, status, timer, or a registered component")
+    send.add_argument("--type", default="standard", help="standard, progress, status, timer, telegram, results-table, or a registered component")
     send.add_argument("--urgency", choices=["low", "normal", "critical"], default="normal")
     send.add_argument("--timeout", type=duration, default=None)
     send.add_argument("--icon", default="")

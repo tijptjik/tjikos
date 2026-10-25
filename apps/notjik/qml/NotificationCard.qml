@@ -314,7 +314,7 @@ Rectangle {
             Layout.fillWidth: true
             visible: source.toString().length > 0 && status === Loader.Ready
             Layout.preferredHeight: item ? item.implicitHeight : 0
-            readonly property var builtins: ({progress: "components/Progress.qml", status: "components/Status.qml", timer: "components/Countdown.qml", telegram: "components/Telegram.qml"})
+            readonly property var builtins: ({progress: "components/Progress.qml", status: "components/Status.qml", timer: "components/Countdown.qml", telegram: "components/Telegram.qml", "results-table": "components/ResultsTable.qml"})
             function loadComponent() {
                 const custom = card.controller.config.components[card.notice.type];
                 const builtin = builtins[card.notice.type];

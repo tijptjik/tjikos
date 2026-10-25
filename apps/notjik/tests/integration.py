@@ -54,6 +54,18 @@ def run():
                 guard = subprocess.run([sys.executable, "-c", "from pathlib import Path; import notjik; raise SystemExit(notjik.launch(Path.cwd(), []))"],
                                        cwd=ROOT, capture_output=True, text=True)
                 assert guard.returncode == 1 and "already has an owner" in guard.stderr, guard.stderr
+                # Built-in tables work without any user component registration.
+                table = {"results": [{"label": "Sectors", "value": "12",
+                          "ingredients": [{"label": "New signals", "value": "3"}]}],
+                         "state": "Complete", "tone": "success", "duration": "42s"}
+                table_id = call("send", notice={"title": "Survey", "app": "survey",
+                    "id": "report", "type": "results-table", "data": table, "timeout": 0})["id"]
+                time.sleep(.5)  # Allow the real QML Loader and nested delegates to render.
+                assert next(n for n in call("list")["notices"] if n["id"] == table_id)["data"] == table
+                assert call("send", notice={"title": "New survey", "app": "survey",
+                    "id": "report", "type": "results-table", "data": {}, "timeout": 0})["id"] == table_id
+                time.sleep(.3)
+                call("dismiss", id="all")
                 # Sender-chosen IDs are persistent upserts, scoped by application.
                 named = call("send", notice={"title":"Upload", "app":"backup", "id":"nightly", "type":"progress", "data":{"value":10}})["id"]
                 original = call("list")["notices"][0]
