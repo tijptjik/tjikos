@@ -1,0 +1,11 @@
+node_modules/
+.turbo/
+**/dist/
+__pycache__/
+*.pyc
+.env*
+*.sqlite*
+*.eml
+*.mbox
+*.age
+*.partial

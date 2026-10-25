@@ -1,0 +1,10 @@
+{
+  "name": "@tooltjik/mailtjik",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "check": "python3 scripts/check.py",
+    "demo": "vhs docs/demo.tape"
+  }
+}

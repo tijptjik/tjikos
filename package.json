@@ -1,0 +1,13 @@
+{
+  "name": "tooltjik",
+  "private": true,
+  "packageManager": "bun@1.4.2",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "build": "turbo run build",
+    "check": "turbo run check",
+    "demo": "turbo run demo --filter=@tooltjik/mailtjik",
+    "install:local": "bun run build && bash scripts/install.sh"
+  },
+  "devDependencies": {"turbo": "2.5.8"}
+}
