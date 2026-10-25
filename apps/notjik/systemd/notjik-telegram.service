@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram media notifications for Notjik
+After=graphical-session.target notjik.service network-online.target
+PartOf=graphical-session.target
+Wants=notjik.service
+ConditionPathExists=%h/.local/state/notjik/telegram/credentials.json
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/notjikctl telegram run
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=graphical-session.target
