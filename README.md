@@ -48,3 +48,14 @@ See the [full mailtjik README](apps/mailtjik/README.md) for features, key bindin
 Applications live under `apps/`; shared libraries can live under `packages/`.
 `bun run build` builds through Turbo; `bun run check` performs static checks;
 `bun run demo` regenerates the synthetic-mail recording.
+
+## tjikup
+
+[Configurable script runner](apps/tjikup/README.md) with ordered stages, explicit
+parallel groups, status rows, dry-run commands and completion notifications.
+Requires only Python 3.10+. Workflows and fleet policy live in their own repos.
+
+```sh
+bash apps/tjikup/scripts/install.sh
+tjikup --config /path/to/workflow.json --check
+```
