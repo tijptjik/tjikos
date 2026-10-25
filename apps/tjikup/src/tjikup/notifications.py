@@ -180,7 +180,57 @@ def capture_focus_command():
     return None
 
 
-def notify_ssh_terminal(title, body, urgency):
+def ssh_notification_filter(command):
+    """Kitty desktop hook: render remote status metadata through local Notjik.
+
+    Only display fields cross SSH. Actions are derived on this desktop, never
+    accepted from the remote notification. False retains Kitty's normal delivery.
+    """
+    if command.application_name != "Tjikup":
+        return False
+    prefix = "tjikup-status-v1:"
+    try:
+        metadata = next(value for value in command.notification_types
+                        if value.startswith(prefix))
+        if len(metadata) > 16384:
+            return False
+        payload = json.loads(metadata[len(prefix):])
+        data, body = payload["data"], payload["body"]
+        if (set(payload) != {"data", "body"} or
+                set(data) != {"state", "detail", "tone"} or
+                data["tone"] not in {"success", "warning", "critical"} or
+                not all(isinstance(value, str) and len(value) <= 8192
+                        for value in (body, data["state"], data["detail"]))):
+            return False
+        return send_native_notification(
+            command.title, body, "critical" if data["tone"] == "critical" else "normal",
+            data, capture_focus_command(),
+        )
+    except (StopIteration, KeyError, TypeError, ValueError, AttributeError):
+        return False
+
+
+def send_native_notification(title, body, urgency, data, focus_command=None):
+    native = shutil.which("notjikctl")
+    if not native:
+        return False
+    icon = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "icons/tjikup.png"
+    actions = [{"label": "Show window", "command": focus_command}] if focus_command else []
+    try:
+        sent = subprocess.run(
+            [native, "send", title, body, "--app", "Tjikup",
+             "--icon", str(icon), "--type", "status", "--data", json.dumps(data),
+             "--actions", json.dumps(actions), "--urgency", urgency,
+             "--timeout", "10s" if data["tone"] == "success" else "until-dismissed"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, check=False, timeout=3,
+        )
+        return sent.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def notify_ssh_terminal(title, body, urgency, data=None, native_body=""):
     """Return one OSC 99 notification through a direct Kitty SSH PTY."""
     if os.environ.get("TERM") != "xterm-kitty" or not sys.stdout.isatty():
         return
@@ -197,6 +247,9 @@ def notify_ssh_terminal(title, body, urgency):
         f"i={identifier}:e=1:a=-report:f={encoded('Tjikup')}:n={encoded('tjikup-notification')}"
         f":u={2 if urgency == 'critical' else 1}:w=10000:o=always"
     )
+    if data is not None:
+        payload = "tjikup-status-v1:" + json.dumps({"data": data, "body": native_body})
+        metadata += f":t={encoded(payload)}"
     # Kitty treats bodies as plain text; notify-send expects escaped markup.
     message = (
         f"\x1b]99;{metadata}:d=0:p=title;{encoded(title)}\x1b\\"
@@ -215,7 +268,7 @@ def notify_completion(
     if os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"):
         try:
             notify_ssh_terminal(
-                *completion_message(
+                *completion_payload(
                     report_file,
                     result,
                     seconds,
@@ -240,22 +293,8 @@ def notify_completion(
             Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
             / "icons/tjikup.png"
         )
-        native = shutil.which("notjikctl")
-        if native:
-            actions = [{"label": "Show window", "command": focus_command}] if focus_command else []
-            try:
-                sent = subprocess.run(
-                    [native, "send", title, native_body, "--app", "Tjikup",
-                     "--icon", str(icon), "--type", "status", "--data", json.dumps(data),
-                     "--actions", json.dumps(actions), "--urgency", urgency,
-                     "--timeout", "10s" if data["tone"] == "success" else "until-dismissed"],
-                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL, check=False, timeout=3,
-                )
-                if sent.returncode == 0:
-                    return
-            except (OSError, subprocess.TimeoutExpired):
-                pass
+        if send_native_notification(title, native_body, urgency, data, focus_command):
+            return
         sender = shutil.which("notify-send")
         if sender is None:
             return

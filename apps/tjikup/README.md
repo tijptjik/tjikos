@@ -130,6 +130,13 @@ A direct Kitty SSH terminal receives completion notifications on the computer
 running Kitty. Remote titles include the hostname; the Focus button activates
 the originating Kitty terminal. Use `ssh -t HOST tjikup`
 for one-line commands; interactive SSH sessions already allocate a terminal.
+
+The OSC notification also carries `tjikup-status-v1` display metadata. A desktop
+Kitty `notifications.py` hook can call `tjikup.notifications.ssh_notification_filter`
+to deliver a native Notjik status card; without the hook, standard Kitty delivery
+continues. The hook accepts no remote action commands and keeps the generic
+notification if local delivery fails. Kitty loads the hook when it starts.
+
 The connection must remain open until completion. The local installation
 provides the `tjikup-notification` icon. No remote `notify-send`, reverse SSH,
 or desktop-bus forwarding is required. Redirected output and unsupported
