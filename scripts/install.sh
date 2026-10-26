@@ -7,12 +7,15 @@ fi
 # Validate all targets before installing any of them.
 for app in "$@"; do
     case "$app" in
-        mailtjik|notjik|tjikup) ;;
-        *) printf 'Unknown app: %s (expected mailtjik, notjik or tjikup)\n' "$app" >&2; exit 2 ;;
+        mailtjik|notjik|tjikup|bartjik) ;;
+        *) printf 'Unknown app: %s (expected mailtjik, notjik, tjikup or bartjik)\n' "$app" >&2; exit 2 ;;
     esac
 done
 for app in "$@"; do
     case "$app" in
+        bartjik)
+            bash "$root_dir/apps/bartjik/scripts/install.sh"
+            ;;
         tjikup)
             bash "$root_dir/apps/tjikup/scripts/install.sh"
             ;;

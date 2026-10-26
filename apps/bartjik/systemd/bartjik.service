@@ -1,0 +1,10 @@
+[Unit]
+Description=bartjik Quickshell bar
+After=graphical-session.target
+PartOf=graphical-session.target
+[Service]
+ExecStart=%h/.local/bin/bartjik
+Restart=on-failure
+RestartSec=2
+[Install]
+WantedBy=graphical-session.target
