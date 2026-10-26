@@ -222,7 +222,7 @@ def main():
         code = code.replace('HistoryDrawer { controller: root }', 'HistoryDrawer { id: historyDrawer; controller: root }')
         code = code.replace('case "capture":', 'case "groupHoverPoint": return {ok:true, point:panels.instances[0].groupHoverPoint()};\n        case "startMotion": panels.instances[0].startMotion(request.path || ""); return {ok:true};\n        case "stopMotion": return {ok:true, count:panels.instances[0].stopMotion()};\n        case "motionFrames": return {ok:true, frames:panels.instances[0].motionFrames.slice(request.offset, request.offset + 5)};\n        case "capture":')
         code = code.replace('case "capture":', 'case "expandHistory": for (const group of historyGroups) expandedGroups = Object.assign({}, expandedGroups, {[group.key]:true}); break;\n        case "captureHistory": historyDrawer.capture(request.path); return {ok:true};\n        case "capture":')
-        code = code.replace('case "status": break;', 'case "revealControls": panels.instances[0].revealControls(); return {ok:true};\n        case "status": break;')
+        code = code.replace('case "status": break;', 'case "revealControls": panels.instances[0].revealControls(request.revealed !== false); return {ok:true};\n        case "status": break;')
         shell.write_text(code)
         history = root / "qml/HistoryDrawer.qml"
         history.write_text(history.read_text().replace('id: drawer', 'id: drawer\n    function capture(path) { drawerContent.grabToImage(result => result.saveToFile(path)); }', 1)
@@ -249,7 +249,7 @@ def main():
             import re
             card.write_text(re.sub(r"readonly property bool controlsRevealed:.*?(?=    readonly property bool hasInteractions)",
                                    "readonly property bool controlsRevealed: false\n", card.read_text(), count=1, flags=re.S))
-        card.write_text(card.read_text().replace("id: card", 'id: card\n    function advanceActions(direction) { if (direction > 0 && nextActions.enabled) nextActions.clicked(); else if (direction < 0 && previousActions.enabled) previousActions.clicked(); }\n    readonly property int artworkStatus: coverArtwork ? coverImage.status : artworkImage.status\n    readonly property url artworkSource: coverArtwork ? coverImage.source : artworkImage.source\n    function footerGeometry() { return {imageCover:card.imageCover, avatarCover:card.avatarCover, border:card.border.width, cover:card.coverArtwork, coverWidth:coverImage.width, coverHeight:coverImage.height, contentLeft:content.x, contentTop:content.y, contentHeight:content.implicitHeight, visible:actionFooter.visible, y:actionFooter.y, height:actionFooter.height, bottom:actionFooter.y+actionFooter.height, cardHeight:height, mainBottom:content.y+content.implicitHeight}; }\n    function actionGeometry() {\n        if (!pages.count) return [];\n        const row = pages.itemAt(actions.page).children[0];\n        return [{x:row.x, width:row.width, available:actionViewport.width, page:actions.page, count:pages.count, previous:previousActions.enabled, next:nextActions.enabled, stripX:actionStrip.x,\n            buttons:row.children.filter(button => button.modelData !== undefined).map(button => ({label:button.text, index:button.modelData.actionIndex, x:button.x, width:button.width, height:button.height, textHeight:button.contentItem.implicitHeight, truncated:button.contentItem.truncated}))}];\n    }\n', 1))
+        card.write_text(card.read_text().replace("readonly property bool controlsRevealed:", "property bool controlsRevealed:").replace("id: card", 'id: card\n    function advanceActions(direction) { if (direction > 0 && nextActions.enabled) nextActions.clicked(); else if (direction < 0 && previousActions.enabled) previousActions.clicked(); }\n    readonly property int artworkStatus: coverArtwork ? coverImage.status : artworkImage.status\n    readonly property url artworkSource: coverArtwork ? coverImage.source : artworkImage.source\n    function footerGeometry() { return {imageCover:card.imageCover, avatarCover:card.avatarCover, border:card.border.width, cover:card.coverArtwork, coverWidth:coverImage.width, coverHeight:coverImage.height, contentLeft:content.x, contentTop:content.y, contentHeight:content.implicitHeight, detailHeight:detail.height, detailVisible:detail.visible, visible:actionFooter.visible, y:actionFooter.y, height:actionFooter.height, bottom:actionFooter.y+actionFooter.height, cardHeight:height, mainBottom:content.y+content.implicitHeight}; }\n    function actionGeometry() {\n        if (!pages.count) return [];\n        const row = pages.itemAt(actions.page).children[0];\n        return [{x:row.x, width:row.width, available:actionViewport.width, page:actions.page, count:pages.count, previous:previousActions.enabled, next:nextActions.enabled, stripX:actionStrip.x,\n            buttons:row.children.filter(button => button.modelData !== undefined).map(button => ({label:button.text, index:button.modelData.actionIndex, x:button.x, width:button.width, height:button.height, textHeight:button.contentItem.implicitHeight, truncated:button.contentItem.truncated}))}];\n    }\n', 1))
         card.write_text(card.read_text().replace("id: card", """id: card
     function groupGeometry() {
         return Object.assign(groupNotches.geometry(), {label:groupIndicator.Accessible.name, visible:groupIndicator.visible, indicatorOpacity:groupIndicator.opacity,
@@ -300,7 +300,7 @@ def main():
         }
     }
     function advanceActions(direction) { for (let i = 0; i < cardItems.count; ++i) cardItems.itemAt(i).renderedCard.advanceActions(direction); }
-    function revealControls() { for (let i = 0; i < cardItems.count; ++i) cardItems.itemAt(i).renderedCard.controlsRevealed = true; }
+    function revealControls(revealed) { for (let i = 0; i < cardItems.count; ++i) cardItems.itemAt(i).renderedCard.controlsRevealed = revealed; }
     function metrics() {
         const result = [];
         for (let i = 0; i < cardItems.count; ++i) {
@@ -384,7 +384,7 @@ def main():
                         wait_for(lambda: not ipc(root, {"op":"metrics"})["metrics"]["cards"])
                         notice = {"title":"StarProwlarr", "app":"Telegram Desktop", "body":BODY, "timeout":0}
                         if transport == "bridge":
-                            notice.update(app="Telegram via Notjik", type="telegram", data={"kind":"text", "source":"", "status":"", "chatId":"123", "messageId":"456", "demo":True})
+                            notice.update(app="Telegram via Notjik", type="telegram", data={"kind":"text", "source":"", "status":"", "chatId":"123", "messageId":"456", "parts":[{"kind":"text", "text":BODY}], "demo":True})
                         elif transport == "unmatched":
                             notice["body"] = "A new message format stays readable."
                         ipc(root, {"op":"send", "notice":notice})
@@ -393,6 +393,16 @@ def main():
                         assert metric["structuredReady"] == (transport != "unmatched"), metric
                         if transport != "unmatched":
                             assert metric["presentation"]["data"]["codec"] == "x264", metric
+                        if transport == "bridge":
+                            ipc(root, {"op":"revealControls"})
+                            time.sleep(.3)
+                            expanded = ipc(root, {"op":"metrics"})["metrics"]["cards"][0]
+                            assert expanded["footer"]["detailVisible"] and expanded["fullHeight"] > metric["fullHeight"], expanded
+                            ipc(root, {"op":"revealControls", "revealed":False})
+                            time.sleep(.3)
+                            collapsed = ipc(root, {"op":"metrics"})["metrics"]["cards"][0]
+                            assert not collapsed["footer"]["detailVisible"], collapsed
+                            assert abs(collapsed["fullHeight"] - metric["fullHeight"]) < 1, collapsed
                         image = destination / ("handler-" + transport + ".png")
                         ipc(root, {"op":"capture", "path":str(image)})
                         wait_for(lambda: readable_image(image))

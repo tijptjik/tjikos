@@ -355,7 +355,8 @@ Rectangle {
         Loader {
             id: detail
             Layout.fillWidth: true
-            visible: source.toString().length > 0 && status === Loader.Ready
+            // An empty Telegram detail must not reserve a ColumnLayout spacing slot.
+            visible: source.toString().length > 0 && status === Loader.Ready && !!item && item.implicitHeight > 0
             Layout.preferredHeight: item ? item.implicitHeight : 0
             readonly property var builtins: ({progress: "components/Progress.qml", status: "components/Status.qml", timer: "components/Countdown.qml", telegram: "components/Telegram.qml", "results-table": "components/ResultsTable.qml"})
             function loadComponent() {
