@@ -113,13 +113,15 @@ function grouped(notices, config, selectedId) {
     return groups.sort((a, b) => b.latest.received - a.latest.received).map(group => {
         var representative = group.members.find(n => n.id === selectedId) || group.latest;
         return Object.assign({}, representative, {groupId: group.id, groupGeneration: group.generation, groupKey: group.key,
-            groupCount: group.members.length, memberIds: group.members.map(n => n.id)});
+            groupReceived: group.members[0].received, groupCount: group.members.length, memberIds: group.members.map(n => n.id)});
     });
 }
 
 function visibleGroups(notices, config, selectedId) {
-    var groups = grouped(notices, config, selectedId);
-    var visible = groups.slice(0, Math.min(4, config.maxVisible));
+    // Admit the oldest groups first; new arrivals wait instead of displacing cards.
+    // Use the group's first arrival so updates do not reorder an existing slot.
+    var groups = grouped(notices, config, selectedId).sort((a, b) => a.groupReceived - b.groupReceived);
+    var visible = groups.slice(0, Math.min(4, config.maxVisible)).reverse();
     var selected = groups.find(group => group.memberIds.includes(selectedId));
     if (selected && !visible.includes(selected)) visible[visible.length - 1] = selected;
     return visible;

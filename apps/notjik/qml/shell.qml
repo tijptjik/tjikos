@@ -110,7 +110,7 @@ ShellRoot {
     readonly property var theme: config.style
     readonly property string primaryMonitor: Quickshell.screens.find(s => s.name === config.placement.primaryMonitor)?.name || Quickshell.screens[0]?.name || ""
     readonly property var screens: Quickshell.screens.filter((screen, index) => Logic.selected(config, screen, index, primaryMonitor))
-    readonly property var visibleNotices: ready && !paused && !conceal && !drawerOpen ? (draggingId ? dragStack : Logic.visibleGroups(notices.filter(n => !isFloating(n.id)), config, telegramRecording.holdsNotice ? telegramRecording.noticeId : selectedId)) : []
+    readonly property var visibleNotices: ready && !paused && !conceal && !drawerOpen ? (draggingId ? dragStack : Logic.visibleGroups(notices.filter(n => !isFloating(n.id)), config, telegramRecording.holdsNotice ? telegramRecording.noticeId : (keyboardMode ? selectedId : ""))) : []
 
     function snapshot(n) {
         return {id: n.id, senderId: n.senderId || "", updatedAt: n.updatedAt || n.received, title: n.title, body: n.body, app: n.app, urgency: n.urgency, type: n.type,

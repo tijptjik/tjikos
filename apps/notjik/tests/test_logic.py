@@ -236,8 +236,12 @@ assert.equal(grouped([...notices,{id:"d",app:"mail",received:200000}],groupedCon
 assert.equal(grouped([{id:"a",app:"x",group:"one",received:1},{id:"b",app:"x",group:"two",received:2}],groupedConfig,"").length,2);
 assert.equal(visibleGroups(notices,{...groupedConfig,maxVisible:1},"b")[0].id,"b");
 const burst=Array.from({length:6},(_,i)=>({id:String(i),app:String(i),received:i}));
-assert.deepEqual(visibleGroups(burst,{...groupedConfig,maxVisible:10},"").map(n=>n.id),["5","4","3","2"]);
-assert.deepEqual(visibleGroups(burst,{...groupedConfig,maxVisible:10},"0").map(n=>n.id),["5","4","3","0"]);
+assert.deepEqual(visibleGroups(burst,{...groupedConfig,maxVisible:10},"").map(n=>n.id),["3","2","1","0"]);
+assert.deepEqual(visibleGroups(burst,{...groupedConfig,maxVisible:10},"0").map(n=>n.id),["3","2","1","0"]);
+assert.deepEqual(visibleGroups(burst.slice(0,4),{...groupedConfig,maxVisible:4},"").map(n=>n.id),["3","2","1","0"]);
+assert.deepEqual(visibleGroups(burst.slice(1),{...groupedConfig,maxVisible:4},"").map(n=>n.id),["4","3","2","1"]);
+const updatedBurst=[...burst,{id:"update",app:"0",received:10}];
+assert.deepEqual(visibleGroups(updatedBurst,{...groupedConfig,maxVisible:4},"").map(n=>n.groupId),["3","2","1","0"]);
 assert.throws(()=>validateNotice({title:"test",group:3}));
 validateNotice({title:"job",id:"backup/nightly"});
 assert.throws(()=>validateNotice({title:"job",id:""}));
