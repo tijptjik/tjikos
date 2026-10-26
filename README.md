@@ -1,15 +1,17 @@
 # tooltjik
 
-Desktop and terminal tools, led by **Notjik**, a notification system for Hyprland.
+A collection of Linux desktop utilities and terminal programs for notifications,
+status bars, scripted workflows and mail archives.
 
 ## Notjik
 
 **Notifications you can act on: live status, progress, timers, grouped history,
 and Telegram replies, with a robot for every feeling.**
 
-[![Watch Dunst vs Notjik](apps/notjik/docs/showcase.png)](apps/notjik/docs/showcase.mp4)
+![Dunst and Notjik render the same synthetic notifications](apps/notjik/docs/showcase.gif)
 
-[Watch the full Dunst vs Notjik video](apps/notjik/docs/showcase.mp4) ·
+*80-second synthetic Dunst and Notjik comparison, shown as an animated preview.*
+
 [Installation](apps/notjik/README.md#install-and-start) ·
 [Card types and calling the API](apps/notjik/docs/cards.md) ·
 [Configuration and full documentation](apps/notjik/README.md)

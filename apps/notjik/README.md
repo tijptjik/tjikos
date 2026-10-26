@@ -3,9 +3,11 @@
 A Quickshell notification server with reusable QML cards, desktop notification
 compatibility, command buttons, configurable placement and searchable local history.
 
-[![Watch Dunst vs Notjik](docs/showcase.png)](docs/showcase.mp4)
+![Dunst and Notjik render the same synthetic notifications](docs/showcase.gif)
 
-[Watch the full video](docs/showcase.mp4) · [Install](#install-and-start) ·
+*80-second synthetic Dunst and Notjik comparison, shown as an animated preview.*
+
+[Install](#install-and-start) ·
 [Card types and CLI examples](docs/cards.md) · [Configuration](#configuration) ·
 [Telegram integration](#telegram-photos-and-voice-messages)
 
@@ -870,3 +872,7 @@ left edge, cropped to fill the full card height without a height cap. Sender ima
 use the same 80 px strip, clipped to the card corners.
 They fill the full height as controls open or close. Missing avatars retain
 the initials fallback; app icons keep their inset presentation.
+
+Telegram notifications (native and bridge) are suppressed while a Telegram window
+has keyboard focus. Focusing Telegram also dismisses its existing notices, so they
+do not reappear when focus moves away. Other applications are unaffected.
