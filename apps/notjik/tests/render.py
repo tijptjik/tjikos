@@ -188,14 +188,13 @@ def group_preview(root, destination):
             p = ipc(root, {"op":"groupHoverPoint"})["point"]
             subprocess.run(["hyprctl", "dispatch", "hl.dsp.cursor.move({x=" + str(round(p["globalX"])) + ",y=" + str(round(p["globalY"])) + "})"], check=True, capture_output=True)
             subprocess.run(["ydotool", "mousemove", "--", "1", "0"], check=True, capture_output=True)
-            wait_for(lambda: ipc(root, {"op":"status"})["drawerOpen"])
-            print("PASS: real pointer hovering the card centre opens the group")
+            time.sleep(.7)
+            assert not ipc(root, {"op":"status"})["drawerOpen"]
+            print("PASS: hovering the grouped card leaves history closed")
         finally:
             subprocess.run(["hyprctl", "dispatch", "hl.dsp.cursor.move({x=" + str(previous["x"]) + ",y=" + str(previous["y"]) + "})"], check=True, capture_output=True)
-    else:
-        ipc(root, {"op":"openGroup"})
-        assert ipc(root, {"op":"status"})["drawerOpen"]
-    print("PASS: symmetric 2-to-3 split and 3-to-2 merge; interrupted morph; five-notch cap; disabled motion; stable card height; open group")
+    assert not ipc(root, {"op":"status"})["drawerOpen"]
+    print("PASS: symmetric 2-to-3 split and 3-to-2 merge; interrupted morph; five-notch cap; disabled motion; stable card height; history stays closed")
 
 
 def main():
@@ -217,7 +216,7 @@ def main():
         code = shell.read_text().replace('Variants {\n        model:', 'Variants {\n        id: panels\n        model:')
         code = code.replace('case "status": break;', 'case "advanceActions": panels.instances[0].advanceActions(request.direction); return {ok:true};\n        case "metrics": return {ok:true, metrics:panels.instances[0].metrics()};\n        case "capture": panels.instances[0].capture(request.path); return {ok:true};\n        case "status": break;')
         code = code.replace('HistoryDrawer { controller: root }', 'HistoryDrawer { id: historyDrawer; controller: root }')
-        code = code.replace('case "capture":', 'case "groupHoverPoint": return {ok:true, point:panels.instances[0].groupHoverPoint()};\n        case "openGroup": panels.instances[0].openGroup(); return {ok:true};\n        case "startMotion": panels.instances[0].startMotion(request.path || ""); return {ok:true};\n        case "stopMotion": return {ok:true, count:panels.instances[0].stopMotion()};\n        case "motionFrames": return {ok:true, frames:panels.instances[0].motionFrames.slice(request.offset, request.offset + 5)};\n        case "capture":')
+        code = code.replace('case "capture":', 'case "groupHoverPoint": return {ok:true, point:panels.instances[0].groupHoverPoint()};\n        case "startMotion": panels.instances[0].startMotion(request.path || ""); return {ok:true};\n        case "stopMotion": return {ok:true, count:panels.instances[0].stopMotion()};\n        case "motionFrames": return {ok:true, frames:panels.instances[0].motionFrames.slice(request.offset, request.offset + 5)};\n        case "capture":')
         code = code.replace('case "capture":', 'case "expandHistory": for (const group of historyGroups) expandedGroups = Object.assign({}, expandedGroups, {[group.key]:true}); break;\n        case "captureHistory": historyDrawer.capture(request.path); return {ok:true};\n        case "capture":')
         code = code.replace('case "status": break;', 'case "revealControls": panels.instances[0].revealControls(); return {ok:true};\n        case "status": break;')
         shell.write_text(code)
@@ -250,9 +249,8 @@ def main():
         card.write_text(card.read_text().replace("id: card", """id: card
     function groupGeometry() {
         return Object.assign(groupNotches.geometry(), {label:groupIndicator.Accessible.name, visible:groupIndicator.visible, indicatorOpacity:groupIndicator.opacity,
-            timer:groupHoverTimer.running, enabled:groupIndicator.enabled, dragging:card.dragging, drawer:card.controller.drawerOpen, hovered:groupIndicator.hovered, cardHovered:card.hovered, x:groupIndicator.x, width:groupIndicator.width, cardWidth:width, height:height});
+            enabled:groupIndicator.enabled, dragging:card.dragging, drawer:card.controller.drawerOpen, cardHovered:card.hovered, x:groupIndicator.x, width:groupIndicator.width, cardWidth:width, height:height});
     }
-    function openGroup() { groupIndicator.clicked(); }
     function groupHoverPoint() { return card.mapToItem(card.Window.window.contentItem, card.width / 2, card.height / 2); }
 """, 1))
         if "--height-limit" in sys.argv[2:]:
@@ -297,7 +295,6 @@ def main():
             panel.motionFrames.push(sample);
         }
     }
-    function openGroup() { for (let i = 0; i < cardItems.count; ++i) cardItems.itemAt(i).renderedCard.openGroup(); }
     function advanceActions(direction) { for (let i = 0; i < cardItems.count; ++i) cardItems.itemAt(i).renderedCard.advanceActions(direction); }
     function revealControls() { for (let i = 0; i < cardItems.count; ++i) cardItems.itemAt(i).renderedCard.controlsRevealed = true; }
     function metrics() {

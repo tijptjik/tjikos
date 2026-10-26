@@ -161,7 +161,7 @@ any non-interactive area again to reposition them through the compositor, includ
 onto another monitor. New notices and sender updates preserve the detached window
 and its workspace. The managed Hyprland `notjik-detached` window rule supplies the
 initial floating style; only the initial drag preview uses a layer surface.
-Action buttons, group controls, media controls and text editors retain their own
+Action buttons, media controls and text editors retain their own
 mouse gestures; clicking a floating panel's background leaves it open. Detaching
 a grouped popup pins the displayed notice; its other messages remain in the stack.
 The surrounding desktop remains interactive. Use the wheel, touchpad or scrollbar
@@ -378,8 +378,10 @@ of a text count: one per message, capped at five. The marks split and merge as t
 count changes: three to two divides the middle notch between its neighbours; two
 to three reverses that motion. A change during animation continues from the current
 positions. Counts above five keep the same five marks, and `stack.animationMs: 0`
-disables the morph. Hovering anywhere on the grouped card for 400 ms or clicking its notch strip opens the
-group's history; its tooltip and accessible label retain the exact count. Single
+disables the morph. Group marks are informational and their accessible label retains
+the exact count. Clicking a grouped card, including its notch strip, dismisses only
+the displayed message, revealing the next member. Hovering never opens history;
+open history explicitly with Super+M. Single
 notices have no group marks. The drawer groups
 saved notices by application and group key across time, with expandable headings.
 Set `grouping.enabled` to false to show separate cards.

@@ -383,11 +383,6 @@ ShellRoot {
         }
     }
 
-    function showGroup(notice) {
-        setDrawer(true);
-        selectHistory(session + "/" + notice.id);
-    }
-
     function navigate(direction) {
         if (locked) throw Error("Notification navigation is unavailable while locked");
         if (drawerOpen || !notices.length) {

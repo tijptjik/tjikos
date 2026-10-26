@@ -41,7 +41,7 @@ Rectangle {
     readonly property bool controlsRevealed: hovered || (card.Window.active && selected && controller.keyboardMode)
         || !!detail.item?.interactionHeld
     readonly property bool hasInteractions: !notice.archived && (availableActions.length > 0 || floating
-        || !!detail.item?.hasInteractions || (notice.groupCount || 1) > 1)
+        || !!detail.item?.hasInteractions)
     readonly property var availableActions: Logic.actionButtonsFor(notice, controller.config)
     readonly property bool richTelegram: notice.type === "telegram"
     readonly property string initials: notice.title.trim().split(/\s+/).slice(0, 2).map(word => word.charAt(0)).join("").toUpperCase()
@@ -202,41 +202,23 @@ Rectangle {
         }
     }
 
-    Button {
+    // Group marks are informational; taps pass through to normal card dismissal.
+    Item {
         id: groupIndicator
         anchors { right: parent.right; top: parent.top; bottom: parent.bottom; topMargin: card.radius; bottomMargin: card.radius }
         width: Math.max(12, card.theme.padding)
         visible: !card.historyMode && (groupNotches.grouped || groupNotches.opacity > 0)
-        enabled: groupNotches.grouped
-        padding: 0
-        hoverEnabled: true
-        focusPolicy: Qt.StrongFocus
-        Accessible.name: "Show " + (card.notice.groupCount || 1) + " messages"
-        ToolTip.visible: !card.telegram && hovered && enabled
-        ToolTip.delay: 500
-        ToolTip.text: (card.notice.groupCount || 1) + " messages"
-        background: Rectangle {
-            color: "transparent"
-            radius: 3
-            border.width: groupIndicator.visualFocus ? 1 : 0
-            border.color: card.accent
-        }
-        contentItem: GroupNotches {
+        Accessible.role: Accessible.StaticText
+        Accessible.name: (card.notice.groupCount || 1) + " messages"
+        GroupNotches {
             id: groupNotches
+            anchors.fill: parent
             count: card.historyMode ? 1 : (card.notice.groupCount || 1)
             animationMs: card.controller.config.stack?.animationMs ?? 220
             notchWidth: Math.max(3, card.theme.borderWidth + 2)
-            color: groupIndicator.hovered || groupIndicator.visualFocus ? card.accent : card.theme.muted
-            inkOpacity: groupIndicator.hovered || groupIndicator.visualFocus ? 1 : 0.75
+            color: card.theme.muted
+            inkOpacity: 0.75
         }
-        Timer {
-            id: groupHoverTimer
-            interval: 400
-            running: card.hovered && groupIndicator.enabled && groupIndicator.visible
-                && !card.dragging && !card.controller.drawerOpen
-            onTriggered: card.controller.showGroup(card.notice)
-        }
-        onClicked: card.controller.showGroup(card.notice)
     }
 
     ColumnLayout {
