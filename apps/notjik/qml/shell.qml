@@ -43,6 +43,7 @@ ShellRoot {
         for (const notice of notices.slice())
             if (Logic.suppressForFocus(notice, focusedAppId)) close(notice.id, false);
     }
+    property var telegramDelivery: ({nativeReceived: 0, nativeFocusSuppressed: 0, lastNativeAt: 0})
     property double telegramBridgeUntil: 0
     readonly property bool telegramBridgeActive: telegramBridgeUntil > now
     readonly property alias telegramPlayer: telegramPlayback
@@ -213,14 +214,19 @@ ShellRoot {
         inlineReplySupported: false
         onNotification: n => {
             n.tracked = true;
-            if (Logic.suppressForFocus({app:n.appName, desktopEntry:n.desktopEntry}, root.focusedAppId)) {
+            const telegram = Logic.telegramNotice({app:n.appName, desktopEntry:n.desktopEntry});
+            const suppressed = Logic.suppressForFocus({app:n.appName, desktopEntry:n.desktopEntry}, root.focusedAppId);
+            if (telegram) root.telegramDelivery = {
+                nativeReceived: root.telegramDelivery.nativeReceived + 1,
+                nativeFocusSuppressed: root.telegramDelivery.nativeFocusSuppressed + (suppressed ? 1 : 0),
+                lastNativeAt: Date.now()
+            };
+            if (suppressed) {
+                root.log("suppressed", root.nativeRecord(n));
                 n.expire(); return;
             }
-            // The bridge handles chat notifications while its connected lease is fresh.
-            // Calls and other categories continue through Telegram Desktop.
-            if (root.telegramBridgeActive && n.hints.category === "im.received" && Logic.telegramNotice({app:n.appName, desktopEntry:n.desktopEntry})) {
-                n.expire(); return;
-            }
+            // A connected bridge is not a receipt for this message. Keep Desktop's
+            // delivery path until both transports provide a reliable shared identity.
             const id = "dbus-" + n.id;
             root.nativeNotices[id] = n;
             n.closed.connect(reason => root.remove(id, reason === NotificationCloseReason.Expired ? "expired"
@@ -446,7 +452,7 @@ ShellRoot {
         default: throw Error("Unknown operation");
         }
         return {ok: true, paused: paused, queued: notices.length, visible: visibleNotices.length, floating: floatingIds.length, pinned: floatingIds.length,
-            telegramBridgeActive: telegramBridgeActive, focusedAppId: focusedAppId, groupingEnabled: config.grouping.enabled, theme: config.theme, lockState: lockState, drawerOpen: drawerOpen, historyCount: historyItems.length, selectedId: selectedId, historySelectedKey: historySelectedKey, keyboardMode: keyboardMode, historyError: backendError, monitors: screens.map(s => s.name)};
+            telegramDelivery: telegramDelivery, telegramBridgeActive: telegramBridgeActive, focusedAppId: focusedAppId, groupingEnabled: config.grouping.enabled, theme: config.theme, lockState: lockState, drawerOpen: drawerOpen, historyCount: historyItems.length, selectedId: selectedId, historySelectedKey: historySelectedKey, keyboardMode: keyboardMode, historyError: backendError, monitors: screens.map(s => s.name)};
     }
 
     FileView {

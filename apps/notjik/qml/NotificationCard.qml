@@ -43,6 +43,8 @@ Rectangle {
     readonly property bool hasInteractions: !notice.archived && (availableActions.length > 0 || floating
         || !!detail.item?.hasInteractions)
     readonly property var availableActions: Logic.actionButtonsFor(notice, controller.config)
+    readonly property bool structuredReady: !!presentation && structuredDetail.status === Loader.Ready
+    readonly property var presentation: Logic.notificationPresentation(notice, controller.config)
     readonly property bool richTelegram: notice.type === "telegram"
     readonly property string initials: notice.title.trim().split(/\s+/).slice(0, 2).map(word => word.charAt(0)).join("").toUpperCase()
     readonly property string telegramAge: controller.now - (notice.received || controller.now) < 60000 ? "now" : Qt.formatDateTime(new Date(notice.received), "HH:mm")
@@ -87,7 +89,7 @@ Rectangle {
         asynchronous: true
         MouseArea {
             anchors.fill: parent
-            enabled: card.avatarCover && card.opensChat
+            enabled: !card.richTelegram && card.opensChat
             cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
             Accessible.role: Accessible.Button
             Accessible.name: "Open Telegram chat"
@@ -299,7 +301,8 @@ Rectangle {
                 Text {
                     Layout.fillWidth: true
                     visible: text.length > 0
-                    text: card.richTelegram ? "Telegram · " + card.telegramAge : Logic.spacedBody(card.notice.body)
+                    text: card.structuredReady ? (card.telegram ? "Telegram · " + card.telegramAge : "")
+                        : card.richTelegram ? "Telegram · " + card.telegramAge : Logic.spacedBody(card.notice.body)
                     textFormat: Text.PlainText
                     color: card.urgencyInk.body
                     lineHeight: 1.22
@@ -307,7 +310,7 @@ Rectangle {
                     wrapMode: Text.Wrap
                     maximumLineCount: card.theme.maxBodyLines
                     elide: Text.ElideRight
-                    font { family: card.theme.font; pixelSize: card.richTelegram ? card.theme.fontSize - 3 : card.theme.fontSize }
+                    font { family: card.theme.font; pixelSize: card.richTelegram || card.presentation ? card.theme.fontSize - 3 : card.theme.fontSize }
                 }
             }
             ActionButton {
@@ -326,6 +329,29 @@ Rectangle {
             }
         }
         Loader {
+            id: structuredDetail
+            Layout.fillWidth: true
+            visible: status === Loader.Ready
+            Layout.preferredHeight: item ? item.implicitHeight : 0
+            function loadComponent() {
+                const view = card.presentation;
+                if (!view) { source = ""; return; }
+                const custom = card.controller.config.components[view.type];
+                const url = custom || (view.type === "key-value" ? Qt.resolvedUrl("components/KeyValue.qml") : "");
+                const properties = {notice:Object.assign({}, card.notice, {data:view.data}), theme:card.theme, now:card.controller.now};
+                if (source.toString() === url.toString() && item) {
+                    for (const key of Object.keys(properties)) item[key] = properties[key];
+                } else setSource(url, properties);
+            }
+            Component.onCompleted: loadComponent()
+            Connections {
+                target: card
+                function onPresentationChanged() { structuredDetail.loadComponent(); }
+                function onNoticeChanged() { structuredDetail.loadComponent(); }
+                function onThemeChanged() { structuredDetail.loadComponent(); }
+            }
+        }
+        Loader {
             id: detail
             Layout.fillWidth: true
             visible: source.toString().length > 0 && status === Loader.Ready
@@ -338,6 +364,7 @@ Rectangle {
                 if (url) {
                     const properties = {notice: card.notice, theme: card.theme, now: card.controller.now};
                     if (card.notice.type === "telegram" && !custom) {
+                        properties.showBody = Qt.binding(() => !card.structuredReady);
                         properties.controlsRevealed = Qt.binding(() => card.controlsRevealed);
                         properties.controller = card.controller;
                         properties.monitorName = card.monitorName;

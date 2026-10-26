@@ -1,0 +1,48 @@
+{
+  "handlers": [
+    {
+      "id": "starprowlarr-grab",
+      "match": {
+        "telegram": true,
+        "title": "StarProwlarr"
+      },
+      "pattern": "(?:📺[ \\t]*)?([\\s\\S]+?)\\n[ \\t]*\\n([0-9]{3,4}p|[248]K)[ \\t]*·[ \\t]*([^\\n·]+)[ \\t]*·[ \\t]*([^\\n]+)\\n(Grabbed) by (Sonarr|Radarr)[ \\t]*·[ \\t]*([^\\n]+)",
+      "card": "key-value",
+      "captures": {
+        "heading": 1,
+        "resolution": 2,
+        "source": 3,
+        "codec": 4,
+        "event": 5,
+        "application": 6,
+        "indexer": 7
+      },
+      "fields": [
+        {
+          "label": "Resolution",
+          "key": "resolution"
+        },
+        {
+          "label": "Source",
+          "key": "source"
+        },
+        {
+          "label": "Codec",
+          "key": "codec"
+        },
+        {
+          "label": "Event",
+          "key": "event"
+        },
+        {
+          "label": "Application",
+          "key": "application"
+        },
+        {
+          "label": "Indexer",
+          "key": "indexer"
+        }
+      ]
+    }
+  ]
+}

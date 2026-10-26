@@ -129,6 +129,19 @@ def run():
                         check=True, capture_output=True, text=True)
                     return int(result.stdout.split()[1])
 
+                # Connection health must never suppress an unmatched Desktop message.
+                call("telegramBridge", active=True)
+                assert call("status")["telegramBridgeActive"]
+                fallback = "dbus-" + str(notify("Desktop fallback", actions=("default", "Open"),
+                    hints=("desktop-entry", "s", "telegram", "category", "s", "im.received")))
+                wait_for(lambda: fallback in ids())
+                assert call("status")["telegramDelivery"]["nativeReceived"] == 1
+                assert call("status")["telegramDelivery"]["nativeFocusSuppressed"] == 0
+                bridge_card = call("send", notice={"title":"Independent bridge card", "app":"Telegram via Notjik", "timeout":0})["id"]
+                assert fallback in ids() and bridge_card in ids()
+                call("dismiss", id="all")
+                call("telegramBridge", active=False)
+
                 # Focus policy covers both transports and clears existing Telegram cards.
                 local_focus = call("send", notice={"title":"Focus check", "app":"Telegram via Notjik", "timeout":0})["id"]
                 native_focus = "dbus-" + str(notify("Focus check", hints=("desktop-entry", "s", "telegram")))

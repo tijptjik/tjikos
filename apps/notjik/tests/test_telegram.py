@@ -41,6 +41,26 @@ class TelegramTests(unittest.TestCase):
                             "added_notifications": [{"id": ident, "date": 1000, "type": {
                                 "@type": "notificationTypeNewMessage", "message": message or self.message, "show_preview": preview}}]})
 
+    def test_delivery_diagnostics_separate_filtering_and_publish_failure(self):
+        self.bridge.publish = lambda notice: (_ for _ in ()).throw(OSError("offline"))
+        self.add()
+        self.assertEqual(self.bridge.delivery["notificationEvents"], 1)
+        self.assertEqual(self.bridge.delivery["publishFailures"], 1)
+        self.assertFalse(next(iter(self.bridge.entries.values()))["published"])
+        self.bridge.publish = self.cards.append
+        self.bridge.show(next(iter(self.bridge.entries)))
+        self.assertTrue(next(iter(self.bridge.entries.values()))["published"])
+        self.assertEqual(self.bridge.delivery["publishAttempts"], 2)
+        self.add(message={**self.message, "is_outgoing":True})
+        self.bridge.add(8, 123, {"id":10, "date":900, "type":{
+            "@type":"notificationTypeNewMessage", "message":self.message}})
+        self.bridge.add(8, 123, {"id":11, "type":{"@type":"notificationTypeNewCall"}})
+        self.assertEqual(self.bridge.delivery["ignoredOutgoing"], 1)
+        self.assertEqual(self.bridge.delivery["ignoredOld"], 1)
+        self.assertEqual(self.bridge.delivery["ignoredType"], 1)
+        self.assertEqual(self.bridge.delivery["lastNotificationAt"], 1000)
+        self.assertNotIn("A photo", json.dumps(self.bridge.delivery))
+
     def test_photo_download_and_real_identity(self):
         self.add()
         self.assertEqual(self.cards[-1]["data"]["chatId"], "123")

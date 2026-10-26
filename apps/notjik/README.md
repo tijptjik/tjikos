@@ -698,11 +698,41 @@ Telegram's native notification payload does not contain attachments or playback
 controls. The optional TDLib bridge below supplies media through its own account session.
 
 
+## Structured notification handlers
+
+`handlers` is an ordered registry of presentation rules. Each rule combines a
+source selector, a full-body regular expression, numbered captures and a card
+renderer. The first complete match wins. See `examples/handlers.json` for the
+StarProwlarr grab template; copy its `handlers` array into your configuration.
+
+- `match.telegram: true` recognizes both Desktop and bridge transports.
+  `match.title` selects an exact chat title. `match.chatId` selects a stable
+  bridge chat ID, but intentionally cannot match Desktop payloads without that ID.
+  `match.app` selects an exact app name or desktop entry (case insensitive).
+  All supplied selectors must match. These selectors control presentation only;
+  display names are not authentication and matching never grants actions.
+- `pattern` uses JavaScript regular-expression syntax with numbered capture
+  groups (the portable Python/JavaScript subset is validated). It must match the
+  entire body after outer whitespace and CRLF normalization. Use explicit line
+  separators; unexpected message formats remain unchanged.
+- `captures` maps data names to capture numbers. Every capture must be nonempty.
+  `card: "key-value"` renders `heading` plus `fields` entries containing `label`
+  and a captured `key`. A registered `components` name may select another QML
+  renderer; it receives the captured values as `notice.data`.
+
+Handlers format standard text and Telegram text messages only. The original
+body, transport type, ID, avatar, grouping, action policy and Telegram controls
+remain intact, including in history. Values render as literal text. Removing a
+rule restores ordinary rendering. Rules neither deduplicate notifications nor
+change delivery. Invalid templates fail configuration validation; a renderer
+that fails to load falls back to the original body. The registry is local trusted
+configuration, not patterns supplied by incoming messages.
+
 ## Telegram photos and voice messages
 
 The optional bridge receives TDLib notification updates, respecting Telegram's
-notification/mute and preview settings. It displays ordinary messages too, so
-native Telegram chat notifications can be suppressed while the bridge is connected.
+notification/mute and preview settings. It displays ordinary messages too, while
+Telegram Desktop remains an independent notification delivery path.
 It does not poll the inbox or reuse Telegram Desktop's `tdata`.
 
 Build/install Notjik normally, then install its optional pinned runtime:
@@ -729,6 +759,16 @@ in repository files, command arguments, or chat. The bridge is a separate Telegr
 session named **Notjik**. The installer supplies its service but does not enable it
 or sign in automatically. Stop `notjik-telegram.service` before signing in again;
 an exclusive lock prevents two processes from opening the same TDLib database.
+
+Telegram Desktop notifications remain enabled while the bridge is connected. A
+healthy connection does not prove delivery of a particular message or coverage
+of every Desktop account. Both paths may show the same message; no title/body
+heuristic discards notifications. Existing focus suppression still applies.
+`notjikctl status` includes `telegramDelivery` counters for native arrivals and
+focus suppression. `notjikctl telegram status` includes `delivery` counters for
+bridge events, filtering and publication failures. Counters reset on service
+restart and contain no message text. A successful publication means the UI
+accepted the request, not that the user saw the card.
 
 Photos appear as previews up to 1280 pixels. Voice cards have Play/Pause, a seek
 slider and 1×/1.25×/1.5×/2× speed controls. There is one shared player across cards
@@ -771,11 +811,9 @@ matches a message using a display name. These are the bridge's own controls unde
 caller `Telegram via Notjik`; the existing native Telegram action blacklist stays
 unchanged. Blacklisting `Telegram via Notjik` also disables its controls.
 
-A connected bridge renews a 12-second lease in Notjik every three seconds. Only
-native Telegram notifications categorized as `im.received` are suppressed while
-that lease is fresh. Other applications/categories remain visible. On disconnect,
-bridge exit, failed delivery, or lease expiry, native Telegram notifications resume;
-leave Telegram Desktop notifications enabled as the fallback. Old unread messages
+A connected bridge renews a 12-second health lease in Notjik every three seconds.
+The lease is diagnostic only; it never suppresses native notifications. Leave
+Telegram Desktop notifications enabled as the fallback. Old unread messages
 are not replayed on startup. Telegram read/delete updates remove matching live cards.
 
 Hidden notification previews, spoilers, protected media and self-destructing media

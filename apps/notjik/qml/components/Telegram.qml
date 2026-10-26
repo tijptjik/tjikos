@@ -9,6 +9,7 @@ import ".."
 
 ColumnLayout {
     id: detail
+    property bool showBody: true
     required property var notice
     required property var theme
     required property double now
@@ -385,7 +386,7 @@ ColumnLayout {
     Flow {
         id: inlineEmoji
         Layout.fillWidth: true
-        visible: !!detail.mediaData.parts?.length
+        visible: detail.showBody && !!detail.mediaData.parts?.length
         spacing: 0
         Repeater {
             model: detail.mediaData.parts || []
@@ -421,7 +422,7 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
-        visible: detail.notice.body.length > 0 && !detail.mediaData.parts?.length
+        visible: detail.showBody && detail.notice.body.length > 0 && !detail.mediaData.parts?.length
         text: detail.notice.body
         textFormat: Text.PlainText
         wrapMode: Text.Wrap

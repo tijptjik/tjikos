@@ -27,7 +27,7 @@ DEFAULTS = {
     "privacy": {"lockScreen": "hide"},
     "stack": {"animationMs": 220, "heightPercent": 75},
     "actions": {"blacklist": []},
-    "components": {},
+    "components": {}, "handlers": [],
 }
 
 
@@ -133,6 +133,47 @@ def load_config(root):
     blacklist = cfg["actions"]["blacklist"]
     if not isinstance(blacklist, list) or any(not isinstance(caller, str) or not caller.strip() for caller in blacklist):
         raise ValueError("actions.blacklist must be an array of nonempty caller names")
+    handlers = cfg["handlers"]
+    if not isinstance(handlers, list) or len(handlers) > 64:
+        raise ValueError("handlers must be an array of at most 64 rules")
+    ids = set()
+    for rule in handlers:
+        if not isinstance(rule, dict) or not isinstance(rule.get("id"), str) or not rule["id"].strip() or rule["id"] in ids:
+            raise ValueError("handlers require unique nonempty ids")
+        ids.add(rule["id"])
+        match = rule.get("match")
+        if not isinstance(match, dict) or not match or set(match) - {"app", "telegram", "title", "chatId"}:
+            raise ValueError("handlers.match requires a source selector")
+        if not match.get("app") and match.get("telegram") is not True:
+            raise ValueError("handlers.match requires app or telegram: true")
+        for key, value in match.items():
+            if (key == "telegram" and value is not True) or (key != "telegram" and (not isinstance(value, str) or not value.strip())):
+                raise ValueError("invalid handlers.match selector")
+        pattern = rule.get("pattern")
+        if not isinstance(pattern, str) or not pattern or len(pattern) > 4096:
+            raise ValueError("handlers.pattern must be a nonempty template regex")
+        try:
+            compiled = re.compile(pattern)
+        except re.error as error:
+            raise ValueError("invalid handlers.pattern") from error
+        if not isinstance(rule.get("card"), str) or (rule["card"] != "key-value" and rule["card"] not in cfg["components"]):
+            raise ValueError("handlers.card must be key-value or a configured component")
+        captures = rule.get("captures")
+        if not isinstance(captures, dict) or not captures:
+            raise ValueError("handlers.captures must map names to capture numbers")
+        for key, value in captures.items():
+            if not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*", key) or key in {"fields", "__proto__", "constructor", "prototype"}:
+                raise ValueError("invalid handlers.captures name")
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= compiled.groups:
+                raise ValueError("handlers.captures references a missing capture")
+        fields = rule.get("fields", [])
+        if not isinstance(fields, list) or len(fields) > 16:
+            raise ValueError("handlers.fields must be an array of at most 16 fields")
+        for field in fields:
+            if not isinstance(field, dict) or not isinstance(field.get("label"), str) or not field["label"].strip() or not isinstance(field.get("key"), str) or field["key"] not in captures:
+                raise ValueError("handlers.fields requires label and captured key")
+        if rule["card"] == "key-value" and ("heading" not in captures or not fields):
+            raise ValueError("key-value handlers require heading and fields")
     theme_name = cfg["theme"]
     if theme_name in ("monochrome", "rose-punk"):
         theme_path = root / "themes" / f"{theme_name}.json"

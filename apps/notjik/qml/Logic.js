@@ -319,3 +319,34 @@ function robotArtwork(notice) {
     }
     return "icons/robots/" + robotFiles[index];
 }
+
+// Presentation-only adapters: never mutate identity, body, actions or media.
+// First full template match wins; unknown formats retain their original card.
+function notificationPresentation(notice, config) {
+    if (!["standard", "telegram"].includes(notice.type || "standard")) return null;
+    if (notice.type === "telegram" && notice.data?.kind && notice.data.kind !== "text") return null;
+    const body = String(notice.body || "").replace(/\r\n?/g, "\n").trim();
+    if (!body || body.length > 16384) return null;
+    for (const rule of config.handlers || []) {
+        const source = rule.match || {};
+        if (source.telegram && !telegramNotice(notice)) continue;
+        if (source.app && ![notice.app, notice.desktopEntry].some(value => String(value || "").toLowerCase() === source.app.toLowerCase())) continue;
+        if (source.title && notice.title !== source.title) continue;
+        if (source.chatId && String(notice.data?.chatId || "") !== source.chatId) continue;
+        try {
+            const match = new RegExp("^(?:" + rule.pattern + ")$").exec(body);
+            if (!match || match[0].length !== body.length) continue;
+            const data = {};
+            let complete = true;
+            for (const key of Object.keys(rule.captures)) {
+                const value = String(match[rule.captures[key]] || "").trim();
+                if (!value) { complete = false; break; }
+                data[key] = value;
+            }
+            if (!complete) continue;
+            data.fields = (rule.fields || []).map(field => ({label:field.label, value:data[field.key]}));
+            return {handler:rule.id, type:rule.card, data:data};
+        } catch (_) { /* Unsupported regex or malformed rule: retain ordinary text. */ }
+    }
+    return null;
+}

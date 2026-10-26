@@ -298,6 +298,9 @@ class Bridge:
     def __init__(self, td, publish, dismiss, clock=time.time):
         self.td, self.publish, self.dismiss, self.clock = td, publish, dismiss, clock
         self.started = clock()
+        self.delivery = {"notificationEvents": 0, "lastNotificationAt": 0,
+                         "ignoredType": 0, "ignoredOutgoing": 0, "ignoredOld": 0,
+                         "publishAttempts": 0, "publishFailures": 0}
         self.entries = OrderedDict()
         self.notifications = {}
         self.chats = {}
@@ -320,12 +323,14 @@ class Bridge:
         entry = self.entries.get(key)
         if not entry:
             return
+        self.delivery["publishAttempts"] += 1
         try:
             self.publish(entry["notice"])
             entry["published"] = True
             self.ui_ready = True
         except (OSError, ValueError, subprocess.SubprocessError):
             entry["published"] = False
+            self.delivery["publishFailures"] += 1
             self.ui_ready = False
 
     def remove(self, key):
@@ -420,11 +425,18 @@ class Bridge:
                 self.show(key)
 
     def add(self, group_id, chat_id, notification):
+        self.delivery["notificationEvents"] += 1
+        self.delivery["lastNotificationAt"] = self.clock()
         item = notification.get("type", {})
         if item.get("@type") != "notificationTypeNewMessage":
+            self.delivery["ignoredType"] += 1
             return  # No push registration or call handling: Desktop remains responsible for calls.
         message = item.get("message", {})
-        if message.get("is_outgoing") or notification.get("date", message.get("date", 0)) < self.started - 30:
+        if message.get("is_outgoing"):
+            self.delivery["ignoredOutgoing"] += 1
+            return
+        if notification.get("date", message.get("date", 0)) < self.started - 30:
+            self.delivery["ignoredOld"] += 1
             return  # Do not replay old unread messages when starting or reconnecting.
         chat_id = identifier(chat_id)
         message = {**message, "chat_id": chat_id}
@@ -986,7 +998,7 @@ def run(root, login=False):
                 while not requests.empty():
                     request, answer = requests.get_nowait()
                     if request.get("action") == "status":
-                        answer.put({"ok": True, "authorized": auth.ready, "connected": connected, "active": len(bridge.entries)})
+                        answer.put({"ok": True, "authorized": auth.ready, "connected": connected, "active": len(bridge.entries), "delivery": dict(bridge.delivery)})
                     elif not auth.ready or not connected:
                         answer.put({"ok": False, "error": "Telegram is reconnecting"})
                     else:

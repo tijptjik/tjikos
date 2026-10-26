@@ -305,10 +305,10 @@ def main():
             const slotPoint = slot.mapToItem(viewport, 0, 0);
             const visibleTop = slot.clip ? Math.max(point.y,slotPoint.y) : point.y;
             const visibleBottom = slot.clip ? Math.min(point.y+card.height*card.scale,slotPoint.y+slot.height) : point.y+card.height*card.scale;
-            result.push({id:card.notice.id, lifeKey:slot.noticeKey, title:card.notice.title, y:visibleTop, x:point.x, width:card.width*card.scale,
+            result.push({structuredReady:card.structuredReady, presentation:card.presentation, id:card.notice.id, lifeKey:slot.noticeKey, title:card.notice.title, y:visibleTop, x:point.x, width:card.width*card.scale,
                 height:Math.max(0,visibleBottom-visibleTop), fullHeight:card.height, admissionHeight:card.admissionHeight, extent:slot.extent, slotClip:slot.clip, cardZ:slot.z, scale:card.scale, behind:card.parent === exitLayer, layerZ:card.parent === exitLayer ? exitLayer.z : viewport.z, entranceAt:slot.entranceAt, started:slot.started, firstRevealAt:slot.firstRevealAt, firstSpaceAt:slot.firstSpaceAt, urgency:card.notice.urgency, titleInk:card.urgencyInk.title, bodyInk:card.urgencyInk.body, opacity:card.opacity*slot.opacity, retiring:slot.retiring, artwork:card.artwork, artworkReady:card.artworkStatus === Image.Ready, artworkSource:card.artworkSource.toString(), actions:card.actionGeometry(), group:card.groupGeometry(), footer:card.footerGeometry()});
         }
-        return {cards:result, heightBlocked:panel.heightBlocked, flowSpeed:panel.motionSpeed, now:Date.now(), height:panel.height, layoutHeight:panel.layoutHeight, exitCount:exitLayer.children.length, contentHeight:viewport.contentHeight, animationMs:panel.animationMs};
+        return {handlerCount:(controller.config.handlers || []).length, cards:result, heightBlocked:panel.heightBlocked, flowSpeed:panel.motionSpeed, now:Date.now(), height:panel.height, layoutHeight:panel.layoutHeight, exitCount:exitLayer.children.length, contentHeight:viewport.contentHeight, animationMs:panel.animationMs};
     }
 """, 1)
         start = panel_code.index("    visible: controller.ready")
@@ -368,6 +368,33 @@ def main():
                     return
                 if "--motion" in sys.argv[2:]:
                     motion_preview(root, destination)
+                    return
+                if "--handlers" in sys.argv[2:]:
+                    from test_handlers import RULE, BODY
+                    config["handlers"] = [RULE]
+                    config["theme"] = "rose-punk"
+                    (root / "config.json").write_text(json.dumps(config))
+                    wait_for(lambda: ipc(root, {"op":"metrics"})["metrics"]["handlerCount"] == 1 and ipc(root, {"op":"status"})["theme"] == "rose-punk")
+                    for transport in ("native", "bridge", "unmatched"):
+                        ipc(root, {"op":"dismiss", "id":"all"})
+                        wait_for(lambda: not ipc(root, {"op":"metrics"})["metrics"]["cards"])
+                        notice = {"title":"StarProwlarr", "app":"Telegram Desktop", "body":BODY, "timeout":0}
+                        if transport == "bridge":
+                            notice.update(app="Telegram via Notjik", type="telegram", data={"kind":"text", "source":"", "status":"", "chatId":"123", "messageId":"456", "demo":True})
+                        elif transport == "unmatched":
+                            notice["body"] = "A new message format stays readable."
+                        ipc(root, {"op":"send", "notice":notice})
+                        wait_for(lambda: len(ipc(root, {"op":"metrics"})["metrics"]["cards"]) == 1 and ipc(root, {"op":"metrics"})["metrics"]["cards"][0]["extent"] == 1)
+                        metric = ipc(root, {"op":"metrics"})["metrics"]["cards"][0]
+                        assert metric["structuredReady"] == (transport != "unmatched"), metric
+                        if transport != "unmatched":
+                            assert metric["presentation"]["data"]["codec"] == "x264", metric
+                        image = destination / ("handler-" + transport + ".png")
+                        ipc(root, {"op":"capture", "path":str(image)})
+                        wait_for(lambda: readable_image(image))
+                    errors = (destination / "render.log").read_text()
+                    assert not any(value in errors for value in ("TypeError:", "ReferenceError:", "Unable to assign")), errors
+                    print("PASS: structured native/bridge cards and unmatched-text fallback")
                     return
                 examples = [
                     {"title": "Connected to Taihingtjik", "body": "Wi-Fi · wlp11s0 · signal 79%", "icon": "network-wireless-symbolic"},
