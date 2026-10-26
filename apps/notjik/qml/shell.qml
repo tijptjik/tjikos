@@ -289,11 +289,26 @@ ShellRoot {
             if (!handle) throw Error("Action no longer available");
             const hooks = Logic.nativeActionHooks(notice, action, config);
             handle.invoke();
+            if (Logic.telegramChatAction(notice) === index) finishTelegramOpen(id);
             for (const command of hooks) Quickshell.execDetached(command);
         } else {
             Quickshell.execDetached(action.command);
             if (!notice.resident) close(id, false);
         }
+    }
+
+    function finishTelegramOpen(id) {
+        const windows = Hyprland.toplevels.values.filter(window =>
+            Logic.telegramWindow(window.lastIpcObject.class));
+        const target = windows.find(window => !window.lastIpcObject.title?.includes("Media viewer")) || windows[0];
+        if (target) {
+            const address = "address:" + target.lastIpcObject.address;
+            if (Hyprland.usingLua)
+                Quickshell.execDetached(["hyprctl", "eval", "local w=hl.get_window(" + JSON.stringify(address)
+                    + "); if w then hl.dispatch(hl.dsp.focus({window=w})) end"]);
+            else Hyprland.dispatch("focuswindow " + address);
+        }
+        close(id, false);
     }
 
     function openTelegramChat(id) {
@@ -304,6 +319,7 @@ ShellRoot {
         if(!action)throw Error("Telegram chat action unavailable");
         log("action",notice,{action:"Open Telegram chat"});
         action.invoke();
+        finishTelegramOpen(id);
     }
 
     function setHover(screen, id, value) {
