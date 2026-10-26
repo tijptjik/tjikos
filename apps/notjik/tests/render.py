@@ -390,7 +390,7 @@ def main():
                         ({"title":"Tall sender image", "body":"\n".join(["A longer image notification"] * 10), "image":(ROOT / "examples/demo-artwork.png").as_uri()}, True),
                         ({"title":"Short avatar", "type":"telegram", "body":"Hello", "image":(ROOT / "examples/demo-artwork.png").as_uri(), "data":{"kind":"text","demo":True,"chatId":"123","messageId":"456","source":""}}, True),
                         ({"title":"Tall avatar", "type":"telegram", "body":"A photo with a square avatar", "image":(ROOT / "examples/demo-artwork.png").as_uri(), "data":{"kind":"photo","demo":True,"chatId":"123","messageId":"457","source":(ROOT / "examples/demo-artwork.png").as_uri()}}, True),
-                        ({"title":"Telegram avatar", "type":"telegram", "data":{"kind":"text", "chatId":"123", "messageId":"456", "source":""}}, False),
+                        ({"title":"Telegram avatar", "type":"telegram", "data":{"kind":"text", "chatId":"123", "messageId":"456", "source":""}}, True),
                     ]
                     for notice, cover in cases:
                         ipc(root, {"op":"dismiss", "id":"all"})
@@ -424,7 +424,7 @@ def main():
                             assert row["footer"]["coverHeight"] == max(0,row["fullHeight"]-2*row["footer"]["border"]),row
                         else:
                             assert row["footer"]["contentLeft"] == 16, row
-                    print("PASS: 80px covers, full-height robots, square short/tall avatars and sender images and missing-avatar fallback")
+                    print("PASS: 80px covers, full-height robots and Telegram cover rails, including the missing-avatar initials rail")
                     return
                 # Incoming cards fade as they push; their full shape is never clipped by a slot.
                 ipc(root, {"op":"dismiss", "id":"all"})

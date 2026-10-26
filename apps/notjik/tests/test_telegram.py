@@ -187,8 +187,8 @@ class TelegramTests(unittest.TestCase):
         self.bridge.chat_result(123, {"@type":"chat", "id":123, "title":"Maya", "photo":{"small":{"id":90}, "big":photo}})
         self.assertEqual(self.td.calls[-1][0], "downloadFile")
         self.assertEqual(self.td.calls[-1][1]["file_id"], 91)
-        path = Path(self.temp.name) / "files/avatar.jpg"
-        path.parent.mkdir(); path.write_bytes(b"synthetic")
+        path = Path(self.temp.name) / "db/profile_photos/avatar.jpg"
+        path.parent.mkdir(parents=True); path.write_bytes(b"synthetic")
         self.bridge.handle({"@type":"updateFile", "file":{**photo, "local":{"is_downloading_completed":True, "path":str(path)}}})
         self.assertEqual(self.cards[-1]["image"], path.as_uri())
         self.assertEqual(self.cards[-1]["title"], "Maya")

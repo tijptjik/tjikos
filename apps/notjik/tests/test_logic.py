@@ -235,6 +235,9 @@ assert.equal(grouped(notices,{...groupedConfig,grouping:{enabled:false,windowSec
 assert.equal(grouped([...notices,{id:"d",app:"mail",received:200000}],groupedConfig,"").length,3);
 assert.equal(grouped([{id:"a",app:"x",group:"one",received:1},{id:"b",app:"x",group:"two",received:2}],groupedConfig,"").length,2);
 assert.equal(visibleGroups(notices,{...groupedConfig,maxVisible:1},"b")[0].id,"b");
+const burst=Array.from({length:6},(_,i)=>({id:String(i),app:String(i),received:i}));
+assert.deepEqual(visibleGroups(burst,{...groupedConfig,maxVisible:10},"").map(n=>n.id),["5","4","3","2"]);
+assert.deepEqual(visibleGroups(burst,{...groupedConfig,maxVisible:10},"0").map(n=>n.id),["5","4","3","0"]);
 assert.throws(()=>validateNotice({title:"test",group:3}));
 validateNotice({title:"job",id:"backup/nightly"});
 assert.throws(()=>validateNotice({title:"job",id:""}));

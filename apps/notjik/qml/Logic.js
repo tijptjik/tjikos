@@ -119,7 +119,7 @@ function grouped(notices, config, selectedId) {
 
 function visibleGroups(notices, config, selectedId) {
     var groups = grouped(notices, config, selectedId);
-    var visible = groups.slice(0, config.maxVisible);
+    var visible = groups.slice(0, Math.min(4, config.maxVisible));
     var selected = groups.find(group => group.memberIds.includes(selectedId));
     if (selected && !visible.includes(selected)) visible[visible.length - 1] = selected;
     return visible;

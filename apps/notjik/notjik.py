@@ -20,7 +20,7 @@ DEFAULTS = {
     "placement": {"monitors": "primary", "primaryMonitor": "", "edge": "b", "position": "c",
                   "offsetX": 0, "offsetY": -24, "margin": 16, "perMonitor": {}},
     "timeouts": {"low": 5, "normal": 8, "critical": 0},
-    "pauseOnHover": True, "maxVisible": 5, "maxQueued": 100,
+    "pauseOnHover": True, "maxVisible": 4, "maxQueued": 100,
     "history": {"enabled": True, "maxEvents": 10000, "maxAgeDays": 0, "logTransient": False, "drawerLimit": 100},
     "grouping": {"enabled": True, "windowSeconds": 120},
     "privacy": {"lockScreen": "hide"},

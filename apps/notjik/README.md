@@ -227,7 +227,7 @@ restarts the config/history helper. Config reload preserves current cards.
   },
   "timeouts": { "low": 5, "normal": 8, "critical": 0 },
   "pauseOnHover": true,
-  "maxVisible": 5,
+  "maxVisible": 4,
   "maxQueued": 100,
   "history": { "enabled": true, "maxEvents": 10000, "maxAgeDays": 0, "logTransient": false, "drawerLimit": 100 },
   "grouping": { "enabled": true, "windowSeconds": 120 },
@@ -283,10 +283,13 @@ native D-Bus uses milliseconds (`-1` default, `0` persistent); the CLI accepts
 `default`, `never`, `until-dismissed`, or durations such as `8s`, `500ms`, `2m`.
 
 Pause hides the stack and queues incoming notifications. Lifetimes count only
-while the display is active, including timed notices behind `maxVisible`. Pause,
-lock, an open history drawer, and hover freeze expiration. Keyboard selection
+while the display is active, including timed notices behind `maxVisible`.
+Pause, lock, an open history drawer, and hover freeze expiration. Keyboard selection
 freezes the selected card. Hovering any mirrored copy freezes all copies. Suspend
-does not consume the whole remaining timeout on wake. Countdown components show
+does not consume the whole remaining timeout on wake.
+
+The stack displays at most four groups. A bar between the stack and its screen
+edge remains visible while additional groups are queued. Countdown components show
 wall-clock time independently of display lifetime. Persistent notifications remain
 until dismissal, sender close, or a non-resident action.
 

@@ -308,6 +308,9 @@ class Bridge:
         self.media_jobs = {}
         self.render_root = private_dir(state_dir() / "rendered")
         self.files_root = (state_dir() / "files").resolve()
+        # TDLib writes downloaded chat photos into its own private database
+        # cache, rather than the ordinary attachment directory.
+        self.profile_photos_root = (state_dir() / "db" / "profile_photos").resolve()
         self.ui_ready = True
         self.voice_uploads = {}
         self.voice_sends = {}
@@ -398,7 +401,8 @@ class Bridge:
         self.avatar_downloads.pop(file_id, None)
         try:
             path = Path(local["path"]).resolve(strict=True)
-            if not path.is_relative_to(self.files_root) or not path.is_file() or path.stat().st_size > MAX_FILE:
+            if (not (path.is_relative_to(self.files_root) or path.is_relative_to(self.profile_photos_root))
+                    or not path.is_file() or path.stat().st_size > MAX_FILE):
                 return
             os.chmod(path, 0o600)
         except (OSError, KeyError, ValueError):

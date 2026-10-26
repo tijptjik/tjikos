@@ -45,6 +45,39 @@ PanelWindow {
         height: panel.redacted ? 80 : Math.min(panel.layoutHeight, stack.implicitHeight)
     }
 
+    // A separate, input-transparent surface lets the indicator sit in the edge gap.
+    PanelWindow {
+        readonly property bool horizontal: panel.placement.edge === "t" || panel.placement.edge === "b"
+        readonly property real stackHeight: Math.min(panel.layoutHeight, stack.implicitHeight)
+        readonly property real stackY: panel.coordinates.y + panel.stackTop
+        readonly property bool overflowing: Logic.grouped(panel.controller.notices.filter(n => !panel.controller.isFloating(n.id)), panel.controller.config, "").length > panel.controller.visibleNotices.length
+        screen: panel.screen
+        visible: panel.visible && !panel.redacted && overflowing
+        anchors { top: true; left: true }
+        implicitWidth: horizontal ? 32 : 3
+        implicitHeight: horizontal ? 3 : 32
+        margins {
+            left: horizontal ? panel.coordinates.x + (panel.width - width) / 2
+                : panel.placement.edge === "l" ? (panel.coordinates.x - width) / 2
+                : (panel.coordinates.x + panel.width + panel.screen.width - width) / 2
+            top: !horizontal ? stackY + (stackHeight - height) / 2
+                : panel.placement.edge === "t" ? (stackY - height) / 2
+                : (stackY + stackHeight + panel.screen.height - height) / 2
+        }
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.namespace: "notjik-overflow"
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        mask: Region {}
+        Rectangle {
+            anchors.fill: parent
+            radius: 1.5
+            color: panel.theme.muted || "#aaaaaa"
+            opacity: 0.75
+        }
+    }
+
     function keyFor(notice) { return JSON.stringify([notice.groupId, notice.groupGeneration]); }
     function finishRemove(key) {
         for (let i = 0; i < cards.count; ++i)

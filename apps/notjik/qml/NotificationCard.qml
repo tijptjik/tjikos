@@ -55,8 +55,12 @@ Rectangle {
     readonly property string artwork: notice.image || notice.icon || fallbackArtwork
     readonly property string resolvedArtwork: imageSource(artwork)
     readonly property bool imageCover: !!notice.image
-    readonly property bool avatarCover: (richTelegram || telegram) && imageCover
-    readonly property bool coverArtwork: imageCover || (!richTelegram && (resolvedArtwork === fallbackArtwork
+    // Rich Telegram cards always use the full-height cover rail. When a preview
+    // policy withholds the profile photo, initials occupy the same rail instead
+    // of collapsing the card into the ordinary small-icon layout.
+    readonly property bool telegramRail: richTelegram
+    readonly property bool avatarCover: telegram && !richTelegram && imageCover
+    readonly property bool coverArtwork: telegramRail || imageCover || (!richTelegram && (resolvedArtwork === fallbackArtwork
         || resolvedArtwork === Qt.resolvedUrl("icons/wifi-cover.png").toString()))
     readonly property real coverWidth: 80
     implicitHeight: Math.max(avatarCover ? coverWidth + 2 * border.width : (coverArtwork ? 80 : 0), content.implicitHeight + theme.padding * 2 + (actionFooter.visible ? actionFooter.implicitHeight : 0))
@@ -72,7 +76,7 @@ Rectangle {
         y: card.border.width
         width: card.coverWidth
         height: card.avatarCover ? width : Math.max(0, card.height - 2 * card.border.width)
-        source: visible ? card.resolvedArtwork : ""
+        source: visible && (!card.telegramRail || card.imageCover) ? card.resolvedArtwork : ""
         sourceSize { width: 320; height: 320 }
         fillMode: card.avatarCover ? Image.PreserveAspectFit : Image.PreserveAspectCrop
         asynchronous: true
@@ -102,6 +106,31 @@ Rectangle {
                     color: "white"
                 }
             }
+        }
+    }
+    Rectangle {
+        id: telegramFallbackRail
+        objectName: "telegram-fallback-rail"
+        visible: card.telegramRail && !card.imageCover
+        x: card.border.width
+        y: card.border.width
+        width: card.coverWidth
+        height: Math.max(0, card.height - 2 * card.border.width)
+        radius: Math.max(0, card.radius - card.border.width)
+        color: card.theme.surface
+        Text {
+            anchors.centerIn: parent
+            text: card.initials
+            color: card.accent
+            font { family: card.theme.font; pixelSize: 18; bold: true }
+        }
+        MouseArea {
+            anchors.fill: parent
+            enabled: card.opensChat
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            Accessible.role: Accessible.Button
+            Accessible.name: "Open Telegram chat"
+            onClicked: card.controller.openTelegramChat(card.notice.id)
         }
     }
     Rectangle {
