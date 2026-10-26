@@ -214,6 +214,10 @@ def main():
         shutil.copy(ROOT / "lock_watch.py", root / "lock_watch.py")
         shell = root / "qml/shell.qml"
         code = shell.read_text().replace('Variants {\n        model:', 'Variants {\n        id: panels\n        model:')
+        if "--covers" in sys.argv[2:]:
+            fixture = (ROOT / "examples/demo-artwork.png").as_uri()
+            code = code.replace('root.avatarCache = response.avatars || {byChat: {}, byTitle: {}};',
+                                'root.avatarCache = {byChat: {}, byTitle: {"Cached native avatar": ' + json.dumps(fixture) + '}};')
         code = code.replace('case "status": break;', 'case "advanceActions": panels.instances[0].advanceActions(request.direction); return {ok:true};\n        case "metrics": return {ok:true, metrics:panels.instances[0].metrics()};\n        case "capture": panels.instances[0].capture(request.path); return {ok:true};\n        case "status": break;')
         code = code.replace('HistoryDrawer { controller: root }', 'HistoryDrawer { id: historyDrawer; controller: root }')
         code = code.replace('case "capture":', 'case "groupHoverPoint": return {ok:true, point:panels.instances[0].groupHoverPoint()};\n        case "startMotion": panels.instances[0].startMotion(request.path || ""); return {ok:true};\n        case "stopMotion": return {ok:true, count:panels.instances[0].stopMotion()};\n        case "motionFrames": return {ok:true, frames:panels.instances[0].motionFrames.slice(request.offset, request.offset + 5)};\n        case "capture":')
@@ -445,6 +449,7 @@ def main():
                         assert item["footer"]["cover"] and item["footer"]["coverWidth"] == 80, item
                         assert item["footer"]["contentLeft"] == 96, item
                     cases = [
+                        ({"app":"Telegram Desktop", "title":"Cached native avatar", "body":"Full-size cached profile photo", "image":"file:///missing-native-thumbnail.jpg"}, True),
                         ({"title":"Everything is up to date"}, True),
                         ({"title":"Connected to Taihingtjik", "body":"Wi-Fi · wlp11s0 · signal 79%", "icon":"network-wireless-symbolic"}, True),
                         ({"title":"Tall robot", "body":"\n".join(["A long notification line"] * 10)}, True),
@@ -461,7 +466,11 @@ def main():
                         def settled_cover():
                             rows = ipc(root, {"op":"metrics"})["metrics"]["cards"]
                             return rows if len(rows) == 1 and rows[0]["opacity"] == 1 and rows[0]["extent"] == 1 else None
-                        row = wait_for(settled_cover)[0]
+                        try:
+                            row = wait_for(settled_cover)[0]
+                        except AssertionError:
+                            print(notice["title"], ipc(root, {"op":"metrics"}), flush=True)
+                            raise
                         assert row["footer"]["cover"] == cover, row
                         if cover:
                             f=row["footer"]
@@ -471,6 +480,12 @@ def main():
                             image=destination/("centered-title.png" if not notice.get("body") else "centered-body.png")
                             ipc(root,{"op":"capture","path":str(image)})
                             wait_for(lambda:readable_image(image))
+                        if notice["title"] == "Cached native avatar":
+                            assert row["artworkReady"] and row["artworkSource"].endswith("demo-artwork.png"), row
+                            assert not row["footer"]["avatarCover"], row
+                            image = destination / "cached-native-avatar.png"
+                            ipc(root, {"op":"capture", "path":str(image)})
+                            wait_for(lambda: readable_image(image))
                         if notice["title"] == "Sender image":
                             image=destination/"sender-image.png"
                             ipc(root,{"op":"capture","path":str(image)})

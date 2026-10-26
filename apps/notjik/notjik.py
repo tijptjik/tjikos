@@ -2,6 +2,7 @@
 import argparse
 import copy
 import datetime as dt
+import hashlib
 import json
 import math
 import os
@@ -13,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from urllib.parse import unquote, urlparse
 from lock_watch import LockObserver
 
 
@@ -206,7 +208,65 @@ def database():
     os.chmod(directory / "history.sqlite3", 0o600)
     db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, time TEXT NOT NULL, event TEXT NOT NULL, notice_id TEXT, app TEXT, payload TEXT NOT NULL)")
     db.execute("CREATE INDEX IF NOT EXISTS events_time ON events(time)")
+    fresh = not db.execute("SELECT 1 FROM sqlite_master WHERE name='avatars'").fetchone()
+    db.execute("CREATE TABLE IF NOT EXISTS avatars (chat_id TEXT PRIMARY KEY, title TEXT NOT NULL, image TEXT NOT NULL)")
+    if fresh:
+        # Recover full-size photos from existing bridge snapshots on first upgrade.
+        for (payload,) in db.execute("SELECT payload FROM events ORDER BY id"):
+            cache_avatar(db, json.loads(payload).get("notice", {}))
+        db.commit()
     return db
+
+
+def cache_avatar(db, notice):
+    """Keep bridge profile photos independently of TDLib's disposable cache."""
+    data = notice.get("data") or {}
+    chat_id = str(data.get("chatId", ""))
+    if notice.get("type") != "telegram" or data.get("demo") or not re.fullmatch(r"-?\d+", chat_id):
+        return
+    source = urlparse(str(notice.get("image", "")))
+    if source.scheme != "file" or source.netloc:
+        return
+    telegram_root = Path(os.environ.get("NOTJIK_TELEGRAM_DIR", str(state_path() / "telegram"))).resolve()
+    try:
+        path = Path(unquote(source.path)).resolve(strict=True)
+        if not any(path.is_relative_to(telegram_root / part) for part in ("db/profile_photos", "files")):
+            return
+        if not path.is_file() or not 0 < path.stat().st_size <= 20 * 1024 * 1024:
+            return
+        content = path.read_bytes()
+        directory = state_path() / "avatars"
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        target = directory / (hashlib.sha256(content).hexdigest() + ".jpg")
+        if not target.exists():
+            with tempfile.NamedTemporaryFile(dir=directory, delete=False) as stream:
+                stream.write(content)
+                temporary = Path(stream.name)
+            temporary.replace(target)
+        with db:
+            old_images = {row[0] for row in db.execute("SELECT image FROM avatars")}
+            db.execute("INSERT OR REPLACE INTO avatars VALUES(?,?,?)",
+                       (chat_id, str(notice.get("title", "")), target.as_uri()))
+            db.execute("DELETE FROM avatars WHERE rowid NOT IN (SELECT rowid FROM avatars ORDER BY rowid DESC LIMIT 512)")
+        retained = {row[0] for row in db.execute("SELECT image FROM avatars")}
+        for obsolete in old_images - retained:
+            old_path = Path(unquote(urlparse(obsolete).path))
+            if old_path.parent == directory:
+                old_path.unlink(missing_ok=True)
+    except (OSError, ValueError):
+        return  # A missing photo must never prevent notification delivery.
+
+
+def avatar_index(db):
+    by_chat, by_title = {}, {}
+    for chat_id, title, image in db.execute("SELECT chat_id,title,image FROM avatars"):
+        if not Path(unquote(urlparse(image).path)).is_file():
+            continue
+        by_chat[chat_id] = image
+        if title:
+            # Desktop does not expose a chat ID; never choose between namesakes.
+            by_title[title] = "" if title in by_title else image
+    return {"byChat": by_chat, "byTitle": by_title}
 
 
 def prune_history(db, history, now=None):
@@ -226,6 +286,7 @@ def prune_history(db, history, now=None):
 def record(db, cfg, event):
     history = cfg["history"]
     notice = event.get("notice", {})
+    cache_avatar(db, notice)
     if not history["enabled"] or (notice.get("transient") and not history["logTransient"]):
         return
     # Log display data and labels; never store runnable command arrays or binary artwork.
@@ -311,7 +372,7 @@ def worker(root):
                 try:
                     if db is None:
                         db = database()
-                    emit({"history": history_notices(db, cfg["history"]["drawerLimit"])})
+                    emit({"avatars": avatar_index(db), "history": history_notices(db, cfg["history"]["drawerLimit"])})
                     dirty_history = False
                     last_history = now
                 except (OSError, sqlite3.Error) as error:

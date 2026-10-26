@@ -57,14 +57,15 @@ Rectangle {
     // Kitty supplies its terminal icon as an image; use portrait artwork for its reports.
     readonly property bool kittyReport: [notice.app, notice.desktopEntry].some(value =>
         /^(kitty|kitty\.desktop)$/i.test(String(value || "")))
-    readonly property string artwork: kittyReport ? fallbackArtwork : (notice.image || notice.icon || fallbackArtwork)
+    readonly property string cachedAvatar: Logic.cachedAvatar(notice, controller.avatarCache)
+    readonly property string artwork: kittyReport ? fallbackArtwork : (cachedAvatar || notice.image || notice.icon || fallbackArtwork)
     readonly property string resolvedArtwork: imageSource(artwork)
-    readonly property bool imageCover: !kittyReport && !!notice.image
+    readonly property bool imageCover: !kittyReport && !!(cachedAvatar || notice.image)
     // Rich Telegram cards always use the full-height cover rail. When a preview
     // policy withholds the profile photo, initials occupy the same rail instead
     // of collapsing the card into the ordinary small-icon layout.
-    readonly property bool telegramRail: richTelegram
-    readonly property bool avatarCover: telegram && !richTelegram && imageCover
+    readonly property bool telegramRail: richTelegram || !!cachedAvatar
+    readonly property bool avatarCover: telegram && !telegramRail && imageCover
     readonly property bool coverArtwork: telegramRail || imageCover || (!richTelegram && (resolvedArtwork === fallbackArtwork
         || resolvedArtwork === Qt.resolvedUrl("icons/wifi-cover.png").toString()))
     readonly property real coverWidth: 80

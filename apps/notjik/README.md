@@ -926,3 +926,12 @@ the initials fallback; app icons keep their inset presentation.
 Telegram notifications (native and bridge) are suppressed while a Telegram window
 has keyboard focus. Focusing Telegram also dismisses its existing notices, so they
 do not reappear when focus moves away. Other applications are unaffected.
+
+Full-size Telegram profile photos are copied from bridge notifications into the private
+Notjik state directory's `avatars/` cache (up to 512 chats). Both native Desktop
+notifications and bridge cards use these photos and the same full-height rail.
+The cache survives TDLib file eviction and notification history pruning; an upgrade
+seeds it from existing bridge history. Bridge cards resolve by chat ID. Native
+Desktop cards, which lack that ID, resolve by an exact, unique cached chat title;
+ambiguous or unknown names retain Desktop's supplied image. New bridge photos
+replace cached versions. Synthetic demos never populate or consult this cache.

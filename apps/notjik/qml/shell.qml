@@ -15,6 +15,7 @@ ShellRoot {
     readonly property bool conceal: locked && config.privacy?.lockScreen !== "show"
     property bool drawerOpen: false
     property string drawerMonitor: ""
+    property var avatarCache: ({byChat: {}, byTitle: {}})
     property var historyItems: []
     property string historyQuery: ""
     readonly property bool historyFiltering: historyQuery.trim().length > 0
@@ -501,6 +502,7 @@ ShellRoot {
                     } else if (response.lockState) {
                         root.lockState = response.lockState;
                     } else if (response.history) {
+                        root.avatarCache = response.avatars || {byChat: {}, byTitle: {}};
                         root.historyItems = response.history;
                         if (root.historySelectedKey && !root.historyItems.some(n => n.historyKey === root.historySelectedKey))
                             root.historySelectedKey = "";

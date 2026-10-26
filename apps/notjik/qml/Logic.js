@@ -320,6 +320,13 @@ function robotArtwork(notice) {
     return "icons/robots/" + robotFiles[index];
 }
 
+// Prefer the bridge's durable full-size avatar for both delivery paths and history.
+function cachedAvatar(notice, cache) {
+    if (!cache || notice.data?.demo || !(telegramNotice(notice) || notice.type === "telegram")) return "";
+    const chatId = String(notice.data?.chatId || "");
+    return chatId ? (cache.byChat?.[chatId] || "") : (cache.byTitle?.[notice.title] || "");
+}
+
 // Presentation-only adapters: never mutate identity, body, actions or media.
 // First full template match wins; unknown formats retain their original card.
 function notificationPresentation(notice, config) {

@@ -9,6 +9,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @unittest.skipUnless(shutil.which("bun"), "Bun required for pure QML JavaScript checks")
 class LogicTests(unittest.TestCase):
+    def test_cached_avatar_selection(self):
+        source = (ROOT / "qml/Logic.js").read_text()
+        assertions = r'''
+const assert = require("node:assert/strict");
+const cache = {byChat:{"123":"large"}, byTitle:{Maya:"large", Ambiguous:""}};
+assert.equal(cachedAvatar({app:"Telegram Desktop",title:"Maya"},cache),"large");
+assert.equal(cachedAvatar({type:"telegram",title:"Renamed",data:{chatId:"123"}},cache),"large");
+assert.equal(cachedAvatar({type:"telegram",title:"Maya",data:{chatId:"456"}},cache),"");
+assert.equal(cachedAvatar({app:"Other",title:"Maya"},cache),"");
+assert.equal(cachedAvatar({app:"Telegram Desktop",title:"Ambiguous"},cache),"");
+assert.equal(cachedAvatar({type:"telegram",title:"Maya",data:{demo:true}},cache),"");
+'''
+        subprocess.run(["bun", "-e", source + assertions], check=True)
+
     def test_telegram_focus_suppression(self):
         source = (ROOT / "qml/Logic.js").read_text()
         assertions = r'''
