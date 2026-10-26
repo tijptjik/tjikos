@@ -449,8 +449,22 @@ ShellRoot {
             telegramBridgeActive: telegramBridgeActive, focusedAppId: focusedAppId, groupingEnabled: config.grouping.enabled, theme: config.theme, lockState: lockState, drawerOpen: drawerOpen, historyCount: historyItems.length, selectedId: selectedId, historySelectedKey: historySelectedKey, keyboardMode: keyboardMode, historyError: backendError, monitors: screens.map(s => s.name)};
     }
 
+    FileView {
+        id: ipcRequestFile
+        blockLoading: true
+        printErrors: false
+    }
+
     IpcHandler {
         target: "notjik"
+        function requestFile(path: string): string {
+            try {
+                ipcRequestFile.path = path;
+                const payload = ipcRequestFile.text();
+                return request(payload);
+            } catch (error) { return JSON.stringify({ok: false, error: "Cannot read private IPC request"}); }
+            finally { ipcRequestFile.path = ""; }
+        }
         function request(payload: string): string {
             try {
                 if (payload.length > 131072) throw Error("Request exceeds 128 KiB");

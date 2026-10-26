@@ -11,6 +11,7 @@ import select
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 from lock_watch import LockObserver
 
@@ -307,8 +308,17 @@ def worker(root):
 
 
 def ipc(root, request):
-    result = subprocess.run(["quickshell", "ipc", "--path", str(root / "qml"), "call", "notjik", "request",
-                             json.dumps(request, separators=(",", ":"))], text=True, capture_output=True, timeout=5)
+    payload = json.dumps(request, separators=(",", ":"))
+    if len(payload) > 131072:
+        raise ValueError("Request exceeds 128 KiB")
+    # Process arguments are visible across user accounts on many Linux hosts.
+    # Only a private, short-lived filename may enter the command line.
+    with tempfile.TemporaryDirectory(prefix="notjik-ipc-", dir=os.environ.get("XDG_RUNTIME_DIR")) as directory:
+        path = Path(directory) / "request.json"
+        with open(path, "x", encoding="utf-8", opener=lambda name, flags: os.open(name, flags, 0o600)) as target:
+            target.write(payload)
+        result = subprocess.run(["quickshell", "ipc", "--path", str(root / "qml"), "call", "notjik", "requestFile",
+                                 str(path)], text=True, capture_output=True, timeout=5)
     if result.returncode:
         raise ValueError(result.stderr.strip() or "notjik is not running; start it with notjik")
     try:

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -14,6 +15,38 @@ SPEC.loader.exec_module(runner)
 
 
 class PipelineTests(unittest.TestCase):
+    def test_json_write_does_not_reuse_readable_or_symlinked_temporary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "connection.json"
+            old_temp = root / "connection.json.tmp"
+            old_temp.write_text("unchanged")
+            old_temp.chmod(0o644)
+            previous_umask = os.umask(0)
+            try:
+                runner.save_json(path, {"token": "synthetic"})
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(old_temp.read_text(), "unchanged")
+                old_temp.unlink()
+                victim = root / "victim"
+                victim.write_text("unchanged")
+                old_temp.symlink_to(victim)
+                runner.save_json(path, {"token": "synthetic-refresh"})
+                self.assertEqual(victim.read_text(), "unchanged")
+                self.assertEqual(json.loads(path.read_text())["token"], "synthetic-refresh")
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            finally:
+                os.umask(previous_umask)
+
+    def test_failed_json_write_preserves_destination_and_cleans_temporary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "connection.json"
+            path.write_text("original")
+            with self.assertRaises(TypeError):
+                runner.save_json(path, {"invalid": object()})
+            self.assertEqual(path.read_text(), "original")
+            self.assertEqual(list(Path(directory).iterdir()), [path])
+
     def test_failed_index_never_starts_export_or_records_success(self):
         with tempfile.TemporaryDirectory(prefix=".email-pipeline-test-", dir=ROOT) as temp:
             work = Path(temp)
