@@ -224,7 +224,7 @@
       },
       "text": {
         "actions": {
-          "leftClick": "audio.panel"
+          "leftClick": "audio.mute"
         }
       },
       "actions": {

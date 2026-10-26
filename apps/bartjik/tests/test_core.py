@@ -406,9 +406,31 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
             row = (await providers.audio({}))[0]
             self.assertEqual(row["text"]["value"], "-%")
             self.assertEqual(choose({}, row, "icon", "leftClick"), "audio.route")
-            self.assertEqual(choose({}, row, "text", "leftClick"), "audio.panel")
+            self.assertEqual(choose({}, row, "text", "leftClick"), "audio.mute")
             for part in ("icon", "text"):
                 self.assertEqual(choose({}, row, part, "hoverEnter"), "audio.panel")
+
+    async def test_audio_route_icon_is_independent_of_mute(self):
+        for description, symbol in [("USB Audio Speakers", "headphones"), ("USB Audio Front Headphones", "headphones"), ("Navi 21/23 HDMI/DP Screen", "volume_up")]:
+            for muted in (False, True):
+                sink = dict(name="sink", description=description, mute=muted, volume={"left": {"value": 65536}})
+                with patch("bartjik_core.providers.audio_state", AsyncMock(return_value=([sink], sink))):
+                    row = (await providers.audio({}))[0]
+                self.assertEqual(row["icon"]["value"], symbol)
+                self.assertEqual(row["text"]["value"], "-%" if muted else "100%")
+
+    async def test_audio_route_uses_panel_pair_and_respects_explicit_routes(self):
+        usb = dict(name="usb", description="USB Audio Speakers")
+        dp = dict(name="dp", description="Navi 21/23 HDMI/DP Screen")
+        other = dict(name="spdif", description="USB Audio S/PDIF Output")
+        for active, module, target in [(usb, {}, "dp"), (dp, {}, "usb"), (usb, {"routes": ["usb", "spdif"]}, "spdif")]:
+            with (
+                patch("bartjik_core.actions.audio_state", AsyncMock(return_value=([usb, other, dp], active))),
+                patch("bartjik_core.actions.json_command", AsyncMock(return_value=[])),
+                patch("bartjik_core.actions.command", AsyncMock()) as run,
+            ):
+                await Executor().execute("audio.route", {}, module, {}, [])
+                run.assert_awaited_once_with(["pactl", "set-default-sink", target])
 
     def test_crypto_ids_format_and_order(self):
         c = {

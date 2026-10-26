@@ -10,6 +10,7 @@ from .io import command, json_command, http_json, Unavailable, RateLimit
 from .model import item, untrusted_items
 from . import quota, credits, details, connectivity
 from .icons import icon
+from .audio_output import is_headphones
 
 COUNTRY_FLAGS = {
     "Albania": "al",
@@ -376,15 +377,11 @@ async def audio(m):
     channels = list(s["volume"].values())
     volume = round(sum(v["value"] for v in channels) / len(channels) / 65536 * 100)
     muted = s["mute"]
-    port = s.get("active_port", "")
-    headphones = (
-        "headphone" in str(port).lower()
-        or "headphone" in s.get("description", "").lower()
-    )
+    headphones = is_headphones(s)
     row = item(
         "master",
         "-%" if muted else f"{volume}%",
-        "volume_off" if muted else "headphones" if headphones else "volume_up",
+        "headphones" if headphones else "volume_up",
         dict(muted=muted),
         s.get("description", s["name"]),
         kind="symbol",
@@ -396,7 +393,7 @@ async def audio(m):
         },
     )
     row["icon"]["actions"] = {"leftClick": "audio.route"}
-    row["text"]["actions"] = {"leftClick": "audio.panel"}
+    row["text"]["actions"] = {"leftClick": "audio.mute"}
     return [row]
 
 

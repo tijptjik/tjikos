@@ -9,6 +9,7 @@ import subprocess
 from . import config
 from .io import command, json_command, Unavailable
 from .providers import audio_state, running
+from .audio_output import panel_routes
 
 
 def choose(module, row, part, event):
@@ -248,6 +249,8 @@ class Executor:
                             for choice in choices
                         )
                     ]
+                    if not choices:
+                        routes = panel_routes(routes)
                     if len(routes) < 2:
                         raise Unavailable(
                             "At least two available output routes are required"
