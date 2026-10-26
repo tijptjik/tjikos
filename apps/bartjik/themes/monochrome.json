@@ -1,0 +1,47 @@
+{
+  "background": "#191919",
+  "surface": "#242424",
+  "border": "#505050",
+  "text": "#eeeeee",
+  "muted": "#aaaaaa",
+  "accent": "#ffffff",
+  "font": "monospace",
+  "iconFont": "Material Symbols Rounded",
+  "fontSize": 14,
+  "iconSize": 18,
+  "radius": 11,
+  "padding": 10,
+  "borderWidth": 0,
+  "iconTextGap": 5,
+  "itemGap": 12,
+  "moduleGap": 14,
+  "minItemSize": 20,
+  "maxTextWidth": 200,
+  "states": {
+    "active": {
+      "color": "#ffffff"
+    },
+    "urgent": {
+      "color": "#ff9999"
+    },
+    "muted": {
+      "color": "#aaaaaa"
+    },
+    "disconnected": {
+      "color": "#aaaaaa"
+    },
+    "stale": {
+      "color": "#aaaaaa"
+    },
+    "hover": {
+      "color": "#ffffff"
+    }
+  },
+  "paddingX": 12,
+  "paddingY": 10,
+  "greyscaleIcons": true,
+  "iconSet": "proicons",
+  "animateIcons": true,
+  "previewHeight": 360,
+  "panelBorder": "#353535"
+}

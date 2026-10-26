@@ -1,0 +1,26 @@
+{
+  "modules": {
+    "filter": {
+      "provider": "nightlight",
+      "actions": {
+        "middleClick": [
+          "systemctl",
+          "poweroff"
+        ]
+      }
+    }
+  },
+  "bars": [
+    {
+      "id": "nightlight",
+      "islands": [
+        {
+          "id": "filter",
+          "modules": [
+            "filter"
+          ]
+        }
+      ]
+    }
+  ]
+}

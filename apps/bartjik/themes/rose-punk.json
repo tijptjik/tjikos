@@ -1,0 +1,50 @@
+{
+  "background": "#1f1d2e",
+  "surface": "#26233a",
+  "border": "#555169",
+  "text": "#e5e5e5",
+  "muted": "#a5a0ba",
+  "accent": "#ff53a6",
+  "font": "tijpset",
+  "iconFont": "Material Symbols Rounded",
+  "fontSize": 14,
+  "iconSize": 18,
+  "radius": 11,
+  "padding": 10,
+  "borderWidth": 0,
+  "iconTextGap": 5,
+  "itemGap": 12,
+  "moduleGap": 14,
+  "minItemSize": 20,
+  "maxTextWidth": 200,
+  "states": {
+    "active": {
+      "color": "#ff53a6"
+    },
+    "focused": {
+      "color": "#ff53a6"
+    },
+    "urgent": {
+      "color": "#eb6f92"
+    },
+    "muted": {
+      "color": "#a5a0ba"
+    },
+    "disconnected": {
+      "color": "#a5a0ba"
+    },
+    "stale": {
+      "color": "#a5a0ba"
+    },
+    "hover": {
+      "color": "#ff53a6"
+    }
+  },
+  "paddingX": 12,
+  "paddingY": 10,
+  "greyscaleIcons": true,
+  "iconSet": "proicons",
+  "animateIcons": true,
+  "previewHeight": 360,
+  "panelBorder": "#393546"
+}

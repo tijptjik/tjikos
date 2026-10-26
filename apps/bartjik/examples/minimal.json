@@ -1,0 +1,56 @@
+{
+  "theme": "monochrome",
+  "modules": {
+    "time": {
+      "provider": "datetime",
+      "format": "%H:%M",
+      "alternate": "%a %d %b",
+      "tooltipFormat": "%A, %d %B %Y",
+      "actions": {
+        "leftClick": "datetime.toggle"
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      },
+      "worldClocks": [
+        {
+          "label": "New York",
+          "timezone": "America/New_York"
+        },
+        {
+          "label": "London",
+          "timezone": "Europe/London"
+        },
+        {
+          "label": "Amsterdam",
+          "timezone": "Europe/Amsterdam"
+        },
+        {
+          "label": "Tokyo",
+          "timezone": "Asia/Tokyo"
+        }
+      ]
+    }
+  },
+  "bars": [
+    {
+      "id": "clock",
+      "monitors": "all",
+      "side": "b",
+      "position": "c",
+      "alignment": "c",
+      "offsetY": -20,
+      "islandGap": 10,
+      "islands": [
+        {
+          "id": "clock",
+          "modules": [
+            "time"
+          ]
+        }
+      ]
+    }
+  ]
+}

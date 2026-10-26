@@ -1,0 +1,444 @@
+{
+  "theme": "rose-punk",
+  "style": {},
+  "layout": {
+    "centre_width": "20%"
+  },
+  "modules": {
+    "spaces": {
+      "provider": "workspaces",
+      "scope": "screen",
+      "special": false,
+      "occupiedOnly": true,
+      "label": "name",
+      "appearance": "separators",
+      "style": {
+        "iconTextGap": 0,
+        "itemGap": 0
+      },
+      "icon": {
+        "style": {
+          "minItemSize": 12,
+          "iconSize": 12
+        }
+      },
+      "text": {
+        "style": {
+          "minItemSize": 16
+        }
+      },
+      "preview": {
+        "enabled": true,
+        "delay": 300,
+        "width": 640,
+        "slideDuration": 120
+      },
+      "persistent": {
+        "DP-1": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "DP-2": [
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20
+        ],
+        "HDMI-A-1": [
+          21,
+          22
+        ],
+        "eDP-1": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ]
+      }
+    },
+    "music": {
+      "provider": "playerctl",
+      "players": [
+        "Feishin"
+      ],
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 200
+      },
+      "artist": {
+        "style": {
+          "maxTextWidth": 180,
+          "marquee": true
+        }
+      },
+      "track": {
+        "style": {
+          "maxTextWidth": 300,
+          "marquee": true
+        }
+      },
+      "actions": {
+        "rightClick": "player.quit"
+      }
+    },
+    "prices": {
+      "provider": "crypto",
+      "interval": 600,
+      "currency": "USD",
+      "currencySymbol": "",
+      "assets": [
+        {
+          "symbol": "BTC",
+          "price_precision": 0
+        },
+        {
+          "symbol": "SOL",
+          "price_precision": 0
+        },
+        {
+          "symbol": "AR",
+          "price_precision": 1
+        }
+      ],
+      "items": {
+        "BTC/USD": {
+          "icon": {
+            "actions": {
+              "leftClick": [
+                "xdg-open",
+                "https://coinmarketcap.com/currencies/bitcoin/"
+              ]
+            }
+          },
+          "text": {
+            "actions": {
+              "leftClick": [
+                "xdg-open",
+                "https://www.tradingview.com/symbols/BTCUSD/"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "tray": {
+      "provider": "icontray",
+      "exclude": [
+        "Input Method",
+        "solaar",
+        "indicator-solaar",
+        "spotify*",
+        "com.spotify.Client",
+        "Mullvad VPN*"
+      ],
+      "iconOverrides": {
+        "ChatGPT": "builtin:chatgpt",
+        "Mullvad VPN_status_icon_*": "builtin:mullvad",
+        "TelegramDesktop": "builtin:telegram",
+        "ZapZap": "builtin:whatsapp",
+        "spotify*": "builtin:spotify",
+        "com.spotify.Client": "builtin:spotify"
+      },
+      "style": {
+        "iconSize": 21,
+        "greyscaleIcons": true,
+        "monochromeIcon": false
+      }
+    },
+    "net": {
+      "provider": "network",
+      "text": {
+        "style": {
+          "maxTextWidth": 110,
+          "marquee": true
+        }
+      },
+      "actions": {
+        "leftClick": "network.panel",
+        "hoverEnter": "network.panel"
+      }
+    },
+    "vpn": {
+      "provider": "mullvad",
+      "actions": {
+        "leftClick": [
+          "mullvad",
+          "connect"
+        ],
+        "rightClick": "tailscale.toggle",
+        "middleClick": [
+          "mullvad",
+          "disconnect"
+        ]
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      },
+      "quickCountries": [
+        "nl",
+        "jp",
+        "sg"
+      ]
+    },
+    "tailnet": {
+      "provider": "tailscale",
+      "symbol": "vpn_lock",
+      "actions": {
+        "leftClick": "tailscale.toggle"
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      }
+    },
+    "sound": {
+      "provider": "audio",
+      "icon": {
+        "actions": {
+          "leftClick": "audio.route"
+        }
+      },
+      "text": {
+        "actions": {
+          "leftClick": "audio.panel"
+        }
+      },
+      "actions": {
+        "scrollUp": "audio.up",
+        "scrollDown": "audio.down",
+        "middleClick": "audio.mute"
+      }
+    },
+    "time": {
+      "provider": "datetime",
+      "format": "%H:%M",
+      "alternate": "%a %d %b",
+      "tooltipFormat": "%A, %d %B %Y",
+      "actions": {
+        "leftClick": "datetime.toggle"
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      },
+      "worldClocks": [
+        {
+          "label": "New York",
+          "timezone": "America/New_York"
+        },
+        {
+          "label": "London",
+          "timezone": "Europe/London"
+        },
+        {
+          "label": "Amsterdam",
+          "timezone": "Europe/Amsterdam"
+        },
+        {
+          "label": "Tokyo",
+          "timezone": "Asia/Tokyo"
+        }
+      ]
+    },
+    "input": {
+      "provider": "locale",
+      "actions": {
+        "leftClick": "locale.cycle",
+        "rightClick": {
+          "command": [
+            "fcitx5-configtool"
+          ],
+          "detach": true
+        }
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      }
+    },
+    "quota": {
+      "provider": "codex",
+      "source": "db",
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      }
+    },
+    "credit": {
+      "provider": "openrouter",
+      "interval": 600,
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      }
+    },
+    "notifications": {
+      "provider": "DND",
+      "actions": {
+        "leftClick": "DND.toggle"
+      }
+    },
+    "idle": {
+      "provider": "caffeine",
+      "actions": {
+        "leftClick": "caffeine.toggle",
+        "middleClick": [
+          "systemctl",
+          "suspend"
+        ]
+      }
+    },
+    "filter": {
+      "provider": "nightlight",
+      "actions": {
+        "leftClick": "nightlight.toggle",
+        "middleClick": null
+      }
+    },
+    "display": {
+      "provider": "monitor-layout",
+      "actions": {
+        "leftClick": "monitor.toggle"
+      }
+    }
+  },
+  "perMonitor": {},
+  "bars": [
+    {
+      "id": "workspace-bar",
+      "monitors": [
+        "eDP-1"
+      ],
+      "side": "b",
+      "position": "l",
+      "alignment": "r",
+      "offsetY": -20,
+      "islandGap": 10,
+      "islands": [
+        {
+          "id": "workspaces",
+          "modules": [
+            "spaces"
+          ]
+        },
+        {
+          "id": "media",
+          "modules": [
+            "music"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "status-bar",
+      "monitors": [
+        "eDP-1"
+      ],
+      "side": "b",
+      "position": "r",
+      "alignment": "l",
+      "offsetY": -20,
+      "islandGap": 10,
+      "islands": [
+        {
+          "id": "connectivity",
+          "modules": [
+            "net",
+            "vpn",
+            "tailnet"
+          ]
+        },
+        {
+          "id": "audio-clock-input",
+          "modules": [
+            "sound",
+            "time",
+            "input"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "services-bar",
+      "monitors": [
+        "eDP-1"
+      ],
+      "side": "b",
+      "position": "r",
+      "alignment": "l",
+      "offsetY": -20,
+      "islandGap": 10,
+      "islands": [
+        {
+          "id": "markets",
+          "modules": [
+            "prices"
+          ]
+        },
+        {
+          "id": "applications",
+          "modules": [
+            "tray"
+          ]
+        },
+        {
+          "id": "ai",
+          "modules": [
+            "quota",
+            "credit"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "controls-bar",
+      "monitors": [
+        "eDP-1"
+      ],
+      "side": "b",
+      "position": "l",
+      "alignment": "r",
+      "offsetY": -20,
+      "islandGap": 10,
+      "islands": [
+        {
+          "id": "controls",
+          "modules": [
+            "notifications",
+            "idle",
+            "filter",
+            "display"
+          ]
+        }
+      ]
+    }
+  ]
+}

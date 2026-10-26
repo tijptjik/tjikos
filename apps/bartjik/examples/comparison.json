@@ -1,0 +1,462 @@
+{
+  "theme": "rose-punk",
+  "style": {
+    "paddingX": 12,
+    "paddingY": 10
+  },
+  "layout": {
+    "centre_width": "40%"
+  },
+  "modules": {
+    "spaces": {
+      "provider": "workspaces",
+      "scope": "screen",
+      "special": false,
+      "occupiedOnly": true,
+      "label": "name",
+      "appearance": "ring",
+      "style": {
+        "iconTextGap": 0,
+        "itemGap": 4,
+        "states": {
+          "active": {
+            "color": "#e5e5e5"
+          },
+          "focused": {
+            "color": "#e5e5e5"
+          }
+        }
+      },
+      "icon": {
+        "style": {
+          "minItemSize": 12,
+          "iconSize": 12
+        }
+      },
+      "text": {
+        "style": {
+          "minItemSize": 16
+        }
+      },
+      "preview": {
+        "enabled": true,
+        "delay": 300,
+        "width": 640,
+        "slideDuration": 120
+      },
+      "labels": {
+        "10": "X"
+      }
+    },
+    "music": {
+      "provider": "playerctl",
+      "players": [
+        "spotify"
+      ],
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 200
+      },
+      "artist": {
+        "style": {
+          "maxTextWidth": 180,
+          "marquee": true
+        }
+      },
+      "track": {
+        "style": {
+          "maxTextWidth": 300,
+          "marquee": true
+        }
+      },
+      "actions": {
+        "rightClick": "player.quit"
+      }
+    },
+    "prices": {
+      "provider": "crypto",
+      "interval": 600,
+      "currency": "USD",
+      "currencySymbol": "",
+      "assets": [
+        {
+          "symbol": "BTC",
+          "price_precision": 0
+        },
+        {
+          "symbol": "SOL",
+          "price_precision": 0
+        },
+        {
+          "symbol": "AR",
+          "price_precision": 1
+        }
+      ],
+      "items": {},
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      },
+      "actions": {
+        "leftClick": "crypto.panel"
+      }
+    },
+    "tray": {
+      "provider": "icontray",
+      "exclude": [
+        "Input Method",
+        "solaar",
+        "indicator-solaar",
+        "spotify*",
+        "com.spotify.Client",
+        "Mullvad VPN*"
+      ],
+      "iconOverrides": {
+        "ChatGPT": "builtin:chatgpt-outline",
+        "Mullvad VPN_status_icon_*": "builtin:mullvad",
+        "TelegramDesktop": "builtin:telegram-outline",
+        "ZapZap": "builtin:whatsapp-outline",
+        "spotify*": "builtin:spotify",
+        "com.spotify.Client": "builtin:spotify"
+      },
+      "style": {
+        "iconSize": 18,
+        "greyscaleIcons": true,
+        "monochromeIcon": false
+      }
+    },
+    "net": {
+      "provider": "network",
+      "text": {
+        "style": {
+          "maxTextWidth": 110,
+          "marquee": true
+        }
+      },
+      "actions": {
+        "leftClick": "network.panel",
+        "hoverEnter": "network.panel"
+      }
+    },
+    "vpn": {
+      "provider": "mullvad",
+      "actions": {
+        "leftClick": [
+          "mullvad",
+          "connect"
+        ],
+        "rightClick": "tailscale.toggle",
+        "middleClick": [
+          "mullvad",
+          "disconnect"
+        ]
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      },
+      "regionFlag": true,
+      "style": {
+        "states": {
+          "active": {
+            "color": "#e5e5e5"
+          }
+        }
+      },
+      "quickCountries": [
+        "nl",
+        "jp",
+        "sg"
+      ]
+    },
+    "tailnet": {
+      "provider": "tailscale",
+      "symbol": "vpn_lock",
+      "actions": {
+        "leftClick": "tailscale.toggle"
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      }
+    },
+    "sound": {
+      "provider": "audio",
+      "icon": {
+        "actions": {
+          "leftClick": "audio.route"
+        }
+      },
+      "text": {
+        "actions": {
+          "leftClick": "audio.panel"
+        }
+      },
+      "actions": {
+        "scrollUp": "audio.up",
+        "scrollDown": "audio.down",
+        "middleClick": "audio.mute"
+      }
+    },
+    "time": {
+      "provider": "datetime",
+      "format": "%H:%M",
+      "alternate": "%a %d %b",
+      "tooltipFormat": "%A, %d %B %Y",
+      "actions": {
+        "leftClick": "datetime.toggle"
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      },
+      "worldClocks": [
+        {
+          "label": "New York",
+          "timezone": "America/New_York"
+        },
+        {
+          "label": "London",
+          "timezone": "Europe/London"
+        },
+        {
+          "label": "Amsterdam",
+          "timezone": "Europe/Amsterdam"
+        },
+        {
+          "label": "Tokyo",
+          "timezone": "Asia/Tokyo"
+        }
+      ]
+    },
+    "input": {
+      "provider": "locale",
+      "actions": {
+        "leftClick": "locale.cycle",
+        "rightClick": {
+          "command": [
+            "fcitx5-configtool"
+          ],
+          "detach": true
+        }
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      }
+    },
+    "quota": {
+      "provider": "codex",
+      "source": "db",
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      }
+    },
+    "credit": {
+      "provider": "openrouter",
+      "interval": 600,
+      "currencySymbol": "",
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      }
+    },
+    "notifications": {
+      "provider": "DND",
+      "actions": {
+        "leftClick": "DND.toggle"
+      },
+      "style": {
+        "states": {
+          "active": {
+            "color": "#e5e5e5"
+          }
+        }
+      }
+    },
+    "idle": {
+      "provider": "caffeine",
+      "actions": {
+        "leftClick": "caffeine.toggle",
+        "middleClick": [
+          "systemctl",
+          "suspend"
+        ]
+      },
+      "style": {
+        "states": {
+          "active": {
+            "color": "#e5e5e5"
+          }
+        }
+      }
+    },
+    "filter": {
+      "provider": "nightlight",
+      "actions": {
+        "leftClick": "nightlight.toggle",
+        "middleClick": null
+      },
+      "style": {
+        "states": {
+          "active": {
+            "color": "#e5e5e5"
+          }
+        }
+      }
+    },
+    "display": {
+      "provider": "monitor-layout",
+      "actions": {
+        "leftClick": "monitor.toggle"
+      }
+    }
+  },
+  "perMonitor": {
+    "DP-2": {
+      "modules": {
+        "music": {
+          "players": [
+            "spotify"
+          ]
+        },
+        "spaces": {
+          "labels": {
+            "11": "1",
+            "12": "2",
+            "13": "3",
+            "14": "4",
+            "15": "5",
+            "16": "6",
+            "17": "7",
+            "18": "8",
+            "19": "9",
+            "20": "X"
+          }
+        }
+      }
+    }
+  },
+  "bars": [
+    {
+      "id": "workspace-bar",
+      "monitors": [
+        "DP-1",
+        "DP-2"
+      ],
+      "side": "b",
+      "position": "l",
+      "alignment": "r",
+      "offsetY": -60,
+      "islandGap": 10,
+      "islands": [
+        {
+          "id": "markets",
+          "modules": [
+            "prices"
+          ]
+        },
+        {
+          "id": "media",
+          "modules": [
+            "music"
+          ]
+        },
+        {
+          "id": "workspaces",
+          "modules": [
+            "spaces"
+          ]
+        }
+      ],
+      "perMonitor": {
+        "DP-2": {
+          "islands": [
+            {
+              "id": "workspaces",
+              "modules": [
+                "spaces"
+              ]
+            }
+          ]
+        }
+      },
+      "thickness": 44,
+      "overflow": "centre",
+      "autoHide": true,
+      "activationEdge": "b",
+      "activationDelay": 0,
+      "hideDelay": 1000,
+      "keepVisibleDistance": "140px",
+      "fadeDuration": 180
+    },
+    {
+      "id": "status-bar",
+      "monitors": [
+        "DP-1"
+      ],
+      "side": "b",
+      "position": "r",
+      "alignment": "l",
+      "offsetY": -60,
+      "islandGap": 10,
+      "islands": [
+        {
+          "id": "applications",
+          "modules": [
+            "tray"
+          ]
+        },
+        {
+          "id": "ai",
+          "modules": [
+            "quota",
+            "credit"
+          ]
+        },
+        {
+          "id": "connectivity",
+          "modules": [
+            "net",
+            "vpn",
+            "tailnet"
+          ]
+        },
+        {
+          "id": "audio-clock-input",
+          "modules": [
+            "sound",
+            "time",
+            "input"
+          ]
+        },
+        {
+          "id": "controls",
+          "modules": [
+            "notifications",
+            "idle",
+            "filter",
+            "display"
+          ]
+        }
+      ],
+      "thickness": 44,
+      "overflow": "centre",
+      "autoHide": true,
+      "activationEdge": "b",
+      "activationDelay": 0,
+      "hideDelay": 1000,
+      "keepVisibleDistance": "140px",
+      "fadeDuration": 180
+    }
+  ]
+}
