@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import hashlib
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -87,10 +88,12 @@ def selected_partitions(args, catalogue):
 def partition_db(store, part):
     cache = private_directory(store.workdir / "indexes")
     target = cache / (part["index"]["plaintext_sha256"] + ".sqlite")
-    if not target.exists():
-        download_plain(store, part["index"], target)
-    elif file_hash(target) != part["index"]["plaintext_sha256"]:
-        raise RuntimeError("cached index was modified; remove it before refetching")
+    with target.with_suffix(".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not target.exists():
+            download_plain(store, part["index"], target)
+        elif file_hash(target) != part["index"]["plaintext_sha256"]:
+            raise RuntimeError("cached index was modified; remove it before refetching")
     return connect(target, True)
 
 

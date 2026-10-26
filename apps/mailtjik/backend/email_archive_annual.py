@@ -31,7 +31,7 @@ import email_archive_index as index
 import email_archive_export as views
 from email_archive_run import save_json, source_state
 
-PART_BYTES = 128 * 1024 * 1024
+PART_BYTES = 16 * 1024 * 1024
 ROOT = "type-drive:private/archives/mail/structured"
 
 
@@ -172,6 +172,7 @@ class Part:
         self.tar = None if kind == "reader" else tarfile.open(fileobj=self.stream, mode="w|", format=tarfile.USTAR_FORMAT)
         self.size = 0
         self.records = []
+        self.record_folders = {}
         self.closed = False
 
     def add(self, digest, content):
@@ -244,8 +245,10 @@ class Part:
                        (self.id, self.key, self.account, self.year, self.kind, self.folder,
                         ciphertext_hash, self.path.stat().st_size, self.generation, len(self.records)))
             db.executemany("INSERT INTO locations VALUES(?,?,?,?,?,?,?,?,?)",
-                           [(self.kind, self.account, self.year, self.folder, digest,
-                             self.id, member, offset, size) for digest, member, offset, size, _ in self.records])
+                           [(self.kind, self.account, self.year, folder, digest,
+                             self.id, member, offset, size)
+                            for digest, member, offset, size, _ in self.records
+                            for folder in self.record_folders.get(digest, {self.folder})])
         if self.kind == "raw":
             self.path.replace(self.engine.store.cache / (self.id + ".age"))
         else:
@@ -289,41 +292,63 @@ class Engine:
         self.started = time.time()
         self.processed = 0
         self.last_status = 0
+        self.derived_messages = 0
+        self.derived_objects = 0
 
     def status(self, stage, **values):
         now = time.time()
-        if stage == "scanning" and now - self.last_status < 5:
+        if stage in {"scanning", "reader_views"} and now - self.last_status < 5:
             return
         self.last_status = now
         save_json(self.store.workdir / "status.json", {
             "version": 1, "stage": stage, "generation": self.generation,
             "processed_occurrences": self.processed, "elapsed_seconds": int(now - self.started),
+            "derived_messages_this_run": self.derived_messages,
+            "derived_raw_objects_this_run": self.derived_objects,
             "updated_utc": datetime.now(timezone.utc).isoformat(), **values})
 
     def put(self, kind, account, year, digest, content, folder=""):
-        key = (kind, account, year, folder)
-        locator = (*key, digest)
+        # Pool physical reader records by account/year. Folder membership is
+        # represented by multiple locations pointing to the same MBOX record.
+        key = (kind, account, year, "" if kind == "reader" else folder)
+        locator = (kind, account, year, folder, digest)
         if locator in self.pending or self.db.execute(
                 "SELECT 1 FROM locations WHERE kind=? AND account=? AND year=? AND folder=? AND digest=?",
                 locator).fetchone():
             return
         writer = self.writers.get(key)
+        if kind == "reader":
+            if writer and digest in writer.record_folders:
+                writer.record_folders[digest].add(folder)
+                self.pending.add(locator)
+                return
+            existing = self.db.execute(
+                "SELECT object_id,member,offset,length FROM locations "
+                "WHERE kind='reader' AND account=? AND year=? AND digest=? LIMIT 1",
+                (account, year, digest)).fetchone()
+            if existing:
+                with self.db:
+                    self.db.execute("INSERT INTO locations VALUES(?,?,?,?,?,?,?,?,?)",
+                                    (*locator, *existing))
+                return
         if writer and writer.size and writer.size + len(content) > self.part_bytes:
             self.close(key)
             writer = None
         if writer is None:
             if len(self.writers) >= 32:
                 self.close(next(iter(self.writers)))
-            writer = self.writers[key] = Part(self, account, year, kind, folder)
+            writer = self.writers[key] = Part(self, account, year, kind, key[3])
         self.writers.move_to_end(key)
         writer.add(digest, content)
+        writer.record_folders[digest] = {folder}
         self.pending.add(locator)
 
     def close(self, key):
         writer = self.writers[key]
         writer.seal()
         for digest, *_ in writer.records:
-            self.pending.discard((*key, digest))
+            for folder in writer.record_folders.get(digest, {key[3]}):
+                self.pending.discard((*key[:3], folder, digest))
         del self.writers[key]
 
     def flush(self):
@@ -464,8 +489,10 @@ def derive_views(engine):
                         record = views.mbox_record(parsed, cleaned)
                         for folder in reader_folders(db, digest):
                             engine.put("reader", account, year, digest, record, folder)
+                        engine.derived_messages += 1
                         engine.status("reader_views")
             completed.append((obj["id"], path))
+            engine.derived_objects += 1
         engine.flush()
         with db:
             db.executemany("INSERT INTO derived_objects VALUES(?)", [(ident,) for ident, _ in completed])

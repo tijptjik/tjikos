@@ -3,6 +3,7 @@
 from __future__ import annotations
 import base64
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout, contextmanager
 import email
 import email.policy
@@ -139,9 +140,15 @@ def query(config, request):
     offset = max(0, int(request.get('offset', 0)))
     limit = 40
     hits, rows, facets = 0, [], []
-    for p in cat['partitions']:
-        if not eligible(p, filters):
-            continue
+    selected = [p for p in cat['partitions'] if eligible(p, filters)]
+    def warm_index(part):
+        db = partition_db(store, part)
+        db.close()
+    # A cold all-account search must not serialize dozens of Drive round trips.
+    # Only selected indexes are fetched; message objects are opened on demand.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(warm_index, selected))
+    for p in selected:
         db = partition_db(store, p)
         try:
             db.create_function('casefold', 1, lambda s: str(s).casefold(), deterministic=True)
