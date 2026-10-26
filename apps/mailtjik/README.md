@@ -25,7 +25,7 @@
 - **Read comfortably:** Glamour renders text and HTML converted to Markdown. Original headers, attachment counts and image counts stay visible.
 - **Embedded images in Kitty:** PNG, JPEG, GIF (first frame) and WebP appear in an inline pane below the message. Images fit both the available terminal width and height, resize with the terminal, and can be cycled or hidden. No remote images or tracking pixels are fetched.
 - **Export originals:** save a verified raw EML or its ordinary attachments for use in another mail client.
-- **Archive by address and year:** independently compressed, age-encrypted parts targeting 128 MiB of uncompressed content; one oversized message or attachment may exceed that target.
+- **Archive by address and year:** independently compressed, age-encrypted parts targeting 16 MiB of uncompressed content; one oversized message or attachment may exceed that target. Existing 128 MiB parts remain readable.
 - **Preserve evidence:** exact raw SHA-256 deduplication, all source/folder memberships, attachments, aliases and attribution evidence. Different messages sharing a Message-ID stay separate.
 - **Choose what to capture:** a year → address → excluded-label tree. Exclusion wins across all Gmail labels, including All Mail. `Gmail Archive` is the retained residual view.
 - **Read-only live capture:** Gmail desktop OAuth, metadata inventory and resumable body downloads; TLS IMAP is available through private provider configuration.
@@ -155,6 +155,18 @@ mailtjik archive     # prepare, select, preserve and monitor
 5. Use **↑/↓** and **Enter** to read a message. **n/p** pages through results; **c** opens all account/year counts, including counts from the last search.
 
 Search matches case-insensitive substrings. Participant and subject filters are combined with AND. Search downloads the selected indexes; opening a message fetches only its bounded encrypted part, authenticates it and verifies the preserved raw hash.
+
+Missing indexes are fetched with up to four concurrent downloads and cached privately.
+Later searches reuse those indexes. Opening a message downloads only its containing
+part; subsequent reads reuse the verified local EML. A cold read of an older
+128 MiB part can take longer than a new 16 MiB part. Neither requires downloading
+an entire annual archive. Network throughput still determines cold-read latency.
+
+Reader MBOX parts pool messages within each account/year. Folder memberships are
+index references to record offsets, so a message in many folders is stored once.
+The MBOX itself contains pooled messages; original folder recovery uses the index
+memberships. Export progress includes messages and raw objects processed during
+derivation; completed partition checkpoints remain separate resume evidence.
 
 ### Read and export
 
