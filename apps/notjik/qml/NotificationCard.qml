@@ -69,25 +69,35 @@ Rectangle {
     readonly property bool coverArtwork: telegramRail || imageCover || (!richTelegram && (resolvedArtwork === fallbackArtwork
         || resolvedArtwork === Qt.resolvedUrl("icons/wifi-cover.png").toString()))
     readonly property real coverWidth: 80
+    readonly property real bodyHeight: Math.max(avatarCover ? coverWidth + 2 * border.width : (coverArtwork ? 80 : 0), content.implicitHeight + theme.padding * 2)
     // Admission reserves the fully revealed footer even while it is collapsed.
-    readonly property real admissionHeight: Math.max(avatarCover ? coverWidth + 2 * border.width : (coverArtwork ? 80 : 0), content.implicitHeight + theme.padding * 2 + (actionFooter.visible ? (actions.implicitHeight + 12) : 0))
-    implicitHeight: Math.max(avatarCover ? coverWidth + 2 * border.width : (coverArtwork ? 80 : 0), content.implicitHeight + theme.padding * 2 + (actionFooter.visible ? actionFooter.implicitHeight : 0))
+    readonly property real admissionHeight: bodyHeight + (actionFooter.visible ? actions.implicitHeight + 12 : 0)
+    implicitHeight: bodyHeight + (actionFooter.visible ? actionFooter.implicitHeight : 0)
     color: theme.background
     radius: theme.radius
     border.width: theme.borderWidth
     border.color: selected ? Qt.tint(theme.border, Qt.rgba(accent.r, accent.g, accent.b, 0.25)) : theme.border
-    Image {
-        id: coverImage
+    Item {
+        id: coverRail
         objectName: "notification-cover"
         visible: card.coverArtwork
         x: card.border.width
         y: card.border.width
         width: card.coverWidth
         height: card.avatarCover ? width : Math.max(0, card.height - 2 * card.border.width)
-        source: visible && (!card.telegramRail || card.imageCover) ? card.resolvedArtwork : ""
-        sourceSize { width: 320; height: 320 }
-        fillMode: card.avatarCover ? Image.PreserveAspectFit : Image.PreserveAspectCrop
-        asynchronous: true
+        clip: true
+        Image {
+            id: coverImage
+            width: parent.width
+            // Reserve the expanded footer in the image canvas. Only the rail's
+            // clip changes during reveal; PreserveAspectCrop must not rescale
+            // the artwork on every animation frame.
+            height: card.avatarCover ? width : Math.max(0, card.admissionHeight - 2 * card.border.width)
+            source: coverRail.visible && (!card.telegramRail || card.imageCover) ? card.resolvedArtwork : ""
+            sourceSize { width: 320; height: 320 }
+            fillMode: card.avatarCover ? Image.PreserveAspectFit : Image.PreserveAspectCrop
+            asynchronous: true
+        }
         MouseArea {
             anchors.fill: parent
             enabled: !card.richTelegram && card.opensChat
@@ -99,8 +109,8 @@ Rectangle {
         layer.enabled: !card.avatarCover
         layer.effect: OpacityMask {
             maskSource: Item {
-                width: coverImage.width
-                height: coverImage.height
+                width: coverRail.width
+                height: coverRail.height
                 Rectangle {
                     width: parent.width + radius
                     height: parent.height
@@ -108,7 +118,7 @@ Rectangle {
                     color: "white"
                 }
                 Rectangle {
-                    visible: coverImage.height < card.height - 2 * card.border.width
+                    visible: coverRail.height < card.height - 2 * card.border.width
                     anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
                     height: card.radius
                     color: "white"
@@ -149,7 +159,8 @@ Rectangle {
         height: Math.max(3, card.border.width + 2)
         radius: height / 2
         color: card.border.color
-        visible: card.hasInteractions && !card.controlsRevealed
+        // Do not flash the collapsed marker over the still-closing footer.
+        visible: card.hasInteractions && !card.controlsRevealed && actionFooter.reveal === 0
     }
     Accessible.role: Accessible.AlertMessage
     Accessible.name: notice.title + ". " + notice.body
@@ -231,7 +242,7 @@ Rectangle {
             margins: card.theme.padding
             leftMargin: card.coverArtwork ? card.coverWidth + card.theme.padding : card.theme.padding
             topMargin: card.coverArtwork ? Math.max(card.theme.padding,
-                (card.height - (actionFooter.visible ? actionFooter.height : 0) - content.implicitHeight) / 2) : card.theme.padding
+                (card.bodyHeight - content.implicitHeight) / 2) : card.theme.padding
         }
         spacing: 10
         Text {
@@ -481,6 +492,7 @@ Rectangle {
             component PageButton: ActionButton {
                 required property bool forward
                 theme: card.theme
+                disabledColor: card.theme.muted
                 width: actions.navigationWidth
                 height: actions.height
                 enabled: forward ? actions.page < actions.groups.length - 1 : actions.page > 0
@@ -542,6 +554,8 @@ Rectangle {
                                         id: actionButton
                                         required property var modelData
                                         theme: card.theme
+                                        // Disabling input during collapse must not flash disabled ink.
+                                        disabledColor: card.theme.muted
                                         text: modelData.label
                                         width: modelData.buttonWidth
                                         x: actionRow.buttonX(modelData)

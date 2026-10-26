@@ -6,6 +6,7 @@ Button {
     id: button
     required property var theme
     property int labelSize: theme.fontSize - 2
+    property color disabledColor: theme.border
     implicitWidth: Math.ceil(Math.max(label.implicitWidth, metrics.boundingRect(text).width)) + leftPadding + rightPadding
     implicitHeight: Math.max(26, contentItem.implicitHeight + topPadding + bottomPadding)
     padding: 2
@@ -22,7 +23,7 @@ Button {
         text: button.text
         textFormat: Text.PlainText
         wrapMode: Text.Wrap
-        color: !button.enabled ? button.theme.border : button.hovered || button.visualFocus ? button.theme.text : button.theme.muted
+        color: !button.enabled ? button.disabledColor : button.hovered || button.visualFocus ? button.theme.text : button.theme.muted
         verticalAlignment: Text.AlignVCenter
         horizontalAlignment: Text.AlignHCenter
         font { family: button.theme.font; pixelSize: button.labelSize }

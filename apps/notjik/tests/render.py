@@ -249,7 +249,7 @@ def main():
             import re
             card.write_text(re.sub(r"readonly property bool controlsRevealed:.*?(?=    readonly property bool hasInteractions)",
                                    "readonly property bool controlsRevealed: false\n", card.read_text(), count=1, flags=re.S))
-        card.write_text(card.read_text().replace("readonly property bool controlsRevealed:", "property bool controlsRevealed:").replace("id: card", 'id: card\n    function advanceActions(direction) { if (direction > 0 && nextActions.enabled) nextActions.clicked(); else if (direction < 0 && previousActions.enabled) previousActions.clicked(); }\n    readonly property int artworkStatus: coverArtwork ? coverImage.status : artworkImage.status\n    readonly property url artworkSource: coverArtwork ? coverImage.source : artworkImage.source\n    function footerGeometry() { return {imageCover:card.imageCover, avatarCover:card.avatarCover, border:card.border.width, cover:card.coverArtwork, coverWidth:coverImage.width, coverHeight:coverImage.height, contentLeft:content.x, contentTop:content.y, contentHeight:content.implicitHeight, detailHeight:detail.height, detailVisible:detail.visible, visible:actionFooter.visible, y:actionFooter.y, height:actionFooter.height, bottom:actionFooter.y+actionFooter.height, cardHeight:height, mainBottom:content.y+content.implicitHeight}; }\n    function actionGeometry() {\n        if (!pages.count) return [];\n        const row = pages.itemAt(actions.page).children[0];\n        return [{x:row.x, width:row.width, available:actionViewport.width, page:actions.page, count:pages.count, previous:previousActions.enabled, next:nextActions.enabled, stripX:actionStrip.x,\n            buttons:row.children.filter(button => button.modelData !== undefined).map(button => ({label:button.text, index:button.modelData.actionIndex, x:button.x, width:button.width, height:button.height, textHeight:button.contentItem.implicitHeight, truncated:button.contentItem.truncated}))}];\n    }\n', 1))
+        card.write_text(card.read_text().replace("readonly property bool controlsRevealed:", "property bool controlsRevealed:").replace("id: card", 'id: card\n    function advanceActions(direction) { if (direction > 0 && nextActions.enabled) nextActions.clicked(); else if (direction < 0 && previousActions.enabled) previousActions.clicked(); }\n    readonly property int artworkStatus: coverArtwork ? coverImage.status : artworkImage.status\n    readonly property url artworkSource: coverArtwork ? coverImage.source : artworkImage.source\n    function footerGeometry() { return {imageCover:card.imageCover, avatarCover:card.avatarCover, border:card.border.width, cover:card.coverArtwork, coverWidth:coverRail.width, coverHeight:coverRail.height, imageHeight:coverImage.height, contentLeft:content.x, contentTop:content.y, contentHeight:content.implicitHeight, detailHeight:detail.height, detailVisible:detail.visible, visible:actionFooter.visible, y:actionFooter.y, height:actionFooter.height, bottom:actionFooter.y+actionFooter.height, cardHeight:height, mainBottom:content.y+content.implicitHeight}; }\n    function actionGeometry() {\n        if (!pages.count) return [];\n        const row = pages.itemAt(actions.page).children[0];\n        return [{x:row.x, width:row.width, available:actionViewport.width, page:actions.page, count:pages.count, previous:previousActions.enabled, next:nextActions.enabled, stripX:actionStrip.x,\n            buttons:row.children.filter(button => button.modelData !== undefined).map(button => ({label:button.text, index:button.modelData.actionIndex, x:button.x, width:button.width, height:button.height, textHeight:button.contentItem.implicitHeight, truncated:button.contentItem.truncated}))}];\n    }\n', 1))
         card.write_text(card.read_text().replace("id: card", """id: card
     function groupGeometry() {
         return Object.assign(groupNotches.geometry(), {label:groupIndicator.Accessible.name, visible:groupIndicator.visible, indicatorOpacity:groupIndicator.opacity,
@@ -336,6 +336,28 @@ def main():
             process = subprocess.Popen(["quickshell", "--path", str(root / "qml"), "--no-color"], stdout=log, stderr=log, start_new_session=True)
             try:
                 wait_for(lambda: ipc(root, {"op": "status"})["ok"])
+                if "--action-collapse" in sys.argv[2:]:
+                    ipc(root, {"op":"send", "notice":{"app":"notjik demo", "title":"Stable artwork", "body":"", "timeout":0,
+                        "actions":[{"label":"Open", "command":["true"]}]}})
+                    wait_for(lambda: len(ipc(root, {"op":"metrics"})["metrics"]["cards"]) == 1)
+                    def footer():
+                        return ipc(root, {"op":"metrics"})["metrics"]["cards"][0]["footer"]
+                    for cycle in range(3):
+                        ipc(root, {"op":"revealControls"})
+                        time.sleep(.3)
+                        expanded = footer()
+                        ipc(root, {"op":"revealControls", "revealed":False})
+                        samples = []
+                        until = time.monotonic() + .3
+                        while time.monotonic() < until:
+                            samples.append(footer())
+                            time.sleep(.01)
+                        assert samples[-1]["cardHeight"] < expanded["cardHeight"], samples
+                        assert all(abs(f["imageHeight"] - expanded["imageHeight"]) < .01 for f in samples), samples
+                        assert all(abs(f["contentTop"] - expanded["contentTop"]) < .01 for f in samples), samples
+                        assert all(b["cardHeight"] <= a["cardHeight"] + .01 for a, b in zip(samples, samples[1:])), samples
+                    print("PASS: three action collapses retain image scale and shrink monotonically")
+                    return
                 if "--height-limit" in sys.argv[2:]:
                     for duration in (0, 220):
                         config["stack"] = {"animationMs": duration}
