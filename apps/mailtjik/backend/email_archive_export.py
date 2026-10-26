@@ -187,16 +187,35 @@ def clean_reader_message(message: email.message.Message, attachment_refs: list[t
     # payloads as ASCII and aborts. The raw RFC 822 bytes are preserved in the
     # raw collection; make only this derived reader copy explicitly UTF-8.
     def repair_text_payloads(part: email.message.Message) -> None:
-        if part.is_multipart():
-            for child in part.get_payload():
-                repair_text_payloads(child)
+        if part.get_content_maintype() == "multipart":
+            for name in ("preamble", "epilogue"):
+                value = getattr(part, name, None)
+                if isinstance(value, str) and not value.isascii():
+                    # BytesGenerator writes multipart framing as ASCII text.
+                    # These fields are outside the represented message body.
+                    setattr(part, name, value.encode("ascii", "replace").decode("ascii"))
+            boundary = part.get_boundary()
+            if boundary and not boundary.isascii():
+                part.set_boundary("mailtjik-" + hashlib.sha256(boundary.encode("utf-8")).hexdigest()[:24])
+            payload = part.get_payload()
+            if isinstance(payload, list):
+                for child in payload:
+                    repair_text_payloads(child)
+            elif isinstance(payload, str) and not payload.isascii():
+                # A few malformed messages declare multipart content without
+                # valid child parts. BytesGenerator writes that payload as
+                # multipart framing, which must be ASCII.
+                part.set_payload(payload.encode("ascii", "replace").decode("ascii"))
             return
         payload = part.get_payload()
         if not isinstance(payload, str) or payload.isascii():
             return
         part.set_payload(payload.encode("utf-8", "replace"))
         if part.get_content_maintype() == "text":
-            part.set_param("charset", "utf-8", header="Content-Type", replace=True)
+            if part["Content-Type"]:
+                part.set_param("charset", "utf-8", header="Content-Type", replace=True)
+            else:
+                part["Content-Type"] = "text/plain; charset=utf-8"
         if part["Content-Transfer-Encoding"]:
             part.replace_header("Content-Transfer-Encoding", "8bit")
         else:
