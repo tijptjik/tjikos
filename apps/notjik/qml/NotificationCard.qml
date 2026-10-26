@@ -63,6 +63,8 @@ Rectangle {
     readonly property bool coverArtwork: telegramRail || imageCover || (!richTelegram && (resolvedArtwork === fallbackArtwork
         || resolvedArtwork === Qt.resolvedUrl("icons/wifi-cover.png").toString()))
     readonly property real coverWidth: 80
+    // Admission reserves the fully revealed footer even while it is collapsed.
+    readonly property real admissionHeight: Math.max(avatarCover ? coverWidth + 2 * border.width : (coverArtwork ? 80 : 0), content.implicitHeight + theme.padding * 2 + (actionFooter.visible ? (actions.implicitHeight + 12) : 0))
     implicitHeight: Math.max(avatarCover ? coverWidth + 2 * border.width : (coverArtwork ? 80 : 0), content.implicitHeight + theme.padding * 2 + (actionFooter.visible ? actionFooter.implicitHeight : 0))
     color: theme.background
     radius: theme.radius

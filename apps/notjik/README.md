@@ -289,7 +289,8 @@ freezes the selected card. Hovering any mirrored copy freezes all copies. Suspen
 does not consume the whole remaining timeout on wake.
 
 The stack displays at most four groups, keeping existing groups in place. New
-groups wait for a slot to open, oldest first. A bar between the stack and its
+groups wait for a slot to open, oldest first. A card also waits until its full
+height, fully expanded hover buttons, and gap fit within the stack height limit. A bar between the stack and its
 screen edge remains visible while additional groups are queued. Countdown components show
 wall-clock time independently of display lifetime. Persistent notifications remain
 until dismissal, sender close, or a non-resident action.

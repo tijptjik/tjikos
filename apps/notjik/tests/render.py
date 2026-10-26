@@ -219,6 +219,7 @@ def main():
         code = code.replace('HistoryDrawer { controller: root }', 'HistoryDrawer { id: historyDrawer; controller: root }')
         code = code.replace('case "capture":', 'case "groupHoverPoint": return {ok:true, point:panels.instances[0].groupHoverPoint()};\n        case "openGroup": panels.instances[0].openGroup(); return {ok:true};\n        case "startMotion": panels.instances[0].startMotion(request.path || ""); return {ok:true};\n        case "stopMotion": return {ok:true, count:panels.instances[0].stopMotion()};\n        case "motionFrames": return {ok:true, frames:panels.instances[0].motionFrames.slice(request.offset, request.offset + 5)};\n        case "capture":')
         code = code.replace('case "capture":', 'case "expandHistory": for (const group of historyGroups) expandedGroups = Object.assign({}, expandedGroups, {[group.key]:true}); break;\n        case "captureHistory": historyDrawer.capture(request.path); return {ok:true};\n        case "capture":')
+        code = code.replace('case "status": break;', 'case "revealControls": panels.instances[0].revealControls(); return {ok:true};\n        case "status": break;')
         shell.write_text(code)
         history = root / "qml/HistoryDrawer.qml"
         history.write_text(history.read_text().replace('id: drawer', 'id: drawer\n    function capture(path) { drawerContent.grabToImage(result => result.saveToFile(path)); }', 1)
@@ -254,6 +255,9 @@ def main():
     function openGroup() { groupIndicator.clicked(); }
     function groupHoverPoint() { return card.mapToItem(card.Window.window.contentItem, card.width / 2, card.height / 2); }
 """, 1))
+        if "--height-limit" in sys.argv[2:]:
+            card_fixture = root / "qml/NotificationCard.qml"
+            card_fixture.write_text(card_fixture.read_text().replace("readonly property bool controlsRevealed:", "property bool controlsRevealed:"))
         panel = root / "qml/NotificationPanel.qml"
         panel.write_text(panel.read_text().replace('id: panel', 'id: panel\n    function capture(path) { notificationScene.grabToImage(result => result.saveToFile(path)); }', 1))
         panel_code = panel.read_text().replace("property var cachedNotice: null", "property var cachedNotice: null\n                    property alias renderedCard: card")
@@ -295,6 +299,7 @@ def main():
     }
     function openGroup() { for (let i = 0; i < cardItems.count; ++i) cardItems.itemAt(i).renderedCard.openGroup(); }
     function advanceActions(direction) { for (let i = 0; i < cardItems.count; ++i) cardItems.itemAt(i).renderedCard.advanceActions(direction); }
+    function revealControls() { for (let i = 0; i < cardItems.count; ++i) cardItems.itemAt(i).renderedCard.controlsRevealed = true; }
     function metrics() {
         const result = [];
         for (let i = 0; i < cardItems.count; ++i) {
@@ -304,9 +309,9 @@ def main():
             const visibleTop = slot.clip ? Math.max(point.y,slotPoint.y) : point.y;
             const visibleBottom = slot.clip ? Math.min(point.y+card.height*card.scale,slotPoint.y+slot.height) : point.y+card.height*card.scale;
             result.push({id:card.notice.id, lifeKey:slot.noticeKey, title:card.notice.title, y:visibleTop, x:point.x, width:card.width*card.scale,
-                height:Math.max(0,visibleBottom-visibleTop), fullHeight:card.height, extent:slot.extent, slotClip:slot.clip, cardZ:slot.z, scale:card.scale, behind:card.parent === exitLayer, layerZ:card.parent === exitLayer ? exitLayer.z : viewport.z, entranceAt:slot.entranceAt, started:slot.started, firstRevealAt:slot.firstRevealAt, firstSpaceAt:slot.firstSpaceAt, urgency:card.notice.urgency, titleInk:card.urgencyInk.title, bodyInk:card.urgencyInk.body, opacity:card.opacity*slot.opacity, retiring:slot.retiring, artwork:card.artwork, artworkReady:card.artworkStatus === Image.Ready, artworkSource:card.artworkSource.toString(), actions:card.actionGeometry(), group:card.groupGeometry(), footer:card.footerGeometry()});
+                height:Math.max(0,visibleBottom-visibleTop), fullHeight:card.height, admissionHeight:card.admissionHeight, extent:slot.extent, slotClip:slot.clip, cardZ:slot.z, scale:card.scale, behind:card.parent === exitLayer, layerZ:card.parent === exitLayer ? exitLayer.z : viewport.z, entranceAt:slot.entranceAt, started:slot.started, firstRevealAt:slot.firstRevealAt, firstSpaceAt:slot.firstSpaceAt, urgency:card.notice.urgency, titleInk:card.urgencyInk.title, bodyInk:card.urgencyInk.body, opacity:card.opacity*slot.opacity, retiring:slot.retiring, artwork:card.artwork, artworkReady:card.artworkStatus === Image.Ready, artworkSource:card.artworkSource.toString(), actions:card.actionGeometry(), group:card.groupGeometry(), footer:card.footerGeometry()});
         }
-        return {cards:result, flowSpeed:panel.motionSpeed, now:Date.now(), height:panel.height, layoutHeight:panel.layoutHeight, exitCount:exitLayer.children.length, contentHeight:viewport.contentHeight, animationMs:panel.animationMs};
+        return {cards:result, heightBlocked:panel.heightBlocked, flowSpeed:panel.motionSpeed, now:Date.now(), height:panel.height, layoutHeight:panel.layoutHeight, exitCount:exitLayer.children.length, contentHeight:viewport.contentHeight, animationMs:panel.animationMs};
     }
 """, 1)
         start = panel_code.index("    visible: controller.ready")
@@ -314,9 +319,11 @@ def main():
         panel_code = panel_code[:start] + "    visible: controller.ready\n" + panel_code[end:]
         # Capture surfaces must not intercept desktop clicks or lose fixtures to them.
         mask_start = panel_code.index("    mask: Region {")
-        mask_end = panel_code.index("    function ", mask_start)
+        mask_end = panel_code.index("    // A separate, input-transparent surface", mask_start)
         if "--hover" not in sys.argv[2:]:
             panel_code = panel_code[:mask_start] + "    mask: Region { width: 0; height: 0 }\n\n" + panel_code[mask_end:]
+        if "--height-limit" in sys.argv[2:]:
+            panel_code = panel_code.replace('readonly property real layoutHeight: Math.max(1, (screen.height - 2 * placement.margin) * (controller.config.stack?.heightPercent || 75) / 100)', 'readonly property real layoutHeight: cardItems.count && cardItems.itemAt(0) ? cardItems.itemAt(0).admissionHeight * 3 + (theme.gap || 0) * 2 + 1 : 350')
         panel.write_text(panel_code)
         os.environ["NOTJIK_CONFIG"] = str(root / "config.json")
         os.environ["NOTJIK_STATE_DIR"] = str(root / "state")
@@ -328,6 +335,37 @@ def main():
             process = subprocess.Popen(["quickshell", "--path", str(root / "qml"), "--no-color"], stdout=log, stderr=log, start_new_session=True)
             try:
                 wait_for(lambda: ipc(root, {"op": "status"})["ok"])
+                if "--height-limit" in sys.argv[2:]:
+                    for duration in (0, 220):
+                        config["stack"] = {"animationMs": duration}
+                        config["grouping"] = {"enabled": False}
+                        (root / "config.json").write_text(json.dumps(config))
+                        wait_for(lambda: ipc(root, {"op":"metrics"})["metrics"]["animationMs"] == duration)
+                        fixture_ids = []
+                        for i in range(4):
+                            fixture_ids.append(ipc(root, {"op":"send", "notice":{"id":f"fit-{i}", "title":"Height fixture", "body":"Synthetic hover controls\nSpace is reserved before arrival", "timeout":0, "actions":[{"label":"Open", "command":["true"]}]}})["id"])
+                        def settled():
+                            m = ipc(root, {"op":"metrics"})["metrics"]
+                            return m if len(m["cards"]) == 4 and sum(c["extent"] == 1 for c in m["cards"]) == 3 else None
+                        m = wait_for(settled)
+                        assert not m["cards"][3]["started"] and m["cards"][3]["opacity"] == 0, m
+                        assert m["contentHeight"] <= m["layoutHeight"] and m["heightBlocked"], m
+                        time.sleep(.4)
+                        assert not ipc(root, {"op":"metrics"})["metrics"]["cards"][3]["started"]
+                        assert sum(c["fullHeight"] for c in m["cards"]) < m["layoutHeight"], m
+                        ipc(root, {"op":"revealControls"})
+                        time.sleep(.3)
+                        expanded = ipc(root, {"op":"metrics"})["metrics"]
+                        assert expanded["cards"][0]["fullHeight"] > m["cards"][0]["fullHeight"], expanded
+                        assert expanded["contentHeight"] <= expanded["layoutHeight"], expanded
+                        assert not expanded["cards"][3]["started"], expanded
+                        ipc(root, {"op":"dismiss", "id":fixture_ids[0]})
+                        wait_for(lambda: len((m := ipc(root, {"op":"metrics"})["metrics"])["cards"]) == 3 and all(c["extent"] == 1 for c in m["cards"]))
+                        wait_for(lambda: not ipc(root, {"op":"metrics"})["metrics"]["heightBlocked"])
+                        ipc(root, {"op":"dismiss", "id":"all"})
+                        wait_for(lambda: not ipc(root, {"op":"metrics"})["metrics"]["cards"])
+                    print("PASS: height overflow stays hidden and enters after dismissal, with and without animation")
+                    return
                 if "--groups" in sys.argv[2:]:
                     group_preview(root, destination)
                     return
@@ -794,7 +832,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-    if "--groups" in sys.argv[2:]:
+    if "--groups" in sys.argv[2:] or "--height-limit" in sys.argv[2:]:
         pass
     elif "--motion" in sys.argv[2:]:
         print("Synthetic motion previews captured")

@@ -19,6 +19,8 @@ PanelWindow {
         : ((placement.edge === "l" || placement.edge === "r") && placement.position === "c") ? Math.max(0, (layoutHeight - stack.implicitHeight) / 2)
         : Math.max(0, layoutHeight - stack.implicitHeight)
     readonly property int animationMs: controller.config.stack?.animationMs ?? 220
+    property bool heightBlocked: false
+    onLayoutHeightChanged: motionActive = true
     property bool motionActive: false
     property real motionSpeed: 0
     visible: controller.ready && !controller.paused && !controller.drawerOpen &&
@@ -50,7 +52,7 @@ PanelWindow {
         readonly property bool horizontal: panel.placement.edge === "t" || panel.placement.edge === "b"
         readonly property real stackHeight: Math.min(panel.layoutHeight, stack.implicitHeight)
         readonly property real stackY: panel.coordinates.y + panel.stackTop
-        readonly property bool overflowing: Logic.grouped(panel.controller.notices.filter(n => !panel.controller.isFloating(n.id)), panel.controller.config, "").length > panel.controller.visibleNotices.length
+        readonly property bool overflowing: panel.heightBlocked || Logic.grouped(panel.controller.notices.filter(n => !panel.controller.isFloating(n.id)), panel.controller.config, "").length > panel.controller.visibleNotices.length
         screen: panel.screen
         visible: panel.visible && !panel.redacted && overflowing
         anchors { top: true; left: true }
@@ -92,7 +94,22 @@ PanelWindow {
             if (item.retiring && item.extent > 0) { motionSpeed = 0; return; }
             if (!item.retiring) slots.push(item);
         }
-        const waiting = slots.filter(item => !item.started || item.extent < 1);
+        // Reserve each admitted card's fully expanded height, including unfinished entrances.
+        // Hidden slots are measured but consume neither space nor an entrance.
+        const gapSize = theme.gap || 0;
+        const admitted = slots.filter(item => item.started);
+        let reserved = admitted.reduce((sum, item) => sum + item.admissionHeight, 0)
+            + Math.max(0, admitted.length - 1) * gapSize;
+        let count = admitted.length;
+        const waiting = slots.filter(item => item.started && item.extent < 1);
+        heightBlocked = false;
+        for (const item of slots.filter(item => !item.started)) {
+            const needed = item.admissionHeight + (count ? gapSize : 0);
+            if (reserved + needed > layoutHeight) { heightBlocked = true; break; }
+            reserved += needed;
+            count++;
+            waiting.push(item);
+        }
         if (!waiting.length) { motionSpeed = 0; motionActive = false; return; }
         if (!animationMs) {
             for (const item of waiting) { item.begin(); item.extent = 1; }
@@ -230,7 +247,10 @@ PanelWindow {
                         property real entranceAt: 0
                         property bool started: false
                         property bool firstArrival: false
+                        readonly property real admissionHeight: Math.max(card.height, card.admissionHeight)
+                        onAdmissionHeightChanged: panel.motionActive = true
                         readonly property real cardHeight: card.height
+                        onCardHeightChanged: panel.motionActive = true
                         property var cachedNotice: null
                         readonly property var liveNotice: panel.controller.visibleNotices.find(n => panel.keyFor(n) === noticeKey)
                         property real reveal: 0
@@ -274,7 +294,7 @@ PanelWindow {
                         z: index
                         height: card.height * extent
                         clip: false
-                        enabled: !retiring
+                        enabled: started && !retiring
                         // Fade the complete card; flow controls its layout independently.
                         ParallelAnimation {
                             id: entrance
@@ -306,7 +326,7 @@ PanelWindow {
                             id: card
                             parent: slot.retiring ? exitLayer : slot
                             opacity: panel.controller.isFloating(notice.id) ? 0 : slot.reveal
-                            enabled: !slot.retiring
+                            enabled: slot.started && !slot.retiring
                             width: slot.width
                             height: implicitHeight
                             anchors.horizontalCenter: parent.horizontalCenter
