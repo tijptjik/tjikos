@@ -23,6 +23,44 @@ class FakeTD:
 
 
 class TelegramTests(unittest.TestCase):
+    def test_desktop_presence_tracks_lock_and_verifies_tdlib_state(self):
+        td = FakeTD()
+        presence = telegram.DesktopPresence(td)
+        presence.sync({"lockState":"unlocked", "paused":False}, True)
+        self.assertEqual(td.calls[-1][1], {"name":"online", "value":{"@type":"optionValueBoolean", "value":True}})
+        self.assertIsNone(presence.online)
+        td.calls[-1][2]({"@type":"ok"})
+        self.assertEqual(td.calls[-1][0], "getOption")
+        td.calls[-1][2]({"@type":"optionValueBoolean", "value":True})
+        self.assertIs(presence.online, True)
+        before = len(td.calls)
+        presence.sync({"lockState":"unlocked", "paused":False}, True)
+        self.assertEqual(len(td.calls), before)
+        for status, ready in (({"lockState":"locked"}, True), ({}, True),
+                              ({"lockState":"unlocked", "paused":True}, True),
+                              ({"lockState":"unlocked", "paused":False}, False)):
+            presence.online = True
+            presence.sync(status, ready)
+            self.assertIs(td.calls[-1][1]["value"]["value"], False)
+            td.calls[-1][2]({"@type":"ok"})
+            td.calls[-1][2]({"@type":"optionValueBoolean", "value":False})
+            self.assertIs(presence.online, False)
+
+    def test_presence_retries_failure_and_ignores_stale_online_ack(self):
+        td = FakeTD()
+        presence = telegram.DesktopPresence(td)
+        unlocked = {"lockState":"unlocked", "paused":False}
+        presence.sync(unlocked, True)
+        stale = td.calls[-1][2]
+        presence.sync({}, True)
+        stale({"@type":"ok"})
+        self.assertEqual(td.calls[-1][0], "setOption")
+        td.calls[-1][2]({"@type":"error"})
+        self.assertIsNone(presence.online)
+        before = len(td.calls)
+        presence.sync({}, True)
+        self.assertEqual(len(td.calls), before + 1)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

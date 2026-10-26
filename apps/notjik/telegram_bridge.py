@@ -940,12 +940,47 @@ def session_lock():
     return lock
 
 
+class DesktopPresence:
+    """Keep TDLib presence tied to a reachable, unlocked notification UI."""
+    def __init__(self, td):
+        self.td = td
+        self.online = None
+        self.pending = None
+        self.generation = 0
+
+    def sync(self, status, ready):
+        desired = bool(ready and status.get("lockState") == "unlocked" and not status.get("paused", True))
+        if self.pending == desired or (self.pending is None and self.online == desired):
+            return
+        self.generation += 1
+        generation = self.generation
+        self.pending = desired
+        self.online = None
+
+        def verified(result):
+            if generation != self.generation:
+                return
+            self.pending = None
+            self.online = desired if result.get("@type") == "optionValueBoolean" and result.get("value") is desired else None
+
+        def changed(result):
+            if generation != self.generation:
+                return
+            if result.get("@type") != "ok":
+                verified({})
+                return
+            self.td.send("getOption", verified, name="online")
+
+        self.td.send("setOption", changed, name="online", value={"@type": "optionValueBoolean", "value": desired})
+
+
 def run(root, login=False):
     from notjik import ipc
     os.umask(0o077)
     with session_lock():
         td = TDLib()
         auth = Authorization(td, login)
+        presence = DesktopPresence(td)
         bridge = Bridge(td, lambda notice: ipc(root, {"op": "send", "notice": notice}),
                         lambda ident: ipc(root, {"op": "dismiss", "id": ident}))
         requests = queue.Queue(maxsize=32)
@@ -979,6 +1014,7 @@ def run(root, login=False):
                         auth.handle(event["authorization_state"])
                     elif kind == "updateConnectionState":
                         connected = event["state"]["@type"] == "connectionStateReady"
+                        heartbeat = 0
                     elif auth.ready and not login:
                         bridge.handle(event)
                 if auth.ready and login:
@@ -998,22 +1034,26 @@ def run(root, login=False):
                 while not requests.empty():
                     request, answer = requests.get_nowait()
                     if request.get("action") == "status":
-                        answer.put({"ok": True, "authorized": auth.ready, "connected": connected, "active": len(bridge.entries), "delivery": dict(bridge.delivery)})
+                        answer.put({"ok": True, "authorized": auth.ready, "connected": connected, "online": presence.online,
+                                    "active": len(bridge.entries), "delivery": dict(bridge.delivery)})
                     elif not auth.ready or not connected:
                         answer.put({"ok": False, "error": "Telegram is reconnecting"})
                     else:
                         bridge.action(request, answer.put_nowait)
                 now = time.monotonic()
                 if not login and now >= heartbeat:
-                    heartbeat = now + 3
+                    heartbeat = now + 1
                     for key, entry in list(bridge.entries.items()):
                         if not entry["published"]:
                             bridge.show(key)
-                    active = auth.ready and connected and len(options_ready) == 2 and all(entry["published"] for entry in bridge.entries.values())
+                    ready = auth.ready and connected and len(options_ready) == 2
+                    active = ready and presence.online is True and all(entry["published"] for entry in bridge.entries.values())
                     try:
-                        ipc(root, {"op": "telegramBridge", "active": active})
+                        status = ipc(root, {"op": "telegramBridge", "active": active})
                     except (OSError, ValueError, subprocess.SubprocessError):
-                        pass
+                        status = {}
+                    if auth.ready:
+                        presence.sync(status, ready)
                 if auth.ready and not login and now >= cleanup:
                     cleanup = now + 3600
                     bridge.prune_render_cache()
@@ -1022,6 +1062,8 @@ def run(root, login=False):
                             immunity_delay=3600, file_types=[], chat_ids=[], exclude_chat_ids=[],
                             return_deleted_file_statistics=False, chat_limit=0)
         finally:
+            if not login and auth.ready:
+                presence.sync({}, False)
             if server:
                 server.shutdown()
                 server.server_close()

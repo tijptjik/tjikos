@@ -765,7 +765,8 @@ healthy connection does not prove delivery of a particular message or coverage
 of every Desktop account. Both paths may show the same message; no title/body
 heuristic discards notifications. Existing focus suppression still applies.
 `notjikctl status` includes `telegramDelivery` counters for native arrivals and
-focus suppression. `notjikctl telegram status` includes `delivery` counters for
+focus suppression. `notjikctl telegram status` includes verified `online` state
+and `delivery` counters for
 bridge events, filtering and publication failures. Counters reset on service
 restart and contain no message text. A successful publication means the UI
 accepted the request, not that the user saw the card.
@@ -811,9 +812,14 @@ matches a message using a display name. These are the bridge's own controls unde
 caller `Telegram via Notjik`; the existing native Telegram action blacklist stays
 unchanged. Blacklisting `Telegram via Notjik` also disables its controls.
 
-A connected bridge renews a 12-second health lease in Notjik every three seconds.
-The lease is diagnostic only; it never suppresses native notifications. Leave
-Telegram Desktop notifications enabled as the fallback. Old unread messages
+A healthy online bridge renews a 12-second lease in Notjik every second. It sets
+TDLib online only while Notjik is reachable, unpaused, and the desktop is unlocked;
+lock, unknown lock state, pause, or UI failure requests offline on the next check.
+This can make the account appear online and avoids TDLib's roughly 30-second
+offline-client notification delay when another Telegram client is online. TDLib
+may still apply its shorter cross-client delay. The bridge verifies the presence
+option before advertising a healthy lease. The lease remains diagnostic only;
+Telegram Desktop notifications remain enabled. Old unread messages
 are not replayed on startup. Telegram read/delete updates remove matching live cards.
 
 Hidden notification previews, spoilers, protected media and self-destructing media
