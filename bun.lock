@@ -2,6 +2,10 @@
   "lockfileVersion": 2,
   "configVersion": 1,
   "workspaces": {
+    "apps/bartjik": {
+      "name": "@tooltjik/bartjik",
+      "version": "0.1.0",
+    },
     "": {
       "name": "tooltjik",
       "devDependencies": {
@@ -22,6 +26,7 @@
     },
   },
   "packages": {
+    "@tooltjik/bartjik": ["@tooltjik/bartjik@workspace:apps/bartjik"],
     "@tooltjik/tjikup": ["@tooltjik/tjikup@workspace:apps/tjikup"],
     "@tooltjik/mailtjik": ["@tooltjik/mailtjik@workspace:apps/mailtjik"],
 
