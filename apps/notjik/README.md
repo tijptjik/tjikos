@@ -310,7 +310,7 @@ Built-in card types:
 | --- | --- |
 | `standard` | Title, body, artwork and actions |
 | `progress` | `value` (0–100), optional `label` |
-| `status` | `state`, optional `detail`, `tone` (`critical`, `success`, or accent) |
+| `status` | `state`, optional `detail`, `tone` (`critical`, `success`, or accent), optional `rainbow-text` |
 | `timer` | `seconds`, optional `label`, `doneLabel` |
 | `results-table` | `results` rows with optional `ingredients`; footer `state`, `tone`, `duration`. See [results tables](docs/cards.md#results-tables). |
 | `telegram` | Bridge-managed text, photo, voice, sticker, emoji and animation data; see [Telegram setup](#telegram-photos-and-voice-messages) |

@@ -57,6 +57,10 @@ notjikctl send 'Reactor fault' 'Engineering · deck 4' --type status \
 Other tone values use the theme accent. Urgency controls the notification's
 priority and default lifetime independently of its status text.
 
+Set `"rainbow-text": true` to render a status state character-by-character in
+the built-in accent palette. This is intended for celebratory, compact states
+such as `ALL SYSTEMS GO`; the status tone still controls the leading indicator.
+
 ## Update one card in place
 
 Use the same `--app` and `--id` for each update. IDs are scoped to the application.

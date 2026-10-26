@@ -62,6 +62,8 @@ class NotificationTests(unittest.TestCase):
                 send.assert_called_once()
                 args = send.call_args.args[0]
                 self.assertEqual(json.loads(args[args.index("--data") + 1])["state"], expected)
+                data = json.loads(args[args.index("--data") + 1])
+                self.assertEqual(data.get("rainbow-text", False), expected == "ALL SYSTEMS GO")
                 self.assertEqual(json.loads(args[args.index("--actions") + 1]),
                                  [{"label": "Show window", "command": focus}])
                 self.assertEqual(args[args.index("--timeout") + 1], timeout)

@@ -117,6 +117,8 @@ def completion_payload(
                      " · ".join(counts) if counts else
                      "REPORT UNAVAILABLE" if unavailable else "ALL SYSTEMS GO")
     data["detail"] = f"{duration} · {completed} {'stage' if completed == 1 else 'stages'}"
+    if data["tone"] == "success":
+        data["rainbow-text"] = True
     if not failed and not interrupted and len(details) == 1 and details[0].startswith("Dirty "):
         # Give a single dirty repository the status row; timing becomes the body.
         dirty = re.fullmatch(r"(Dirty .+?)(?: — (\d+ files?))?", details[0])
@@ -197,8 +199,10 @@ def ssh_notification_filter(command):
         payload = json.loads(metadata[len(prefix):])
         data, body = payload["data"], payload["body"]
         if (set(payload) != {"data", "body"} or
-                set(data) != {"state", "detail", "tone"} or
+                set(data) not in ({"state", "detail", "tone"},
+                                  {"state", "detail", "tone", "rainbow-text"}) or
                 data["tone"] not in {"success", "warning", "critical"} or
+                ("rainbow-text" in data and not isinstance(data["rainbow-text"], bool)) or
                 not all(isinstance(value, str) and len(value) <= 8192
                         for value in (body, data["state"], data["detail"]))):
             return False
