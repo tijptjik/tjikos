@@ -1,4 +1,4 @@
-var groups=[['notifications','notifications_off'],['coffee','hotel'],['nightlight','light_mode'],['desktop_windows','sports_esports']];
+var groups=[['notifications','notifications_off'],['coffee','hotel'],['nightlight','light_mode'],['desktop_windows','sports_esports'],['volume_up','headphones']];
 function compatible(a,b){return a!==b && groups.some(g=>g.includes(a)&&g.includes(b));}
 function interpolate(a,b,t){
     const result=[];

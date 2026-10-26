@@ -16,7 +16,7 @@ def main():
         shutil.copytree(ROOT / "qml", temp / "qml")
         path = temp / "qml/MorphFixture.qml"
         path.write_text(
-            (ROOT / "tests/MorphFixture.qml").read_text().replace('"../qml"', '"."')
+            (ROOT / "tests/MorphFixture.qml").read_text().replace('../qml', '.')
         )
 
         def call(symbol="", capture=""):
@@ -50,6 +50,7 @@ def main():
                     ("notifications", "notifications_off"),
                     ("nightlight", "light_mode"),
                     ("desktop_windows", "sports_esports"),
+                    ("volume_up", "headphones"),
                 ]:
                     call(a)
                     time.sleep(0.25)
@@ -66,6 +67,13 @@ def main():
                     call(a)
                     wait_for(lambda: not call()["running"])
                     assert call()["symbol"] == a
+                    for step in range(5):
+                        frame = destination / f"{a}-frame-{step}.png"
+                        subprocess.run(
+                            ["quickshell", "ipc", "-p", str(path), "call", "morph", "frame", a, b, str(step / 4), str(frame)],
+                            check=True, capture_output=True, text=True,
+                        )
+                        wait_for(lambda: frame.exists() and frame.read_bytes().endswith(b"IEND\xaeB`\x82"))
             finally:
                 process.terminate()
                 process.wait(timeout=5)
@@ -76,7 +84,7 @@ def main():
         ]
         assert not errors, errors
     print(
-        "Four toggle pairs: real vector morph, intermediate frames, rapid reversal and clean endpoints passed"
+        "Five toggle pairs: real vector morph, intermediate frames, rapid reversal and clean endpoints passed"
     )
 
 

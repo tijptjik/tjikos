@@ -233,6 +233,42 @@ test('shared hover partitions padding and every gap without dead zones',()=>{
  for(const x of [99,104,130,154,166])assert.equal(L.nearestTarget([a,b],x,42).id,'b');
  assert.equal(L.nearestTarget([],0,0),null);
 });
+test('notification slash never displaces the bell or clapper, including reversal',()=>{
+ const m=vm.createContext({}),d=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/MorphLogic.js',import.meta.url),'utf8'),m);vm.runInContext(readFileSync(new URL('../qml/MorphData.js',import.meta.url),'utf8'),d);
+ const on=d.shapes.notifications,off=d.shapes.notifications_off;
+ for(const [a,b] of [[on,off],[off,on],[m.interpolate(on,off,.4),on]]){
+  for(const t of [0,.25,.5,.75,1]){
+   const frame=m.interpolate(a,b,t);
+   frame.slice(0,-1).forEach((path,i)=>assert.equal(JSON.stringify(path.points),JSON.stringify(on[i].points)));
+   const slash=frame.at(-1).points,tip=off.at(-1).points[0];
+   slash.forEach(p=>assert.ok(Math.abs((p[0]-tip[0])-(p[1]-tip[1]))<.002));
+  }
+ }
+ assert.equal(on[0].opacity,1);assert.equal(off[0].opacity,0);
+ assert.equal(on.at(-1).opacity,0);assert.equal(off.at(-1).opacity,1);
+ assert.equal(JSON.stringify(on.at(-2).points),JSON.stringify(off.at(-2).points));
+});
+test('body morphs minimize contour travel and keep unrelated details stationary',()=>{
+ const m=vm.createContext({}),d=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/MorphLogic.js',import.meta.url),'utf8'),m);vm.runInContext(readFileSync(new URL('../qml/MorphData.js',import.meta.url),'utf8'),d);
+ const cost=(a,b)=>a.reduce((sum,p,i)=>sum+p.reduce((n,v,j)=>n+(v-b[i][j])**2,0),0);
+ const isClosed=p=>JSON.stringify(p[0])===JSON.stringify(p.at(-1));
+ for(const [a,b] of m.groups.slice(1)){
+  const first=d.shapes[a],last=d.shapes[b];
+  assert.equal(first.length,last.length);
+  const source=first[0].points,target=last[0].points;
+  const varying=isClosed(target)?target:source,reference=isClosed(target)?source:target;
+  const ring=varying.slice(0,-1),best=cost(source,target);
+  for(const order of [ring,[...ring].reverse()])for(let i=0;i<order.length;i++){
+   const shifted=[...order.slice(i),...order.slice(0,i)];shifted.push(shifted[0]);
+   assert.ok(best<=cost(reference,shifted)+1e-6,`${a}: unnecessary point travel`);
+  }
+  for(const [from,to] of [[first,last],[last,first],[m.interpolate(first,last,.4),first]])for(const t of [0,.25,.5,.75,1]){
+   const frame=m.interpolate(from,to,t);
+   assert.equal(frame[0].closed,false);
+   frame.slice(1).forEach((p,i)=>assert.equal(JSON.stringify(p.points),JSON.stringify(first[i+1].points)));
+  }
+ }
+});
 test('morph endpoints and interrupted transition remain finite and continuous',()=>{
  const m=vm.createContext({}),d=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/MorphLogic.js',import.meta.url),'utf8'),m);vm.runInContext(readFileSync(new URL('../qml/MorphData.js',import.meta.url),'utf8'),d);
  for(const [a,b] of m.groups){assert.ok(m.compatible(a,b));const first=d.shapes[a],last=d.shapes[b],mid=m.interpolate(first,last,.4),back=m.interpolate(mid,first,0);

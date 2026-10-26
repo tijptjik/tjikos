@@ -742,9 +742,14 @@ focused background. Per-part sizing and item gaps remain configurable.
 ### Toggle icon animation
 
 `style.animateIcons:true` enables 220ms vector morphs between the ProIcons-based
-notification, caffeine/bed, nightlight/sun and display/game states. The bed drawing
-is original. Interrupted animations continue from their current shape. Set the
+notification, caffeine/bed, nightlight/sun, display/game and speaker/headphone states. The bed drawing
+is original. Notification toggles keep the bell stationary, crossfade its outline
+gaps and extend or retract the slash. Interrupted animations continue from their current shape. Set the
 option false to disable motion; Material Symbols mode uses static font glyphs.
+Cup/bed, moon/sun and monitor/gamepad match their main outlines by minimum point
+travel, including contour direction and starting point. Independent details
+(steam, bed legs, sun rays, monitor supports and controller buttons) fade in place
+instead of being stretched into unrelated parts of the destination icon.
 Native application tray artwork is not morphed. Runtime needs no animation library:
 precomputed vector coordinates are bundled. Regenerate them with
 `uv run --with svgpathtools python scripts/morphs.py` after editing the source SVGs.
