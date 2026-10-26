@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+import os
+from pathlib import Path
+import sys
+root=Path(__file__).resolve().parent.parent
+if not (root/'bartjik.py').exists():root=Path(os.environ.get('BARTJIK_HOME',str(Path.home()/'.local/lib/bartjik')))
+sys.path.insert(0,str(root))
+from bartjik import launch
+launch(sys.argv[1:])
