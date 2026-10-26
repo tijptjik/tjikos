@@ -10,8 +10,6 @@ and Telegram replies, with a robot for every feeling.**
 
 ![Dunst and Notjik render the same synthetic notifications](apps/notjik/docs/showcase.gif)
 
-*80-second synthetic Dunst and Notjik comparison, shown as an animated preview.*
-
 [Installation](apps/notjik/README.md#install-and-start) ·
 [Card types and calling the API](apps/notjik/docs/cards.md) ·
 [Configuration and full documentation](apps/notjik/README.md)
@@ -60,16 +58,16 @@ notjikctl send 'Star chart transfer' --app navigation --id sector-map \
 notjikctl history toggle
 ```
 
-| What you need | Documentation |
-| --- | --- |
-| Standard notifications, icons and artwork | [Standard cards](apps/notjik/docs/cards.md#standard-cards-and-artwork) |
-| Status and errors | [Status cards](apps/notjik/docs/cards.md#status-and-errors) |
-| Progress and updates | [Persistent IDs](apps/notjik/docs/cards.md#update-one-card-in-place) |
-| Timers and buttons | [Timers](apps/notjik/docs/cards.md#timers) · [Actions](apps/notjik/docs/cards.md#action-buttons) |
-| Grouping and notification history | [Grouping](apps/notjik/docs/cards.md#grouping-and-history) |
-| Telegram text, photos, voice and GIFs | [Telegram setup](apps/notjik/README.md#telegram-photos-and-voice-messages) |
-| Run or record the showcase | [Demo commands](apps/notjik/README.md#directed-comparison-cycle-and-recording) |
-| Dunst compatibility and differences | [Comparison guide](apps/notjik/docs/comparison.md) |
+| What you need                             | Documentation                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Standard notifications, icons and artwork | [Standard cards](apps/notjik/docs/cards.md#standard-cards-and-artwork)                           |
+| Status and errors                         | [Status cards](apps/notjik/docs/cards.md#status-and-errors)                                      |
+| Progress and updates                      | [Persistent IDs](apps/notjik/docs/cards.md#update-one-card-in-place)                             |
+| Timers and buttons                        | [Timers](apps/notjik/docs/cards.md#timers) · [Actions](apps/notjik/docs/cards.md#action-buttons) |
+| Grouping and notification history         | [Grouping](apps/notjik/docs/cards.md#grouping-and-history)                                       |
+| Telegram text, photos, voice and GIFs     | [Telegram setup](apps/notjik/README.md#telegram-photos-and-voice-messages)                       |
+| Run or record the showcase                | [Demo commands](apps/notjik/README.md#directed-comparison-cycle-and-recording)                   |
+| Dunst compatibility and differences       | [Comparison guide](apps/notjik/docs/comparison.md)                                               |
 
 ## mailtjik
 
@@ -77,7 +75,7 @@ notjikctl history toggle
 
 ![mailtjik demo](apps/mailtjik/docs/demo.gif)
 
-*Recorded with Charm VHS using synthetic mail only.*
+_Recorded with Charm VHS using synthetic mail only._
 
 - Participant, From/To/Cc/Bcc, subject, account and year-range search.
 - Account, year and search-result counts.

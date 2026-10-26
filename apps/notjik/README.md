@@ -5,8 +5,6 @@ compatibility, command buttons, configurable placement and searchable local hist
 
 ![Dunst and Notjik render the same synthetic notifications](docs/showcase.gif)
 
-*80-second synthetic Dunst and Notjik comparison, shown as an animated preview.*
-
 [Install](#install-and-start) ·
 [Card types and CLI examples](docs/cards.md) · [Configuration](#configuration) ·
 [Telegram integration](#telegram-photos-and-voice-messages)
