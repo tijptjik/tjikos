@@ -182,6 +182,27 @@ def clean_reader_message(message: email.message.Message, attachment_refs: list[t
             original = index.decoded_part_bytes(message)
             text = original.decode(message.get_content_charset() or "utf-8", "replace")
             message.set_content(text + "\n\n" + "\n".join(placeholders))
+    # Some historical messages contain replacement characters in an otherwise
+    # unencoded MIME text payload. BytesGenerator's SMTP policy serializes such
+    # payloads as ASCII and aborts. The raw RFC 822 bytes are preserved in the
+    # raw collection; make only this derived reader copy explicitly UTF-8.
+    def repair_text_payloads(part: email.message.Message) -> None:
+        if part.is_multipart():
+            for child in part.get_payload():
+                repair_text_payloads(child)
+            return
+        payload = part.get_payload()
+        if not isinstance(payload, str) or payload.isascii():
+            return
+        part.set_payload(payload.encode("utf-8", "replace"))
+        if part.get_content_maintype() == "text":
+            part.set_param("charset", "utf-8", header="Content-Type", replace=True)
+        if part["Content-Transfer-Encoding"]:
+            part.replace_header("Content-Transfer-Encoding", "8bit")
+        else:
+            part["Content-Transfer-Encoding"] = "8bit"
+
+    repair_text_payloads(message)
     return message.as_bytes(policy=email.policy.SMTP)
 
 
