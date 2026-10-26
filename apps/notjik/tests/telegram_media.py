@@ -54,7 +54,9 @@ def main():
             "grouping":{"enabled":False}, "pauseOnHover":False, "stack":{"animationMs":0}}))
         # Test-only inspection hooks stay outside the shipped application.
         shell = root / "qml/shell.qml"
-        code = shell.read_text().replace('Variants {\n        model:', 'Variants {\n        id: panels\n        model:')
+        code = shell.read_text().replace(
+            'readonly property string focusedAppId: ToplevelManager.activeToplevel?.appId || ""',
+            'readonly property string focusedAppId: ""').replace('Variants {\n        model:', 'Variants {\n        id: panels\n        model:')
         code = code.replace('case "status": break;', '''case "testMedia": {
             const panel = panels.instances[0];
             const floating = root.isFloating(request.id);
@@ -436,6 +438,12 @@ def main():
                 wait_for(lambda: media("")["recording"]["phase"] == "idle")
                 assert not closing_draft.exists(), "Closing notification retained the draft"
                 # Ordinary cards support the same gesture, even a quick release.
+                # Rich-message Open uses the same workspace focus and dismissal as native cards.
+                opened = call("send", notice=voice_notice)["id"]
+                wait_for(lambda: media(opened)["loaded"])
+                media(opened, button="telegram-open")
+                wait_for(lambda: opened not in [n["id"] for n in call("list")["notices"]])
+                assert requests[-1]["action"] == "open"
                 # Demo account actions stay simulated; explicit recording uses a self-only send route.
                 demo_voice = call("send", notice={**voice_notice, "id":"demo-voice",
                     "data":{**voice_notice["data"], "demo":True}})["id"]

@@ -256,6 +256,25 @@ class TelegramTests(unittest.TestCase):
         self.assertIn("20 MiB", self.cards[-1]["data"]["status"])
         self.assertFalse(any(call[0] == "downloadFile" for call in self.td.calls))
 
+    def test_tdlib_sticker_cache_is_valid_media(self):
+        path = Path(self.temp.name) / "db/stickers/sticker.tgs"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"synthetic")
+        file = {**self.file, "local": {"is_downloading_completed": True, "path": str(path)}}
+        self.assertEqual(self.bridge.local_media(file), path)
+        self.add()
+        with patch.object(self.bridge, "prepare_media") as render:
+            key = next(iter(self.bridge.entries))
+            self.bridge.entries[key]["notice"]["data"].update(kind="sticker", format="tgs")
+            self.bridge.file_update(file)
+            render.assert_called_once_with(key, path, "tgs")
+        outside = Path(self.temp.name) / "db/private.txt"
+        outside.write_bytes(b"private")
+        path.unlink()
+        path.symlink_to(outside)
+        with self.assertRaises(ValueError):
+            self.bridge.local_media(file)
+
     def test_download_path_cannot_escape_cache(self):
         self.add()
         path = Path(self.temp.name) / "private.txt"

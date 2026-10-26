@@ -160,6 +160,9 @@ ColumnLayout {
                     if (result.ok) {
                         if (detail.pendingRequest.action === "reply") {
                             detail.finishReply();
+                        } else if (detail.pendingRequest.action === "open") {
+                            const owner = detail.controller, id = detail.notice.id;
+                            Qt.callLater(() => owner.finishTelegramOpen(id));
                         } else if (detail.pendingRequest.action === "transcribe") detail.feedback = "";
                         else detail.feedback = result.message || (detail.pendingRequest.action === "read" ? "Marked as read" : "Opening Telegram…");
                     } else detail.feedback = result.error || "Telegram action failed";

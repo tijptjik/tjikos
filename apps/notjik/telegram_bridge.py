@@ -308,6 +308,7 @@ class Bridge:
         self.media_jobs = {}
         self.render_root = private_dir(state_dir() / "rendered")
         self.files_root = (state_dir() / "files").resolve()
+        self.stickers_root = (state_dir() / "db" / "stickers").resolve()
         # TDLib writes downloaded chat photos into its own private database
         # cache, rather than the ordinary attachment directory.
         self.profile_photos_root = (state_dir() / "db" / "profile_photos").resolve()
@@ -484,7 +485,7 @@ class Bridge:
 
     def local_media(self, file):
         path = Path(file["local"]["path"]).resolve(strict=True)
-        if not path.is_relative_to(self.files_root) or not path.is_file() or path.stat().st_size > MAX_FILE:
+        if not (path.is_relative_to(self.files_root) or path.is_relative_to(self.stickers_root)) or not path.is_file() or path.stat().st_size > MAX_FILE:
             raise ValueError("Unexpected media path")
         os.chmod(path, 0o600)
         return path
@@ -583,10 +584,7 @@ class Bridge:
         self.downloads.pop(file["id"], None)
         source = ""
         try:
-            path = Path(local["path"]).resolve(strict=True)
-            if not path.is_relative_to(self.files_root) or not path.is_file() or path.stat().st_size > MAX_FILE:
-                raise ValueError("Unexpected attachment path")
-            os.chmod(path, 0o600)
+            path = self.local_media(file)
             source = path.as_uri()
         except (OSError, KeyError, ValueError):
             pass
