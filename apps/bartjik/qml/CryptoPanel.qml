@@ -71,10 +71,15 @@ DetachablePopup {
     property var cachedCharts: ({})
     property var requests: ({})
     property string cacheKey: ''
+    function remember(table,key,value) {
+        if(!Object.prototype.hasOwnProperty.call(table,key) && Object.keys(table).length>=64)
+            delete table[Object.keys(table)[0]];
+        table[key]=value;
+    }
     function receive(requestToken,result) {
         const cache=requests[requestToken];
         if(!cache)return;
-        cachedCharts[cache]={chart:result,requestedAt:cachedCharts[cache]?.requestedAt || Date.now()};
+        remember(cachedCharts,cache,{chart:result,requestedAt:cachedCharts[cache]?.requestedAt || Date.now()});
         if(!result.loading)delete requests[requestToken];
         if(cacheKey===cache)chart=result;
     }
@@ -103,8 +108,9 @@ DetachablePopup {
         const cached=cachedCharts[cacheKey];
         chart=cached?.chart || {loading:true};opened=true;
         if(cached && Date.now()-cached.requestedAt<60000)return false;
-        if(Object.keys(cachedCharts).length>=64)delete cachedCharts[Object.keys(cachedCharts)[0]];
-        cachedCharts[cacheKey]={chart:chart,requestedAt:Date.now()};requests[token]=cacheKey;
+        remember(cachedCharts,cacheKey,{chart:chart,requestedAt:Date.now()});
+        // A helper restart can lose a reply. Never retain abandoned tokens forever.
+        remember(requests,token,cacheKey);
         chart=Object.assign({},chart,{loading:true});
         return true;
     }

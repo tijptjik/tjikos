@@ -5,6 +5,7 @@ import Quickshell.Services.Mpris
 import Quickshell.Services.SystemTray
 import "TrayIcons.js" as TrayIcons
 import "Media.js" as Media
+import "Logic.js" as Logic
 
 QtObject {
     id: native
@@ -16,7 +17,7 @@ QtObject {
     property Process attentionReader: Process {
         running: !native.demo
         command: ['/usr/bin/python3', '-B', Qt.resolvedUrl('tray_attention.py').toString().replace('file://','')]
-        stdout: SplitParser {onRead: data => {try {native.attention=JSON.parse(data);} catch(e) {console.warn('tray attention: invalid update');}}}
+        stdout: SplitParser {onRead: data => {try {native.attention=Logic.reconcile(native.attention,JSON.parse(data));} catch(e) {console.warn('tray attention: invalid update');}}}
         onExited: (code,status) => {native.attention={};if(!native.demo){console.warn('tray attention reader exited: '+code);native.attentionRetry.restart();}}
     }
     property Timer attentionRetry: Timer {interval:5000;onTriggered:native.attentionReader.running=!native.demo}

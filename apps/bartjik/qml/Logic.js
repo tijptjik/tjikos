@@ -45,9 +45,32 @@ function geometry(bar, sw, sh, contentWidth, contentHeight, scale) {
     return {x:x, y:y, width:horizontal ? extent : contentWidth, height:horizontal ? contentHeight : extent,
         columnStart:column.start, columnSize:column.size, overflow:(horizontal ? contentWidth : contentHeight) > available};
 }
+// JSON snapshots are immutable. Reuse unchanged branches so a clock/provider
+// update does not invalidate every bar, module, theme and item binding.
+function reconcile(previous, next) {
+    if(previous===next)return previous;
+    if(!previous || !next || typeof previous!=='object' || typeof next!=='object'
+        || Array.isArray(previous)!==Array.isArray(next))return next;
+    const keys=Object.keys(next);
+    let equal=keys.length===Object.keys(previous).length;
+    for(const key of keys) {
+        const value=reconcile(previous[key],next[key]);
+        if(!Object.prototype.hasOwnProperty.call(previous,key) || value!==previous[key])equal=false;
+        next[key]=value;
+    }
+    return equal?previous:next;
+}
+// Styles are also immutable: empty/equivalent overrides need no copies.
 function merge(base, patch) {
-    const out = Object.assign({},base);
-    Object.keys(patch || {}).forEach(k => out[k] = patch[k] && typeof patch[k] === 'object' && !Array.isArray(patch[k]) && out[k] && typeof out[k] === 'object' && !Array.isArray(out[k]) ? merge(out[k],patch[k]) : patch[k]);
+    let out=base;
+    for(const k of Object.keys(patch || {})) {
+        const value=patch[k] && typeof patch[k]==='object' && !Array.isArray(patch[k])
+            && base[k] && typeof base[k]==='object' && !Array.isArray(base[k])
+            ? merge(base[k],patch[k]) : patch[k];
+        if(value===base[k] && Object.prototype.hasOwnProperty.call(base,k))continue;
+        if(out===base)out=Object.assign({},base);
+        out[k]=value;
+    }
     return out;
 }
 function choose(module, item, part, event) {

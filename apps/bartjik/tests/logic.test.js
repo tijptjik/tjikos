@@ -5,6 +5,31 @@ const L=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/Logic.
 const base={side:'b',position:'l',alignment:'r',layout:{},padding:0,offsetX:0,offsetY:0};
 let count=0;function test(name,f){f();count++;}
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-6,`${a} != ${b}`);
+test('snapshot reconciliation preserves unchanged bindings without hiding changes',()=>{
+ const old={bars:[{key:'a',style:{color:'pink'}}],providers:{clock:{items:[{id:'time',text:{value:'12:00'}}]},crypto:{items:[{id:'BTC',text:{value:'10'}}]}}};
+ assert.equal(L.reconcile(old,JSON.parse(JSON.stringify(old))),old);
+ const incoming=JSON.parse(JSON.stringify(old));incoming.providers.clock.items[0].text.value='12:01';
+ const next=L.reconcile(old,incoming);
+ assert.notEqual(next,old);assert.equal(next.bars,old.bars);
+ assert.equal(next.providers.crypto,old.providers.crypto);
+ assert.equal(next.providers.clock.items[0].text.value,'12:01');
+ assert.equal(old.providers.clock.items[0].text.value,'12:00');
+ assert.deepEqual(JSON.parse(JSON.stringify(L.reconcile(next,{bars:[]}))),{bars:[]});
+ assert.deepEqual(JSON.parse(JSON.stringify(L.reconcile({a:1},{b:1}))),{b:1});
+ assert.deepEqual(JSON.parse(JSON.stringify(L.reconcile([1,2],[2,1]))),[2,1]);
+ assert.equal(L.reconcile({a:1},null),null);
+});
+test('style merges reuse unchanged values and never mutate shared themes',()=>{
+ const theme=Object.freeze({color:'white',states:Object.freeze({hover:Object.freeze({color:'pink'})})});
+ assert.equal(L.merge(theme,{}),theme);
+ assert.equal(L.merge(theme,{states:{hover:{color:'pink'}}}),theme);
+ const changed=L.merge(theme,{states:{hover:{color:'red'}}});
+ assert.equal(changed.states.hover.color,'red');assert.equal(theme.states.hover.color,'pink');
+ const row={id:'x',state:{},text:{style:{}}};
+ assert.equal(L.partStyle(theme,{},row,'text',false),theme);
+ assert.equal(L.partStyle(theme,{},row,'text',true).color,'pink');
+ assert.equal(theme.color,'white');
+});
 test('required 1920/640/400',()=>{const g=L.geometry(base,1920,1080,400,40,1);near(g.x,240);near(g.x+g.width,640);});
 test('explicit 960px',()=>near(L.geometry({...base,layout:{centre_width:'960px'}},1920,1080,400,40,1).x,80));
 for(const side of ['t','b','l','r'])for(const position of ['l','c','r'])for(const alignment of ['l','c','r'])for(const scale of [1,1.5,2]){

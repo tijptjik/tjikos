@@ -73,7 +73,7 @@ ShellRoot {
             bar:p.bar,screen:{name:p.targetScreen.name,width:p.targetScreen.width,height:p.targetScreen.height,scale:p.targetScreen.devicePixelRatio},
             hovered:p.edgeHovered,fading:p.edgeFading
         }));
-        edgeStates=Logic.edgeStates(edgeStates,entries,sample,now);
+        edgeStates=Logic.reconcile(edgeStates,Logic.edgeStates(edgeStates,entries,sample,now));
     }
     Timer {interval:25;running:true;repeat:true;onTriggered:root.updateEdges()}
     function act(action,context,window,row) {
@@ -167,7 +167,7 @@ ShellRoot {
         running:true
         stdinEnabled:true
         stdout:SplitParser {onRead:data=>{
-            try {const msg=JSON.parse(data);if(msg.kind==='pointer'){root.pointer=msg.pointer;root.pointerUpdated=Date.now();}else if(msg.kind==='crypto'){root.cryptoPanels.forEach(p=>p.receive(msg.token,msg.chart));}else if(msg.kind==='artwork'){root.artworkReceived(msg.token,msg.source);}else if(msg.kind==='lyrics'){root.lyricsReceived(msg.token,msg.lyrics);}else root.state=msg;root.helperError='';}
+            try {const msg=JSON.parse(data);if(msg.kind==='pointer'){root.pointer=msg.pointer;root.pointerUpdated=Date.now();}else if(msg.kind==='crypto'){root.cryptoPanels.forEach(p=>p.receive(msg.token,msg.chart));}else if(msg.kind==='artwork'){root.artworkReceived(msg.token,msg.source);}else if(msg.kind==='lyrics'){root.lyricsReceived(msg.token,msg.lyrics);}else root.state=Logic.reconcile(root.state,msg);root.helperError='';}
             catch(e){root.helperError='Invalid helper JSON';}
         }}
         onStarted:root.send({op:'screens',screens:root.screenInfo})
