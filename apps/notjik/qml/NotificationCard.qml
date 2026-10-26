@@ -59,7 +59,7 @@ Rectangle {
     readonly property bool coverArtwork: imageCover || (!richTelegram && (resolvedArtwork === fallbackArtwork
         || resolvedArtwork === Qt.resolvedUrl("icons/wifi-cover.png").toString()))
     readonly property real coverWidth: 80
-    implicitHeight: Math.max(coverArtwork ? 80 : 0, content.implicitHeight + theme.padding * 2 + (actionFooter.visible ? actionFooter.implicitHeight : 0))
+    implicitHeight: Math.max(avatarCover ? coverWidth + 2 * border.width : (coverArtwork ? 80 : 0), content.implicitHeight + theme.padding * 2 + (actionFooter.visible ? actionFooter.implicitHeight : 0))
     color: theme.background
     radius: theme.radius
     border.width: theme.borderWidth
@@ -71,10 +71,10 @@ Rectangle {
         x: card.border.width
         y: card.border.width
         width: card.coverWidth
-        height: Math.max(0, card.height - 2 * card.border.width)
+        height: card.avatarCover ? width : Math.max(0, card.height - 2 * card.border.width)
         source: visible ? card.resolvedArtwork : ""
         sourceSize { width: 320; height: 320 }
-        fillMode: Image.PreserveAspectCrop
+        fillMode: card.avatarCover ? Image.PreserveAspectFit : Image.PreserveAspectCrop
         asynchronous: true
         MouseArea {
             anchors.fill: parent
@@ -84,7 +84,7 @@ Rectangle {
             Accessible.name: "Open Telegram chat"
             onClicked: card.controller.openTelegramChat(card.notice.id)
         }
-        layer.enabled: true
+        layer.enabled: !card.avatarCover
         layer.effect: OpacityMask {
             maskSource: Item {
                 width: coverImage.width
@@ -233,21 +233,21 @@ Rectangle {
                 Layout.alignment: Qt.AlignTop
                 implicitWidth: card.richTelegram ? 32 : card.theme.iconSize
                 implicitHeight: card.richTelegram ? 32 : card.theme.iconSize
-                radius: card.telegram ? width/2 : Math.min(card.theme.radius, 10)
+                radius: card.telegram ? 0 : Math.min(card.theme.radius, 10)
                 color: card.theme.surface
                 Image {
                     id: artworkImage
                     visible: !card.richTelegram || !!card.notice.image
                     anchors { fill: parent; margins: card.richTelegram ? 0 : 4 }
                     source: card.imageSource(card.artwork)
-                    fillMode: card.richTelegram ? Image.PreserveAspectCrop : Image.PreserveAspectFit
+                    fillMode: Image.PreserveAspectFit
                     sourceSize { width: card.theme.iconSize * 2; height: card.theme.iconSize * 2 }
                     asynchronous: true
                     layer.enabled: card.richTelegram || (!card.notice.image && card.notice.icon.endsWith("-symbolic") && !card.notice.icon.startsWith("network-wireless"))
                     layer.effect: card.richTelegram ? avatarMaskEffect : artworkTintEffect
                     Component {
                         id: avatarMaskEffect
-                        OpacityMask { maskSource: Rectangle { width: artworkImage.width; height: artworkImage.height; radius: width / 2 } }
+                        OpacityMask { maskSource: Rectangle { width: artworkImage.width; height: artworkImage.height; radius: 0 } }
                     }
                     Component { id: artworkTintEffect; ColorOverlay { color: card.urgencyInk.artwork } }
                 }

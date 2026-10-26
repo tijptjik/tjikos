@@ -362,7 +362,8 @@ class Bridge:
         if not entry:
             return
         chat = self.chats.get(entry["message"]["chat_id"], {})
-        file = (chat.get("photo") or {}).get("small") or {}
+        photo = chat.get("photo") or {}
+        file = photo.get("big") or photo.get("small") or {}
         file_id = file.get("id")
         entry["avatar_file"] = file_id
         entry["notice"].pop("image", None)
@@ -407,9 +408,10 @@ class Bridge:
             if entry and entry.get("avatar_file") == file_id:
                 entry["notice"]["image"] = path.as_uri()
                 chat = self.chats.get(entry["message"]["chat_id"], {})
-                small = (chat.get("photo") or {}).get("small") or {}
-                if small.get("id") == file_id:
-                    small.update(file)
+                for size in ("big", "small"):
+                    photo = (chat.get("photo") or {}).get(size) or {}
+                    if photo.get("id") == file_id:
+                        photo.update(file)
                 self.show(key)
 
     def add(self, group_id, chat_id, notification):

@@ -389,7 +389,7 @@ def main():
                         ({"title":"Sender image", "body":"Now playing · Evening sessions", "image":(ROOT / "examples/demo-artwork.png").as_uri()}, True),
                         ({"title":"Tall sender image", "body":"\n".join(["A longer image notification"] * 10), "image":(ROOT / "examples/demo-artwork.png").as_uri()}, True),
                         ({"title":"Short avatar", "type":"telegram", "body":"Hello", "image":(ROOT / "examples/demo-artwork.png").as_uri(), "data":{"kind":"text","demo":True,"chatId":"123","messageId":"456","source":""}}, True),
-                        ({"title":"Tall avatar", "type":"telegram", "body":"A photo with a full-height avatar", "image":(ROOT / "examples/demo-artwork.png").as_uri(), "data":{"kind":"photo","demo":True,"chatId":"123","messageId":"457","source":(ROOT / "examples/demo-artwork.png").as_uri()}}, True),
+                        ({"title":"Tall avatar", "type":"telegram", "body":"A photo with a square avatar", "image":(ROOT / "examples/demo-artwork.png").as_uri(), "data":{"kind":"photo","demo":True,"chatId":"123","messageId":"457","source":(ROOT / "examples/demo-artwork.png").as_uri()}}, True),
                         ({"title":"Telegram avatar", "type":"telegram", "data":{"kind":"text", "chatId":"123", "messageId":"456", "source":""}}, False),
                     ]
                     for notice, cover in cases:
@@ -415,13 +415,16 @@ def main():
                             wait_for(lambda:readable_image(image))
                         if row["footer"]["imageCover"]:
                             assert row["footer"]["coverWidth"] == 80 and row["footer"]["contentLeft"] == 96, row
-                            assert abs(row["footer"]["coverHeight"] + 2*row["footer"]["border"] - row["footer"]["cardHeight"]) < 1, row
-                            if notice["title"] in ("Tall avatar","Tall sender image"): assert row["footer"]["coverHeight"] > 160, row
+                            if row["footer"]["avatarCover"]:
+                                assert row["footer"]["coverHeight"] == row["footer"]["coverWidth"], row
+                            else:
+                                assert abs(row["footer"]["coverHeight"] + 2*row["footer"]["border"] - row["footer"]["cardHeight"]) < 1, row
+                            if notice["title"] == "Tall sender image": assert row["footer"]["coverHeight"] > 160, row
                         elif cover:
                             assert row["footer"]["coverHeight"] == max(0,row["fullHeight"]-2*row["footer"]["border"]),row
                         else:
                             assert row["footer"]["contentLeft"] == 16, row
-                    print("PASS: 80px covers, full-height robots, short/tall avatars and sender images and missing-avatar fallback")
+                    print("PASS: 80px covers, full-height robots, square short/tall avatars and sender images and missing-avatar fallback")
                     return
                 # Incoming cards fade as they push; their full shape is never clipped by a slot.
                 ipc(root, {"op":"dismiss", "id":"all"})

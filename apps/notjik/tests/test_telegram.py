@@ -184,7 +184,7 @@ class TelegramTests(unittest.TestCase):
     def test_avatar_download_updates_card_and_reuses_cached_photo(self):
         self.add()
         photo = {"id": 91, "size": 12, "local": {"is_downloading_completed": False}}
-        self.bridge.chat_result(123, {"@type":"chat", "id":123, "title":"Maya", "photo":{"small":photo}})
+        self.bridge.chat_result(123, {"@type":"chat", "id":123, "title":"Maya", "photo":{"small":{"id":90}, "big":photo}})
         self.assertEqual(self.td.calls[-1][0], "downloadFile")
         self.assertEqual(self.td.calls[-1][1]["file_id"], 91)
         path = Path(self.temp.name) / "files/avatar.jpg"
@@ -194,7 +194,9 @@ class TelegramTests(unittest.TestCase):
         self.assertEqual(self.cards[-1]["title"], "Maya")
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.cards[-1]["data"]["kind"], "photo")
+        avatar_downloads = sum(method == "downloadFile" and fields["file_id"] == 91 for method, fields, _ in self.td.calls)
         self.add()
+        self.assertEqual(sum(method == "downloadFile" and fields["file_id"] == 91 for method, fields, _ in self.td.calls), avatar_downloads)
         self.assertEqual(self.cards[-1]["image"], path.as_uri())
         self.bridge.handle({"@type":"updateChatPhoto", "chat_id":123, "photo":None})
         self.assertNotIn("image", self.cards[-1])
