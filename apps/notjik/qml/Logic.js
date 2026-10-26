@@ -172,6 +172,15 @@ function telegramNotice(notice) {
     return [notice.app,notice.desktopEntry].some(value=>
         ['telegram','telegram desktop','org.telegram.desktop','telegram via notjik'].includes(String(value || '').toLowerCase()));
 }
+// Match compositor application IDs, including Telegram's per-account desktop IDs.
+function telegramWindow(appId) {
+    return /^(telegram|telegram-desktop|org\.telegram\.desktop)(?:$|[._-])/i.test(String(appId || ""));
+}
+
+function suppressForFocus(notice, appId) {
+    return telegramWindow(appId) && (telegramNotice(notice) || notice.type === "telegram");
+}
+
 function telegramChatAction(notice) {
     return !notice.archived && telegramNotice(notice) && String(notice.id || '').startsWith('dbus-')
         ? (notice.actions || []).findIndex(action=>action.identifier==='default') : -1;

@@ -5,6 +5,7 @@ Shows synthetic cards briefly on the current Wayland compositor.
 """
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -35,6 +36,18 @@ def run():
         raise RuntimeError("Run only with dbus-run-session (private /tmp bus)")
     with tempfile.TemporaryDirectory(prefix="notjik-acceptance-") as temp:
         path = Path(temp)
+        fixture = path / "runtime"
+        fixture.mkdir()
+        for source in ROOT.iterdir():
+            if source.name == "qml":
+                shutil.copytree(source, fixture / source.name)
+            else:
+                (fixture / source.name).symlink_to(source)
+        shell = fixture / "qml/shell.qml"
+        shell.write_text(shell.read_text().replace(
+            'readonly property string focusedAppId: ToplevelManager.activeToplevel?.appId || ""',
+            'property string focusedAppId: ""').replace('case "status": break;',
+            'case "testFocus": focusedAppId = request.appId; break;\n        case "status": break;'))
         os.environ["NOTJIK_CONFIG"] = str(path / "config.json")
         os.environ["NOTJIK_STATE_DIR"] = str(path / "state")
         os.environ["QT_ACCESSIBILITY"] = "0"
@@ -42,10 +55,10 @@ def run():
                   "timeouts": {"low": 0.25, "normal": 0.4, "critical": 0}, "pauseOnHover": False, "grouping": {"enabled": False}}
         (path / "config.json").write_text(json.dumps(config))
         with (path / "qml.log").open("w+") as output:
-            proc = subprocess.Popen(["quickshell", "--path", str(ROOT / "qml"), "--no-color"], stdout=output, stderr=output)
+            proc = subprocess.Popen(["quickshell", "--path", str(fixture / "qml"), "--no-color"], stdout=output, stderr=output)
             try:
                 def call(op, **kw):
-                    return notjik.ipc(ROOT, {"op": op, **kw})
+                    return notjik.ipc(fixture, {"op": op, **kw})
                 def ids():
                     return [n["id"] for n in call("list")["notices"]]
                 wait_for(lambda: call("status")["ok"])
@@ -115,6 +128,22 @@ def run():
                         "network-wireless", title, "Synthetic body", str(len(actions)), *actions, str(len(hints) // 3 if hint_count is None else hint_count), *hints, str(timeout)],
                         check=True, capture_output=True, text=True)
                     return int(result.stdout.split()[1])
+
+                # Focus policy covers both transports and clears existing Telegram cards.
+                local_focus = call("send", notice={"title":"Focus check", "app":"Telegram via Notjik", "timeout":0})["id"]
+                native_focus = "dbus-" + str(notify("Focus check", hints=("desktop-entry", "s", "telegram")))
+                wait_for(lambda: native_focus in ids())
+                call("testFocus", appId="org.telegram.desktop._account")
+                wait_for(lambda: local_focus not in ids() and native_focus not in ids())
+                suppressed = call("send", notice={"title":"Suppressed", "app":"Telegram via Notjik", "timeout":0})["id"]
+                suppressed_native = "dbus-" + str(notify("Suppressed", hints=("desktop-entry", "s", "telegram")))
+                unrelated = call("send", notice={"title":"Other app", "app":"Mail", "timeout":0})["id"]
+                assert unrelated in ids() and suppressed not in ids() and suppressed_native not in ids()
+                call("testFocus", appId="firefox")
+                assert suppressed not in ids() and suppressed_native not in ids()
+                restored = call("send", notice={"title":"Focus left", "app":"Telegram", "timeout":0})["id"]
+                assert restored in ids()
+                call("dismiss", id="all")
 
                 # Live policy changes suppress both transports without losing original actions.
                 blocked_marker = path / "blocked-action"

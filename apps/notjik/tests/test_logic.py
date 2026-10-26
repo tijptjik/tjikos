@@ -9,6 +9,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @unittest.skipUnless(shutil.which("bun"), "Bun required for pure QML JavaScript checks")
 class LogicTests(unittest.TestCase):
+    def test_telegram_focus_suppression(self):
+        source = (ROOT / "qml/Logic.js").read_text()
+        assertions = r'''
+const assert = require("node:assert/strict");
+for (const appId of ["org.telegram.desktop", "org.telegram.desktop._account", "telegram-desktop", "telegram"]) {
+    for (const notice of [{app:"Telegram Desktop"}, {desktopEntry:"org.telegram.desktop"},
+                          {app:"Telegram via Notjik"}, {type:"telegram"}]) {
+        assert.equal(suppressForFocus(notice, appId), true);
+        assert.equal(suppressForFocus(notice, "firefox"), false);
+        assert.equal(suppressForFocus(notice, ""), false);
+    }
+    assert.equal(suppressForFocus({app:"Other"}, appId), false);
+}
+assert.equal(telegramWindow("org.telegram.desktopfake"), false);
+'''
+        subprocess.run(["bun", "-e", source + assertions], check=True)
+
     def test_robot_draw_is_stable_and_all_entries_are_reachable(self):
         source = (ROOT / "qml/Logic.js").read_text()
         assertions = r'''

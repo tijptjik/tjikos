@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Notifications
@@ -36,6 +37,11 @@ ShellRoot {
     }
     onLockStateChanged: {
         if (lockState !== "unlocked") { drawerOpen = false; keyboardMode = false; selectedId = ""; historySelectedKey = ""; }
+    }
+    readonly property string focusedAppId: ToplevelManager.activeToplevel?.appId || ""
+    onFocusedAppIdChanged: {
+        for (const notice of notices.slice())
+            if (Logic.suppressForFocus(notice, focusedAppId)) close(notice.id, false);
     }
     property double telegramBridgeUntil: 0
     readonly property bool telegramBridgeActive: telegramBridgeUntil > now
@@ -153,6 +159,11 @@ ShellRoot {
     }
 
     function put(notice) {
+        if (Logic.suppressForFocus(notice, focusedAppId)) {
+            log("suppressed", notice);
+            close(notice.id, false);
+            return true;
+        }
         const index = notices.findIndex(n => n.id === notice.id);
         Logic.assignRobot(notice, index >= 0 ? notices[index] : null);
         notice.generation = index >= 0 ? notices[index].generation : ++noticeGeneration;
@@ -202,6 +213,9 @@ ShellRoot {
         inlineReplySupported: false
         onNotification: n => {
             n.tracked = true;
+            if (Logic.suppressForFocus({app:n.appName, desktopEntry:n.desktopEntry}, root.focusedAppId)) {
+                n.expire(); return;
+            }
             // The bridge handles chat notifications while its connected lease is fresh.
             // Calls and other categories continue through Telegram Desktop.
             if (root.telegramBridgeActive && n.hints.category === "im.received" && Logic.telegramNotice({app:n.appName, desktopEntry:n.desktopEntry})) {
@@ -421,7 +435,7 @@ ShellRoot {
         default: throw Error("Unknown operation");
         }
         return {ok: true, paused: paused, queued: notices.length, visible: visibleNotices.length, floating: floatingIds.length, pinned: floatingIds.length,
-            telegramBridgeActive: telegramBridgeActive, groupingEnabled: config.grouping.enabled, theme: config.theme, lockState: lockState, drawerOpen: drawerOpen, historyCount: historyItems.length, selectedId: selectedId, historySelectedKey: historySelectedKey, keyboardMode: keyboardMode, historyError: backendError, monitors: screens.map(s => s.name)};
+            telegramBridgeActive: telegramBridgeActive, focusedAppId: focusedAppId, groupingEnabled: config.grouping.enabled, theme: config.theme, lockState: lockState, drawerOpen: drawerOpen, historyCount: historyItems.length, selectedId: selectedId, historySelectedKey: historySelectedKey, keyboardMode: keyboardMode, historyError: backendError, monitors: screens.map(s => s.name)};
     }
 
     IpcHandler {
