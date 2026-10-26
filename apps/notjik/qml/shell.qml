@@ -43,7 +43,7 @@ ShellRoot {
         for (const notice of notices.slice())
             if (Logic.suppressForFocus(notice, focusedAppId)) close(notice.id, false);
     }
-    property var telegramDelivery: ({nativeReceived: 0, nativeFocusSuppressed: 0, lastNativeAt: 0})
+    property var telegramDelivery: ({nativeReceived: 0, nativeFocusSuppressed: 0, nativeBridgeSuppressed: 0, lastNativeAt: 0})
     property double telegramBridgeUntil: 0
     readonly property bool telegramBridgeActive: telegramBridgeUntil > now
     readonly property alias telegramPlayer: telegramPlayback
@@ -216,17 +216,19 @@ ShellRoot {
             n.tracked = true;
             const telegram = Logic.telegramNotice({app:n.appName, desktopEntry:n.desktopEntry});
             const suppressed = Logic.suppressForFocus({app:n.appName, desktopEntry:n.desktopEntry}, root.focusedAppId);
+            const bridgeSuppressed = !suppressed && telegram && n.hints.category === "im.received" && root.telegramBridgeActive && !root.locked && !root.paused;
             if (telegram) root.telegramDelivery = {
                 nativeReceived: root.telegramDelivery.nativeReceived + 1,
                 nativeFocusSuppressed: root.telegramDelivery.nativeFocusSuppressed + (suppressed ? 1 : 0),
+                nativeBridgeSuppressed: root.telegramDelivery.nativeBridgeSuppressed + (bridgeSuppressed ? 1 : 0),
                 lastNativeAt: Date.now()
             };
-            if (suppressed) {
+            if (suppressed || bridgeSuppressed) {
                 root.log("suppressed", root.nativeRecord(n));
                 n.expire(); return;
             }
-            // A connected bridge is not a receipt for this message. Keep Desktop's
-            // delivery path until both transports provide a reliable shared identity.
+            // The bridge owns chat alerts only while its online delivery lease is
+            // healthy. Calls and other Desktop categories retain their own route.
             const id = "dbus-" + n.id;
             root.nativeNotices[id] = n;
             n.closed.connect(reason => root.remove(id, reason === NotificationCloseReason.Expired ? "expired"

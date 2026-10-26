@@ -760,13 +760,15 @@ session named **Notjik**. The installer supplies its service but does not enable
 or sign in automatically. Stop `notjik-telegram.service` before signing in again;
 an exclusive lock prevents two processes from opening the same TDLib database.
 
-Telegram Desktop notifications remain enabled while the bridge is connected. A
-healthy connection does not prove delivery of a particular message or coverage
-of every Desktop account. Both paths may show the same message; no title/body
-heuristic discards notifications. Existing focus suppression still applies.
+The bridge is the primary chat-notification route while its online delivery lease
+is healthy. Notjik suppresses Telegram Desktop's `im.received` alerts during that
+lease; calls and other categories remain native. Keep Desktop notifications enabled
+as fallback when the bridge disconnects or cannot publish. This routing assumes
+the bridge covers the Desktop account whose chat alerts it replaces. Existing
+focus suppression still applies; no title/body matching is used.
 `notjikctl status` includes `telegramDelivery` counters for native arrivals and
-focus suppression. `notjikctl telegram status` includes verified `online` state
-and `delivery` counters for
+focus/bridge suppression. `notjikctl telegram status` includes verified `online`
+state and `delivery` counters for
 bridge events, filtering and publication failures. Counters reset on service
 restart and contain no message text. A successful publication means the UI
 accepted the request, not that the user saw the card.
@@ -818,8 +820,7 @@ lock, unknown lock state, pause, or UI failure requests offline on the next chec
 This can make the account appear online and avoids TDLib's roughly 30-second
 offline-client notification delay when another Telegram client is online. TDLib
 may still apply its shorter cross-client delay. The bridge verifies the presence
-option before advertising a healthy lease. The lease remains diagnostic only;
-Telegram Desktop notifications remain enabled. Old unread messages
+option before taking over chat alerts. Old unread messages
 are not replayed on startup. Telegram read/delete updates remove matching live cards.
 
 Hidden notification previews, spoilers, protected media and self-destructing media

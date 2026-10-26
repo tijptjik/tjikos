@@ -129,18 +129,25 @@ def run():
                         check=True, capture_output=True, text=True)
                     return int(result.stdout.split()[1])
 
-                # Connection health must never suppress an unmatched Desktop message.
+                # A healthy bridge owns chat alerts, but never call notifications.
                 call("telegramBridge", active=True)
                 assert call("status")["telegramBridgeActive"]
                 fallback = "dbus-" + str(notify("Desktop fallback", actions=("default", "Open"),
                     hints=("desktop-entry", "s", "telegram", "category", "s", "im.received")))
-                wait_for(lambda: fallback in ids())
+                time.sleep(.1)
+                assert fallback not in ids()
                 assert call("status")["telegramDelivery"]["nativeReceived"] == 1
                 assert call("status")["telegramDelivery"]["nativeFocusSuppressed"] == 0
+                assert call("status")["telegramDelivery"]["nativeBridgeSuppressed"] == 1
                 bridge_card = call("send", notice={"title":"Independent bridge card", "app":"Telegram via Notjik", "timeout":0})["id"]
-                assert fallback in ids() and bridge_card in ids()
+                assert fallback not in ids() and bridge_card in ids()
+                call_notice = "dbus-" + str(notify("Incoming call", hints=("desktop-entry", "s", "telegram", "category", "s", "call.incoming")))
+                wait_for(lambda: call_notice in ids())
                 call("dismiss", id="all")
                 call("telegramBridge", active=False)
+                fallback = "dbus-" + str(notify("Desktop fallback", hints=("desktop-entry", "s", "telegram", "category", "s", "im.received")))
+                wait_for(lambda: fallback in ids())
+                call("dismiss", id="all")
 
                 # Focus policy covers both transports and clears existing Telegram cards.
                 local_focus = call("send", notice={"title":"Focus check", "app":"Telegram via Notjik", "timeout":0})["id"]
