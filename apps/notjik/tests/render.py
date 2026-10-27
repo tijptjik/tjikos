@@ -317,7 +317,9 @@ def main():
 """, 1)
         start = panel_code.index("    visible: controller.ready")
         end = panel_code.index("    anchors {", start)
-        panel_code = panel_code[:start] + "    visible: controller.ready\n" + panel_code[end:]
+        # Handler cards must also be measured while the real panel starts hidden.
+        if "--handlers" not in sys.argv[2:]:
+            panel_code = panel_code[:start] + "    visible: controller.ready\n" + panel_code[end:]
         # Capture surfaces must not intercept desktop clicks or lose fixtures to them.
         mask_start = panel_code.index("    mask: Region {")
         mask_end = panel_code.index("    // A separate, input-transparent surface", mask_start)
@@ -396,29 +398,39 @@ def main():
                     motion_preview(root, destination)
                     return
                 if "--handlers" in sys.argv[2:]:
-                    from test_handlers import RULE, BODY
+                    from test_handlers import RULE
+                    BODY = "🎬 Demo (2026)\n\n1080p · WEB-DL · H 264\nGrabbed by Radarr · Example.index"
                     config["handlers"] = [RULE]
+                    config["actions"] = {"blacklist":["telegram"]}
                     config["theme"] = "rose-punk"
                     (root / "config.json").write_text(json.dumps(config))
                     wait_for(lambda: ipc(root, {"op":"metrics"})["metrics"]["handlerCount"] == 1 and ipc(root, {"op":"status"})["theme"] == "rose-punk")
-                    for transport in ("native", "bridge", "unmatched"):
+                    for transport in ("native", "bridge", "bridge-blocked", "unmatched"):
                         ipc(root, {"op":"dismiss", "id":"all"})
                         wait_for(lambda: not ipc(root, {"op":"metrics"})["metrics"]["cards"])
                         notice = {"title":"StarProwlarr", "app":"Telegram Desktop", "body":BODY, "timeout":0,
                                   "image":(ROOT / "examples/demo-artwork.png").as_uri()}
-                        if transport == "bridge":
-                            notice.update(app="Telegram via Notjik", type="telegram", data={"kind":"text", "source":"", "status":"", "chatId":"123", "messageId":"456", "parts":[{"kind":"text", "text":BODY}], "demo":True})
+                        if transport.startswith("bridge"):
+                            notice.update(app="Telegram via Notjik", desktopEntry="telegram" if transport == "bridge-blocked" else "", type="telegram", data={"kind":"text", "source":"", "status":"", "chatId":"123", "messageId":"456", "parts":[], "demo":True})
                         elif transport == "unmatched":
                             notice["body"] = "A new message format stays readable."
+                        notice["id"] = "handler-update"
+                        notice["group"] = "handler-group"
                         ipc(root, {"op":"send", "notice":notice})
+                        ipc(root, {"op":"send", "notice":dict(notice, id="handler-second")})
+                        time.sleep(.4)
                         wait_for(lambda: len(ipc(root, {"op":"metrics"})["metrics"]["cards"]) == 1 and ipc(root, {"op":"metrics"})["metrics"]["cards"][0]["extent"] == 1)
                         metric = ipc(root, {"op":"metrics"})["metrics"]["cards"][0]
+                        print(f"{transport}: {metric['fullHeight']}px", flush=True)
                         assert metric["structuredReady"] == (transport != "unmatched"), metric
                         if transport != "unmatched":
-                            assert metric["presentation"]["data"]["codec"] == "x264", metric
+                            assert metric["presentation"]["data"]["codec"] == "H 264", metric
                             rail = metric["footer"]
                             assert not rail["avatarCover"], metric
                             assert abs(rail["coverHeight"] + 2 * rail["border"] - rail["cardHeight"]) < 1, metric
+                        if transport.startswith("bridge"):
+                            assert not metric["footer"]["detailVisible"], metric
+                            assert metric["fullHeight"] < 240, metric
                         if transport == "bridge":
                             ipc(root, {"op":"revealControls"})
                             time.sleep(.3)

@@ -24,6 +24,16 @@ ColumnLayout {
     readonly property bool recordingHere: recorder.noticeId === notice.id && recorder.phase !== "idle"
     readonly property bool current: playback.noticeId === notice.id && playback.player.source.toString() === (mediaData.source || "")
     readonly property bool interactive: !notice.archived && !historyMode && !controller.locked
+    // A layout first measured inside a hidden panel can retain its old implicit
+    // height after every child collapses. Report content independently of that
+    // measurement so an empty structured-message detail reserves no space.
+    readonly property bool hasContent: (showBody && (!!notice.body || !!mediaData.parts?.length))
+        || (mediaData.kind === "photo" && !!mediaData.source)
+        || ["sticker", "emoji", "animation", "voice"].includes(mediaData.kind)
+        || !!demoTranscript || !!mediaData.transcript || !!mediaData.transcriptionError
+        || !!(current && playback.error ? playback.error : mediaData.status)
+        || controlsSection.reveal > 0 || (interactive && (recordingHere || replying))
+        || (!recordingHere && !!mediaData.voiceReplyStatus) || !!feedback
     property string previousNoticeId: ""
     onNoticeChanged: {
         if (previousNoticeId && previousNoticeId !== notice.id) playback.stopIf(previousNoticeId);
@@ -441,6 +451,7 @@ ColumnLayout {
         font { family: detail.theme.font; pixelSize: detail.theme.fontSize - 2 }
     }
     RevealSection {
+        id: controlsSection
         Layout.fillWidth: true
         expanded: detail.controlsRevealed && detail.interactive
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: detail.theme.border; opacity: 0.6; visible: detail.interactive }
