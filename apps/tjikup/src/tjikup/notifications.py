@@ -218,7 +218,7 @@ def send_native_notification(title, body, urgency, data, focus_command=None):
     native = shutil.which("notjikctl")
     if not native:
         return False
-    icon = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "icons/tjikup.png"
+    icon = "tjikup-notification"
     actions = [{"label": "Show window", "command": focus_command}] if focus_command else []
     try:
         sent = subprocess.run(
@@ -293,10 +293,7 @@ def notify_completion(
             dry_run=dry_run,
             interrupted=interrupted,
         )
-        icon = (
-            Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
-            / "icons/tjikup.png"
-        )
+        icon = "tjikup-notification"
         if send_native_notification(title, native_body, urgency, data, focus_command):
             return
         sender = shutil.which("notify-send")

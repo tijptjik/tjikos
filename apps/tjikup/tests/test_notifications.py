@@ -238,7 +238,7 @@ class NotificationTests(unittest.TestCase):
         args = send.call_args.args[0]
         self.assertIn("--app-name=Tjikup", args)
         self.assertIn("--urgency=critical", args)
-        self.assertTrue(any(arg.endswith("/tjikup.png") for arg in args))
+        self.assertIn("--icon=tjikup-notification", args)
         self.assertEqual(send.call_args.kwargs["timeout"], 3)
 
     def test_headless_ssh_and_opt_out_do_not_notify(self):
