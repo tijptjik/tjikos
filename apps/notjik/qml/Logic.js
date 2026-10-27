@@ -289,6 +289,81 @@ var robotFiles = [
     "robot-88-dream-cosmic.png"
 ];
 
+// Fish command reports have their own stable, uniformly random artwork draw.
+var fishFiles = [
+    "fish-01-fantail.png",
+    "fish-02-kohaku.png",
+    "fish-03-lilac-glider.png",
+    "fish-04-jade-koi.png",
+    "fish-05-seahorse.png",
+    "fish-06-discus.png",
+    "fish-07-betta.png",
+    "fish-08-lionfish.png",
+    "fish-09-manta-ray.png",
+    "fish-10-pufferfish.png",
+    "fish-11-moray-eel.png",
+    "fish-12-clownfish.png",
+    "fish-13-mandarinfish.png",
+    "fish-14-angelfish.png",
+    "fish-15-butterflyfish.png",
+    "fish-16-blue-tang.png",
+    "fish-17-wrasse.png",
+    "fish-18-parrotfish.png",
+    "fish-19-triggerfish.png",
+    "fish-20-gourami.png",
+    "fish-21-arowana.png",
+    "fish-22-sturgeon.png",
+    "fish-23-sawfish.png",
+    "fish-24-hammerhead.png",
+    "fish-25-pipefish.png",
+    "fish-26-flying-gurnard.png",
+    "fish-27-leafy-seadragon.png",
+    "fish-28-catfish.png"
+];
+
+// Pre-renumbering history stored only an index. Keep this mapping stable.
+var legacyFishNames = ["fantail", "kohaku", "lilac-glider", "pearl-veil", "jade-koi", "azure-sail", "copper-comet", "sakura-koi", "opal-wing", "calico-fantail", "indigo-koi", "coral-glider", "lemon-veil", "seahorse", "discus", "betta", "lionfish", "manta-ray", "pufferfish", "moray-eel", "clownfish", "mandarinfish", "angelfish", "butterflyfish", "blue-tang", "wrasse", "parrotfish", "triggerfish", "gourami", "arowana", "sturgeon", "sawfish", "hammerhead", "pipefish", "flying-gurnard", "leafy-seadragon", "catfish"];
+var fishNames = ["fantail", "kohaku", "lilac-glider", "jade-koi", "seahorse", "discus", "betta", "lionfish", "manta-ray", "pufferfish", "moray-eel", "clownfish", "mandarinfish", "angelfish", "butterflyfish", "blue-tang", "wrasse", "parrotfish", "triggerfish", "gourami", "arowana", "sturgeon", "sawfish", "hammerhead", "pipefish", "flying-gurnard", "leafy-seadragon", "catfish"];
+
+function fishNotice(notice) {
+    return [notice.app, notice.desktopEntry].some(value =>
+        /^fish(\.desktop)?$/i.test(String(value || "")));
+}
+
+function validFishIndex(value) {
+    return Number.isInteger(value) && value >= 0 && value < fishFiles.length;
+}
+
+function fishResolvedIndex(notice) {
+    var name = notice.fishName;
+    if (!name && Number.isInteger(notice.fishIndex))
+        name = legacyFishNames[notice.fishIndex];
+    var index = fishNames.indexOf(name);
+    if (index < 0) {
+        // Deleted artwork and pre-collection history get a stable surviving fish.
+        var seed = String(notice.id || "") + ":" + String(notice.received || 0);
+        var hash = 2166136261;
+        for (var i = 0; i < seed.length; ++i) hash = Math.imul(hash ^ seed.charCodeAt(i), 16777619);
+        index = (hash >>> 0) % fishFiles.length;
+    }
+    return index;
+}
+
+function assignFish(notice, previous) {
+    if (!fishNotice(notice)) return;
+    if (previous && fishNotice(previous))
+        notice.fishIndex = fishResolvedIndex(previous);
+    else if (notice.data?.demo && validFishIndex(notice.data.fishIndex))
+        notice.fishIndex = notice.data.fishIndex;
+    else
+        notice.fishIndex = Math.floor(Math.random() * fishFiles.length);
+    notice.fishName = fishNames[notice.fishIndex];
+}
+
+function fishArtwork(notice) {
+    return "icons/fish/" + fishFiles[fishResolvedIndex(notice)];
+}
+
 // Indices 0-63 remain stable for existing normal-urgency history.
 function robotPool(notice) {
     if (notice.urgency === "critical") return {start: 64, count: 12};

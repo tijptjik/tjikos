@@ -53,8 +53,8 @@ Rectangle {
     readonly property var theme: controller.theme
     readonly property var urgencyInk: Logic.urgencyColors(notice.urgency, theme)
     readonly property color accent: notice.urgency === "critical" ? theme.critical : theme.accent
-    readonly property string fallbackArtwork: Qt.resolvedUrl(Logic.robotArtwork(notice)).toString()
-    // Terminal command reports use a randomly assigned robot instead of terminal icons.
+    readonly property string fallbackArtwork: Qt.resolvedUrl(Logic.fishNotice(notice) ? Logic.fishArtwork(notice) : Logic.robotArtwork(notice)).toString()
+    // Fish reports use fish artwork; Kitty reports keep their robot artwork.
     readonly property bool terminalReport: [notice.app, notice.desktopEntry].some(value =>
         /^(kitty|fish)(\.desktop)?$/i.test(String(value || "")))
     readonly property string cachedAvatar: Logic.cachedAvatar(notice, controller.avatarCache)

@@ -116,7 +116,7 @@ ShellRoot {
 
     function snapshot(n) {
         return {id: n.id, senderId: n.senderId || "", updatedAt: n.updatedAt || n.received, title: n.title, body: n.body, app: n.app, urgency: n.urgency, type: n.type,
-            icon: n.icon, image: n.image, robotIndex: n.robotIndex, data: n.data, transient: n.transient, group: n.group || "", desktopEntry: n.desktopEntry || "",
+            icon: n.icon, image: n.image, robotIndex: n.robotIndex, fishIndex: n.fishIndex, fishName: n.fishName, data: n.data, transient: n.transient, group: n.group || "", desktopEntry: n.desktopEntry || "",
             actions: Logic.actionsFor(n, config).map(a => ({label: a.label})), received: n.received};
     }
 
@@ -168,6 +168,7 @@ ShellRoot {
         }
         const index = notices.findIndex(n => n.id === notice.id);
         Logic.assignRobot(notice, index >= 0 ? notices[index] : null);
+        Logic.assignFish(notice, index >= 0 ? notices[index] : null);
         notice.generation = index >= 0 ? notices[index].generation : ++noticeGeneration;
         if (index >= 0) {
             const next = notices.slice();

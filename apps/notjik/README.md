@@ -644,8 +644,10 @@ application and type. Repeat after selecting a popup with Super+comma. Both apps
 should receive input normally; notification focus must never trap the desktop.
 
 Notifications without sender artwork use the bundled vintage robot icon. Sender
-images and icons take precedence, except Kitty and Fish command reports, which use
-randomly assigned robot artwork. See [artwork attribution](qml/icons/README.md).
+images and icons take precedence, except terminal command reports. Kitty uses
+random robot artwork; Fish uses a uniform random choice from 28 cybernetic fish
+illustrations. The chosen fish persists by stable name across updates and notification history. Legacy indices map to surviving species; deleted artwork receives a deterministic replacement.
+Original high-resolution PNGs and generation prompts are in `qml/icons/fish/`. See [artwork attribution](qml/icons/README.md).
 
 The default icon container is 56 pixels (`style.iconSize`). Actions fill a centred footer row. Named icons use the Qt platform theme; a service launched
 without your desktop theme settings may not find the same icons as your shell.
