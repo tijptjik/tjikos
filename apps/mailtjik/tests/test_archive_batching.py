@@ -7,9 +7,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+import email
+import email.policy
+import email.errors
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from email_archive_annual import Engine, Store, SCHEMA, connect, file_hash, sha
+from email_archive_annual import Engine, Store, SCHEMA, connect, file_hash, sha, reader_record
 from email_archives import retrieve
 
 
@@ -81,6 +85,31 @@ class EncryptedBatchingTests(unittest.TestCase):
             self.assertTrue(retrieve(self.store, self.db, sha(raws[1]), "raw", target))
             self.assertEqual(target.read_bytes(), raws[1])
         self.assertEqual(self.store.downloads, 1)
+
+    def test_malformed_reader_is_quarantined_exactly_and_does_not_stop_next_mail(self):
+        self.db.execute("CREATE TABLE memberships (message_sha256 TEXT, original_mailbox_path TEXT)")
+        raw = b"Subject: malformed fixture\r\n\r\noriginal bytes \xff\r\n"
+        digest = sha(raw)
+        self.db.execute("INSERT INTO memberships VALUES(?,?)", (digest, "Inbox"))
+        parsed = email.message_from_bytes(raw, policy=email.policy.default)
+        with patch("email_archive_annual.views.reader_view", side_effect=email.errors.HeaderWriteError("private detail")):
+            record = reader_record(self.engine, raw, parsed, [], "fixture@example.invalid", "2025")
+        self.assertIn(b"Malformed message preserved separately", record)
+        self.assertNotIn(b"private detail", record)
+        path = self.store.workdir / "review" / "malformed" / (digest + ".eml")
+        self.assertEqual(path.read_bytes(), raw)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.engine.flush()
+        self.assertEqual(self.db.execute("SELECT count(*) FROM review_messages").fetchone()[0], 1)
+        target = Path(self.temp.name) / "quarantine-restored.eml"
+        self.assertTrue(retrieve(self.store, self.db, digest, "quarantine", target))
+        self.assertEqual(target.read_bytes(), raw)
+        good = b"Subject: good\r\n\r\nretained body\r\n"
+        result = reader_record(self.engine, good, email.message_from_bytes(good, policy=email.policy.default), [], "fixture@example.invalid", "2025")
+        self.assertIn(b"retained body", result)
+        with patch("email_archive_annual.views.reader_view", side_effect=OSError("disk failure")):
+            with self.assertRaises(OSError):
+                reader_record(self.engine, good, parsed, [], "fixture@example.invalid", "2025")
 
 
 if __name__ == "__main__":

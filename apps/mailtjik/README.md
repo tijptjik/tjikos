@@ -168,6 +168,14 @@ The MBOX itself contains pooled messages; original folder recovery uses the inde
 memberships. Export progress includes messages and raw objects processed during
 derivation; completed partition checkpoints remain separate resume evidence.
 
+Messages that cannot be serialized into a reader view are preserved exactly in
+the private job's `review/malformed/<raw-sha256>.eml`, with a JSON provenance
+record beside each file. An encrypted `quarantine` collection and the exported
+`review_messages` index table preserve these for later inspection. Reader MBOX
+views contain an explicit review placeholder in the original folders. Original
+raw messages and attachments remain preserved. Storage and checksum failures
+still stop publication; quarantining a malformed header does not hide them.
+
 ### Read and export
 
 | Key | Action |

@@ -13,6 +13,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import email
 import email.policy
+import email.errors
+from email.message import EmailMessage
 import fcntl
 import hashlib
 import io
@@ -177,7 +179,7 @@ class Part:
 
     def add(self, digest, content):
         if self.tar is not None:
-            member = digest + (".eml" if self.kind == "raw" else ".bin")
+            member = digest + (".eml" if self.kind in {"raw", "quarantine"} else ".bin")
             offset = self.tar.offset + 512
             item = tarfile.TarInfo(member)
             item.size, item.mode, item.mtime = len(content), 0o600, 0
@@ -280,6 +282,9 @@ CREATE TABLE IF NOT EXISTS provider_date_evidence (
 CREATE TABLE IF NOT EXISTS generation_policy (
  generation TEXT PRIMARY KEY,policy_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS archive_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS review_messages (
+ sha256 TEXT PRIMARY KEY,error_type TEXT NOT NULL,stage TEXT NOT NULL,
+ first_seen_utc TEXT NOT NULL);
 """
 
 
@@ -460,6 +465,52 @@ def scan_sources(engine, sources):
             db.execute("INSERT INTO source_checkpoints VALUES(?,?,?)", (str(source), stat.st_size, stat.st_mtime_ns))
 
 
+def reader_record(engine, raw, parsed, attachments, account, year):
+    """Quarantine serializer failures; storage/validation errors still stop work."""
+    digest = sha(raw)
+    try:
+        cleaned = views.reader_view(parsed, attachments)
+        return views.mbox_record(parsed, cleaned)
+    except (email.errors.MessageError, UnicodeError, ValueError, LookupError) as error:
+        error_type = type(error).__name__
+    directory = private_directory(engine.store.workdir / "review" / "malformed")
+    target = directory / (digest + ".eml")
+    if target.exists():
+        if file_hash(target) != digest:
+            raise RuntimeError("quarantined raw message checksum mismatch")
+    else:
+        temporary = directory / (digest + "." + uuid.uuid4().hex + ".partial")
+        try:
+            with temporary.open("xb") as output:
+                os.chmod(temporary, 0o600)
+                output.write(raw)
+                output.flush()
+                os.fsync(output.fileno())
+            os.link(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+    # Preserve an independently encrypted review collection as well as the
+    # original raw collection. Provenance remains joined by raw SHA-256.
+    engine.put("quarantine", account, year, digest, raw)
+    with engine.db:
+        engine.db.execute("INSERT OR IGNORE INTO review_messages VALUES(?,?,?,?)",
+                          (digest, error_type, "reader_serialization", datetime.now(timezone.utc).isoformat()))
+    save_json(directory / (digest + ".json"), {
+        "sha256": digest, "error_type": error_type, "stage": "reader_serialization",
+        "raw_file": target.name, "account": account, "year": year,
+        "memberships": [dict(row) for row in engine.db.execute(
+            "SELECT * FROM memberships WHERE message_sha256=?", (digest,))]})
+    placeholder = EmailMessage(policy=email.policy.SMTP)
+    placeholder["Subject"] = "[mailtjik review] Malformed message preserved separately"
+    placeholder["X-Mailtjik-Raw-SHA256"] = digest
+    placeholder.set_content(
+        f"The original message requires inspection ({error_type}).\n"
+        f"Exact original SHA-256: {digest}\n"
+        "Original bytes and attachments are retained in the raw and quarantine collections.\n"
+        "This placeholder preserves folder membership; it is not the original message.\n")
+    return views.mbox_record(placeholder, placeholder.as_bytes())
+
+
 def derive_views(engine):
     """Process one year/account at a time to keep reader writers bounded."""
     db = engine.db
@@ -485,8 +536,7 @@ def derive_views(engine):
                         attachments = views.extract_attachments(parsed)
                         for attachment_hash, _, content in attachments:
                             engine.put("attachments", account, year, attachment_hash, content)
-                        cleaned = views.reader_view(parsed, attachments)
-                        record = views.mbox_record(parsed, cleaned)
+                        record = reader_record(engine, raw, parsed, attachments, account, year)
                         for folder in reader_folders(db, digest):
                             engine.put("reader", account, year, digest, record, folder)
                         engine.derived_messages += 1
@@ -547,6 +597,7 @@ def partition_index(engine, account, year, target):
         "locations": "SELECT * FROM ledger.locations WHERE account=? AND year=?",
         "objects": "SELECT * FROM ledger.objects WHERE id IN (SELECT object_id FROM locations)",
         "reader_decisions": "SELECT x.* FROM ledger.reader_decisions x JOIN messages m ON m.sha256=x.sha256",
+        "review_messages": "SELECT x.* FROM ledger.review_messages x JOIN messages m ON m.sha256=x.sha256",
         "accounts": "SELECT * FROM ledger.accounts",
         "aliases": "SELECT * FROM ledger.aliases",
         "thunderbird_account_config": "SELECT * FROM ledger.thunderbird_account_config",
@@ -581,6 +632,12 @@ def partition_index(engine, account, year, target):
 
 def publish(engine):
     db, store = engine.db, engine.store
+    missing_review = db.execute("""SELECT count(*) FROM review_messages r
+        JOIN archive_years y ON y.sha256=r.sha256 WHERE NOT EXISTS
+        (SELECT 1 FROM locations l WHERE l.kind='quarantine' AND l.digest=r.sha256
+         AND l.account=y.account AND l.year=y.year)""").fetchone()[0]
+    if missing_review:
+        raise RuntimeError(f"quarantine coverage incomplete: {missing_review} messages")
     missing = db.execute("SELECT count(*) FROM messages m WHERE NOT EXISTS (SELECT 1 FROM locations l WHERE l.digest=m.sha256 AND l.kind='raw')").fetchone()[0]
     if missing:
         raise RuntimeError(f"raw coverage incomplete: {missing} messages")
