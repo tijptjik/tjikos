@@ -80,8 +80,12 @@ class Director(shared.Director):
         client=shared.wait_for(lambda:next((c for c in json.loads(shared.checked(['hyprctl','-j','clients'])) if c['class']=='ShowcaseTerminal'),None))
         address=json.dumps('address:'+client['address'])
         width,x=(650,10360) if self.tool=='greetjik' else (1104,10048)
-        shared.checked(['hyprctl','eval',f'local w=hl.get_window({address});hl.dispatch(hl.dsp.window.float({{window=w}}));hl.dispatch(hl.dsp.window.resize({{x={width},y=468,relative=false,window=w}}));hl.dispatch(hl.dsp.window.move({{x={x},y=10182,relative=false,window=w}}))'])
+        make_floating='' if client['floating'] else 'hl.dispatch(hl.dsp.window.float({window=w}));'
+        shared.checked(['hyprctl','eval',f'local w=hl.get_window({address});{make_floating}hl.dispatch(hl.dsp.window.resize({{x={width},y=468,relative=false,window=w}}));hl.dispatch(hl.dsp.window.move({{x={x},y=10182,relative=false,window=w}}))'])
         shared.wait_for(lambda:self.socket.exists());time.sleep(.6)
+        placed=next(c for c in json.loads(shared.checked(['hyprctl','-j','clients'])) if c['address']==client['address'])
+        if not placed['floating'] or placed['size']!=[width,468] or placed['at']!=[x,10182]:raise ValueError('Terminal did not retain the capture geometry: '+str(placed['at']))
+        self.move(1150,680,duration=.3)
         self.evidence('native terminal',address=client['address'],font=font)
 
     def text(self):
@@ -173,6 +177,8 @@ class Director(shared.Director):
         self.scene(3);time.sleep(2.6);self.screen('02-success')
         shutil.copy2(self.directory/'workflow-result.json',self.review/'workflow-result.json')
         shutil.copy2(self.directory/'workflow.json',self.review/'workflow.json')
+        shutil.copy2(self.directory/'release-checks.tar.gz',self.review/'release-checks.tar.gz')
+        shutil.copy2(self.directory/'checks.py',self.review/'checks.py')
 
     def run(self):
         time.sleep(2.2);self.frame('00-intro')
@@ -187,6 +193,14 @@ def prepare_workflow(directory):
       {'id':'checks','label':'Application checks','section':'Checking applications','verb':'CHECK','command':['python3','checks.py'],'output':'stream','summary':False,'timeout':240},
       {'id':'verify','label':'Release package verified','section':'Package and verify','verb':'VERIFY','command':['python3','checks.py','--package'],'output':'stream','summary':False,'timeout':60}]}
     (directory/'workflow.json').write_text(json.dumps(cfg,indent=2))
+
+
+def film_time(raw_time, speed):
+    saved=0
+    for segment in speed:
+        elapsed=max(0,min(raw_time,segment['end'])-segment['start'])
+        saved+=elapsed*(1-1/segment['rate'])
+    return round(raw_time-saved,3)
 
 
 def encode(raw,output,speed):
@@ -238,7 +252,7 @@ def record(tool,output):
                 if (video['width'],video['height'],video['r_frame_rate'])!=(1200,720,'60/1'):raise ValueError('Unexpected film geometry')
                 receipt={'tool':tool,'dimensions':[1200,720],'fps':60,'duration':probe['format']['duration'],'sha256':hashlib.sha256(output.read_bytes()).hexdigest(),
                     'sourceCommit':shared.checked(['git','-C',str(ROOT),'rev-parse','HEAD']),'input':'native Wayland pointer and keyboard; actual application rendering; synthetic data only',
-                    'iconSha256':hashlib.sha256((ROOT/'docs/icons'/f'{tool}.svg').read_bytes()).hexdigest(),'speedSegments':director.speed,'chapters':director.chapters,'evidence':director.events}
+                    'iconSha256':hashlib.sha256((ROOT/'docs/icons'/f'{tool}.svg').read_bytes()).hexdigest(),'speedSegments':director.speed,'chapters':[dict(chapter,start=film_time(chapter['rawStart'],director.speed)) for chapter in director.chapters],'evidence':director.events}
                 output.with_suffix('.json').write_text(json.dumps(receipt,indent=2)+'\n');print('Recording: '+str(output),flush=True)
             finally:
                 if recorder and recorder.poll() is None:recorder.send_signal(signal.SIGINT);recorder.wait(timeout=15)
