@@ -408,8 +408,8 @@ ColumnLayout {
                     id: fragment
                     anchors.fill: parent
                     visible: modelData.kind !== "emoji" || !emojiLoader.item?.ready
-                    text: modelData.text === "\n" ? "" : modelData.text
-                    textFormat: Text.PlainText
+                    text: modelData.text === "\n" ? "" : (modelData.styledText ?? modelData.text)
+                    textFormat: modelData.styledText !== undefined ? Text.StyledText : Text.PlainText
                     wrapMode: Text.WrapAnywhere
                     color: detail.theme.text
                     font { family: detail.theme.font; pixelSize: detail.theme.fontSize }
@@ -433,8 +433,9 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         visible: detail.showBody && detail.notice.body.length > 0 && !detail.mediaData.parts?.length
-        text: detail.notice.body
-        textFormat: Text.PlainText
+        objectName: "telegram-message-text"
+        text: detail.mediaData.styledText ?? detail.notice.body
+        textFormat: detail.mediaData.styledText !== undefined ? Text.StyledText : Text.PlainText
         wrapMode: Text.Wrap
         maximumLineCount: 6
         elide: Text.ElideRight

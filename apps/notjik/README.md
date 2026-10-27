@@ -740,6 +740,13 @@ configuration, not patterns supplied by incoming messages.
 
 ## Telegram photos and voice messages
 
+Bridge notifications preserve Telegram's bold, italic, underline, strikethrough,
+monospace/code and underlined link entities, including captions and text around
+custom emoji. Nested styles and emoji offsets are supported. Links are visual;
+use Open to follow them in Telegram. Literal Markdown and HTML remain literal.
+Messages containing text spoilers show an Open-in-Telegram placeholder, including
+in history. Native Desktop notifications cannot recover entities omitted by Telegram.
+
 The optional bridge receives TDLib notification updates, respecting Telegram's
 notification/mute and preview settings. It displays ordinary messages too, while
 Telegram Desktop remains an independent notification delivery path.

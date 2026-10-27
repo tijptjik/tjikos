@@ -6,6 +6,7 @@ Notification updates (not a message-history poll) preserve Telegram mute rules.
 import argparse
 import concurrent.futures
 import hashlib
+import html
 import re
 import base64
 import binascii
@@ -112,6 +113,64 @@ def sticker_data(sticker, kind="sticker"):
             "width":sticker.get("width", 256), "height":sticker.get("height", 256)}, sticker.get("sticker")
 
 
+def styled_text_renderer(formatted):
+    """Render TDLib UTF-16 entity ranges as a small, escaped Qt StyledText subset.
+
+    Split at every boundary so nested and overlapping entities always produce
+    balanced tags. Literal HTML and Markdown in messages remain literal.
+    """
+    text = formatted.get("text", "")[:65536]
+    positions, units = {0: 0}, 0
+    for index, char in enumerate(text):
+        units += 2 if ord(char) > 0xffff else 1
+        positions[units] = index + 1
+    tags = {
+        "textEntityTypeBold": ("<b>", "</b>"),
+        "textEntityTypeItalic": ("<i>", "</i>"),
+        "textEntityTypeUnderline": ("<u>", "</u>"),
+        "textEntityTypeStrikethrough": ("<s>", "</s>"),
+        "textEntityTypeCode": ('<font face="monospace">', "</font>"),
+        "textEntityTypePre": ('<font face="monospace">', "</font>"),
+        "textEntityTypePreCode": ('<font face="monospace">', "</font>"),
+        # Links retain their visual distinction; Open goes to the original
+        # Telegram message, where Telegram handles the destination.
+        "textEntityTypeTextUrl": ("<u>", "</u>"),
+        "textEntityTypeUrl": ("<u>", "</u>"),
+    }
+    ranges = []
+    for entity in formatted.get("entities", []):
+        tag = tags.get(entity.get("type", {}).get("@type"))
+        offset, length = entity.get("offset"), entity.get("length")
+        if (tag is None or type(offset) is not int or type(length) is not int
+                or length <= 0 or offset not in positions or offset + length not in positions):
+            continue
+        ranges.append((offset, offset + length, tag))
+
+    def render(start=0, stop=None):
+        stop = units if stop is None else min(stop, units)
+        if start not in positions or stop not in positions or start > stop:
+            return ""
+        boundaries = {start, stop}
+        for left, right, _ in ranges:
+            if left < stop and right > start:
+                boundaries.update((max(start, left), min(stop, right)))
+        result = []
+        ordered = sorted(boundaries)
+        for left, right in zip(ordered, ordered[1:]):
+            active = list(dict.fromkeys(tag for a, b, tag in ranges if a <= left and right <= b))
+            value = html.escape(text[positions[left]:positions[right]], quote=False)
+            # Keep line breaks/indentation while retaining ordinary word wrapping.
+            value = value.replace("\t", "    ").replace("\n", "<br>")
+            value = re.sub(r" {2,}", lambda match: "&nbsp;" * (len(match[0]) - 1) + " ", value)
+            result.append("".join(tag[0] for tag in active) + value + "".join(tag[1] for tag in reversed(active)))
+        return "".join(result)
+    return render
+
+
+def styled_text(formatted):
+    return styled_text_renderer(formatted)()
+
+
 def emoji_parts(formatted):
     """TDLib entity offsets are UTF-16 code units, including surrogate pairs."""
     text = formatted.get("text", "")[:4096]
@@ -120,8 +179,15 @@ def emoji_parts(formatted):
     if not entities:
         return []
     parts, end = [], 0
-    def plain(value):
-        parts.extend({"kind":"text", "text":word} for word in re.findall(r"\n|[^\S\n]+|[^\s]+", value))
+    render = styled_text_renderer(formatted)
+    def plain(value, offset):
+        for word in re.findall(r"\n|[^\S\n]+|[^\s]+", value):
+            stop = offset + len(word.encode("utf-16-le")) // 2
+            part = {"kind":"text", "text":word}
+            if not word.isspace():
+                part["styledText"] = render(offset, stop)
+            parts.append(part)
+            offset = stop
     for entity in entities:
         start, stop = entity.get("offset", -1)*2, (entity.get("offset", -1)+entity.get("length", 0))*2
         if start < end or stop <= start or stop > len(encoded):
@@ -131,10 +197,10 @@ def emoji_parts(formatted):
             fallback = encoded[start:stop].decode("utf-16-le")
         except UnicodeDecodeError:
             continue
-        plain(before)
-        parts.append({"kind":"emoji", "text":fallback, "emojiId":str(entity["type"]["custom_emoji_id"]), "source":"", "format":""})
+        plain(before, end // 2)
+        parts.append({"kind":"emoji", "text":fallback, "styledText":render(start // 2, stop // 2), "emojiId":str(entity["type"]["custom_emoji_id"]), "source":"", "format":""})
         end = stop
-    plain(encoded[end:].decode("utf-16-le"))
+    plain(encoded[end:].decode("utf-16-le"), end // 2)
     return parts
 
 
@@ -151,6 +217,11 @@ def describe(message, preview=True):
     caption = content.get("caption", {}).get("text", "")
     formatted = content.get("text") if kind == "messageText" else content.get("caption")
     if isinstance(formatted, dict):
+        if any(entity.get("type", {}).get("@type") == "textEntityTypeSpoiler"
+               for entity in formatted.get("entities", [])):
+            return "Message with spoiler · open in Telegram", data, None
+        if formatted.get("entities"):
+            data["styledText"] = styled_text(formatted)
         data["parts"] = emoji_parts(formatted)
     if kind == "messageSticker":
         media, file = sticker_data(content.get("sticker", {}))

@@ -331,6 +331,8 @@ def main():
         os.environ["NOTJIK_CONFIG"] = str(root / "config.json")
         os.environ["NOTJIK_STATE_DIR"] = str(root / "state")
         config = {"theme": "rose-punk", "placement": {"monitors": [1], "edge": "b", "position": "c"}, "pauseOnHover": False}
+        if "--telegram-formatting" in sys.argv[2:]:
+            config["grouping"] = {"enabled": False}
         if "--hover" in sys.argv[2:]:
             config["placement"].update({"edge":"t", "position":"l", "offsetX":100, "offsetY":100})
         (root / "config.json").write_text(json.dumps(config))
@@ -338,6 +340,35 @@ def main():
             process = subprocess.Popen(["quickshell", "--path", str(root / "qml"), "--no-color"], stdout=log, stderr=log, start_new_session=True)
             try:
                 wait_for(lambda: ipc(root, {"op": "status"})["ok"])
+                if "--telegram-formatting" in sys.argv[2:]:
+                    from telegram_bridge import describe
+                    text = "Bold · italic · underline · strike\nCode: a  b <literal>\nNested bold + strike · 🙂 custom emoji"
+                    entities = []
+                    for label, kind in (("Bold", "Bold"), ("italic", "Italic"), ("underline", "Underline"),
+                                        ("strike", "Strikethrough"), ("a  b <literal>", "Code"),
+                                        ("bold + strike", "Bold"), ("bold + strike", "Strikethrough")):
+                        start = text.index(label)
+                        entities.append({"offset": len(text[:start].encode("utf-16-le")) // 2,
+                            "length": len(label), "type": {"@type": "textEntityType" + kind}})
+                    for custom in (False, True):
+                        current = list(entities)
+                        if custom:
+                            current.append({"offset": len(text[:text.index("🙂")].encode("utf-16-le")) // 2,
+                                "length": 2, "type": {"@type":"textEntityTypeCustomEmoji", "custom_emoji_id":"123"}})
+                        body, data, _ = describe({"content":{"@type":"messageText", "text":{"text":text, "entities":current}}})
+                        data.update(chatId="1", messageId="1", demo=True)
+                        ipc(root, {"op":"send", "notice":{"app":"synthetic formatting", "type":"telegram",
+                            "title":"Telegram styles" + (" with custom emoji" if custom else ""),
+                            "body":body, "data":data, "timeout":0}})
+                    wait_for(lambda: len(ipc(root, {"op":"metrics"})["metrics"]["cards"]) == 2
+                        and all(c["opacity"] == 1 and c["extent"] == 1 for c in ipc(root, {"op":"metrics"})["metrics"]["cards"]))
+                    image = destination / "telegram-formatting.png"
+                    ipc(root, {"op":"capture", "path":str(image)})
+                    wait_for(lambda: readable_image(image))
+                    errors = (destination / "render.log").read_text()
+                    assert not any(word in errors for word in ("ReferenceError", "TypeError", "Unable to assign", "Binding loop", "ERROR:")), errors
+                    print("PASS: Telegram formatting and custom emoji cards rendered: " + str(image))
+                    return
                 if "--action-collapse" in sys.argv[2:]:
                     ipc(root, {"op":"send", "notice":{"app":"notjik demo", "title":"Stable artwork", "body":"", "timeout":0,
                         "actions":[{"label":"Open", "command":["true"]}]}})
@@ -919,7 +950,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-    if "--groups" in sys.argv[2:] or "--height-limit" in sys.argv[2:]:
+    if any(flag in sys.argv[2:] for flag in ("--groups", "--height-limit", "--telegram-formatting")):
         pass
     elif "--motion" in sys.argv[2:]:
         print("Synthetic motion previews captured")
