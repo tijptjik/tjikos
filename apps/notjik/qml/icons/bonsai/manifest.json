@@ -1,0 +1,246 @@
+{
+  "generator": "Built-in image_gen; individually generated",
+  "style": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. ",
+  "bonsai": [
+    {
+      "id": 1,
+      "name": "black-pine",
+      "description": "Japanese black pine in windswept form, layered dark teal needle pads, twisted ochre trunk with a dusty-rose ceramic branch brace and tiny amber sensors, low slate-lavender rectangular pot.",
+      "file": "bonsai-01-black-pine.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Japanese black pine in windswept form, layered dark teal needle pads, twisted ochre trunk with a dusty-rose ceramic branch brace and tiny amber sensors, low slate-lavender rectangular pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 2,
+      "name": "red-maple",
+      "description": "Japanese maple with delicate branching and broad dusty coral-red leaf masses, pale ochre trunk bearing a slim lavender circuit inlay, shallow teal oval pot; upward three-quarter view.",
+      "file": "bonsai-02-red-maple.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Japanese maple with delicate branching and broad dusty coral-red leaf masses, pale ochre trunk bearing a slim lavender circuit inlay, shallow teal oval pot; upward three-quarter view.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 3,
+      "name": "juniper-cascade",
+      "description": "Juniper in dramatic full cascade, teal foliage descending diagonally below a gnarled ivory-ochre trunk, one rose ceramic root connector and fine silver circuit path; tall plum pot, side view.",
+      "file": "bonsai-03-juniper-cascade.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Juniper in dramatic full cascade, teal foliage descending diagonally below a gnarled ivory-ochre trunk, one rose ceramic root connector and fine silver circuit path; tall plum pot, side view.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 4,
+      "name": "cherry",
+      "description": "Flowering cherry bonsai, sparse dusty rose blossom clusters over elegant dark violet branches, ivory electronic graft sleeves at two joints, subdued teal ceramic pot; flat plum garden background.",
+      "file": "bonsai-04-cherry.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Flowering cherry bonsai, sparse dusty rose blossom clusters over elegant dark violet branches, ivory electronic graft sleeves at two joints, subdued teal ceramic pot; flat plum garden background.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 5,
+      "name": "ginkgo",
+      "description": "Ginkgo bonsai with unmistakable fan-shaped warm ochre leaves, upright forked slate trunk, restrained teal sensor panel along bark, shallow dusty rose pot.",
+      "file": "bonsai-05-ginkgo.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Ginkgo bonsai with unmistakable fan-shaped warm ochre leaves, upright forked slate trunk, restrained teal sensor panel along bark, shallow dusty rose pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 6,
+      "name": "banyan",
+      "description": "Banyan bonsai with dense broad muted jade canopy and several exposed aerial roots, one translucent lavender conduit weaving along a root, tiny coral sensor nodes; low ochre bowl.",
+      "file": "bonsai-06-banyan.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Banyan bonsai with dense broad muted jade canopy and several exposed aerial roots, one translucent lavender conduit weaving along a root, tiny coral sensor nodes; low ochre bowl.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 7,
+      "name": "white-pine",
+      "description": "Japanese white pine in informal upright form, asymmetrical slate-teal needle clouds, curling pale ochre trunk with two slim dusty-rose electronic braces; dark lavender unglazed pot.",
+      "file": "bonsai-07-white-pine.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Japanese white pine in informal upright form, asymmetrical slate-teal needle clouds, curling pale ochre trunk with two slim dusty-rose electronic braces; dark lavender unglazed pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 8,
+      "name": "trident-maple",
+      "description": "Trident maple with compact layered dusty rose and ochre autumn leaves, strong flared roots over stone, matte teal ceramic root prosthesis with sparse circuit lines; low indigo pot.",
+      "file": "bonsai-08-trident-maple.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Trident maple with compact layered dusty rose and ochre autumn leaves, strong flared roots over stone, matte teal ceramic root prosthesis with sparse circuit lines; low indigo pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 9,
+      "name": "chinese-elm",
+      "description": "Chinese elm broom-style bonsai with fine ramifying branches and muted jade small-leaf canopy, lavender bark and a narrow amber electronic seam, wide dusty-rose oval pot.",
+      "file": "bonsai-09-chinese-elm.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Chinese elm broom-style bonsai with fine ramifying branches and muted jade small-leaf canopy, lavender bark and a narrow amber electronic seam, wide dusty-rose oval pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 10,
+      "name": "olive",
+      "description": "Ancient olive bonsai, thick hollow twisted ochre trunk, sparse dusty teal leaves, small rose ceramic bridge supporting the hollow with one amber sensor; shallow lavender stone pot.",
+      "file": "bonsai-10-olive.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Ancient olive bonsai, thick hollow twisted ochre trunk, sparse dusty teal leaves, small rose ceramic bridge supporting the hollow with one amber sensor; shallow lavender stone pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 11,
+      "name": "azalea",
+      "description": "Satsuki azalea bonsai with restrained dusty coral and mauve blossoms amid teal leaves, smooth ivory trunk with tiny embedded dark sensor slots, simple ochre oval pot.",
+      "file": "bonsai-11-azalea.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Satsuki azalea bonsai with restrained dusty coral and mauve blossoms amid teal leaves, smooth ivory trunk with tiny embedded dark sensor slots, simple ochre oval pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 12,
+      "name": "larch",
+      "description": "Larch bonsai with airy triangular branch tiers, warm ochre autumn needles, dark plum trunk and slate-blue electronic joint rings; dusty rose rectangular pot.",
+      "file": "bonsai-12-larch.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Larch bonsai with airy triangular branch tiers, warm ochre autumn needles, dark plum trunk and slate-blue electronic joint rings; dusty rose rectangular pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 13,
+      "name": "baobab",
+      "description": "Miniature baobab bonsai with stout bulbous muted rose trunk and small jade foliage tufts, ivory ceramic access plate and two fine teal circuit lines; low slate bowl.",
+      "file": "bonsai-13-baobab.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Miniature baobab bonsai with stout bulbous muted rose trunk and small jade foliage tufts, ivory ceramic access plate and two fine teal circuit lines; low slate bowl.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 14,
+      "name": "cypress",
+      "description": "Bald cypress bonsai with tapered ochre trunk, sparse tiered muted jade needle sprays and small root knees, lilac sensor sleeves at roots; shallow rose pot with a flat dark water surface.",
+      "file": "bonsai-14-cypress.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Bald cypress bonsai with tapered ochre trunk, sparse tiered muted jade needle sprays and small root knees, lilac sensor sleeves at roots; shallow rose pot with a flat dark water surface.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 15,
+      "name": "wisteria",
+      "description": "Wisteria bonsai with elegant twisting ivory-ochre trunk and hanging muted lavender flower racemes, jade leaves, a delicate dusty rose electronic trellis integrated behind branches; dark teal shallow pot.",
+      "file": "bonsai-15-wisteria.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Wisteria bonsai with elegant twisting ivory-ochre trunk and hanging muted lavender flower racemes, jade leaves, a delicate dusty rose electronic trellis integrated behind branches; dark teal shallow pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 16,
+      "name": "pomegranate",
+      "description": "Pomegranate bonsai, twisted slate-lavender trunk, small jade leaves and three dusty coral fruits, ochre ceramic graft joints and tiny dark sensor dots; muted rose pot.",
+      "file": "bonsai-16-pomegranate.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Pomegranate bonsai, twisted slate-lavender trunk, small jade leaves and three dusty coral fruits, ochre ceramic graft joints and tiny dark sensor dots; muted rose pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 17,
+      "name": "ficus",
+      "description": "Ficus retusa bonsai with broad exposed intertwined ochre roots and compact teal rounded canopy, ivory electronic root cuff and sparse lavender circuitry; dark rose oval pot.",
+      "file": "bonsai-17-ficus.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Ficus retusa bonsai with broad exposed intertwined ochre roots and compact teal rounded canopy, ivory electronic root cuff and sparse lavender circuitry; dark rose oval pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 18,
+      "name": "spruce",
+      "description": "Spruce bonsai in rugged mountain style, asymmetric dark teal conical needle pads, pale broken deadwood crown, small dusty rose ceramic trunk repair and amber sensors; slate pot with one simple rock.",
+      "file": "bonsai-18-spruce.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Spruce bonsai in rugged mountain style, asymmetric dark teal conical needle pads, pale broken deadwood crown, small dusty rose ceramic trunk repair and amber sensors; slate pot with one simple rock.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 19,
+      "name": "birch",
+      "description": "Three-trunk birch bonsai grove, slender ivory trunks with sparse dark ink markings, muted ochre and rose autumn leaves, fine teal circuit traces integrated into one trunk; shallow lavender tray.",
+      "file": "bonsai-19-birch.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Three-trunk birch bonsai grove, slender ivory trunks with sparse dark ink markings, muted ochre and rose autumn leaves, fine teal circuit traces integrated into one trunk; shallow lavender tray.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 20,
+      "name": "cedar",
+      "description": "Cedar bonsai with horizontal slate-blue and teal foliage tiers, leaning ochre trunk, thin rose electronic branch splints and one amber sensor lens; ivory-accented dark plum pot.",
+      "file": "bonsai-20-cedar.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Cedar bonsai with horizontal slate-blue and teal foliage tiers, leaning ochre trunk, thin rose electronic branch splints and one amber sensor lens; ivory-accented dark plum pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 21,
+      "name": "plum",
+      "description": "Flowering plum bonsai with angular dark violet branches, sparse dusty pink flowers and small jade buds, elegant ivory ceramic trunk joint, ochre oval pot; intimate frontal composition.",
+      "file": "bonsai-21-plum.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Flowering plum bonsai with angular dark violet branches, sparse dusty pink flowers and small jade buds, elegant ivory ceramic trunk joint, ochre oval pot; intimate frontal composition.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 22,
+      "name": "oak",
+      "description": "Oak bonsai with powerful gnarled muted ochre trunk, distinctive broad jade lobed leaves and a few rose autumn leaves, slate ceramic patch with subtle amber circuitry; dusty lavender rectangular pot.",
+      "file": "bonsai-22-oak.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Oak bonsai with powerful gnarled muted ochre trunk, distinctive broad jade lobed leaves and a few rose autumn leaves, slate ceramic patch with subtle amber circuitry; dusty lavender rectangular pot.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 23,
+      "name": "serissa",
+      "description": "Serissa bonsai with delicate compact jade foliage and tiny restrained ivory star flowers, winding dusty rose trunk, small lavender electronic graft and fine teal root wire; ochre bowl.",
+      "file": "bonsai-23-serissa.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Serissa bonsai with delicate compact jade foliage and tiny restrained ivory star flowers, winding dusty rose trunk, small lavender electronic graft and fine teal root wire; ochre bowl.",
+      "revision": "rose-punk-electronic-bonsai"
+    },
+    {
+      "id": 24,
+      "name": "literati-juniper",
+      "description": "Literati juniper bonsai with dramatically tall sinuous ivory-ochre trunk and a single sparse teal crown, one rose ceramic prosthetic trunk section with a tiny dark sensor slit; small round lavender pot, ample dark plum negative space.",
+      "file": "bonsai-24-literati-juniper.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Create ONE square full-bleed Moebius-inspired French science-fiction comic illustration, matching a DARK ROSE-PUNK artwork collection. Delicate confident ink contours, FLAT matte color fields, sparse hatching, large clear silhouettes; plainly drawn, not painted or rendered. One beautiful living CYBERNETIC BONSAI TREE, naturally convincing miniature tree anatomy, elegant asymmetry. Tree and distinctive trunk fill 85 percent of frame with a simple low ceramic pot visible near bottom; silhouette reads at thumbnail size. Integrate restrained futuristic electronic enhancements into bark, branches, roots or pot: subtle ceramic prostheses, thin circuit paths, small sensors or transparent conduits. Vary technology thoughtfully, avoid excessive machinery. VALUE DESIGN: deep dark aubergine or ink-indigo background, midtone foliage and bark in muted dusty rose, oxidized teal, warm ochre, lavender and plum, selective warm ivory accents. NOT washed out, NOT neon. Background very simple: two or three quiet flat shapes suggesting a futuristic botanical alcove, distant rocks or garden wall, secondary to tree. No glossy metal, dense gears, gradients, cinematic lighting, rays, texture noise, photorealism, 3D, text, border or watermark. Literati juniper bonsai with dramatically tall sinuous ivory-ochre trunk and a single sparse teal crown, one rose ceramic prosthetic trunk section with a tiny dark sensor slit; small round lavender pot, ample dark plum negative space.",
+      "revision": "rose-punk-electronic-bonsai"
+    }
+  ]
+}
