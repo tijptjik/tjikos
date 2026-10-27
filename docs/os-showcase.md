@@ -23,7 +23,7 @@ identity/captions, and the bottom 70 px for the shared footer. Native panels are
 sized and placed through temporary demo configuration. Keep panel contents,
 rendering, hit testing, and interaction handlers intact.
 
-Feature stories (Notjik and Bartjik are recorded; the others are planned):
+Feature stories (all six films have reviewed native recordings):
 
 | Tool | First beat | Second beat | Third beat |
 | --- | --- | --- | --- |
@@ -139,3 +139,54 @@ window and its native close control finishes the sequence. MP4, JSON evidence
 and `.review/` frames/logs follow the no-overwrite convention used by Notjik.
 Inspect the actual recorded transitions before publishing. Stage versioned media
 in TYPE.hk's `.local/site-assets/os-previews/` and use its task-scoped R2 uploader.
+
+## Record Runtjik, Mailtjik, Tjikup and Greetjik
+
+All four use `scripts/suite_showcase.py`, the standalone `SuiteStage.qml` host,
+and the same 1200 × 720 / 60 fps Rose Punk frame. They end with the tool icon,
+name, app repository path and family icons. Each poster is a real opening frame.
+
+```sh
+python3 -B scripts/suite_showcase.py runtjik --plan
+python3 -B scripts/suite_showcase.py runtjik "$HOME/Videos/tjikos/os/runtjik-next.mp4"
+# Replace runtjik with mailtjik, tjikup or greetjik for the other films.
+```
+
+The current masters are `runtjik-v1.mp4`, `mailtjik-v1.mp4`, `tjikup-v1.mp4` and
+`greetjik-v1.mp4` under `~/Videos/tjikos/os/`, with JSON input receipts and
+`.review/` frames, terminal text and logs. The same no-overwrite rules apply.
+Build the current Mailtjik, Tjikup and Greetjik executables into
+`/tmp/tjikos-showcase-build/bin/` first. The terminal runs without shell startup
+files, uses a private history, and removes inherited `NO_COLOR`. Native Kitty
+geometry is verified before recording the app. No private mail, user history,
+real network actions or production workflow is used.
+
+- **Runtjik — Find it. Run it.** Its actual demo renderer shows a complete app
+  grid, fuzzy search, two-instance picker, list mode and shortcut discovery.
+  Native keyboard events do the work. A temporary UI copy bounds the grid and
+  centres it below the caption. Installed Rose Punk application icons are used.
+  The current managed primary `runtjik.svg` is copied to `docs/icons/` before
+  capture; its SHA-256 is retained in the film receipt.
+- **Mailtjik — Your mail, worth keeping.** Its production Go TUI and MIME reader
+  show combined participant/subject/year filters, a rich message and inline
+  image, the EML export control, account/year selection with label exclusions,
+  and a final preview of 20 distinct messages. All mail is synthetic `--demo`
+  data. Both native preview confirmation steps are shown; no capture is started.
+- **Tjikup — One command. A clear outcome.** An actual successful workflow runs
+  Runtjik/Tjikup Python tests, Greetjik Rust tests and Mailtjik Go tests in
+  parallel, then creates and verifies a package of their reports. The workflow
+  uses the production runner and Progress API. Intentional failure cases inside
+  tests cannot write into the outer workflow report. The busy segment alone is
+  encoded at 3×; typing, captions and the success summary retain normal timing.
+  Raw segment boundaries and final chapter times are in the JSON receipt. The
+  verified report package, workflow, check script, command results and hashes
+  remain in the final review folder.
+- **Greetjik — Start every session with a quip.** Actual Rust output in Kitty
+  shows a piped quip and Twilight, then selected Rainbow and Pinkie characters
+  with new messages. It is a small bit of terminal fun. Complete quotes and
+  artwork fit inside the frame without clipping.
+
+Capture contracts can be checked without a desktop with
+`python3 -B -m unittest discover -s scripts/tests -v`. Always review the actual
+encoded motion and decode each master before uploading. Only the workflow film
+uses a speed edit; all application rendering and input are native.
