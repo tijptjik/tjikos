@@ -90,7 +90,7 @@ notification lifetime and countdown duration are separate settings.
 
 ```sh
 notjikctl send 'Unidentified cargo aboard' 'It is warm. It is humming.' \
-  --actions '[{"label":"Open manifest","command":["xdg-open","https://github.com/tijptjik/tooltjik"]},{"label":"Open home folder","command":["xdg-open","."]}]'
+  --actions '[{"label":"Open manifest","command":["xdg-open","https://github.com/tijptjik/tjikos"]},{"label":"Open home folder","command":["xdg-open","."]}]'
 ```
 
 Buttons reveal on hover or keyboard selection. Commands are argument arrays,

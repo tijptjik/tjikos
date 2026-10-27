@@ -33,7 +33,7 @@ when it is unavailable. No pip dependencies or separate notification daemon.
 Clone the repository, then build only Notjik:
 
 ```sh
-git clone https://github.com/tijptjik/tooltjik.git tjikos
+git clone https://github.com/tijptjik/tjikos.git
 cd tjikos
 bun install
 bun run --filter @tjikos/notjik build

@@ -443,7 +443,7 @@ class Cycle:
     def run(self, scenes):
         self.introduction()
         for index,name in enumerate(scenes,1): self.scene(name,index,len(scenes))
-        self.control(title='github.com/tijptjik/tooltjik',caption='Source · Installation · Documentation',counter='',outro=True)
+        self.control(title='github.com/tijptjik/tjikos',caption='Source · Installation · Documentation',counter='',outro=True)
         self.pause(3)
 
 

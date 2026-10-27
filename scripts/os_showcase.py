@@ -62,6 +62,7 @@ def prepare_notjik(app):
     replace(qml / "shell.qml", "id: root", '''id: root
     ShowcaseStage { id: showcaseStage; controller: root; iconRoot: "file://" + Quickshell.env("SHOWCASE_ICONS") }
 ''')
+    replace(qml / "shell.qml", "HistoryDrawer { controller: root }", "HistoryDrawer { id: showcaseDrawer; controller: root }")
     replace(qml / "shell.qml", "Variants {\n        model: root.screens", "Variants {\n        id: showcasePanels\n        model: root.screens")
     replace(qml / "shell.qml", "case \"status\": break;", '''case "showcase": {
             if (request.scene) showcaseStage.scene(request.scene);
@@ -72,6 +73,7 @@ def prepare_notjik(app):
             }
             if (!request.id) return {ok:true, drawerOpen:drawerOpen, historyQuery:historyQuery,
                 historyCount:historyItems.length, filteredCount:filteredHistoryItems.length,
+                historyFocused:showcaseDrawer.showcaseFocused, historySearchOpen:showcaseDrawer.searchOpen,
                 playing:telegramPlayback.playing, playbackPosition:telegramPlayback.player.position,
                 recording:telegramRecording.phase, recordingDuration:telegramRecording.duration,
                 recordingError:telegramRecording.error};
@@ -122,6 +124,8 @@ def prepare_notjik(app):
     }
 ''')
     replace(qml / "components/Telegram.qml", "id: detail\n", "id: detail\n    readonly property alias showcaseDraft: reply.text\n")
+    replace(qml / "HistoryDrawer.qml", "id: drawer\n",
+            "id: drawer\n    readonly property bool showcaseFocused: drawer.contentItem.Window.window.active\n")
     # Fit the native drawer below the title, preserving its content and handlers.
     replace(qml / "HistoryDrawer.qml", 'implicitHeight: Math.min(760, (screen?.height || 1000) * 0.72)',
             'implicitHeight: Math.min(440, (screen?.height || 1000) * 0.72)')
@@ -330,8 +334,10 @@ class Director:
         self.command("B 272 0")
         time.sleep(.85)
         self.frame("03-history")
-        # Clicking the native drawer acquires its OnDemand keyboard focus.
+        # Confirm native focus and search mode before delivering text.
+        wait_for(lambda:self.observe().get("historyFocused"))
         self.key("slash")
+        wait_for(lambda:self.observe().get("historySearchOpen"))
         self.type("moon")
         wait_for(lambda:self.observe().get("historyQuery") == "moon")
         state = self.observe()

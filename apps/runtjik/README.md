@@ -507,4 +507,5 @@ running-dot gutter on the left. Grid indicators remain beside the title.
 Closing an app keeps Runtjik open. Its icon pulses while the requested windows
 remain open, including save prompts. In `/running`, closed apps shrink/fade out
 and the remaining tiles animate into place; in normal search the app stays
-available for launching. Close tracking polls every 180 ms only while needed.
+available for launching. Search changes, paging, sorting and view changes do not
+animate result positions. Close tracking polls every 180 ms only while needed.

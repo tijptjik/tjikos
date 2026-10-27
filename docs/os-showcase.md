@@ -36,11 +36,11 @@ Suggested feature stories for the remaining tools (not recorded yet):
 
 ## Record Notjik
 
-From the Tooltjik repository root:
+From the TjikOS repository root:
 
 ```sh
 python3 -B scripts/os_showcase.py notjik --plan
-python3 -B scripts/os_showcase.py notjik "$HOME/Videos/tooltjik/os/notjik-v4.mp4"
+python3 -B scripts/os_showcase.py notjik "$HOME/Videos/tjikos/os/notjik-v4.mp4"
 ```
 
 Choose an unused output name. Existing MP4s, JSON receipts, and review folders

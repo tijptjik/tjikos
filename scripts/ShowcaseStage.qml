@@ -15,7 +15,7 @@ PanelWindow {
     property real reveal: 1
     property string toolName: "Notjik"
     property string toolId: "notjik"
-    property string repository: "github.com/tijptjik/tooltjik/tree/main/apps/notjik"
+    property string repository: "github.com/tijptjik/tjikos/tree/main/apps/notjik"
     property string iconRoot: ""
     screen: Quickshell.screens[0]
     visible: controller.ready

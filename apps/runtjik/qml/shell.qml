@@ -13,9 +13,17 @@ ShellRoot {
     readonly property bool demo: Quickshell.env('RUNTJIK_DEMO') === '1'
     property var closingIds: []
     ListModel {id: resultModel; dynamicRoles: true}
-    // Reconcile by identity so GridView preserves delegates and animates displacement.
+    property bool animateClosedRemoval: false
+    // Preserve delegates by identity; animate only closed apps leaving the same running query.
     onResultsChanged: {
         const wanted=new Set(results.map(row=>row.id));
+        const removed=[];
+        for(let i=0;i<resultModel.count;++i){
+            const row=resultModel.get(i).row;
+            if(!wanted.has(row.id))removed.push(row);
+        }
+        animateClosedRemoval=opened && runningMode && resultQuery===query && windowEntry===''
+            && removed.length>0 && removed.every(row=>row.provider==='apps' && row.windows>0);
         for(let i=resultModel.count-1;i>=0;--i)
             if(!wanted.has(resultModel.get(i).row.id))resultModel.remove(i);
         for(let i=0;i<results.length;++i){
@@ -444,12 +452,16 @@ ShellRoot {
                             anchors.fill:parent;anchors.margins:8
                             clip:true;model:resultModel
                             remove: Transition {
+                                enabled:root.animateClosedRemoval
                                 ParallelAnimation {
                                     NumberAnimation {property:'opacity';to:0;duration:180}
                                     NumberAnimation {property:'scale';to:.65;duration:180;easing.type:Easing.InCubic}
                                 }
                             }
-                            displaced: Transition {NumberAnimation {properties:'x,y';duration:220;easing.type:Easing.OutCubic}}
+                            removeDisplaced: Transition {
+                                enabled:root.animateClosedRemoval
+                                NumberAnimation {properties:'x,y';duration:220;easing.type:Easing.OutCubic}
+                            }
                             cellWidth:root.listMode?width:width/root.settings.ui.columns
                             cellHeight:root.listMode?70:122
                             currentIndex:root.selected
