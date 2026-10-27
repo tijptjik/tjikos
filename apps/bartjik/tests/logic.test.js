@@ -362,7 +362,6 @@ test('Spotify lyrics IDs accept native URI, web URL and MPRIS object path only',
  }
  for(const value of ['https://evil.test/track/'+id,'spotify:album:'+id,'spotify:track:short','file:///tmp/'+id,'https://open.spotify.com.evil.test/track/'+id])assert.equal(M.spotifyTrackId({'xesam:url':value}),'');
 });
-console.log(`bartjik: ${count} layout and interaction assertions passed`);
 
 test('workspace thumbnails share physical pixel edges at fractional monitor scales',()=>{
  for(const scale of [1,1.25,1.5,2]) {
@@ -374,3 +373,18 @@ test('workspace thumbnails share physical pixel edges at fractional monitor scal
   assert.ok(rect(0,.01).width>=1/scale);
  }
 });
+
+test('keyboard reveal persists until edge contact or a second toggle',()=>{
+ let s=L.toggleReveal({concealed:true});
+ s=step(s,point(100),0);s=step(s,point(100),10000);
+ assert.equal(s.concealed,false);assert.equal(s.keyboardHeld,true);
+ s=step(s,{valid:false},20000);assert.equal(s.keyboardHeld,true);
+ s=step(s,point(1079,'other'),21000);assert.equal(s.keyboardHeld,true);
+ let closed=L.toggleReveal(s);assert.equal(closed.concealed,true);assert.equal(closed.keyboardHeld,false);
+ closed=step(closed,point(100),22000);assert.equal(closed.concealed,true);
+ closed=step(closed,{valid:false},22100);assert.equal(closed.concealed,true);
+ closed=L.edgeState(closed,edgeBar,point(100),screen,true,22200,true);assert.equal(closed.concealed,true);
+ s=step(s,point(1079),23000);assert.equal(s.keyboardHeld,false);assert.equal(s.concealed,false);
+ s=step(s,point(100),24000);s=step(s,point(100),25000);assert.equal(s.concealed,true);
+});
+console.log(`bartjik: ${count} layout and interaction assertions passed`);

@@ -99,10 +99,28 @@ ShellRoot {
     function request(req) {
         switch(req.op) {
         case 'reload':send({op:'reload'});break;
+        case 'toggle-reveal': case 'show-reveal': case 'hide-reveal': {
+            if(req.bar!=='all' && !bars.some(b=>b.id===req.bar))throw Error('unknown bar');
+            const next=Object.assign({},visibility), edges=Object.assign({},edgeStates);
+            const selected=bars.filter(b=>req.bar==='all' || req.bar===b.id);
+            const held=selected.some(b=>edges[b.key]?.keyboardHeld);
+            selected.forEach(b=>{
+                next[b.id]=true;
+                edges[b.key]=Logic.toggleReveal({keyboardHeld:req.op==='hide-reveal' || (req.op==='toggle-reveal' && held)});
+            });
+            edgeStates=edges;visibility=next;break;
+        }
         case 'show': case 'hide':case 'toggle':
             if(req.bar!=='all' && !bars.some(b=>b.id===req.bar))throw Error('unknown bar');
             const next=Object.assign({},visibility);
-            bars.forEach(b=>{if(req.bar==='all' || req.bar===b.id)next[b.id]=req.op==='toggle'?!shown(b):req.op==='show';});visibility=next;break;
+            const edges=Object.assign({},edgeStates);
+            bars.forEach(b=>{
+                if(req.bar!=='all' && req.bar!==b.id)return;
+                next[b.id]=req.op==='toggle'?!shown(b):req.op==='show';
+                // Explicit show must also reveal an already-enabled auto-hidden bar.
+                if(next[b.id])edges[b.key]={concealed:false,enter:null,leave:null};
+            });
+            edgeStates=edges;visibility=next;break;
         case 'config':return {ok:true,config:state.config,bars:bars,error:state.error};
         case 'monitors':return {ok:true,monitors:screenInfo};
         case 'bars':return {ok:true,bars:panels.instances.map(p=>p.inspect())};

@@ -77,7 +77,7 @@ def main(arguments=None):
         action="store_true",
         help="validate file offline instead of inspecting the running effective config",
     )
-    for op in ("show", "hide", "toggle"):
+    for op in ("show", "hide", "toggle", "toggle-reveal", "show-reveal", "hide-reveal"):
         sub.add_parser(op).add_argument("bar", nargs="?", default="all")
     init = sub.add_parser("init")
     init.add_argument(

@@ -152,9 +152,24 @@ function edgeInput(bar, pointer, screen, hovered) {
     return {atEdge:atEdge,held:held};
 }
 
+// Keyboard reveal is held until a second invocation or actual edge contact.
+function toggleReveal(state) {
+    const held=!(state && state.keyboardHeld);
+    return {concealed:!held,keyboardHeld:held,keyboardClosed:!held,enter:null,leave:null};
+}
+
 // Pure edge hysteresis. State stores deadlines, never pointer event counts.
 function edgeState(state, bar, pointer, screen, hovered, now, fading) {
     const s = Object.assign({concealed:false,enter:null,leave:null},state);
+    if(s.keyboardClosed) {
+        if(!edgeInput(bar,pointer,screen,hovered).atEdge)return s;
+        s.keyboardClosed=false;
+    }
+    if(s.keyboardHeld) {
+        if(!edgeInput(bar,pointer,screen,hovered).atEdge)
+            return Object.assign(s,{concealed:false,enter:null,leave:null});
+        s.keyboardHeld=false;
+    }
     if (!bar.autoHide || !pointer?.valid) return {concealed:false,enter:null,leave:null};
     const input=edgeInput(bar,pointer,screen,hovered), atEdge=input.atEdge, held=input.held;
     if (s.concealed && fading && held) return {concealed:false,enter:null,leave:null};

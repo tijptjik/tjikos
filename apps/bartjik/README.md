@@ -283,6 +283,9 @@ for half a second to reveal, then move upward to the bars. All bars on the same
 activation edge reveal together, including their copies on other monitors by
 default. CLI hide disables the surface entirely;
 CLI show restores its configured auto-hide behavior.
+`bartjikctl toggle-reveal` holds the bars open until invoked again or until the
+pointer reaches their activation edge, which restores normal auto-hide.
+`show-reveal` and `hide-reveal` set those states explicitly for coordinated shortcuts.
 
 ## Providers and actions
 
