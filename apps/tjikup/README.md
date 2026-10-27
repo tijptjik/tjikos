@@ -155,3 +155,10 @@ Set a step's `summary: false` when its script already displays its own status
 rows. This suppresses the runner's duplicate success/skip row (including the
 preview skip); failures and stop warnings remain visible. Script report events
 are still collected. The default is `true`.
+
+Concurrent workflows can use `tjikup.progress.Progress` for one live row per task.
+Running rows show a spinner and elapsed time; completion leaves one final row.
+The runner carries terminal capability through nested output pipes using
+`TJIKUP_PROGRESS`; redirected output stays free of cursor controls. Use the
+`output()` context for headings and diagnostics while tasks are active, and keep
+interactive commands exclusive. Workflow adapters own task labels and log policy.

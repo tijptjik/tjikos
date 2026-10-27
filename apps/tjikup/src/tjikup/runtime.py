@@ -102,6 +102,11 @@ def run_stream(
             if sys.stdout.isatty()
             else "0"
         ),
+        "TJIKUP_PROGRESS": (
+            os.environ.get("TJIKUP_PROGRESS", "0")
+            if os.environ.get("TJIKUP_CHILD") == "1"
+            else "1" if sys.stdout.isatty() and os.environ.get("TERM") != "dumb" else "0"
+        ),
         "TJIKUP_CHILD": "1",
         "TJIKUP_NO_SPIN": "1",
         "TJIKUP_COLUMNS": str(terminal_columns()),
@@ -195,8 +200,7 @@ def record(verb, icon, subject, note=""):
             pass
 
 
-def status_msg(verb, icon, subject, note=None):
-    record(verb, icon, subject, note)
+def format_status(verb, icon, subject, note=None):
     prefix = f"{verb:<7} {icon} "
     available = max(1, terminal_columns() - 1 - display_width(prefix))
     if note:
@@ -219,7 +223,12 @@ def status_msg(verb, icon, subject, note=None):
         if note:
             note = f"\033[90m{note}\033[0m"
     content = subject + (" " * padding + note if note else "")
-    print(prefix + content, flush=True)
+    return prefix + content
+
+
+def status_msg(verb, icon, subject, note=None):
+    record(verb, icon, subject, note)
+    print(format_status(verb, icon, subject, note), flush=True)
 
 
 def stage_label(verb, icon, subject, note=None):
