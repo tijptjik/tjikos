@@ -1,0 +1,41 @@
+{
+  "version": "0.6.0",
+  "host": "Fi",
+  "date": "2026-10-28",
+  "method": "CLI invocation to confirmed layer/input readiness; live desktop, OS caches retained. PSS/RSS sum root and descendants three seconds after open/hide.",
+  "cold_ms": [
+    287.83,
+    390.94,
+    285.12,
+    323.74,
+    285.89
+  ],
+  "warm_ms": [
+    116.73,
+    114.77,
+    115.52,
+    115.08,
+    115.17
+  ],
+  "open_memory": {
+    "pss_mib": 83.31,
+    "rss_mib": 200.91,
+    "processes": 2
+  },
+  "toggle_ready_ms": [
+    66.32,
+    66.91,
+    69.06,
+    75.56,
+    65.82
+  ],
+  "hidden_memory": {
+    "pss_mib": 88.99,
+    "rss_mib": 207.3,
+    "processes": 2
+  },
+  "toggle_ready_median_ms": 66.91,
+  "cold_median_ms": 287.83,
+  "warm_median_ms": 115.17,
+  "indexed": 305
+}

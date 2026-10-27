@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-28",
+  "host": "Fi",
+  "metric": "CLI invocation to confirmed UI/input readiness, seconds",
+  "method": "Five full process restarts per version on the live Fi desktop; caches not cleared; all samples retained; endpoint is CLI invocation to UI and input readiness, not keyboard dispatch or first painted pixel.",
+  "before_version": "0.4.1",
+  "before": [
+    0.5303,
+    0.3727,
+    0.3762,
+    0.3886,
+    0.3824
+  ],
+  "after_version": "0.4.2",
+  "after": [
+    0.5015,
+    0.2786,
+    0.2701,
+    0.2679,
+    0.2792
+  ],
+  "before_median": 0.3824,
+  "after_median": 0.2786
+}

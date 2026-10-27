@@ -6,7 +6,7 @@ Linux desktop utilities and terminal tools.
 
 ![Runtjik icon grid with synthetic applications](apps/runtjik/docs/showcase.png)
 
-An on-demand Quickshell launcher with an icon grid, automatic application and
+A Quickshell launcher that stays warm after first use, with an icon grid, application and
 command discovery limited to Fish history, launch statistics, and keyboard window switching. Drag the
 top-layer launcher and edit featured TOML settings through `/config`. Outside clicks
 close it without consuming the click.

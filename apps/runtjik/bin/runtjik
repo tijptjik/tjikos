@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -f "$source_root/runtjik.py" ]]; then
+    export RUNTJIK_HOME="$source_root"
+else
+    export RUNTJIK_HOME="${RUNTJIK_HOME:-$HOME/.local/lib/runtjik}"
+fi
+case "${1:-toggle}" in
+    --version|version) exec python3 -B "$RUNTJIK_HOME/runtjik.py" version ;;
+    refresh|stats|rebuild-counts|check) exec python3 -B "$RUNTJIK_HOME/runtjik.py" "$@" ;;
+    status) exec quickshell ipc --path "$RUNTJIK_HOME/qml" call runtjik status ;;
+    close|quit|toggle|show) ;;
+    --demo) export RUNTJIK_DEMO=1 ;;
+    *) printf 'Usage: runtjik [toggle|show|close|quit|refresh|stats|rebuild-counts|check|status|--demo|--version]\n' >&2; exit 2 ;;
+esac
+command -v quickshell >/dev/null || { echo 'Runtjik needs Quickshell on a Wayland desktop.' >&2; exit 1; }
+# Match the personal icon theme without forcing Qt platform/style integration.
+export QT_QUICK_CONTROLS_STYLE=Basic
+if [[ "${1:-toggle}" == --demo ]]; then
+    exec quickshell --path "$RUNTJIK_HOME/qml" --no-duplicate
+fi
+# The desktop hotkey only needs to submit the toggle. Cold starts still use
+# the locked controller; `show` retains its synchronous readiness contract.
+if [[ "${1:-toggle}" == toggle ]] && quickshell ipc --path "$RUNTJIK_HOME/qml" call runtjik toggle >/dev/null 2>&1; then
+    exit 0
+fi
+exec python3 -B "$RUNTJIK_HOME/control.py" "${1:-toggle}"

@@ -1,0 +1,1076 @@
+{
+  "date": "2026-10-27",
+  "host": "Fi",
+  "kernel": "7.2.11-300.fc45.x86_64",
+  "hamr": "hamr 1.1.0",
+  "runtjik": "0.2.0",
+  "quickshell": "Quickshell 0.3.2 (revision 9b0f339b19057f4731bf3b48293307d7ef241671, distributed by Fedora COPR (lionheartp/Hyprland))",
+  "method": {
+    "trials": 5,
+    "settle_seconds": 3,
+    "os_caches": "warm; not dropped",
+    "runtjik_index": "existing cached real index",
+    "endpoint": "Hyprland visible mapped surface; Runtjik initial placement complete",
+    "poll_seconds": 0.01,
+    "hamr_show": "one show request after GTK logs its daemon connection",
+    "environment": "private nested Hyprland with normal user D-Bus, real user config/index/icon caches, direct process launch for both",
+    "memory": "PSS/RSS from smaps_rollup of new launcher roots and descendants only, excluding pre-existing service-cgroup applications"
+  },
+  "trials": [
+    {
+      "app": "hamr",
+      "trial": 1,
+      "cold_mapped_s": 0.6614,
+      "visible_memory": {
+        "pss_mib": 275.75,
+        "rss_mib": 519.57,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 26985,
+            "rss_kib": 29760
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 53137,
+            "rss_kib": 136240
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14918,
+            "rss_kib": 25176
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11469,
+            "rss_kib": 21364
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15950,
+            "rss_kib": 27520
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12687,
+            "rss_kib": 23468
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13236,
+            "rss_kib": 24132
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13786,
+            "rss_kib": 24596
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11755,
+            "rss_kib": 22528
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13052,
+            "rss_kib": 23980
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12964,
+            "rss_kib": 23932
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14197,
+            "rss_kib": 26652
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16669,
+            "rss_kib": 27640
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13844,
+            "rss_kib": 24668
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12471,
+            "rss_kib": 23372
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13277,
+            "rss_kib": 24272
+          }
+        ]
+      },
+      "hidden_memory": {
+        "pss_mib": 275.8,
+        "rss_mib": 519.63,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 27045,
+            "rss_kib": 29820
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 53136,
+            "rss_kib": 136240
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14918,
+            "rss_kib": 25176
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11469,
+            "rss_kib": 21364
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15950,
+            "rss_kib": 27520
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12687,
+            "rss_kib": 23468
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13236,
+            "rss_kib": 24132
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13786,
+            "rss_kib": 24596
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11755,
+            "rss_kib": 22528
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13052,
+            "rss_kib": 23980
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12963,
+            "rss_kib": 23932
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14196,
+            "rss_kib": 26652
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16669,
+            "rss_kib": 27640
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13844,
+            "rss_kib": 24668
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12471,
+            "rss_kib": 23372
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13277,
+            "rss_kib": 24272
+          }
+        ]
+      },
+      "warm_mapped_s": 0.0289
+    },
+    {
+      "app": "runtjik",
+      "trial": 1,
+      "cold_mapped_s": 0.3227,
+      "indexed": 3355,
+      "visible_memory": {
+        "pss_mib": 101.02,
+        "rss_mib": 242.11,
+        "processes": [
+          {
+            "process": "quickshell",
+            "pss_kib": 67831,
+            "rss_kib": 180072
+          },
+          {
+            "process": "python3",
+            "pss_kib": 35609,
+            "rss_kib": 67848
+          }
+        ]
+      },
+      "closed_root_exited": true
+    },
+    {
+      "app": "hamr",
+      "trial": 2,
+      "cold_mapped_s": 0.2063,
+      "visible_memory": {
+        "pss_mib": 273.45,
+        "rss_mib": 517.74,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 25061,
+            "rss_kib": 27836
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 52861,
+            "rss_kib": 135996
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14906,
+            "rss_kib": 25228
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11465,
+            "rss_kib": 21244
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15810,
+            "rss_kib": 27376
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13790,
+            "rss_kib": 24664
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13276,
+            "rss_kib": 24216
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12963,
+            "rss_kib": 24008
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12691,
+            "rss_kib": 23472
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16669,
+            "rss_kib": 27640
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12475,
+            "rss_kib": 23424
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22844
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13051,
+            "rss_kib": 24056
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13231,
+            "rss_kib": 24128
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14192,
+            "rss_kib": 26592
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13847,
+            "rss_kib": 24848
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11754,
+            "rss_kib": 22592
+          }
+        ]
+      },
+      "hidden_memory": {
+        "pss_mib": 273.48,
+        "rss_mib": 517.77,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 25097,
+            "rss_kib": 27872
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 52861,
+            "rss_kib": 135996
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14906,
+            "rss_kib": 25228
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11465,
+            "rss_kib": 21244
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15810,
+            "rss_kib": 27376
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13790,
+            "rss_kib": 24664
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13276,
+            "rss_kib": 24216
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12963,
+            "rss_kib": 24008
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12691,
+            "rss_kib": 23472
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16669,
+            "rss_kib": 27640
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12475,
+            "rss_kib": 23424
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22844
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13051,
+            "rss_kib": 24056
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13231,
+            "rss_kib": 24128
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14192,
+            "rss_kib": 26592
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13847,
+            "rss_kib": 24848
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11754,
+            "rss_kib": 22592
+          }
+        ]
+      },
+      "warm_mapped_s": 0.0293
+    },
+    {
+      "app": "runtjik",
+      "trial": 2,
+      "cold_mapped_s": 0.3133,
+      "indexed": 3355,
+      "visible_memory": {
+        "pss_mib": 102.01,
+        "rss_mib": 241.9,
+        "processes": [
+          {
+            "process": "quickshell",
+            "pss_kib": 68478,
+            "rss_kib": 179864
+          },
+          {
+            "process": "python3",
+            "pss_kib": 35981,
+            "rss_kib": 67840
+          }
+        ]
+      },
+      "closed_root_exited": true
+    },
+    {
+      "app": "hamr",
+      "trial": 3,
+      "cold_mapped_s": 0.1923,
+      "visible_memory": {
+        "pss_mib": 274.08,
+        "rss_mib": 517.97,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 25582,
+            "rss_kib": 28308
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 53044,
+            "rss_kib": 136464
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14886,
+            "rss_kib": 25072
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11473,
+            "rss_kib": 21368
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15786,
+            "rss_kib": 27228
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12692,
+            "rss_kib": 23472
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16665,
+            "rss_kib": 27740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13844,
+            "rss_kib": 24668
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13269,
+            "rss_kib": 24088
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13232,
+            "rss_kib": 24168
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12467,
+            "rss_kib": 23304
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12964,
+            "rss_kib": 23892
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13786,
+            "rss_kib": 24660
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14193,
+            "rss_kib": 26704
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11759,
+            "rss_kib": 22652
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13052,
+            "rss_kib": 23876
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22740
+          }
+        ]
+      },
+      "hidden_memory": {
+        "pss_mib": 274.1,
+        "rss_mib": 517.99,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 25602,
+            "rss_kib": 28328
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 53044,
+            "rss_kib": 136464
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14886,
+            "rss_kib": 25072
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11473,
+            "rss_kib": 21368
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15786,
+            "rss_kib": 27228
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12692,
+            "rss_kib": 23472
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16665,
+            "rss_kib": 27740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13844,
+            "rss_kib": 24668
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13269,
+            "rss_kib": 24088
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13232,
+            "rss_kib": 24168
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12467,
+            "rss_kib": 23304
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12964,
+            "rss_kib": 23892
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13786,
+            "rss_kib": 24660
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14193,
+            "rss_kib": 26704
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11759,
+            "rss_kib": 22652
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13052,
+            "rss_kib": 23876
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22740
+          }
+        ]
+      },
+      "warm_mapped_s": 0.0295
+    },
+    {
+      "app": "runtjik",
+      "trial": 3,
+      "cold_mapped_s": 0.3083,
+      "indexed": 3355,
+      "visible_memory": {
+        "pss_mib": 101.55,
+        "rss_mib": 240.82,
+        "processes": [
+          {
+            "process": "quickshell",
+            "pss_kib": 68055,
+            "rss_kib": 178972
+          },
+          {
+            "process": "python3",
+            "pss_kib": 35930,
+            "rss_kib": 67628
+          }
+        ]
+      },
+      "closed_root_exited": true
+    },
+    {
+      "app": "hamr",
+      "trial": 4,
+      "cold_mapped_s": 0.1947,
+      "visible_memory": {
+        "pss_mib": 276.26,
+        "rss_mib": 519.94,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 27930,
+            "rss_kib": 30652
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 52793,
+            "rss_kib": 135908
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14926,
+            "rss_kib": 25224
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11473,
+            "rss_kib": 21188
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15878,
+            "rss_kib": 27384
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13786,
+            "rss_kib": 24660
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12694,
+            "rss_kib": 23604
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11755,
+            "rss_kib": 22708
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13231,
+            "rss_kib": 24120
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13051,
+            "rss_kib": 23932
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13272,
+            "rss_kib": 24092
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16661,
+            "rss_kib": 27632
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12471,
+            "rss_kib": 23308
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14193,
+            "rss_kib": 26584
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12967,
+            "rss_kib": 24012
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13844,
+            "rss_kib": 24668
+          }
+        ]
+      },
+      "hidden_memory": {
+        "pss_mib": 276.3,
+        "rss_mib": 519.98,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 27974,
+            "rss_kib": 30696
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 52793,
+            "rss_kib": 135908
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14926,
+            "rss_kib": 25224
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11473,
+            "rss_kib": 21188
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15878,
+            "rss_kib": 27384
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13786,
+            "rss_kib": 24660
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12694,
+            "rss_kib": 23604
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11755,
+            "rss_kib": 22708
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13231,
+            "rss_kib": 24120
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13051,
+            "rss_kib": 23932
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13272,
+            "rss_kib": 24092
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16661,
+            "rss_kib": 27632
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12471,
+            "rss_kib": 23308
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14193,
+            "rss_kib": 26584
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12967,
+            "rss_kib": 24012
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13844,
+            "rss_kib": 24668
+          }
+        ]
+      },
+      "warm_mapped_s": 0.0292
+    },
+    {
+      "app": "runtjik",
+      "trial": 4,
+      "cold_mapped_s": 0.3146,
+      "indexed": 3355,
+      "visible_memory": {
+        "pss_mib": 102.45,
+        "rss_mib": 242.54,
+        "processes": [
+          {
+            "process": "quickshell",
+            "pss_kib": 69019,
+            "rss_kib": 180540
+          },
+          {
+            "process": "python3",
+            "pss_kib": 35890,
+            "rss_kib": 67820
+          }
+        ]
+      },
+      "closed_root_exited": true
+    },
+    {
+      "app": "hamr",
+      "trial": 5,
+      "cold_mapped_s": 0.1917,
+      "visible_memory": {
+        "pss_mib": 274.6,
+        "rss_mib": 518.45,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 26005,
+            "rss_kib": 28604
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 52986,
+            "rss_kib": 136408
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14938,
+            "rss_kib": 25292
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11473,
+            "rss_kib": 21188
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15882,
+            "rss_kib": 27388
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13051,
+            "rss_kib": 23924
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14197,
+            "rss_kib": 26596
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13273,
+            "rss_kib": 24148
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13228,
+            "rss_kib": 24060
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13852,
+            "rss_kib": 24740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13794,
+            "rss_kib": 24788
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12467,
+            "rss_kib": 23360
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12972,
+            "rss_kib": 23900
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12691,
+            "rss_kib": 23472
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16661,
+            "rss_kib": 27696
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11755,
+            "rss_kib": 22592
+          }
+        ]
+      },
+      "hidden_memory": {
+        "pss_mib": 274.6,
+        "rss_mib": 518.45,
+        "processes": [
+          {
+            "process": "hamr-daemon",
+            "pss_kib": 26005,
+            "rss_kib": 28604
+          },
+          {
+            "process": "hamr-gtk",
+            "pss_kib": 52986,
+            "rss_kib": 136408
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14938,
+            "rss_kib": 25292
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11473,
+            "rss_kib": 21188
+          },
+          {
+            "process": "python3",
+            "pss_kib": 15882,
+            "rss_kib": 27388
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13051,
+            "rss_kib": 23924
+          },
+          {
+            "process": "python3",
+            "pss_kib": 14197,
+            "rss_kib": 26596
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13273,
+            "rss_kib": 24148
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13228,
+            "rss_kib": 24060
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13852,
+            "rss_kib": 24740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 13794,
+            "rss_kib": 24788
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12467,
+            "rss_kib": 23360
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12972,
+            "rss_kib": 23900
+          },
+          {
+            "process": "python3",
+            "pss_kib": 12691,
+            "rss_kib": 23472
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11967,
+            "rss_kib": 22740
+          },
+          {
+            "process": "python3",
+            "pss_kib": 16661,
+            "rss_kib": 27696
+          },
+          {
+            "process": "python3",
+            "pss_kib": 11755,
+            "rss_kib": 22592
+          }
+        ]
+      },
+      "warm_mapped_s": 0.0292
+    },
+    {
+      "app": "runtjik",
+      "trial": 5,
+      "cold_mapped_s": 0.3157,
+      "indexed": 3355,
+      "visible_memory": {
+        "pss_mib": 102.22,
+        "rss_mib": 242.18,
+        "processes": [
+          {
+            "process": "quickshell",
+            "pss_kib": 68774,
+            "rss_kib": 180244
+          },
+          {
+            "process": "python3",
+            "pss_kib": 35900,
+            "rss_kib": 67752
+          }
+        ]
+      },
+      "closed_root_exited": true
+    }
+  ]
+}

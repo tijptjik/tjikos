@@ -1,0 +1,1 @@
+{"name":"@tjikos/runtjik","private":true,"version":"0.8.3","scripts":{"build":"bash scripts/build.sh","check":"python3 -B scripts/check.py","test":"python3 -B -m unittest discover -s tests -v","demo":"bin/runtjik --demo"}}
