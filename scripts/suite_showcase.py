@@ -208,7 +208,11 @@ class Director(shared.Director):
         self.wait_text('Checking applications',timeout=30);time.sleep(1)
         self.screen('01-workflow');self.scene(2)
         start=time.monotonic()-self.started
-        self.wait_text('ALL SYSTEMS GO',timeout=240)
+        def completed():
+            screen=self.text()
+            if 'NEEDS ATTENTION' in screen:raise RuntimeError('Native workflow reported failure: '+screen[-1600:])
+            return 'ALL SYSTEMS GO' in screen
+        shared.wait_for(completed,timeout=240)
         end=time.monotonic()-self.started
         if end-start>1:self.speed.append({'start':round(start,3),'end':round(end,3),'rate':3})
         report=json.loads((self.directory/'workflow-result.json').read_text())

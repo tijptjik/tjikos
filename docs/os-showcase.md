@@ -30,7 +30,7 @@ Feature stories (all six films have reviewed native recordings):
 | Notjik | Progress and status | Grouped history and inline reply | Voice playback/recording and urgency |
 | Bartjik | Public rates, pointer tracking, bass-driven real artwork | Real workspace previews; VPN, Tailscale, usage, audio, clocks and mode | Exponential detach release; move and retain a chart beside another panel |
 | Runtjik | Filter the app grid | Choose an open window | Browse running apps and close them gracefully |
-| Tjikup | Start a demo workflow | Follow parallel stages | Read the results |
+| Tjikup | Start a real workflow | Follow parallel stages with app icons | Rich report with counts, timings and verified outcomes |
 | Mailtjik | Search demo mail | Open and read a result | Browse archive status |
 | Greetjik | Render a greeting | Change character/style | Pipe a message into the tool |
 
@@ -152,7 +152,7 @@ python3 -B scripts/suite_showcase.py runtjik "$HOME/Videos/tjikos/os/runtjik-nex
 # Replace runtjik with mailtjik, tjikup or greetjik for the other films.
 ```
 
-The current masters are `runtjik-v2.mp4`, `mailtjik-v1.mp4`, `tjikup-v1.mp4` and
+The current masters are `runtjik-v2.mp4`, `mailtjik-v1.mp4`, `tjikup-v2.mp4` and
 `greetjik-v1.mp4` under `~/Videos/tjikos/os/`, with JSON input receipts and
 `.review/` frames, terminal text and logs. The same no-overwrite rules apply.
 Build the current Mailtjik, Tjikup and Greetjik executables into
@@ -176,8 +176,12 @@ real network actions or production workflow is used.
   and a final preview of 20 distinct messages. All mail is synthetic `--demo`
   data. Both native preview confirmation steps are shown; no capture is started.
 - **Tjikup — One command. A clear outcome.** An actual successful workflow runs
-  Runtjik/Tjikup Python tests, Greetjik Rust tests and Mailtjik Go tests in
-  parallel, then creates and verifies a package of their reports. The workflow
+  six app test suites in parallel, then creates and verifies a package of their
+  reports. The final rich report shows all six current app icons, per-app test
+  counts and timings, the verified-package result, and the success summary.
+  This take records 198 passing checks. The native Kitty renderer is copied
+  from `scripts/fleet_update` in the theme source checkout; it renders current
+  primary SVGs as 32px Unicode-placeholder sprites inside the terminal. The workflow
   uses the production runner and Progress API. Intentional failure cases inside
   tests cannot write into the outer workflow report. The busy segment alone is
   encoded at 3×; typing, captions and the success summary retain normal timing.
