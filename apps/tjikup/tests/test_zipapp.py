@@ -81,4 +81,6 @@ class ZipappTests(unittest.TestCase):
             )
             result = run("--config", str(config))
             self.assertEqual(result.returncode, 1, result.stderr)
-            self.assertIn("command failed (8)", result.stderr)
+            self.assertIn("command failed (8)", result.stdout)
+            self.assertNotIn("✗ Tjikup", result.stdout)
+            self.assertNotIn("tjikup: failure", result.stderr)

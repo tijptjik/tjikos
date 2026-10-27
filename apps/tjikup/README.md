@@ -153,8 +153,12 @@ These are display-only fields and do not affect execution order.
 
 Set a step's `summary: false` when its script already displays its own status
 rows. This suppresses the runner's duplicate success/skip row (including the
-preview skip); failures and stop warnings remain visible. Script report events
-are still collected. The default is `true`.
+preview skip). For a streaming step, a new failure report from that command also
+suppresses its generic wrapper failure; the workflow still stops and exits
+nonzero. Missing reports, warnings alone, and older failures cannot hide a new
+command failure. Stop warnings remain visible. Failures already displayed by the
+runner do not gain a second `Tjikup` issue at the CLI boundary. Script report
+events are still collected. The default is `true`.
 
 Concurrent workflows can use `tjikup.progress.Progress` for one live row per task.
 Running rows show a spinner and elapsed time; completion leaves one final row.

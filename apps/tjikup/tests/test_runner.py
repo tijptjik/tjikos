@@ -17,6 +17,49 @@ from tjikup.runtime import UpdateError
 
 
 class RunnerTests(unittest.TestCase):
+    def test_script_owned_failure_only_reports_root_cause(self):
+        cases = (
+            ("FAILED", "✗", False),
+            ("PULL", "✗", False),
+            ("WARN", "!", True),
+            (None, None, True),
+        )
+        for verb, icon, needs_wrapper in cases:
+            with self.subTest(verb=verb):
+                command = [sys.executable, "-c", (
+                    "from tjikup import runtime; "
+                    + (f"runtime.record({verb!r}, {icon!r}, 'Repository', 'dirty checkout'); "
+                       if verb else "")
+                    + "raise SystemExit(1)"
+                )]
+                self.config.write_text(json.dumps(dict(version=1, steps=[
+                    dict(id="wrapper", label="Wrapper", command=command,
+                         output="stream", summary=False),
+                    self.step("last"),
+                ])))
+                result = subprocess.run(
+                    [sys.executable, "-B", "-m", "tjikup", "--config", str(self.config)],
+                    env={**os.environ, "TJIKUP_NOTIFY": "0"}, capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual("Wrapper" in result.stdout, needs_wrapper)
+                self.assertNotIn("✗ Tjikup", result.stdout)
+                self.assertNotIn("tjikup: Wrapper", result.stderr)
+                self.assertNotIn("ALL SYSTEMS GO", result.stdout)
+                self.assertEqual(self.events(), [])
+
+    def test_previous_failure_does_not_hide_new_silent_failure(self):
+        report = self.root / "report"
+        report.write_text("PULL\t✗\tOld repo\told failure\n")
+        self.config.write_text(json.dumps(dict(version=1, steps=[
+            self.step("fail", output="stream", summary=False),
+        ])))
+        with patch.object(tjikup, "ACTIVE_REPORT_FILE", report), \
+                contextlib.redirect_stdout(io.StringIO()) as output, \
+                self.assertRaises(tjikup.ReportedError):
+            tjikup.run_workflow(load_config(self.config))
+        self.assertIn("FAILED", output.getvalue())
+        self.assertIn("command failed (5)", output.getvalue())
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

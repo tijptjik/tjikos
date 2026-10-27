@@ -265,14 +265,18 @@ Rectangle {
                 implicitWidth: card.richTelegram ? 32 : card.theme.iconSize
                 implicitHeight: card.richTelegram ? 32 : card.theme.iconSize
                 radius: card.telegram ? 0 : Math.min(card.theme.radius, 10)
-                color: card.theme.surface
+                color: card.richTelegram ? card.theme.surface : "transparent"
                 Image {
                     id: artworkImage
                     visible: !card.richTelegram || !!card.notice.image
-                    anchors { fill: parent; margins: card.richTelegram ? 0 : 4 }
+                    anchors.fill: parent
                     source: card.imageSource(card.artwork)
                     fillMode: Image.PreserveAspectFit
-                    sourceSize { width: card.theme.iconSize * 2; height: card.theme.iconSize * 2 }
+                    sourceSize {
+                        width: Math.ceil(artworkImage.width * Screen.devicePixelRatio)
+                        height: Math.ceil(artworkImage.height * Screen.devicePixelRatio)
+                    }
+                    mipmap: true
                     asynchronous: true
                     layer.enabled: card.richTelegram || (!card.notice.image && card.notice.icon.endsWith("-symbolic") && !card.notice.icon.startsWith("network-wireless"))
                     layer.effect: card.richTelegram ? avatarMaskEffect : artworkTintEffect

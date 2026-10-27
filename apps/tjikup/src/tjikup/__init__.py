@@ -23,6 +23,33 @@ CHILDREN_LOCK = threading.Lock()
 CANCELLED = threading.Event()
 
 
+class ReportedError(UpdateError):
+    """A failed operation whose actionable diagnostics were already reported."""
+
+
+def report_offset():
+    try:
+        return ACTIVE_REPORT_FILE.stat().st_size if ACTIVE_REPORT_FILE else 0
+    except OSError:
+        return 0
+
+
+def reported_failure_since(offset):
+    if not ACTIVE_REPORT_FILE:
+        return False
+    try:
+        with ACTIVE_REPORT_FILE.open("rb") as report:
+            report.seek(offset)
+            rows = report.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return False
+    for row in rows:
+        fields = row.split("\t", 3)
+        if len(fields) == 4 and (fields[0] in {"FAILED", "ERROR"} or fields[1] in {"✗", "X"}):
+            return True
+    return False
+
+
 def stop_children():
     CANCELLED.set()
     with CHILDREN_LOCK:
@@ -35,6 +62,7 @@ def stop_children():
 
 def execute(step, command, env):
     started = time.monotonic()
+    step["_report_offset"] = report_offset()
     timeout = step.get("timeout", 300)
     output = ""
     if step.get("output", "quiet") == "stream":
@@ -91,7 +119,13 @@ def finish(step, result):
     if code:
         if output:
             print(output, file=sys.stderr, end="" if output.endswith("\n") else "\n")
-        raise UpdateError(f"{label}: command failed ({code})")
+        error = f"{label}: command failed ({code})"
+        # Streaming script-owned presentation may already report its root cause.
+        # Quiet parallel steps cannot attribute shared report rows to one child.
+        if (not step.get("summary", True) and step.get("output") == "stream"
+                and reported_failure_since(step.get("_report_offset", 0))):
+            raise ReportedError(error)
+        raise UpdateError(error)
     if step.get("summary", True):
         runtime.stage_result(step.get("verb", "RUN"), label, f"{elapsed:.2f}s")
     return False
@@ -162,12 +196,13 @@ def run_workflow(config, *, dry_run=False, flags=None):
                 try:
                     stopped = finish(step, execute(step, command, env)) or stopped
                 except Exception as error:
-                    runtime.stage_label(
-                        "FAILED", "✗", step.get("label", step["id"]), str(error)
-                    )
+                    if not isinstance(error, ReportedError):
+                        runtime.stage_label(
+                            "FAILED", "✗", step.get("label", step["id"]), str(error)
+                        )
                     errors.append(error)
         if errors:
-            raise UpdateError(str(errors[0]))
+            raise ReportedError(str(errors[0]))
         if stopped:
             return 0
     return 0
@@ -251,6 +286,8 @@ def cli():
         if ACTIVE_REPORT_FILE:
             runtime.record("FAILED", "✗", "Tjikup", "interrupted")
         print("tjikup: interrupted", file=sys.stderr)
+    except ReportedError:
+        result = 1
     except Exception as error:
         result = 1
         if ACTIVE_REPORT_FILE:
