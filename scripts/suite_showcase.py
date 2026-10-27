@@ -16,10 +16,10 @@ import os_showcase as shared
 ROOT=shared.ROOT
 BUILD=Path('/tmp/tjikos-showcase-build')
 STORIES={
- 'runtjik':('Runtjik','Find it. Run it.','Find an app, choose a window, keep your hands on the keyboard.',[
+ 'runtjik':('Runtjik','Find it. Run it.','Find an app, choose a window, close what you no longer need.',[
   ('Your next app, a few letters away.','Fuzzy search narrows the grid as you type.'),
   ('Choose the right window.','See open instances before deciding where to go.'),
-  ('Keep your flow on the keyboard.','Switch layouts and discover shortcuts without leaving the launcher.')]),
+  ('Your launcher is a task manager.','Browse running apps and close them gracefully, right here.')]),
  'mailtjik':('Mailtjik','Your mail, worth keeping.','Find a conversation. Read the original. Choose what to preserve.',[
   ('Find that conversation again.','Combine a name, subject and years to narrow the archive.'),
   ('Read the message, with its context.','Sender, recipients, rich text and inline images stay together.'),
@@ -108,15 +108,18 @@ class Director(shared.Director):
         app=self.directory/'runtjik';shutil.copytree(ROOT/'apps/runtjik/qml',app/'qml')
         shutil.copy2(ROOT/'apps/runtjik/runtjik.py',app/'runtjik.py')
         qml=app/'qml/shell.qml';text=qml.read_text().replace('(panel.height-frame.height)/2','190').replace('y: (panel.height-height)/2','y: 190').replace('if(placed && root.centering)', 'if(placed && !root.transferring)').replace('cellHeight:root.listMode?70:122','cellHeight:root.listMode?70:104')
+        text=text.replace("if(msg.action==='close' && !demo)","if(msg.action==='close' && (!demo || Quickshell.env('RUNTJIK_SHOWCASE_CLOSE')==='1'))")
         qml.write_text(text)
+        self.runtjik_fixtures(app)
         conf=self.directory/'runtjik.conf';conf.write_text('[ui]\nwidth=1040\nheight=450\ncolumns=5\nicon_size=42\nfont_size=14\n[theme]\nicon_theme="rose-punk-illustrated"\n')
         self.scene(1)
         with (self.directory/'runtjik.log').open('w') as log:
-            p=subprocess.Popen(['quickshell','--path',str(app/'qml'),'--no-color'],env={**self.env,'RUNTJIK_HOME':str(app),'RUNTJIK_DEMO':'1','RUNTJIK_CONFIG':str(conf)},stdout=log,stderr=log)
+            p=subprocess.Popen(['quickshell','--path',str(app/'qml'),'--no-color'],env={**self.env,'RUNTJIK_HOME':str(app),'RUNTJIK_DEMO':'1','RUNTJIK_CONFIG':str(conf),'RUNTJIK_SHOWCASE_CLOSE':'1','RUNTJIK_SHOWCASE_FIXTURES':str(self.directory/'fixtures.json')},stdout=log,stderr=log)
         self.processes.append(p)
         def status():return json.loads(qs(app/'qml','runtjik','status'))
         def state():return json.loads(qs(app/'qml','runtjik','testState'))
         shared.wait_for(lambda:status()['ready']);time.sleep(1.5)
+        (self.review/'fixture-windows.json').write_text(json.dumps({'actual':json.loads(shared.checked(['hyprctl','-j','clients'])),'expected':self.fixture_rows,'rows':state()},indent=2))
         if status()['geometry']['y']<10180:raise ValueError('Launcher obscures the caption')
         self.frame('01-app-grid');time.sleep(.8)
         self.type('fire');shared.wait_for(lambda:state()['resultQuery']=='fire' and len(state()['rows'])==1)
@@ -125,13 +128,50 @@ class Director(shared.Director):
         time.sleep(1.3);self.key('Down');time.sleep(1.1);self.key('Up');time.sleep(1)
         self.frame('03-window-picker');self.evidence('native instance picker',rows=state()['rows'])
         self.key('Escape');time.sleep(.4)
-        self.scene(3);self.chord('ctrl','l');shared.wait_for(lambda:status()['view']=='list')
-        time.sleep(1.3);self.frame('04-list')
-        self.chord('ctrl','a');self.type('/bindings');shared.wait_for(lambda:state()['resultQuery']=='/bindings')
-        time.sleep(2);self.frame('05-shortcuts')
-        for _ in range(4):self.key('Down');time.sleep(.3)
-        time.sleep(1.2);self.frame('06-shortcut-actions');self.evidence('native shortcuts',count=len(state()['rows']))
+        self.scene(3)
+        self.chord('ctrl','a');self.type('/running')
+        shared.wait_for(lambda:state()['resultQuery']=='/running' and len(state()['rows'])==3)
+        time.sleep(1.3);self.frame('04-task-manager')
+        for index in range(2):
+            before=state()['rows'];selected=before[status()['selected']]
+            self.chord('ctrl','Return')
+            shared.wait_for(lambda:bool(status()['closing']))
+            time.sleep(.18);self.frame('05-closing-'+str(index+1))
+            shared.wait_for(lambda:selected['id'] not in [row['id'] for row in state()['rows']])
+            closed=[row for row in self.fixture_rows if row['entry']==selected['id']]
+            shared.wait_for(lambda:all(self.fixture_processes[row['pid']].poll() is not None for row in closed))
+            events=[json.loads(line) for line in self.fixture_marker.read_text().splitlines()]
+            if not closed or any(self.fixture_processes[row['pid']].returncode!=0 for row in closed):raise ValueError('Application did not exit cleanly')
+            if not all(any(event['application']==row['class'] and event['title']==row['title'] and event['event']=='graceful-close' for event in events) for row in closed):raise ValueError('Missing native graceful-close event')
+            if not status()['visible']:raise ValueError('Task manager dismissed itself')
+            self.evidence('native graceful application close',application=selected['name'],closed=closed,exitCodes=[self.fixture_processes[row['pid']].returncode for row in closed],remaining=[row['name'] for row in state()['rows']])
+            time.sleep(1.1);self.frame('06-closed-'+str(index+1))
+        shutil.copy2(self.fixture_marker,self.review/'graceful-close-events.jsonl')
         qs(app/'qml','runtjik','quit');p.wait(timeout=8)
+
+    def runtjik_fixtures(self,app):
+        import showcase_close
+        shutil.copy2(shared.HERE/'showcase_close.py',app/'showcase_close.py')
+        backend=app/'runtjik.py';text=backend.read_text()
+        text=text.replace("    def close_app(self, entry, address='', pending=None):", "    def close_app(self, entry, address='', pending=None):\n        if self.demo and os.environ.get('RUNTJIK_SHOWCASE_CLOSE')=='1':\n            from showcase_close import close\n            return close(self,entry,address,pending)")
+        if "return close(self,entry,address,pending)" not in text:raise ValueError('Native fixture close guard was not installed')
+        start=text.index('def demo_windows():');end=text.index('\ndef main():',start)
+        text=text[:start]+"def demo_windows():\n    from showcase_close import clients\n    return clients()\n\n"+text[end:]
+        text=text.replace('data={"classes": [icon]}','data={"classes": ['+repr(showcase_close.CLASSES)+'.get(icon,icon)]}')
+        backend.write_text(text)
+        self.fixture_rows=[];self.fixture_processes={};self.fixture_marker=self.directory/'graceful-close.jsonl'
+        for icon,title,workspace in [('firefox','Design notes — Firefox','1'),('firefox','Documentation — Firefox','2'),('obsidian','A few ideas — Obsidian','3'),('kitty','A quiet terminal','3')]:
+            shared.checked(['hyprctl','eval','hl.dispatch(hl.dsp.focus({workspace='+json.dumps(workspace)+'}))'])
+            identity=showcase_close.CLASSES[icon]
+            process=subprocess.Popen(['/usr/bin/python3','-B',str(shared.HERE/'showcase_close_app.py'),identity,title,str(self.fixture_marker)],env=self.env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            self.processes.append(process);self.fixture_processes[process.pid]=process
+            client=shared.wait_for(lambda:next((client for client in json.loads(shared.checked(['hyprctl','-j','clients'])) if client['pid']==process.pid),None))
+            if client['class']!=identity:raise ValueError('Fixture application identity did not match: '+client['class'])
+            self.fixture_rows.append({'pid':process.pid,'class':identity,'title':title,'entry':'apps:'+icon+'.desktop'})
+        (self.directory/'fixtures.json').write_text(json.dumps(self.fixture_rows))
+        shared.checked(['hyprctl','eval','hl.dispatch(hl.dsp.focus({workspace="9"}))'])
+        time.sleep(.3)
+
 
     def mailtjik(self):
         self.scene(1);self.shell('mailtjik read --demo',wait='PARTICIPANT');time.sleep(.7)

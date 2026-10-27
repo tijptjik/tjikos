@@ -29,7 +29,7 @@ Feature stories (all six films have reviewed native recordings):
 | --- | --- | --- | --- |
 | Notjik | Progress and status | Grouped history and inline reply | Voice playback/recording and urgency |
 | Bartjik | Public rates, pointer tracking, bass-driven real artwork | Real workspace previews; VPN, Tailscale, usage, audio, clocks and mode | Exponential detach release; move and retain a chart beside another panel |
-| Runtjik | Filter the app grid | Switch to a window | Find a shortcut |
+| Runtjik | Filter the app grid | Choose an open window | Browse running apps and close them gracefully |
 | Tjikup | Start a demo workflow | Follow parallel stages | Read the results |
 | Mailtjik | Search demo mail | Open and read a result | Browse archive status |
 | Greetjik | Render a greeting | Change character/style | Pipe a message into the tool |
@@ -152,7 +152,7 @@ python3 -B scripts/suite_showcase.py runtjik "$HOME/Videos/tjikos/os/runtjik-nex
 # Replace runtjik with mailtjik, tjikup or greetjik for the other films.
 ```
 
-The current masters are `runtjik-v1.mp4`, `mailtjik-v1.mp4`, `tjikup-v1.mp4` and
+The current masters are `runtjik-v2.mp4`, `mailtjik-v1.mp4`, `tjikup-v1.mp4` and
 `greetjik-v1.mp4` under `~/Videos/tjikos/os/`, with JSON input receipts and
 `.review/` frames, terminal text and logs. The same no-overwrite rules apply.
 Build the current Mailtjik, Tjikup and Greetjik executables into
@@ -162,8 +162,11 @@ geometry is verified before recording the app. No private mail, user history,
 real network actions or production workflow is used.
 
 - **Runtjik — Find it. Run it.** Its actual demo renderer shows a complete app
-  grid, fuzzy search, two-instance picker, list mode and shortcut discovery.
-  Native keyboard events do the work. A temporary UI copy bounds the grid and
+  grid, fuzzy search, two-instance picker and a task-manager view that gracefully
+  closes applications and reflows the remaining running apps.
+  Native keyboard events do the work. Cooperative GTK fixtures on private workspaces
+  receive real compositor close requests; event receipts and zero exit codes
+  verify shutdown. Only manifest-allowlisted fixture processes can be targeted. A temporary UI copy bounds the grid and
   centres it below the caption. Installed Rose Punk application icons are used.
   The current managed primary `runtjik.svg` is copied to `docs/icons/` before
   capture; its SHA-256 is retained in the film receipt.
