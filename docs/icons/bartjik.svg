@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<defs>
+ <linearGradient id="enamel" x1="0" y1="0" x2=".6" y2="1"><stop stop-color="#ffa9c3" /><stop offset=".4" stop-color="#ff53a6" /><stop offset="1" stop-color="#b24685" /></linearGradient>
+ <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffa9c3" /><stop offset=".6" stop-color="#ff53a6" /><stop offset="1" stop-color="#b24685" /></linearGradient>
+ <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c8c8e3" /><stop offset=".5" stop-color="#8596ed" /><stop offset="1" stop-color="#666fb1" /></linearGradient>
+<linearGradient id="material-bartjik-1" x1="0.0" y1="0.0" x2="22.4" y2="64.0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff8fba" /><stop offset=".32" stop-color="#ff53a6" /><stop offset="1" stop-color="#be488a" /></linearGradient><linearGradient id="material-bartjik-2" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="#fcdad1" /><stop offset=".32" stop-color="#facdcc" /><stop offset="1" stop-color="#bb9ba4" /></linearGradient></defs>
+<rect id="tile" x="3" y="2" width="58" height="58" rx="17" fill="#26233a" stroke="#555169" stroke-opacity=".45" stroke-width=".65" />
+<g stroke-linecap="round" stroke-linejoin="round" /><circle cx="32" cy="32" r="20" fill="#26233a" stroke="url(#material-bartjik-1)" stroke-width="4" />
+  <circle cx="32" cy="32" r="6" fill="url(#material-bartjik-2)" />
+</svg>

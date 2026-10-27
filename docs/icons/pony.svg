@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<defs>
+ <linearGradient id="enamel" x1="0" y1="0" x2=".6" y2="1"><stop stop-color="#f5c3ca" /><stop offset=".4" stop-color="#e88bb6" /><stop offset="1" stop-color="#a4688f" /></linearGradient>
+ <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f3b6c0" /><stop offset=".6" stop-color="#e56ea1" /><stop offset="1" stop-color="#a25682" /></linearGradient>
+ <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ceb7cc" /><stop offset=".5" stop-color="#9272ba" /><stop offset="1" stop-color="#6e5991" /></linearGradient>
+</defs>
+<rect id="tile" x="3" y="2" width="58" height="58" rx="17" fill="#26233a" stroke="#555169" stroke-opacity=".45" stroke-width=".65" />
+<g stroke-linecap="round" stroke-linejoin="round" /><title>Pony — flowing rainbow mane</title><desc>A swept six-colour mane, without a face, body, white streaks or outlined facets.</desc>
+<g data-material="authored">
+<path fill="#b39bd9" d="M36 18C48 18 50 28 46 35C43 41 47 48 53 53C39 51 31 42 32 32C32 25 33 21 36 18Z" />
+<path fill="#819bea" d="M36 21C45 23 44 29 41 35C38 40 41 45 46 48C36 44 32 38 34 31Z" />
+<path fill="#65c5ae" d="M36 22C41 25 39 31 36 34C34 37 36 40 38 42C31 38 29 32 33 26Z" />
+<path fill="#eb779f" d="M9 32C10 20 20 11 33 11C40 11 45 12 51 9L46 18L50 18L44 26C33 21 19 25 9 32Z" />
+<path fill="#f2b075" d="M9 32C17 21 29 15 43 19L46 23C31 20 20 26 9 32Z" />
+<path fill="#f3d57f" d="M9 32C21 25 31 20 44 24L38 29L31 28L23 38L23 30Z" />
+</g></svg>

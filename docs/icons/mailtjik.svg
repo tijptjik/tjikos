@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<defs>
+ <linearGradient id="enamel" x1="0" y1="0" x2=".6" y2="1"><stop stop-color="#f5c3ca" /><stop offset=".4" stop-color="#e88bb6" /><stop offset="1" stop-color="#a4688f" /></linearGradient>
+ <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f3b6c0" /><stop offset=".6" stop-color="#e56ea1" /><stop offset="1" stop-color="#a25682" /></linearGradient>
+ <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ceb7cc" /><stop offset=".5" stop-color="#9272ba" /><stop offset="1" stop-color="#6e5991" /></linearGradient>
+</defs>
+<rect id="tile" x="3" y="2" width="58" height="58" rx="17" fill="#26233a" stroke="#555169" stroke-opacity=".45" stroke-width=".65" />
+<g stroke-linecap="round" stroke-linejoin="round" /><title>Mailtjik</title>
+  <defs>
+    <pattern id="airmail-stripes" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(40)">
+      <rect width="16" height="16" fill="#f5f5f7" />
+      <rect width="4" height="16" fill="#8596ed" />
+      <rect x="8" width="4" height="16" fill="#eb6f92" />
+    </pattern>
+  </defs>
+  <g data-material="authored" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="12" y="12" width="40" height="40" rx="9" fill="#26233a" />
+    <path d="M14.636 14.636 32 32 49.364 14.636" fill="none" stroke="#f5f5f7" stroke-width="3" />
+    <rect x="12" y="12" width="40" height="40" rx="9" fill="none" stroke="url(#airmail-stripes)" stroke-width="4" />
+  </g>
+</svg>

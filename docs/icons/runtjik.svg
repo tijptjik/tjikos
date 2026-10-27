@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<defs>
+ <linearGradient id="enamel" x1="0" y1="0" x2=".6" y2="1"><stop stop-color="#ffa9c3" /><stop offset=".4" stop-color="#ff53a6" /><stop offset="1" stop-color="#b24685" /></linearGradient>
+ <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffa9c3" /><stop offset=".6" stop-color="#ff53a6" /><stop offset="1" stop-color="#b24685" /></linearGradient>
+ <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c8c8e3" /><stop offset=".5" stop-color="#8596ed" /><stop offset="1" stop-color="#666fb1" /></linearGradient>
+<linearGradient id="material-runtjik-1" x1="0.0" y1="0.0" x2="22.4" y2="64.0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#b3b8e6" /><stop offset=".32" stop-color="#8596ed" /><stop offset="1" stop-color="#6b75ba" /></linearGradient><linearGradient id="material-runtjik-2" x1="0.0" y1="0.0" x2="22.4" y2="64.0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fcdad1" /><stop offset=".32" stop-color="#facdcc" /><stop offset="1" stop-color="#bb9ba4" /></linearGradient></defs>
+<rect id="tile" x="3" y="2" width="58" height="58" rx="17" fill="#26233a" stroke="#555169" stroke-opacity=".45" stroke-width=".65" />
+<g stroke-linecap="round" stroke-linejoin="round" /><g stroke-linecap="round" stroke-linejoin="round">
+<rect x="12" y="12" width="40" height="40" rx="9" fill="#26233a" stroke="url(#material-runtjik-1)" stroke-width="4" />
+<path d="M27 27h10v10H27V23a4 4 0 1 0-4 4h18a4 4 0 1 0-4-4v18a4 4 0 1 0 4-4H23a4 4 0 1 0 4 4Z" transform="translate(8 8) scale(.75)" fill="none" stroke="url(#material-runtjik-2)" stroke-width="3.2" />
+</g>
+</svg>

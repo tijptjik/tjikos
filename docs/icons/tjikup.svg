@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<defs>
+ <linearGradient id="enamel" x1="0" y1="0" x2=".6" y2="1"><stop stop-color="#fbdbad" /><stop offset=".4" stop-color="#f6c177" /><stop offset="1" stop-color="#ac8a68" /></linearGradient>
+ <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fbdbad" /><stop offset=".6" stop-color="#f6c177" /><stop offset="1" stop-color="#ac8a68" /></linearGradient>
+ <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d2e1d9" /><stop offset=".5" stop-color="#9ccfd8" /><stop offset="1" stop-color="#7493a4" /></linearGradient>
+<linearGradient id="material-tjikup-1" x1="0.0" y1="0.0" x2="22.4" y2="64.0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f9d39d" /><stop offset=".32" stop-color="#f6c177" /><stop offset="1" stop-color="#b8936a" /></linearGradient><linearGradient id="material-tjikup-2" x1="0.0" y1="0.0" x2="22.4" y2="64.0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fcdad1" /><stop offset=".32" stop-color="#facdcc" /><stop offset="1" stop-color="#bb9ba4" /></linearGradient></defs>
+<rect id="tile" x="3" y="2" width="58" height="58" rx="17" fill="#26233a" stroke="#555169" stroke-opacity=".45" stroke-width=".65" />
+<g stroke-linecap="round" stroke-linejoin="round" /><rect x="12" y="12" width="40" height="40" rx="9" fill="#26233a" stroke="url(#material-tjikup-1)" stroke-width="4" />
+  <path d="m24 36 8-8 8 8" fill="none" stroke="url(#material-tjikup-2)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
