@@ -425,6 +425,12 @@ ShellRoot {
         if (active && !active.archived && find(active.id)) close(active.id, false);
     }
 
+    function setPaused(value) {
+        if (!backend.running) throw Error("Cannot save notification mode while the helper is stopped");
+        backend.write(JSON.stringify({op: "pausePreference", paused: value}) + "\n");
+        paused = value;
+    }
+
     function handle(request) {
         if (!ready) throw Error("notjik configuration is not ready: " + backendError);
         switch (request.op) {
@@ -439,9 +445,9 @@ ShellRoot {
             telegramBridgeUntil = request.active === true ? Date.now() + 12000 : 0;
             break;
         case "send": return {ok: true, id: send(request.notice)};
-        case "pause": paused = true; break;
-        case "resume": paused = false; break;
-        case "toggle": paused = !paused; break;
+        case "pause": setPaused(true); break;
+        case "resume": setPaused(false); break;
+        case "toggle": setPaused(!paused); break;
         case "dismiss":
             if (request.id !== "all" && !find(request.id)) throw Error("Notification not found");
             for (const n of notices.slice()) if (request.id === "all" || request.id === n.id) close(n.id, false);
@@ -493,7 +499,9 @@ ShellRoot {
             onRead: line => {
                 try {
                     const response = JSON.parse(line);
-                    if (response.config) {
+                    if (typeof response.paused === "boolean") {
+                        root.paused = response.paused;
+                    } else if (response.config) {
                         root.config = response.config;
                         if (!root.ready) for (const n of root.notices) n.remaining = Logic.timeout(n.requestedTimeout, n.urgency, root.config);
                         root.ready = true;

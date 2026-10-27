@@ -117,6 +117,13 @@ notjikctl demo robots             # preview all robot artwork, one per second
 notjikctl demo robots --interval 2s # slower robot preview
 ```
 
+Do Not Disturb (pause) is saved in `preferences.json` under the Notjik state
+directory (`$NOTJIK_STATE_DIR`, otherwise `$XDG_STATE_HOME/notjik`). Bar toggles,
+`notjikctl pause/resume/toggle`, and the drawer's Resume button share this
+preference. It survives app restarts, reboot, and managed configuration updates.
+Configuration reloads do not reset it.
+
+
 `send` prints the card ID. Local IDs use `local-N`; native desktop notifications
 appear in `list` as `dbus-N`. Replacing a local card refreshes its content and
 timeout, preserving its queue position. Native applications continue to use the

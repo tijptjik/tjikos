@@ -43,6 +43,36 @@ def state_path():
         "XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "notjik")))
 
 
+def load_paused():
+    """User preference is separate from managed config and notification history."""
+    path = state_path() / "preferences.json"
+    if not path.exists():
+        return False
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict) or type(value.get("paused")) is not bool:
+        raise ValueError(f"Invalid notification pause preference in {path}")
+    return value["paused"]
+
+
+def save_paused(paused):
+    if type(paused) is not bool:
+        raise ValueError("Notification pause preference must be boolean")
+    directory = state_path()
+    directory.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=directory, delete=False) as target:
+            temporary = Path(target.name)
+            json.dump({"paused": paused}, target)
+            target.write("\n")
+            target.flush()
+            os.fsync(target.fileno())
+        os.replace(temporary, directory / "preferences.json")
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def merge(base, patch):
     result = copy.deepcopy(base)
     for key, value in patch.items():
@@ -328,6 +358,7 @@ def emit(value):
 
 def worker(root):
     os.umask(0o077)
+    emit({"paused": load_paused()})
     cfg, db, previous = None, None, None
     buffer = b""
     observer = LockObserver()
@@ -394,7 +425,9 @@ def worker(root):
                 line, buffer = buffer.split(b"\n", 1)
                 try:
                     event = json.loads(line)
-                    if event.get("op") == "history":
+                    if event.get("op") == "pausePreference":
+                        save_paused(event.get("paused"))
+                    elif event.get("op") == "history":
                         dirty_history = True
                     elif cfg is not None:
                         if db is None:
