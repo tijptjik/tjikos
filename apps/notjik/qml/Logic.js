@@ -111,7 +111,8 @@ function grouped(notices, config, selectedId) {
         group.latest = notice;
     }
     return groups.sort((a, b) => b.latest.received - a.latest.received).map(group => {
-        var representative = group.members.find(n => n.id === selectedId) || group.latest;
+        // Keep the oldest pending message in front as new members arrive.
+        var representative = group.members.find(n => n.id === selectedId) || group.members[0];
         return Object.assign({}, representative, {groupId: group.id, groupGeneration: group.generation, groupKey: group.key,
             groupReceived: group.members[0].received, groupCount: group.members.length, memberIds: group.members.map(n => n.id)});
     });
