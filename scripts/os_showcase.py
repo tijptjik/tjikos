@@ -161,6 +161,7 @@ def native_session(directory, scale=1):
     compositor_config = ('hl.monitor({output="",mode="1200x720@60",position="0x0",scale=1})\n'
                       'hl.monitor({output="HEADLESS-1",mode="1200x720@60",position="10000x10000",scale=1})\n'
                       'hl.config({general={border_size=0},decoration={rounding=0,shadow={enabled=false}},misc={disable_watchdog_warning=true,disable_hyprland_logo=true,disable_splash_rendering=true}})\n')
+    compositor_config+='hl.window_rule({name="bartjik-detached",float=true,no_anim=true,no_shadow=true,no_blur=true,border_size=0,match={initial_title="^bartjik-detached:.*$"}})\n'
     config.write_text(compositor_config.replace("scale=1}", "scale="+str(scale)+"}"))
     env = {**os.environ, "XDG_RUNTIME_DIR": str(runtime), "XDG_CONFIG_HOME": str(config_home),
            "XDG_CACHE_HOME": str(directory / "cache"), "XDG_DATA_HOME": str(directory / "data"),

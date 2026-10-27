@@ -13,6 +13,7 @@ FloatingWindow {
     readonly property string initialTitle: "bartjik-detached:" + Quickshell.processId + ":" + identity + ":" + host.generation
     property string identity: Date.now().toString(36)+Math.random().toString(36).slice(2)
     property bool placed:false
+    property real releaseProgress:0
     property bool luaMode:Hyprland.usingLua
     property bool modeKnown:false
     property string address:""
@@ -33,8 +34,18 @@ FloatingWindow {
         else if(!backingWindowVisible){locateTimer.stop();placed=false;address="";placementAttempts=0;}
     }
     onClosed:host.dismissed()
-    onPlacedChanged:if(placed)contentItem.Window.window?.update()
-    Item {id:liveBody;anchors.fill:parent;opacity:panel.placed?1:0}
+    onPlacedChanged:{
+        release.stop();releaseProgress=0;
+        if(placed){release.start();contentItem.Window.window?.update();}
+    }
+    NumberAnimation {
+        id:release;target:panel;property:'releaseProgress';from:0;to:1;duration:420;easing.type:Easing.OutExpo
+        onFinished:panel.host.completeDrop()
+    }
+    Item {
+        id:liveBody;anchors.fill:parent;opacity:panel.placed?panel.releaseProgress:0
+        scale:.985+.015*panel.releaseProgress;transformOrigin:Item.Center
+    }
 
     function finishPlacement() {if(visible)placed=true;}
     // Some Quickshell builds report usingLua=false on Lua compositors.

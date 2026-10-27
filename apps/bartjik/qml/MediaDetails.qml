@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Controls
+import Quickshell
+import Quickshell.Io
 import Quickshell.Widgets
 
 ClippingRectangle {
@@ -8,6 +10,14 @@ ClippingRectangle {
     readonly property var media:popup.row?.media || {}
     readonly property var theme:popup.theme
     readonly property bool artworkReady:cover.ready
+    property real outputEnergy:0
+    readonly property real musicEnergy:popup.controller.demo ? Number(media.energy || 0) : outputEnergy
+    Process {
+        running:details.visible && details.popup.opened && details.media.playing===true && !details.popup.controller.demo
+        command:['python3','-B',Qt.resolvedUrl('audio_levels.py').toString().replace('file://',''),'--playback-only']
+        stdout:SplitParser {onRead:line=>{try{details.outputEnergy=Number(JSON.parse(line).__output || 0);}catch(_){details.outputEnergy=0;}}}
+        onExited:details.outputEnergy=0
+    }
     property bool lyricsShown:false
     readonly property string lyricsStatus:lyrics.status
     radius:12;color:theme.background
@@ -22,6 +32,7 @@ ClippingRectangle {
         id:cover;anchors.top:parent.top;anchors.left:parent.left;anchors.right:parent.right
         height:Math.max(0,parent.height-footer.height)
         controller:popup.controller;requestedSource:details.media.artwork || '';visible:!details.lyricsShown
+        playing:details.media.playing===true;energy:details.musicEnergy
     }
     Text {anchors.centerIn:cover;visible:!details.lyricsShown && !cover.ready;text:'♫';color:details.theme.muted;font.pixelSize:64}
     Lyrics {

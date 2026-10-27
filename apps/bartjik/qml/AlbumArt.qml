@@ -3,6 +3,9 @@ import QtQuick
 Item {
     id:art
     required property var controller
+    property bool playing:false
+    property real energy:0
+    readonly property real pulseScale:playing ? 1+Math.max(0,Math.min(1,energy))*.065 : 1
     property string requestedSource:''
     property string token:''
     property int sequence:0
@@ -52,10 +55,14 @@ Item {
         target:art.controller
         function onArtworkReceived(token,source){art.receive(token,source);}
     }
+    Item {
+        anchors.fill:parent;clip:true
     Image {
         id:first;anchors.fill:parent;asynchronous:true;cache:true
         fillMode:Image.PreserveAspectCrop;smooth:true;mipmap:true
         sourceSize:art.decodeSize
+        scale:art.pulseScale;transformOrigin:Item.Center
+        Behavior on scale {NumberAnimation {duration:120;easing.type:Easing.OutCubic}}
         z:art.activeSlot===0?0:1
         onStatusChanged:art.loaded(first)
     }
@@ -63,8 +70,11 @@ Item {
         id:second;anchors.fill:parent;asynchronous:true;cache:true
         fillMode:Image.PreserveAspectCrop;smooth:true;mipmap:true
         sourceSize:art.decodeSize
+        scale:art.pulseScale;transformOrigin:Item.Center
+        Behavior on scale {NumberAnimation {duration:120;easing.type:Easing.OutCubic}}
         z:art.activeSlot===1?0:1
         onStatusChanged:art.loaded(second)
+    }
     }
     NumberAnimation {
         id:fade;property:'opacity';from:0;to:1;duration:220;easing.type:Easing.InOutQuad

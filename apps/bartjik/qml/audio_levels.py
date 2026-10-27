@@ -12,13 +12,14 @@ import selectors
 import signal
 import subprocess
 import time
+import sys
 
 
 def query(*args):
     return subprocess.check_output(['pactl', *args], text=True, timeout=2)
 
 
-def watch():
+def watch(include_microphone=True):
     selector = selectors.DefaultSelector()
     captures = {}
     refreshed = 0
@@ -56,9 +57,10 @@ def watch():
                         sink = sinks.get(stream['sink'])
                         if sink:
                             wanted[(stream['index'], sink['name'])] = (title, sink['monitor_source'], ['--monitor-stream=' + str(stream['index'])])
-                    for source in json.loads(query('-f', 'json', 'list', 'sources')):
-                        if source['name'].startswith('alsa_input.usb-046d_Logitech_BRIO_') and not source.get('mute'):
-                            wanted[('microphone', source['name'])] = ('__input', source['name'], [])
+                    if include_microphone:
+                        for source in json.loads(query('-f', 'json', 'list', 'sources')):
+                            if source['name'].startswith('alsa_input.usb-046d_Logitech_BRIO_') and not source.get('mute'):
+                                wanted[('microphone', source['name'])] = ('__input', source['name'], [])
                     for key in list(captures):
                         if key not in wanted or captures[key]['process'].poll() is not None:
                             stop(key)
@@ -105,4 +107,4 @@ def watch():
 
 
 if __name__ == '__main__':
-    watch()
+    watch(include_microphone="--playback-only" not in sys.argv)

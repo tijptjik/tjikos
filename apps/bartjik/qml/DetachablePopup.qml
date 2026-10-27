@@ -98,7 +98,7 @@ PopupWindow {
         if(detached)destination=floating.screen;
     }
     function finishDrop(){dropping=false;dropReady=false;dragImage=null;sourceSurface=null;}
-    function completeDrop(){if(dropFrames>=2 && sourceFrames>=2)finishDrop();}
+    function completeDrop(){if(dropFrames>=2 && sourceFrames>=2 && (!nativeDetach || nativeWindow.releaseProgress>=.999))finishDrop();}
     function resetDetach(){cancelDrag();detached=false;destination=null;}
     function placement(){return {monitor:panelScreen?.name || '',x:detached?floating.margins.left:anchor.rect.x,y:detached?floating.margins.top:anchor.rect.y};}
     Connections {
@@ -207,6 +207,7 @@ PopupWindow {
         Image {
             id:previewImage;anchors.fill:parent;z:1
             visible:surface.showingPreview;source:surface.showingPreview?host.dragImage.url:''
+            opacity:host.nativeDetach && host.dropping ? 1-nativeWindow.releaseProgress : 1
         }
     }
     DetachedWindow {id:nativeWindow;host:host}

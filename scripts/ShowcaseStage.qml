@@ -10,6 +10,7 @@ PanelWindow {
     property string introHeading: "Notifications with flair"
     property string introCaption: "Live updates. Telegram integration. Replies in place."
     property string caption: "Live updates. Telegram integration. Replies in place."
+    property bool coverWindows:false
     property int chapter: 0
     property int chapterCount: 3
     property real reveal: 1
@@ -21,20 +22,20 @@ PanelWindow {
     visible: controller.ready
     anchors { top: true; bottom: true; left: true; right: true }
     exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.layer: WlrLayer.Background
+    WlrLayershell.layer: coverWindows ? WlrLayer.Top : WlrLayer.Background
     WlrLayershell.namespace: "tjikOS-showcase"
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     mask: Region { width: 0; height: 0 }
     color: "#191724"
     function scene(data) {
         if (data.mode === "intro") { introHeading = data.heading || introHeading; introCaption = data.caption || introCaption; }
+        if (data.coverWindows !== undefined) coverWindows=data.coverWindows;
         if (data.mode !== undefined) mode = data.mode;
         if (data.heading !== undefined) heading = data.heading;
         if (data.caption !== undefined) caption = data.caption;
         if (data.chapterCount !== undefined) chapterCount = data.chapterCount;
         if (data.chapter !== undefined) chapter = data.chapter;
-        reveal = 0;
-        revealLater.restart();
+        if(data.animate !== false){reveal = 0;revealLater.restart();}
     }
     Timer { id: revealLater; interval: 50; onTriggered: stage.reveal = 1 }
     Behavior on reveal { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
