@@ -27,7 +27,7 @@ STORIES={
  'tjikup':('Tjikup','One command. A clear outcome.','Run the workflow, follow the work, finish with a clear result.',[
   ('One command for the whole workflow.','Ordered stages keep preparation, checks and packaging together.'),
   ('Watch tasks progress together.','Independent checks run in parallel, with a result for every task.  ·  3×'),
-  ('Finish with a clear result.','The real run succeeded: checks passed and the package was verified.')]),
+  ('Rich reporting. Clear results.','App icons, test counts and timings make every result easy to scan.')]),
  'greetjik':('Greetjik','Start every session with a quip','A tiny dose of pony-powered fun for your terminal.',[
   ('A little fun at the prompt.','Pipe a quip into Greetjik and let a pony deliver it.'),
   ('Pick your pony.','Choose a character to match today’s mood.'),
@@ -214,7 +214,9 @@ class Director(shared.Director):
         report=json.loads((self.directory/'workflow-result.json').read_text())
         if not report['success'] or any(row['returncode'] for row in report['checks']):raise ValueError('Workflow did not succeed')
         self.evidence('real successful workflow',report=report)
-        self.scene(3);time.sleep(2.6);self.screen('02-success')
+        self.scene(3);time.sleep(4);self.screen('02-rich-report')
+        if 'Rich reporting' not in self.text():raise ValueError('Rich report was not rendered')
+        shutil.copytree(self.directory/'showcase_report',self.review/'report-renderer')
         shutil.copy2(self.directory/'workflow-result.json',self.review/'workflow-result.json')
         shutil.copy2(self.directory/'workflow.json',self.review/'workflow.json')
         shutil.copy2(self.directory/'release-checks.tar.gz',self.review/'release-checks.tar.gz')
@@ -222,12 +224,28 @@ class Director(shared.Director):
 
     def run(self):
         time.sleep(2.2);self.frame('00-intro')
-        if self.tool!='runtjik':self.terminal(font=7.5 if self.tool=='greetjik' else 9 if self.tool=='mailtjik' else 11.5)
+        if self.tool!='runtjik':self.terminal(font=7.5 if self.tool=='greetjik' else 9 if self.tool=='mailtjik' else 10.5)
         getattr(self,self.tool)()
         self.stage_scene(mode='outro',chapter=3,coverWindows=True);time.sleep(1.2);self.frame('99-outro');time.sleep(2)
 
 
 def prepare_workflow(directory):
+    import base64,zlib
+    theme=Path(os.environ.get('SHOWCASE_THEME_SOURCE',str(Path.home()/'.local/share/chezmoi')))
+    package=directory/'showcase_report';package.mkdir()
+    (package/'__init__.py').write_text('')
+    for name in ['icons.py','kitty_icons.py','icon_catalog.py']:
+        shutil.copy2(theme/'scripts/fleet_update'/name,package/name)
+    sprites={};sources={}
+    for tool in ['notjik','bartjik','runtjik','tjikup','mailtjik','greetjik']:
+        source=theme/'home/dot_local/share/icons/rose-punk/scalable/apps'/(tool+'.svg')
+        pixels=subprocess.check_output(['magick','-background','none',str(source),'-resize','32x32!','-depth','8','rgba:-'])
+        if len(pixels)!=4096:raise ValueError('Invalid report icon size: '+tool)
+        sprites[tool.capitalize()]=base64.b64encode(zlib.compress(pixels,9)).decode()
+        sources[tool]={'source':str(source),'sha256':hashlib.sha256(source.read_bytes()).hexdigest()}
+    sprites['*']=sprites['Tjikup']
+    (package/'icons32.json').write_text(json.dumps({'size':32,'format':'zlib-base64-rgba','sprites':sprites}))
+    (package/'sources.json').write_text(json.dumps(sources,indent=2))
     shutil.copy2(shared.HERE/'showcase_workflow.py',directory/'checks.py')
     cfg={'version':1,'title':'TjikOS release checks','env':{'TJIKUP_NOTIFY':'0','SHOWCASE_ROOT':str(ROOT),'SHOWCASE_WORK':str(directory),'GOCACHE':str(directory/'go-cache')},'steps':[
       {'id':'checks','label':'Application checks','section':'Checking applications','verb':'CHECK','command':['python3','checks.py'],'output':'stream','summary':False,'timeout':240},

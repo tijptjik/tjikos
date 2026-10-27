@@ -436,9 +436,7 @@ def record(output):
                             (review/'failure-state.json').write_text(json.dumps(director.observe(),indent=2))
                             raise
                         recorder.send_signal(signal.SIGINT);recorder.wait(timeout=15);recorder=None
-                        music_duration=max(.1,director.music_ended-director.music_started)
-                        audio_filter=f"[1:a]atrim=duration={music_duration},asetpts=PTS-STARTPTS,volume=.65,adelay={round(director.music_started*1000)}:all=1,apad[a]"
-                        shared.checked(["ffmpeg","-v","error","-i",str(raw),"-i",snapshot["music"]["audio"],"-filter_complex",audio_filter,"-map","0:v","-map","[a]","-shortest","-vf","fps=60","-c:v","libx264","-preset","slow","-crf","17","-pix_fmt","yuv420p","-c:a","aac","-b:a","160k","-movflags","+faststart",str(output)])
+                        shared.checked(["ffmpeg","-v","error","-i",str(raw),"-an","-vf","fps=60","-c:v","libx264","-preset","slow","-crf","17","-pix_fmt","yuv420p","-movflags","+faststart",str(output)])
                         probe=json.loads(shared.checked(["ffprobe","-v","error","-show_streams","-show_format","-of","json",str(output)]))
                         stream=probe["streams"][0]
                         if (stream["width"],stream["height"],stream["r_frame_rate"])!=(1200,720,"60/1"):
@@ -446,7 +444,7 @@ def record(output):
                         receipt={"tool":"bartjik","dimensions":[1200,720],"fps":60,"dataMode":"real public market/music snapshots; isolated desktop controls",
                             "publicDataSha256":hashlib.sha256(PUBLIC_DATA.read_bytes()).hexdigest(),"fetchedAt":snapshot["fetchedAt"],"publicAssets":snapshot["assets"],
                             "input":"private Wayland compositor seat; no QtTest or comparison renderer", "scale":SCALE,
-                            "duration":probe["format"]["duration"],"sha256":hashlib.sha256(output.read_bytes()).hexdigest(),
+                            "audio":"none", "duration":probe["format"]["duration"],"sha256":hashlib.sha256(output.read_bytes()).hexdigest(),
                             "sourceCommit":shared.checked(["git","-C",str(ROOT),"rev-parse","HEAD"]),
                             "directorSha256":hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                             "stageSha256":hashlib.sha256((shared.HERE/"ShowcaseStage.qml").read_bytes()).hexdigest(),

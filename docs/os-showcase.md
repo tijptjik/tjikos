@@ -1,7 +1,7 @@
 # tjikOS showcase films
 
 The `/os` gallery at TYPE.hk uses a fixed **1200 × 720** frame. Capture the tools
-at that geometry, at **60 fps**, with H.264 / yuv420p / faststart MP4 output. Notjik stays silent; Bartjik includes the public music preview during its music chapter.
+at that geometry, at **60 fps**, with H.264 / yuv420p / faststart MP4 output. All showcase MP4s are silent and contain no audio track.
 Use the same `scripts/ShowcaseStage.qml` frame for all six films. Each app supplies
 its own native content and a small director for its real input paths.
 
@@ -100,7 +100,7 @@ python3 -B scripts/bartjik_showcase.py "$HOME/Videos/tjikos/os/bartjik-next.mp4"
   --data "$HOME/Videos/tjikos/os/bartjik-public-20261028/snapshot.json"
 ```
 
-The reviewed revision is `bartjik-v3.mp4`. It uses the same 1200 × 720, 60 fps
+The reviewed revision is `bartjik-v4.mp4`. It uses the same 1200 × 720, 60 fps
 Rose Punk stage, the opening poster **Panels at your fingertips**, and six chapters:
 real market charts and pointer tracking; music; workspace previews/switching;
 VPN/Tailscale; usage/audio/clocks/mode; and independent detachable charts.
@@ -119,7 +119,7 @@ fetch time and SHA-256 receipts. Source responses, artwork and audio remain
 outside Git beside `snapshot.json`. The recorder uses those exact chart points.
 Qt MediaPlayer plays the real preview muted in the private session; a 25 ms
 bass envelope derived from the same audio drives native album-art movement.
-FFmpeg includes that preview only during the music chapter. The live artwork
+FFmpeg exports video only; the public preview is used solely to drive the visual pulse. The live artwork
 meter reads playback streams with `--playback-only` and never queries microphones.
 World clocks use the actual current time.
 
