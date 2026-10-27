@@ -3,6 +3,8 @@ import copy
 import io
 import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -78,6 +80,28 @@ class TelegramTests(unittest.TestCase):
         self.bridge.handle({"@type": "updateNotificationGroup", "notification_group_id": 8, "chat_id": 123,
                             "added_notifications": [{"id": ident, "date": 1000, "type": {
                                 "@type": "notificationTypeNewMessage", "message": message or self.message, "show_preview": preview}}]})
+
+    @unittest.skipUnless(shutil.which("bun"), "Bun required for QML validation")
+    def test_group_and_private_chat_cards_pass_ui_validation_and_dismiss(self):
+        for chat_id in (123, -123, -1001234567890):
+            with self.subTest(chat_id=chat_id):
+                message = {**self.message, "chat_id": chat_id}
+                self.bridge.add(8, chat_id, {"id": 9, "date": 1000, "type": {
+                    "@type": "notificationTypeNewMessage", "message": message,
+                    "show_preview": True}})
+                card = self.cards[-1]
+                source = (ROOT / "qml/Logic.js").read_text()
+                subprocess.run(["bun", "-e", source + "\nvalidateNotice(" + json.dumps(card) + ");"], check=True)
+                self.assertEqual(card["data"]["chatId"], str(chat_id))
+                self.assertEqual(card["group"], str(chat_id))
+                key = telegram.message_key(chat_id, message["id"])
+                self.assertEqual(card["id"], key)
+                self.bridge.handle({"@type": "updateNotificationGroup", "notification_group_id": 8,
+                                    "chat_id": chat_id, "removed_notification_ids": [9]})
+                self.assertNotIn(key, self.bridge.entries)
+                self.assertEqual(self.closed[-1], telegram.notice_id(card["id"]))
+        self.assertEqual(telegram.message_key(123, 456), "123/456")
+        self.assertEqual(telegram.message_key(-123, 456), "chat-123/456")
 
     def test_delivery_diagnostics_separate_filtering_and_publish_failure(self):
         self.bridge.publish = lambda notice: (_ for _ in ()).throw(OSError("offline"))

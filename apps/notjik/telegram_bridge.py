@@ -71,7 +71,10 @@ def identifier(value):
 
 
 def message_key(chat, message):
-    return f"{identifier(chat)}/{identifier(message)}"
+    chat = identifier(chat)
+    # Named notification IDs must start with a letter or digit. TDLib uses
+    # negative chat IDs for groups/channels; preserve positive private-chat IDs.
+    return f"{'chat' if chat < 0 else ''}{chat}/{identifier(message)}"
 
 
 def notice_id(key):
