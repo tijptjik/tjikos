@@ -23,12 +23,12 @@ identity/captions, and the bottom 70 px for the shared footer. Native panels are
 sized and placed through temporary demo configuration. Keep panel contents,
 rendering, hit testing, and interaction handlers intact.
 
-Suggested feature stories for the remaining tools (not recorded yet):
+Feature stories (Notjik and Bartjik are recorded; the others are planned):
 
 | Tool | First beat | Second beat | Third beat |
 | --- | --- | --- | --- |
 | Notjik | Progress and status | Grouped history and inline reply | Voice playback/recording and urgency |
-| Bartjik | Expand a live status panel | Move between media/workspace controls | Detach and move a panel |
+| Bartjik | Explore native market charts | Media/lyrics, usage, audio, networking, clocks | Detach, move and retain a chart beside another panel |
 | Runtjik | Filter the app grid | Switch to a window | Find a shortcut |
 | Tjikup | Start a demo workflow | Follow parallel stages | Read the results |
 | Mailtjik | Search demo mail | Open and read a result | Browse archive status |
@@ -90,3 +90,35 @@ Copy the chosen film and a real captured poster into TYPE.hk's
 
 The Notjik poster uses the opening identity frame: **Notifications with flair**.
 Its feature line is **Live updates. Telegram integration. Replies in place.**
+
+
+## Record Bartjik
+
+```sh
+python3 -B scripts/bartjik_showcase.py --plan
+python3 -B scripts/bartjik_showcase.py "$HOME/Videos/tjikos/os/bartjik-v1.mp4"
+```
+
+Bartjik uses the same 1200 × 720, 60 fps Rose Punk stage and an opening-frame
+poster, with the identity **Panels at your fingertips**. It shows only Bartjik:
+market graphs, native panel transitions, lyrics, usage, an audio slider gesture,
+networking and clocks, then a detached chart alongside another attached chart.
+It ends with Bartjik's icon, name and app repository path.
+
+The native compositor runs at 1.2 scale so panels fill more of the film while
+keeping their native layout. The shared stage uses a 1200 × 720 reference canvas,
+so its typography and framing stay consistent at different compositor scales.
+The default Notjik scale stays at 1. Bartjik's temporary configuration uses one
+bar and demo providers; the temporary UI copy adds stage control, read-only
+geometry/state observations, control names and bounded drag diagnostics. Panel
+viewports are sized to fit below the captions. Native panel tracking, native
+pointer observation, gestures, handlers and detached-window implementation stay
+active. No QtTest events or comparison renderer is used.
+
+The recorder verifies 288 chart samples, the lyrics toggle, the audio slider's
+value, networking and clock data, native drop frames, actual compositor window
+geometry and the independence of the two charts. Detachment and the subsequent
+floating-window move are separate real pointer gestures. A native close control
+finishes the sequence. MP4, JSON evidence and `.review/` screenshots/logs use the
+same output convention and no-overwrite rules as Notjik. Captures remain outside
+the source repository.

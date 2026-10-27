@@ -38,6 +38,10 @@ PanelWindow {
     }
     Timer { id: revealLater; interval: 50; onTriggered: stage.reveal = 1 }
     Behavior on reveal { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
+    Item {
+        width: 1200; height: 720
+        scale: stage.width/1200
+        transformOrigin: Item.TopLeft
     Rectangle {
         x: 48; y: 44; width: 4; height: 22; radius: 2; color: "#ff53a6"
     }
@@ -114,5 +118,6 @@ PanelWindow {
         anchors { right: parent.right; rightMargin: 48; bottom: parent.bottom; bottomMargin: 22 }
         text: "ROSE PUNK  /  NATIVE TOOLS"; color: "#777185"
         font { family: "tijpset"; pixelSize: 12; letterSpacing: 1.1 }
+    }
     }
 }

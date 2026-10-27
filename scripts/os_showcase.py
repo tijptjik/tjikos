@@ -146,7 +146,7 @@ def prepare_notjik(app):
 
 
 @contextmanager
-def native_session(directory):
+def native_session(directory, scale=1):
     """A nested compositor, private runtime, configuration, state, and D-Bus."""
     runtime = directory / "r"
     runtime.mkdir(mode=0o700)
@@ -158,9 +158,10 @@ def native_session(directory):
     if styles.exists():
         shutil.copytree(styles, directory / "data/quickshell/styles")
     config = directory / "hyprland.lua"
-    config.write_text('hl.monitor({output="",mode="1200x720@60",position="0x0",scale=1})\n'
+    compositor_config = ('hl.monitor({output="",mode="1200x720@60",position="0x0",scale=1})\n'
                       'hl.monitor({output="HEADLESS-1",mode="1200x720@60",position="10000x10000",scale=1})\n'
                       'hl.config({general={border_size=0},decoration={rounding=0,shadow={enabled=false}},misc={disable_watchdog_warning=true,disable_hyprland_logo=true,disable_splash_rendering=true}})\n')
+    config.write_text(compositor_config.replace("scale=1}", "scale="+str(scale)+"}"))
     env = {**os.environ, "XDG_RUNTIME_DIR": str(runtime), "XDG_CONFIG_HOME": str(config_home),
            "XDG_CACHE_HOME": str(directory / "cache"), "XDG_DATA_HOME": str(directory / "data"),
            "XDG_STATE_HOME": str(directory / "state"), "QT_LOGGING_RULES": "qt.qpa.wayland.textinput=false"}
@@ -180,7 +181,7 @@ def native_session(directory):
             before = {m["name"] for m in json.loads(checked(["hyprctl", "-j", "monitors"], env=env))}
             checked(["hyprctl", "output", "create", "headless"], env=env)
             monitor = wait_for(lambda: next((m["name"] for m in json.loads(checked(["hyprctl", "-j", "monitors"], env=env)) if m["name"] not in before), None))
-            result = checked(["hyprctl", "eval", "hl.monitor({output=" + json.dumps(monitor) + ',mode="1200x720@60",position="10000x10000",scale=1})'], env=env)
+            result = checked(["hyprctl", "eval", "hl.monitor({output=" + json.dumps(monitor) + ',mode="1200x720@60",position="10000x10000",scale='+str(scale)+'})'], env=env)
             if result != "ok":
                 raise ValueError(result)
             # Disable the nested window after the headless output is ready.
