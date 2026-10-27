@@ -404,7 +404,8 @@ def main():
                     for transport in ("native", "bridge", "unmatched"):
                         ipc(root, {"op":"dismiss", "id":"all"})
                         wait_for(lambda: not ipc(root, {"op":"metrics"})["metrics"]["cards"])
-                        notice = {"title":"StarProwlarr", "app":"Telegram Desktop", "body":BODY, "timeout":0}
+                        notice = {"title":"StarProwlarr", "app":"Telegram Desktop", "body":BODY, "timeout":0,
+                                  "image":(ROOT / "examples/demo-artwork.png").as_uri()}
                         if transport == "bridge":
                             notice.update(app="Telegram via Notjik", type="telegram", data={"kind":"text", "source":"", "status":"", "chatId":"123", "messageId":"456", "parts":[{"kind":"text", "text":BODY}], "demo":True})
                         elif transport == "unmatched":
@@ -415,6 +416,9 @@ def main():
                         assert metric["structuredReady"] == (transport != "unmatched"), metric
                         if transport != "unmatched":
                             assert metric["presentation"]["data"]["codec"] == "x264", metric
+                            rail = metric["footer"]
+                            assert not rail["avatarCover"], metric
+                            assert abs(rail["coverHeight"] + 2 * rail["border"] - rail["cardHeight"]) < 1, metric
                         if transport == "bridge":
                             ipc(root, {"op":"revealControls"})
                             time.sleep(.3)

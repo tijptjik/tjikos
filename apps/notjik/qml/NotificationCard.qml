@@ -65,7 +65,8 @@ Rectangle {
     // policy withholds the profile photo, initials occupy the same rail instead
     // of collapsing the card into the ordinary small-icon layout.
     readonly property bool telegramRail: richTelegram || !!cachedAvatar
-    readonly property bool avatarCover: telegram && !telegramRail && imageCover
+    // Structured cards use a full-height artwork rail, including Desktop previews.
+    readonly property bool avatarCover: telegram && !telegramRail && imageCover && !structuredReady
     readonly property bool coverArtwork: telegramRail || imageCover || (!richTelegram && (resolvedArtwork === fallbackArtwork
         || resolvedArtwork === Qt.resolvedUrl("icons/wifi-cover.png").toString()))
     readonly property real coverWidth: 80
