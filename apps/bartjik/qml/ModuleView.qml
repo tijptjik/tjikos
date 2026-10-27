@@ -59,7 +59,7 @@ Item {
                 required property string key
                 required property int index
                 readonly property var row: moduleView.entries.find(i=>i.id===key) || {id:key,type:'text',text:{value:''}}
-                readonly property bool media: moduleView.moduleConfig.provider==='playerctl'
+                readonly property bool media: moduleView.moduleConfig.provider==='playerctl' && !row.idle
                 readonly property bool separator: moduleView.spacedWorkspaces && index>0
                 readonly property bool chip: moduleView.moduleConfig.provider==='workspaces' && moduleView.moduleConfig.appearance==='chips'
                 readonly property bool compactWorkspace: chip || moduleView.ringWorkspaces

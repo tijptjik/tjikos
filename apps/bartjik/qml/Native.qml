@@ -21,6 +21,10 @@ QtObject {
         onExited: (code,status) => {native.attention={};if(!native.demo){console.warn('tray attention reader exited: '+code);native.attentionRetry.restart();}}
     }
     property Timer attentionRetry: Timer {interval:5000;onTriggered:native.attentionReader.running=!native.demo}
+    property Process spotifyStart: Process {
+        command: ['/usr/bin/python3','-B',Qt.resolvedUrl('media_play.py').toString().replace('file://','')]
+        stderr: StdioCollector {onStreamFinished:if(text.trim())native.navigationError=text.trim();}
+    }
     property string navigationError: ''
     property var navigationQueue: []
     property var navigationRequest: ({})
@@ -88,9 +92,16 @@ QtObject {
         if(module.provider === 'playerctl') {
             const allowed=players.filter(p => !(module.players || []).length || module.players.some(name => p.identity.toLowerCase()===name.toLowerCase() || p.desktopEntry.toLowerCase()===name.toLowerCase() || p.dbusName.toLowerCase().indexOf('.'+name.toLowerCase())>=0));
             const p=allowed.find(p => p.isPlaying) || allowed[0];
-            if(!p)return [];
+            if(!p) {
+                if(!(module.players || []).some(name=>name.toLowerCase()==='spotify'))return [];
+                const idle=base('spotify-idle','icon','play_arrow','','Play Spotify',{leftClick:'player.toggle',middleClick:'player.toggle'});
+                idle.icon.actions={leftClick:'player.toggle'};idle.idle=true;
+                return [idle];
+            }
             const row=base(p.dbusName,'icon_text',p.isPlaying?'pause':'play_arrow',p.trackTitle || p.identity,'',
                 {middleClick:'player.toggle',scrollUp:'player.previous',scrollDown:'player.next'});
+            row.idle=!p.isPlaying;
+            if(row.idle)row.type='icon';
             row.icon.actions={leftClick:'player.toggle'};
             row.artist={value:p.trackArtist || p.trackAlbumArtist || '',style:{},actions:{leftClick:'player.artist'}};
             row.track={value:p.trackTitle || p.identity,style:{},actions:{leftClick:'player.playlist'}};
@@ -123,6 +134,10 @@ QtObject {
             return true;
         }
         if(action.startsWith('player.')) {
+            if(id==='spotify-idle' && action==='player.toggle') {
+                if(!spotifyStart.running){navigationError='';spotifyStart.running=true;}
+                return true;
+            }
             const p=players.find(p=>p.dbusName===id);if(!p)return false;
             if(action==='player.toggle' && p.canTogglePlaying)p.togglePlaying();
             else if(action==='player.next' && p.canGoNext)p.next();
