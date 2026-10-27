@@ -109,3 +109,23 @@ class RuntimeTests(unittest.TestCase):
                 Path.cwd(),
             )
         self.assertEqual(output.getvalue(), "1 103\n")
+
+
+class OutcomeStyleTests(unittest.TestCase):
+    def test_no_change_display_and_report_agree_before_truncation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report"
+            with patch.dict(os.environ, {"TJIKUP_COLOR": "0", "TJIKUP_COLUMNS": "24",
+                                         "TJIKUP_REPORT_FILE": str(report)}), \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                runtime.status_msg("INSTALL", "✓", "Example", "no changes")
+            self.assertTrue(output.getvalue().startswith("SKIP    ✓ "))
+            self.assertEqual(report.read_text(), "SKIP\t✓\tExample\tno changes\n")
+
+    def test_warning_precedes_skip_and_truncated_subtype_stays_dim(self):
+        with patch.dict(os.environ, {"TJIKUP_COLOR": "1", "TJIKUP_COLUMNS": "24"}):
+            row = runtime.format_status("SKIP", "!", "Assets (long subtype)")
+        self.assertIn("\x1b[33;1mSKIP", row)
+        self.assertIn("\x1b[33m!", row)
+        self.assertIn("\x1b[97mAssets\x1b[0m \x1b[90m(", row)
+        self.assertIn("…", row)

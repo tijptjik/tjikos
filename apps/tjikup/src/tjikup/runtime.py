@@ -186,7 +186,14 @@ def use_color():
     return os.environ.get("TJIKUP_COLOR", "1" if sys.stdout.isatty() else "0") == "1"
 
 
+def outcome_verb(verb, icon, note):
+    if icon == "✓" and re.search(r"(?:^|;\s*)no (?:changes|updates)$", str(note or "").strip(), re.IGNORECASE):
+        return "SKIP"
+    return verb
+
+
 def record(verb, icon, subject, note=""):
+    verb = outcome_verb(verb, icon, note)
     filename = os.environ.get("TJIKUP_REPORT_FILE")
     if filename:
         try:
@@ -201,6 +208,7 @@ def record(verb, icon, subject, note=""):
 
 
 def format_status(verb, icon, subject, note=None):
+    verb = outcome_verb(verb, icon, note)
     prefix = f"{verb:<7} {icon} "
     available = max(1, terminal_columns() - 1 - display_width(prefix))
     if note:
@@ -210,16 +218,23 @@ def format_status(verb, icon, subject, note=None):
     else:
         subject = shorten_status(subject, available)
     if use_color():
-        color = "90" if verb == "SKIP" else "31;1" if icon in {"✗", "X"} else "36;1"
-        icon_color = "32" if icon == "✓" else "33" if icon == "!" else color
-        prefix = f"\033[{color}m{verb:<7}\033[0m \033[{icon_color}m{icon}\033[0m "
-        # Match the Fish presenter: qualifiers and right-hand metadata recede.
-        # Apply styling after measuring so ANSI escapes never affect alignment.
-        subject = re.sub(
-            r"(\[[^]]+\]|\([^)]*\))$",
-            lambda match: f"\033[90m{match[0]}\033[0m",
-            subject,
-        )
+        if icon in {"✗", "X"} or verb in {"FAILED", "ERROR"}:
+            color = "31"
+        elif icon == "!" or verb == "WARN":
+            color = "33"
+        elif verb == "SKIP" or icon == "-":
+            color = "90"
+        elif icon == "✓":
+            color = "32"
+        else:
+            color = "36"
+        prefix = f"\033[{color};1m{verb:<7}\033[0m \033[{color}m{icon}\033[0m "
+        # Keep the service white and the optional subtype dim, even when the
+        # terminal is too narrow to retain the subtype's closing delimiter.
+        parts = re.split(r" (?=[\[(])", subject, maxsplit=1)
+        subject = f"\033[97m{parts[0]}\033[0m"
+        if len(parts) == 2:
+            subject += f" \033[90m{parts[1]}\033[0m"
         if note:
             note = f"\033[90m{note}\033[0m"
     content = subject + (" " * padding + note if note else "")
