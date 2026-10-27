@@ -134,3 +134,9 @@ bash scripts/install.sh bartjik
 
 Installation does not start a desktop session or replace Waybar/notjik. See the app
 guide for synthetic previews and deliberate switch-over/rollback.
+
+## pony-rs
+
+Native Rust pony artwork renderer with the full ponysay catalogue and piped
+quotes. Run `fortune | pony-rs`. See [pony-rs](apps/pony-rs/README.md) for building,
+installation, coverage, and artwork licensing.

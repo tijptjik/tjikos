@@ -1,0 +1,218 @@
+{
+  "timestamp": "2026-10-27T07:04:19.259485+00:00",
+  "platform": "Linux-7.2.11-300.fc45.x86_64-x86_64-with-glibc2.44",
+  "machine": "x86_64",
+  "pony": "twilight",
+  "quote": "A fresh quote, a colourful pony, and a shell ready to work.\n",
+  "docker_image": "mpepping/ponysay:latest",
+  "docker_image_id": "sha256:9ec84c97aa50daa5d85b97f21ef168a8d5c89cd3e87db24c66ed86540b8140b1",
+  "docker_repo_digests": [
+    "mpepping/ponysay@sha256:d407658bef64bef9bec55ed79cb5bd70c4a6d2ed14e3a4f873a79b4e24663cd2"
+  ],
+  "rust_version": "pony-rs 0.1.0",
+  "commands": {
+    "docker": [
+      "xargs",
+      "-0",
+      "docker",
+      "run",
+      "--rm",
+      "--pull=never",
+      "mpepping/ponysay:latest",
+      "-f",
+      "twilight"
+    ],
+    "rust": [
+      "/home/io/.local/bin/pony-rs",
+      "-f",
+      "twilight"
+    ]
+  },
+  "warmups_per_implementation": 2,
+  "results": [
+    {
+      "implementation": "docker",
+      "iteration": 0,
+      "warmup": true,
+      "ms": 604.982579
+    },
+    {
+      "implementation": "rust",
+      "iteration": 0,
+      "warmup": true,
+      "ms": 5.996095
+    },
+    {
+      "implementation": "rust",
+      "iteration": 1,
+      "warmup": true,
+      "ms": 2.139943
+    },
+    {
+      "implementation": "docker",
+      "iteration": 1,
+      "warmup": true,
+      "ms": 503.455356
+    },
+    {
+      "implementation": "docker",
+      "iteration": 2,
+      "warmup": false,
+      "ms": 484.951897
+    },
+    {
+      "implementation": "rust",
+      "iteration": 2,
+      "warmup": false,
+      "ms": 2.054883
+    },
+    {
+      "implementation": "rust",
+      "iteration": 3,
+      "warmup": false,
+      "ms": 1.479148
+    },
+    {
+      "implementation": "docker",
+      "iteration": 3,
+      "warmup": false,
+      "ms": 451.765569
+    },
+    {
+      "implementation": "docker",
+      "iteration": 4,
+      "warmup": false,
+      "ms": 503.306177
+    },
+    {
+      "implementation": "rust",
+      "iteration": 4,
+      "warmup": false,
+      "ms": 1.417093
+    },
+    {
+      "implementation": "rust",
+      "iteration": 5,
+      "warmup": false,
+      "ms": 1.260585
+    },
+    {
+      "implementation": "docker",
+      "iteration": 5,
+      "warmup": false,
+      "ms": 495.60724
+    },
+    {
+      "implementation": "docker",
+      "iteration": 6,
+      "warmup": false,
+      "ms": 463.085825
+    },
+    {
+      "implementation": "rust",
+      "iteration": 6,
+      "warmup": false,
+      "ms": 1.210914
+    },
+    {
+      "implementation": "rust",
+      "iteration": 7,
+      "warmup": false,
+      "ms": 1.27209
+    },
+    {
+      "implementation": "docker",
+      "iteration": 7,
+      "warmup": false,
+      "ms": 459.247496
+    },
+    {
+      "implementation": "docker",
+      "iteration": 8,
+      "warmup": false,
+      "ms": 484.653588
+    },
+    {
+      "implementation": "rust",
+      "iteration": 8,
+      "warmup": false,
+      "ms": 1.16928
+    },
+    {
+      "implementation": "rust",
+      "iteration": 9,
+      "warmup": false,
+      "ms": 1.052874
+    },
+    {
+      "implementation": "docker",
+      "iteration": 9,
+      "warmup": false,
+      "ms": 454.74483
+    },
+    {
+      "implementation": "docker",
+      "iteration": 10,
+      "warmup": false,
+      "ms": 499.385362
+    },
+    {
+      "implementation": "rust",
+      "iteration": 10,
+      "warmup": false,
+      "ms": 1.462415
+    },
+    {
+      "implementation": "rust",
+      "iteration": 11,
+      "warmup": false,
+      "ms": 1.352356
+    },
+    {
+      "implementation": "docker",
+      "iteration": 11,
+      "warmup": false,
+      "ms": 473.753609
+    },
+    {
+      "implementation": "docker",
+      "iteration": 12,
+      "warmup": false,
+      "ms": 496.276871
+    },
+    {
+      "implementation": "rust",
+      "iteration": 12,
+      "warmup": false,
+      "ms": 1.213624
+    },
+    {
+      "implementation": "rust",
+      "iteration": 13,
+      "warmup": false,
+      "ms": 1.076814
+    },
+    {
+      "implementation": "docker",
+      "iteration": 13,
+      "warmup": false,
+      "ms": 461.154675
+    }
+  ],
+  "summary": {
+    "docker": {
+      "samples": 12,
+      "median_ms": 479.2035985,
+      "mean_ms": 477.3277615833333,
+      "min_ms": 451.765569,
+      "max_ms": 503.306177
+    },
+    "rust": {
+      "samples": 12,
+      "median_ms": 1.2663375000000001,
+      "mean_ms": 1.335173,
+      "min_ms": 1.052874,
+      "max_ms": 2.054883
+    }
+  }
+}

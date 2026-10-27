@@ -1,0 +1,170 @@
+# pony-rs
+
+Pony artwork and piped quotes, rendered by a small native Rust executable.
+`pony-rs` keeps the complete upstream ponysay artwork catalogue while removing
+Docker and Python from the shell greeting.
+
+```sh
+fortune | pony-rs
+```
+
+Each invocation selects a random pony. Running this pipeline from Fish's
+`fish_greeting` produces a fresh fortune and pony for each interactive terminal.
+There is no background service or cached quote to maintain.
+
+## Speed compared with Docker
+
+Measured on the same Linux x86-64 machine on 2026-10-27, with the same `twilight`
+pony and the same piped quote:
+
+| Quote-to-output pipeline | Median | Mean | Range |
+| --- | ---: | ---: | ---: |
+| Old `xargs -0 docker run --rm …` pipeline | 479.20 ms | 477.33 ms | 451.77–503.31 ms |
+| Native `pony-rs` | **1.27 ms** | **1.34 ms** | **1.05–2.05 ms** |
+
+The native pipeline was **about 378x faster by median elapsed time**, removing
+approximately **478 ms per greeting** in this comparison. This ratio describes
+the renderer pipeline, not the whole terminal startup.
+
+The benchmark ran two warm-ups and 12 measured invocations per implementation,
+alternating their order. Docker was already running, its image was already
+present, and `--pull=never` excluded downloads. Each Docker sample still started
+and removed a fresh container, as the old greeting did. Both commands received
+the same text on stdin; `xargs -0` passed it as an argument to containerized
+ponysay. Output was captured through completion and checked for the quote and
+artwork. Fortune generation, shell initialization, and screen presentation are
+outside this timer. These are warm-cache measurements on one machine.
+
+A separate Kitty first-prompt benchmark with the fresh `fortune | pony-rs`
+greeting enabled measured **310 ms median**, with **288–331 ms** across 12
+launches after two warm-ups. Earlier terminal results included other Fish
+startup fixes, so they should not be used to attribute the entire improvement
+to Rust alone.
+
+### Reproduce the comparison
+
+Requires Python 3 for the benchmark runner and an already-running Docker daemon
+with the old image cached. Docker and Python are not runtime requirements for
+pony-rs itself.
+
+```sh
+# From apps/pony-rs, after building:
+python3 scripts/benchmark.py \
+  --binary ./dist/pony-rs \
+  --runs 12 --warmups 2 \
+  --output /tmp/pony-benchmark.json
+```
+
+The runner deliberately does not pull images. The [recorded results](docs/benchmarks/2026-10-27-docker-vs-rust.json)
+include every sample, command arguments, platform, binary version, and Docker
+image identity. The [first-prompt results](docs/benchmarks/2026-10-27-kitty-startup.json)
+record the separate Kitty measurement.
+
+## Usage
+
+```sh
+fortune | pony-rs                             # new quote and random regular pony
+printf 'Hello, world!\n' | pony-rs -f twilight
+pony-rs -f rainbowdash 'Stay awesome'
+pony-rs --list                               # 474 regular entries
+pony-rs --all --list                         # all 577 entries
+pony-rs --extra 'Hello from the extras'       # random extra pony
+pony-rs --extra -f applejack 'Extra variant'  # resolve a shared name explicitly
+pony-rs --tty -f twilight 'TTY artwork'
+fortune | pony-rs --width 100
+```
+
+| Option | Behavior |
+| --- | --- |
+| `-f`, `--pony NAME` | Choose a pony; `.pony` suffix is optional. |
+| `-l`, `--list` | List pony names in the selected collection. |
+| `-a`, `--all` | Include extras in random selection and listing. |
+| `-A`, `--extra` | Select only extras, including when resolving shared names. |
+| `--tty` | Use the corresponding upstream Linux TTY artwork. |
+| `-W`, `--width N` | Wrap quote text to the selected terminal width, 12–4096 columns. |
+| `-V`, `--version` | Print the application version. |
+| `-h`, `--help` | Show usage. |
+
+With no message arguments, pony-rs reads UTF-8 text from stdin. With arguments,
+it joins them into the message; use `--` before text beginning with a dash.
+Running without text in an interactive terminal prints usage guidance instead
+of waiting for input. Unknown pony names and invalid options return an error.
+
+`TERM=linux` automatically selects TTY artwork. Width defaults to the actual
+terminal dimensions, then `COLUMNS`, then 80. Multiline quotes and Unicode
+column widths are supported. Terminal control codes are removed from quoted
+text; artwork retains its ANSI colours.
+
+## Coverage and scope
+
+The binary embeds **474 regular ponies and 103 extras**, each with a TTY variant:
+**1,154 artwork entries**, including upstream aliases and metadata. It does not
+need a runtime artwork directory or network connection.
+
+The supported scope is pony selection, artwork rendering, and piped or argument
+text. Custom balloon themes, image conversion, palette/KMS administration, and
+the built-in episode-quote database are omitted. The shell's QOTD functionality
+comes from `fortune`, invoked afresh for every terminal.
+
+All 1,154 entries render in the catalogue tests. Differential tests match 1,152
+upstream layouts. Upstream's `ttyponies/twilightrage` raises an exception, and
+`extrattyponies/velvetremedy` corrupts escape sequences around its embedded
+balloon. Dedicated Rust tests verify the corrected TTY layouts against their
+regular-artwork counterparts rather than reproducing those bugs.
+
+## Build and install
+
+Building requires Rust and Cargo. Runtime dependencies are supplied by the
+compiled binary and system libraries; the two locked Rust crates are `libc`
+and `unicode-width`. Install `fortune-mod` separately for the greeting pipeline.
+
+From `apps/pony-rs`:
+
+```sh
+bash scripts/build.sh
+bash scripts/install.sh
+```
+
+Or through tooltjik, using the pinned **Bun 1.4.4**:
+
+```sh
+bun install --frozen-lockfile
+bun run build --filter=@tooltjik/pony-rs
+bash scripts/install.sh pony-rs
+```
+
+Installation places the executable in `~/.local/bin/pony-rs` and license notices
+in `~/.local/share/licenses/pony-rs`. Add `~/.local/bin` to PATH. The direct Cargo
+build and install scripts do not require Bun.
+
+The Chezmoi setup provisions Cargo and fortune-mod on client hosts, builds the
+app from tooltjik, and restores `fortune | pony-rs` in Fish's interactive greeting.
+It skips the greeting if either command is missing and does not invoke Docker.
+The `pony` Fish helper also displays a fresh greeting on demand.
+
+## Development checks
+
+```sh
+# From apps/pony-rs:
+cargo test --locked
+cargo clippy --locked --all-targets -- -D warnings
+cargo fmt --check
+
+# From the tooltjik root:
+bun run check --filter=@tooltjik/pony-rs
+
+# Optional comparison with a checkout of the pinned upstream:
+python3 scripts/check-parity.py /path/to/erkin-ponysay
+```
+
+Tests cover catalogue completeness, stdin, selection, duplicate names, Unicode,
+ANSI colour restoration, multiline wrapping, and embedded speech bubbles.
+
+## Artwork provenance and licensing
+
+Artwork is pinned to erkin/ponysay commit
+`00b8c84d2fff682bc1a02221d92e798cc60d58ea`. See
+[assets/UPSTREAM.md](assets/UPSTREAM.md) for the source archive, checksum, update
+procedure, and attribution. Program code is GPL-3.0-or-later. Artwork retains
+its individual upstream terms, including restrictions on commercial
+redistribution for some images; embedding it does not change those terms.
