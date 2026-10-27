@@ -45,6 +45,7 @@ class ShowcaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             app=Path(directory)
             shutil.copytree(source,app/"qml")
+            shutil.copytree(ROOT/"apps/bartjik/bartjik_core",app/"bartjik_core")
             film.prepare(app)
             text="\n".join(p.read_text() for p in (app/"qml").glob("**/*.qml"))
             self.assertNotIn("import QtTest",text)
@@ -57,7 +58,8 @@ class ShowcaseTests(unittest.TestCase):
             self.assertIn("root.pointer=msg.pointer;root.pointerUpdated=Date.now();",shell)
             path=app/"config.json";path.write_text(json.dumps(film.configuration("HEADLESS-1")))
             loaded=config.load(path)
-            self.assertEqual(len(loaded["bars"]),1)
+            self.assertEqual(len(loaded["bars"]),2)
+            self.assertEqual([b["id"] for b in loaded["bars"]],["workspace-bar","status-bar"])
             self.assertEqual(loaded["bars"][0]["monitors"],["HEADLESS-1"])
         self.assertEqual(before,{p.relative_to(source):p.read_bytes() for p in source.glob("**/*.qml")})
 

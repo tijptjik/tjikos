@@ -1,15 +1,21 @@
 """Read-only public market/music capture snapshot; local-only connectivity state."""
 import json,os
+import datetime
 from pathlib import Path
 from .model import item
 from .icons import icon
-from . import connectivity
+from . import connectivity,details
 DATA=json.loads(Path(os.environ['BARTJIK_PUBLIC_DATA']).read_text())
 COUNTRY='jp'
 TAILNET=True
 
 
 def items(provider,options):
+    if provider=='workspaces':
+        return [dict(item(str(n),str(n),None,actions={'leftClick':'workspace.activate'}),workspace=n) for n in (1,2,3,9)]
+    if provider=='datetime':
+        row=item('clock',datetime.datetime.now().strftime('%H:%M'),None)
+        row['panel']=details.world_clock();return [row]
     if provider=='crypto':
         result=[]
         for pair,value in DATA['markets'].items():

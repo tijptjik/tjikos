@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Shapes
 import Quickshell
@@ -136,26 +137,31 @@ DetachablePopup {
                         readonly property var source: popup.sourceList.find(t=>t.address===key)
                         readonly property var clientData: source?.lastIpcObject || {}
                         readonly property var rect: Logic.previewRect(clientData, popup.controller.demo ? {x:0,y:0} : popup.monitor || {x:0,y:0},popup.targetScreen?.width || 1,popup.targetScreen?.height || 1,desktop.width,desktop.height,popup.pixelScale)
-                        readonly property bool captured: stream.hasContent
+                        readonly property bool captured: streamLoader.item?.hasContent || false
                         x:rect.x;y:rect.y;width:rect.width;height:rect.height
                         color:popup.controller.demo?(key==='demo-editor'?'#2b293c':'#17151f'):popup.theme.surface
                         border.width:0;clip:true
-                        ScreencopyView {
-                            id:stream;anchors.fill:parent
-                            captureSource:popup.opened && !popup.controller.demo ? thumb.source?.wayland || null : null
-                            live:false;paintCursor:false
-                            // Preserve source detail in the offscreen texture, then use
-                            // mipmaps for minification instead of undersampling fine lines.
-                            smooth:true
-                            layer.enabled:hasContent
-                            layer.textureSize:Qt.size(Math.max(1,sourceSize.width),Math.max(1,sourceSize.height))
-                            layer.mipmap:true
-                            layer.smooth:true
+                        Loader {
+                            id:streamLoader;anchors.fill:parent
+                            // Create after reparenting into the panel's native scene graph.
+                            active:popup.opened && !!parent.Window.window
+                            sourceComponent:ScreencopyView {
+                                id:stream;anchors.fill:parent
+                                captureSource:popup.opened && !popup.controller.demo ? thumb.source?.wayland || null : null
+                                live:false;paintCursor:false
+                                // Preserve source detail in the offscreen texture, then use
+                                // mipmaps for minification instead of undersampling fine lines.
+                                smooth:true
+                                layer.enabled:hasContent
+                                layer.textureSize:Qt.size(Math.max(1,sourceSize.width),Math.max(1,sourceSize.height))
+                                layer.mipmap:true
+                                layer.smooth:true
+                                Timer {interval:popup.options.refreshInterval ?? 50;running:popup.opened && !!stream.captureSource && stream.hasContent;repeat:true;onTriggered:stream.captureFrame()}
+                            }
                         }
-                        Timer {interval:popup.options.refreshInterval ?? 50;running:popup.opened && !!stream.captureSource && stream.hasContent;repeat:true;onTriggered:stream.captureFrame()}
                         Text {
                             anchors.fill:parent;anchors.margins:6
-                            visible:popup.controller.demo || !stream.hasContent
+                            visible:popup.controller.demo || !thumb.captured
                             text:popup.controller.demo ? thumb.clientData.class+'\n\n'+(thumb.key==='demo-editor'?'function hello() {\n  return "preview";\n}':'$ build\n✓ complete') : thumb.clientData.class || 'Preview unavailable'
                             textFormat:Text.PlainText;color:popup.theme.text;font.family:'monospace';font.pixelSize:Math.max(7,desktop.width/40);wrapMode:Text.Wrap;elide:Text.ElideRight
                         }

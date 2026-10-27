@@ -1,7 +1,7 @@
 # tjikOS showcase films
 
 The `/os` gallery at TYPE.hk uses a fixed **1200 × 720** frame. Capture the tools
-at that geometry, at **60 fps**, with silent H.264 / yuv420p / faststart MP4 output.
+at that geometry, at **60 fps**, with H.264 / yuv420p / faststart MP4 output. Notjik stays silent; Bartjik includes the public music preview during its music chapter.
 Use the same `scripts/ShowcaseStage.qml` frame for all six films. Each app supplies
 its own native content and a small director for its real input paths.
 
@@ -28,7 +28,7 @@ Feature stories (Notjik and Bartjik are recorded; the others are planned):
 | Tool | First beat | Second beat | Third beat |
 | --- | --- | --- | --- |
 | Notjik | Progress and status | Grouped history and inline reply | Voice playback/recording and urgency |
-| Bartjik | Explore native market charts | Media/lyrics, usage, audio, networking, clocks | Detach, move and retain a chart beside another panel |
+| Bartjik | Public rates, pointer tracking, bass-driven real artwork | Real workspace previews; VPN, Tailscale, usage, audio, clocks and mode | Exponential detach release; move and retain a chart beside another panel |
 | Runtjik | Filter the app grid | Switch to a window | Find a shortcut |
 | Tjikup | Start a demo workflow | Follow parallel stages | Read the results |
 | Mailtjik | Search demo mail | Open and read a result | Browse archive status |
@@ -86,7 +86,7 @@ same card centre before/after opening and resetting controls before completing
 the file.
 Inspect the recorded transitions as well as the still frames before publishing.
 Copy the chosen film and a real captured poster into TYPE.hk's
-`public/os-previews/notjik-showcase.{mp4,webp}`; keep its existing 1200/720 layout.
+`.local/site-assets/os-previews/notjik-showcase.{mp4,webp}`; keep its existing 1200/720 layout.
 
 The Notjik poster uses the opening identity frame: **Notifications with flair**.
 Its feature line is **Live updates. Telegram integration. Replies in place.**
@@ -96,29 +96,46 @@ Its feature line is **Live updates. Telegram integration. Replies in place.**
 
 ```sh
 python3 -B scripts/bartjik_showcase.py --plan
-python3 -B scripts/bartjik_showcase.py "$HOME/Videos/tjikos/os/bartjik-v1.mp4"
+python3 -B scripts/bartjik_showcase.py "$HOME/Videos/tjikos/os/bartjik-next.mp4" \
+  --data "$HOME/Videos/tjikos/os/bartjik-public-20261028/snapshot.json"
 ```
 
-Bartjik uses the same 1200 × 720, 60 fps Rose Punk stage and an opening-frame
-poster, with the identity **Panels at your fingertips**. It shows only Bartjik:
-market graphs, native panel transitions, lyrics, usage, an audio slider gesture,
-networking and clocks, then a detached chart alongside another attached chart.
-It ends with Bartjik's icon, name and app repository path.
+The reviewed revision is `bartjik-v3.mp4`. It uses the same 1200 × 720, 60 fps
+Rose Punk stage, the opening poster **Panels at your fingertips**, and six chapters:
+real market charts and pointer tracking; music; workspace previews/switching;
+VPN/Tailscale; usage/audio/clocks/mode; and independent detachable charts.
+Each chapter has an explanatory heading and caption. The outro shows Bartjik's
+icon, name and app repository path. There is no comparison renderer.
 
-The native compositor runs at 1.2 scale so panels fill more of the film while
-keeping their native layout. The shared stage uses a 1200 × 720 reference canvas,
-so its typography and framing stay consistent at different compositor scales.
-The default Notjik scale stays at 1. Bartjik's temporary configuration uses one
-bar and demo providers; the temporary UI copy adds stage control, read-only
-geometry/state observations, control names and bounded drag diagnostics. Panel
-viewports are sized to fit below the captions. Native panel tracking, native
-pointer observation, gestures, handlers and detached-window implementation stay
-active. No QtTest events or comparison renderer is used.
+The main bar holds markets, music and workspaces. A second bar holds system and
+connection controls. Both appear together first; the lower bar receives its own
+section so its panels and buttons have clear space. The native compositor uses
+1.2 scale; stage typography stays fixed to its 1200 × 720 reference canvas.
 
-The recorder verifies 288 chart samples, the lyrics toggle, the audio slider's
-value, networking and clock data, native drop frames, actual compositor window
-geometry and the independence of the two charts. Detachment and the subsequent
-floating-window move are separate real pointer gestures. A native close control
-finishes the sequence. MP4, JSON evidence and `.review/` screenshots/logs use the
-same output convention and no-overwrite rules as Notjik. Captures remain outside
-the source repository.
+The public snapshot contains fetched CoinGecko BTC/USD, SOL/USD and AR/USD
+quotes, changes and 289 actual 24-hour points per coin. It also contains Karla
+Blum's **Acid Rain** cover and public iTunes preview, with original URLs,
+fetch time and SHA-256 receipts. Source responses, artwork and audio remain
+outside Git beside `snapshot.json`. The recorder uses those exact chart points.
+Qt MediaPlayer plays the real preview muted in the private session; a 25 ms
+bass envelope derived from the same audio drives native album-art movement.
+FFmpeg includes that preview only during the music chapter. The live artwork
+meter reads playback streams with `--playback-only` and never queries microphones.
+World clocks use the actual current time.
+
+Workspace previews capture actual Kitty/Vim windows displaying public source
+files in the private compositor, then a native click switches its real workspace.
+The screencopy view is initialized after it has a native window. VPN/Tailscale,
+quota, audio-device and mode data/actions stay isolated demo state; this film
+never changes the host network, VPN, volumes or monitor mode. Native pointer
+motion, clicks, scrolling and handlers remain active. No QtTest events or direct
+click-handler invocation is used.
+
+Detachment preserves the snapshot until the native floating window is placed,
+then uses a 420 ms exponential release with a small scale settle. The receipt
+records release progress, frame counts, actual compositor geometry and the
+independence of the two charts. A second real pointer gesture moves the native
+window and its native close control finishes the sequence. MP4, JSON evidence
+and `.review/` frames/logs follow the no-overwrite convention used by Notjik.
+Inspect the actual recorded transitions before publishing. Stage versioned media
+in TYPE.hk's `.local/site-assets/os-previews/` and use its task-scoped R2 uploader.

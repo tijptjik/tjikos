@@ -26,11 +26,16 @@ int main(int argc,char**argv){
  struct wl_registry*r=wl_display_get_registry(d);struct wl_registry_listener l={global,removed};wl_registry_add_listener(r,&l,NULL);
  wl_display_roundtrip(d);wl_display_roundtrip(d);if(!manager||!output)return 4;
  struct zwlr_virtual_pointer_v1*p=zwlr_virtual_pointer_manager_v1_create_virtual_pointer_with_output(manager,NULL,output);
- char command;unsigned a,b;
- while(scanf(" %c %u %u",&command,&a,&b)==3){
+ char command;int a,b;
+ while(scanf(" %c %d %d",&command,&a,&b)==3){
   struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);uint32_t ms=t.tv_sec*1000+t.tv_nsec/1000000;
   if(command=='M')zwlr_virtual_pointer_v1_motion_absolute(p,ms,a,b,1200,720);
   else if(command=='B')zwlr_virtual_pointer_v1_button(p,ms,a,b);
+  else if(command=='S'){
+   zwlr_virtual_pointer_v1_axis_source(p,WL_POINTER_AXIS_SOURCE_FINGER);
+   if(b)zwlr_virtual_pointer_v1_axis(p,ms,a,wl_fixed_from_int(b));
+   else zwlr_virtual_pointer_v1_axis_stop(p,ms,a);
+  }
   else return 5;
   zwlr_virtual_pointer_v1_frame(p);if(wl_display_roundtrip(d)<0)return 6;puts("ok");fflush(stdout);
  }

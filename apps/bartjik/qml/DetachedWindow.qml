@@ -43,7 +43,7 @@ FloatingWindow {
         onFinished:panel.host.completeDrop()
     }
     Item {
-        id:liveBody;anchors.fill:parent;opacity:panel.placed?panel.releaseProgress:0
+        id:liveBody;anchors.fill:parent;opacity:panel.placed?1:0
         scale:.985+.015*panel.releaseProgress;transformOrigin:Item.Center
     }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native Bartjik panels in the shared Rose Punk film stage; demo providers only."""
+"""Native Bartjik film with public market/music snapshots and isolated controls."""
 import argparse
 import hashlib
 import json
@@ -84,7 +84,7 @@ def prepare(app):
                 detail:detailPanel.inspect(),crypto:cards,pointer:pointer,workspace:workspacePreview.item?.inspect() || {},
                 music:{playing:captureMusic.playing,position:captureMusic.position,energy:captureMusic.energy,pulse:detailPanel.showcasePulse},
                 mode:captureGame?'Game Mode':'Desktop Mode',workspaceId:Hyprland.focusedMonitor?.activeWorkspace?.id,
-                toplevels:Hyprland.toplevels.values.map(t=>({address:t.address,workspace:t.workspace?.name,monitor:t.monitor?.name,mapped:t.lastIpcObject.mapped,hidden:t.lastIpcObject.hidden}))};
+                toplevels:Hyprland.toplevels.values.map(t=>({address:t.address,workspace:t.workspace?.name,monitor:t.monitor?.name,mapped:t.lastIpcObject.mapped,hidden:t.lastIpcObject.hidden,wayland:!!t.wayland}))};
             const host=req.panel==='workspace'?workspacePreview.item:req.panel==='crypto'?(req.pair?cryptoPanels.find(p=>p.pair===req.pair && p.panelVisible):cryptoPanel):detailPanel;
             if(!host || !host.panelVisible)return {ok:true,present:false};
             const item=req.target?find(host.panelBody,req.target):host.panelBody;
@@ -98,7 +98,7 @@ def prepare(app):
                 dropFrames:host.dropFrames,sourceFrames:host.sourceFrames,
                 placement:host.placement(),points:host.points?.length || 0,
                 audioNodes:req.panel==='detail'?detailPanel.showcaseAudioNodes():[],
-                nativePlaced:host.showcasePlaced,nativeAddress:host.showcaseAddress,
+                nativePlaced:host.showcasePlaced,nativeAddress:host.showcaseAddress,releaseProgress:host.showcaseRelease,
                 trace:req.trace?host.showcaseEvents:[]};
         }
         case 'status':break;''')
@@ -120,6 +120,7 @@ def prepare(app):
     }
     function capture(path)''')
     shared.replace(qml / "DetachablePopup.qml", "    id:host\n", '''    id:host
+    readonly property real showcaseRelease:nativeWindow.releaseProgress
     readonly property bool showcasePlaced:nativeWindow.placed
     readonly property string showcaseAddress:nativeWindow.address
     property var showcaseEvents:[]
@@ -214,12 +215,27 @@ class Director(shared.Director):
 
     def click(self,**kwargs):
         target=self.target(**kwargs)
+        for _ in range(5 if kwargs.get('panel')=='detail' else 0):
+            if target['top']+75<target['y']<target['top']+target['bodyHeight']-24:break
+            self.move(target['left']+target['bodyWidth']*.75,target['top']+target['bodyHeight']*.65,duration=.4)
+            direction=1 if target['y']>target['top']+target['bodyHeight']-24 else -1
+            for _ in range(12):self.command(f'S 0 {direction*8}');time.sleep(1/60)
+            self.command('S 0 0');time.sleep(.25)
+            target=self.target(**kwargs)
         self.move(target["x"],target["y"])
         time.sleep(.2)
         target=self.target(**kwargs)
         self.move(target["x"],target["y"],duration=.15)
+        def aligned():
+            pointer=self.observe()['pointer']
+            return pointer.get('valid') and abs(pointer['x']-target['x'])<2 and abs(pointer['y']-target['y'])<2
+        if not aligned():self.move(target['x'],target['y'],duration=.2)
+        shared.wait_for(aligned)
+        time.sleep(.08)
         self.command("B 272 1");time.sleep(.09);self.command("B 272 0")
-        self.events.append({"time":round(time.monotonic()-self.started,3),"input":"native click","target":kwargs})
+        self.events.append({"time":round(time.monotonic()-self.started,3),"input":"native click","target":kwargs,"geometry":target,"pointer":self.observe()["pointer"]})
+        if kwargs.get('panel')=='detail':
+            self.move(target['left']+target['bodyWidth']*.6,target['top']+110,duration=.12)
 
     def detail(self,provider):
         return shared.wait_for(lambda:(lambda s:s if s.get("opened") and s.get("provider")==provider and s.get("crossfade")==1 else None)(self.observe()["detail"]))
@@ -240,6 +256,7 @@ class Director(shared.Director):
                 'vim','-u','NONE','-i','NONE','-n','-R',str(path),'-c','set number','-c','syntax on'],env=self.env,cwd=directory,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             self.windows.append(process)
             shared.wait_for(lambda:any(c['title']==title for c in json.loads(shared.checked(['hyprctl','-j','clients']))))
+            time.sleep(.7)
         self.focus_workspace('9')
 
     def focus_workspace(self,number):
@@ -297,6 +314,7 @@ class Director(shared.Director):
         time.sleep(.9);self.frame('03-workspace-switcher')
         self.evidence('native workspace activation',workspace=2)
         self.focus_workspace('9');self.observe(scene={'coverWindows':False,'animate':False})
+        self.ipc(op='hide',bar='workspace-bar')
         self.scene(4)
         self.aim('vpn');self.detail('mullvad');time.sleep(.7)
         self.describe('Select a VPN country from the panel’s quick locations.')
@@ -327,6 +345,7 @@ class Director(shared.Director):
         self.detach()
 
     def detach(self):
+        self.ipc(op='hide',bar='status-bar');self.ipc(op='show',bar='workspace-bar')
         self.scene(6)
         self.aim("prices","BTC/USD");self.graph("BTC/USD")
         time.sleep(.5)
@@ -340,7 +359,13 @@ class Director(shared.Director):
         card=self.target(panel="crypto",pair="BTC/USD",header=True,fraction=.08)
         self.move(self.position[0]+200,self.position[1],duration=.9)
         self.command("B 272 0")
-        dropped=shared.wait_for(lambda:(lambda s:s if s.get("detached") and not s.get("dropping") and s.get("nativePlaced") and s.get("dropFrames",0)>=2 else None)(self.target(panel="crypto",pair="BTC/USD")))
+        release_started=time.monotonic();release_samples=[]
+        def settled():
+            state=self.target(panel="crypto",pair="BTC/USD")
+            release_samples.append({'ms':round((time.monotonic()-release_started)*1000),'progress':state.get('releaseProgress',0)})
+            return state if state.get('detached') and not state.get('dropping') and state.get('nativePlaced') and state.get('dropFrames',0)>=2 else None
+        dropped=shared.wait_for(settled)
+        self.evidence('native exponential release',samples=release_samples)
         time.sleep(.4)
         # Reposition the detached xdg-toplevel through its native system move.
         dropped=self.target(panel="crypto",pair="BTC/USD",header=True,fraction=.08)
@@ -397,14 +422,14 @@ def record(output):
                         shared.wait_for(lambda:ipc({"op":"status"}).get("ready"))
                         ipc({"op":"hide","bar":"all"})
                         director=Director(app,env,pointer,monitor,review)
-                        director.observe(publicData=snapshot)
+                        director.observe(publicData={"music":snapshot["music"]})
                         director.launch_workspaces(directory)
                         time.sleep(2)
                         raw=directory/"capture.mp4"
+                        director.started=time.monotonic()
                         recorder=subprocess.Popen(["wf-recorder","-D","--no-dmabuf","-o",monitor,"-r","60","-c","libx264rgb","-p","preset=ultrafast","-p","crf=0","-x","bgr0","-f",str(raw)],env=env,stdout=capture_log,stderr=capture_log)
                         time.sleep(.3)
                         if recorder.poll() is not None:raise ValueError("Recorder failed to start")
-                        director.started=time.monotonic()
                         try:director.run(SOURCE)
                         except BaseException:
                             director.frame('failure')

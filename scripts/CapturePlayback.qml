@@ -17,7 +17,7 @@ Item {
         audioOutput:AudioOutput {muted:true}
         loops:MediaPlayer.Infinite
         onPlaybackStateChanged:if(capture.playing)capture.epoch=Date.now()-position
-        onPositionChanged:if(capture.playing)capture.epoch=Date.now()-position
+        onPositionChanged:(position)=>{if(capture.playing)capture.epoch=Date.now()-position}
     }
     Timer {
         interval:25;running:capture.playing;repeat:true
