@@ -12,6 +12,10 @@
         "turbo": "2.5.8",
       },
     },
+    "apps/pony-rs": {
+      "name": "@tooltjik/pony-rs",
+      "version": "0.1.0",
+    },
     "apps/tjikup": {
       "name": "@tooltjik/tjikup",
       "version": "0.1.0",
@@ -27,6 +31,7 @@
   },
   "packages": {
     "@tooltjik/bartjik": ["@tooltjik/bartjik@workspace:apps/bartjik"],
+    "@tooltjik/pony-rs": ["@tooltjik/pony-rs@workspace:apps/pony-rs"],
     "@tooltjik/tjikup": ["@tooltjik/tjikup@workspace:apps/tjikup"],
     "@tooltjik/mailtjik": ["@tooltjik/mailtjik@workspace:apps/mailtjik"],
 

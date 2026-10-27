@@ -2,19 +2,22 @@
 set -euo pipefail
 root_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 if (( $# == 0 )); then
-    set -- mailtjik notjik tjikup
+    set -- mailtjik notjik tjikup pony-rs
 fi
 # Validate all targets before installing any of them.
 for app in "$@"; do
     case "$app" in
-        mailtjik|notjik|tjikup|bartjik) ;;
-        *) printf 'Unknown app: %s (expected mailtjik, notjik, tjikup or bartjik)\n' "$app" >&2; exit 2 ;;
+        mailtjik|notjik|tjikup|bartjik|pony-rs) ;;
+        *) printf 'Unknown app: %s (expected mailtjik, notjik, tjikup, bartjik or pony-rs)\n' "$app" >&2; exit 2 ;;
     esac
 done
 for app in "$@"; do
     case "$app" in
         bartjik)
             bash "$root_dir/apps/bartjik/scripts/install.sh"
+            ;;
+        pony-rs)
+            bash "$root_dir/apps/pony-rs/scripts/install.sh"
             ;;
         tjikup)
             bash "$root_dir/apps/tjikup/scripts/install.sh"
