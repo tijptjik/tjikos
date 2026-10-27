@@ -40,7 +40,7 @@ From the TjikOS repository root:
 
 ```sh
 python3 -B scripts/os_showcase.py notjik --plan
-python3 -B scripts/os_showcase.py notjik "$HOME/Videos/tjikos/os/notjik-v4.mp4"
+python3 -B scripts/os_showcase.py notjik "$HOME/Videos/tjikos/os/notjik-v8.mp4"
 ```
 
 Choose an unused output name. Existing MP4s, JSON receipts, and review folders
@@ -73,10 +73,10 @@ progress updates; normal input performs the shown UI actions.
 
 Each successful capture produces:
 
-- `notjik-v4.mp4`: encoded gallery film.
-- `notjik-v4.json`: dimensions, duration, SHA-256, feature timestamps, input
+- `notjik-v8.mp4`: encoded gallery film.
+- `notjik-v8.json`: dimensions, duration, SHA-256, feature timestamps, input
   evidence, and verification results.
-- `notjik-v4.review/`: actual compositor screenshots at each major state, plus
+- `notjik-v8.review/`: actual compositor screenshots at each major state, plus
   application, compositor, and recorder logs.
 
 The recorder verifies real hover, a narrowed history search, the typed reply,
@@ -87,3 +87,6 @@ the file.
 Inspect the recorded transitions as well as the still frames before publishing.
 Copy the chosen film and a real captured poster into TYPE.hk's
 `public/os-previews/notjik-showcase.{mp4,webp}`; keep its existing 1200/720 layout.
+
+The Notjik poster uses the opening identity frame: **Notifications with flair**.
+Its feature line is **Live updates. Telegram integration. Replies in place.**
