@@ -67,7 +67,7 @@ def main(arguments=None):
     parser = argparse.ArgumentParser(prog="bartjikctl")
     parser.add_argument("--config", type=Path)
     sub = parser.add_subparsers(dest="op", required=True)
-    for op in ("status", "monitors", "bars", "modules", "reload"):
+    for op in ("status", "monitors", "bars", "modules", "reload", "show-workspaces", "hide-workspaces"):
         sub.add_parser(op)
     spotify = sub.add_parser("spotify", help="configure the optional Spotify lyrics source")
     spotify.add_argument("action", choices=("login", "logout", "status"))

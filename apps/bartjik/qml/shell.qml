@@ -7,6 +7,7 @@ import "Logic.js" as Logic
 ShellRoot {
     id: root
     property var state: ({ready:false,config:{},bars:[],providers:{}})
+    property bool workspaceReminder: false
     property var visibility: ({})
     property var edgeStates: ({})
     signal artworkReceived(string token,string source)
@@ -98,6 +99,8 @@ ShellRoot {
     }
     function request(req) {
         switch(req.op) {
+        case 'show-workspaces':workspaceReminder=true;break;
+        case 'hide-workspaces':workspaceReminder=false;break;
         case 'reload':send({op:'reload'});break;
         case 'toggle-reveal': case 'show-reveal': case 'hide-reveal': {
             if(req.bar!=='all' && !bars.some(b=>b.id===req.bar))throw Error('unknown bar');
@@ -170,7 +173,7 @@ ShellRoot {
         default:throw Error('unknown operation');
         }
         return {ok:true,ready:state.ready,demo:demo,theme:state.config?.theme,error:state.error || helperError,
-            pointerError:pointer.error || '',actionError:native.navigationError || state.actionError,bars:bars.length,providers:Object.keys(state.providers || {}).length};
+            workspaceReminder:workspaceReminder,pointerError:pointer.error || '',actionError:native.navigationError || state.actionError,bars:bars.length,providers:Object.keys(state.providers || {}).length};
     }
     IpcHandler {
         target:'bartjik'
@@ -197,6 +200,10 @@ ShellRoot {
         id:panels
         model:root.bars.map(b=>b.key)
         Bar {required property string modelData;barKey:modelData;controller:root}
+    }
+    Variants {
+        model:root.bars.filter(b=>b.islands.some(i=>i.modules.some(id=>b.moduleConfigs[id]?.provider==='workspaces'))).map(b=>b.key)
+        WorkspaceReminder {required property string modelData;barKey:modelData;controller:root}
     }
     Variants {
         model:[...new Set(root.bars.filter(b=>b.reserve).map(b=>b.screen+'/'+b.side))]
