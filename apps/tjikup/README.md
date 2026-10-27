@@ -158,6 +158,9 @@ are still collected. The default is `true`.
 
 Concurrent workflows can use `tjikup.progress.Progress` for one live row per task.
 Running rows show a spinner and elapsed time; completion leaves one final row.
+Active rows keep the cursor hidden and redraw inside synchronized terminal
+updates, preventing visible erase/repaint flashes on supporting terminals.
+The cursor returns when rows finish, for `output()` blocks, and on interruption.
 The runner carries terminal capability through nested output pipes using
 `TJIKUP_PROGRESS`; redirected output stays free of cursor controls. Use the
 `output()` context for headings and diagnostics while tasks are active, and keep

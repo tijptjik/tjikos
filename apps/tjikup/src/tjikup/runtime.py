@@ -133,6 +133,12 @@ def run_stream(
 
             def forward_output(value: str, *, final: bool = False) -> None:
                 nonlocal pending
+                if formatter is None:
+                    # Frame endings, cursor restoration and prompts need not
+                    # end in a newline. Do not delay them until another row.
+                    sys.stdout.write(value)
+                    sys.stdout.flush()
+                    return
                 pending += value
                 lines = pending.splitlines(keepends=True)
                 pending = ""
@@ -170,6 +176,10 @@ def run_stream(
                 except ProcessLookupError:
                     pass
                 process.wait()
+                if stream_env["TJIKUP_PROGRESS"] == "1":
+                    # The killed child cannot unwind its progress context.
+                    sys.stdout.write("\033[?25h\033[?2026l")
+                    sys.stdout.flush()
                 raise
     except subprocess.TimeoutExpired as error:
         raise UpdateError(

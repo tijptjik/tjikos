@@ -73,6 +73,39 @@ class RuntimeTests(unittest.TestCase):
                 timeout=0.05,
             )
 
+    def test_frame_end_is_forwarded_before_child_writes_another_line(self):
+        with tempfile.TemporaryDirectory() as directory:
+            acknowledged = Path(directory) / 'ack'
+
+            class Terminal(io.StringIO):
+                def write(self, value):
+                    result = super().write(value)
+                    if self.getvalue().endswith('\x1b[?2026l'):
+                        acknowledged.touch()
+                    return result
+
+            output = Terminal()
+            child = (
+                "import pathlib,sys,time; "
+                "sys.stdout.write('\\x1b[?2026hrow\\n\\x1b[?2026l'); sys.stdout.flush(); "
+                "ack=pathlib.Path(sys.argv[1]); deadline=time.monotonic()+1\n"
+                "while not ack.exists() and time.monotonic()<deadline: time.sleep(.01)\n"
+                "sys.exit(0 if ack.exists() else 3)"
+            )
+            with contextlib.redirect_stdout(output):
+                runtime.run_stream([sys.executable, '-c', child, str(acknowledged)], Path.cwd(), timeout=3)
+            self.assertEqual(output.getvalue(), '\x1b[?2026hrow\n\x1b[?2026l')
+
+    def test_killed_live_child_restores_terminal(self):
+        output = io.StringIO()
+        with patch.dict(os.environ, {'TJIKUP_CHILD': '1', 'TJIKUP_PROGRESS': '1'}), \
+                contextlib.redirect_stdout(output), \
+                self.assertRaisesRegex(runtime.UpdateError, 'timed out'):
+            runtime.run_stream([sys.executable, '-c',
+                               "import sys,time; sys.stdout.write('\\x1b[?25l\\x1b[?2026h'); sys.stdout.flush(); time.sleep(10)"],
+                               Path.cwd(), timeout=.2)
+        self.assertTrue(output.getvalue().endswith('\x1b[?25h\x1b[?2026l'))
+
     def test_full_report_keeps_text_that_display_truncates(self):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "report"

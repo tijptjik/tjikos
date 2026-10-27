@@ -61,6 +61,76 @@ class ProgressTests(unittest.TestCase):
                 worker.join()
         self.assertEqual(len(output.getvalue().splitlines()), 20)
 
+    def test_redraw_keeps_cursor_hidden_until_last_task_finishes(self):
+        output = io.StringIO()
+        progress = Progress(stream=output, live=True)
+        progress.start('a', 'Python')
+        progress.start('b', 'Icons')
+        progress.finish('a', 'Python', record=False)
+        self.assertEqual(output.getvalue().count('\x1b[?25l'), 1)
+        self.assertNotIn('\x1b[?25h', output.getvalue())
+        progress.finish('b', 'Icons', record=False)
+        self.assertEqual(output.getvalue().count('\x1b[?25h'), 1)
+        self.assertTrue(output.getvalue().endswith('\x1b[?25h\x1b[?2026l'))
+        # Every clear and replacement row belongs to a complete frame.
+        frames = output.getvalue().split('\x1b[?2026h')[1:]
+        self.assertEqual(len(frames), 4)
+        self.assertTrue(all(frame.endswith('\x1b[?2026l') for frame in frames))
+
+    def test_prompt_restores_cursor_and_releases_frame_before_waiting(self):
+        output = io.StringIO()
+        progress = Progress(stream=output, live=True)
+        progress.start('a', 'Python')
+        with self.assertRaises(RuntimeError):
+            with progress.output():
+                self.assertFalse(progress.cursor_hidden)
+                self.assertTrue(output.getvalue().endswith('\x1b[?25h\x1b[?2026l'))
+                output.write('Prompt\n')
+                raise RuntimeError('prompt failed')
+        self.assertTrue(progress.cursor_hidden)
+        self.assertEqual(progress.height, 1)
+        progress.discard('a')
+        self.assertFalse(progress.cursor_hidden)
+
+    def test_interrupt_and_render_failure_restore_cursor_and_end_frame(self):
+        for error in (KeyboardInterrupt, RuntimeError):
+            with self.subTest(error=error):
+                output = io.StringIO()
+                with self.assertRaises(error), Progress(stream=output, live=True) as progress:
+                    progress.start('a', 'Python')
+                    raise error()
+                self.assertFalse(progress.cursor_hidden)
+                self.assertTrue(output.getvalue().endswith('\x1b[?25h\x1b[?2026l'))
+                self.assertEqual(output.getvalue().count('\x1b[?2026h'),
+                                 output.getvalue().count('\x1b[?2026l'))
+        output = io.StringIO()
+        progress = Progress(stream=output, live=True)
+        with patch.object(progress, '_print', side_effect=ValueError('render failed')):
+            with self.assertRaises(ValueError):
+                progress.start('a', 'Python')
+        self.assertFalse(progress.cursor_hidden)
+        self.assertTrue(output.getvalue().endswith('\x1b[?25h\x1b[?2026l'))
+
+    def test_idle_tick_does_not_write_terminal_controls(self):
+        output = io.StringIO()
+        progress = Progress(stream=output, live=True)
+        with patch.object(progress.stop, 'wait', side_effect=[False, True]):
+            progress._tick()
+        self.assertEqual(output.getvalue(), '')
+
+    def test_tick_redraw_does_not_show_cursor_between_frames(self):
+        output = io.StringIO()
+        progress = Progress(stream=output, live=True)
+        progress.start('a', 'Python')
+        output.seek(0)
+        output.truncate()
+        with patch.object(progress.stop, 'wait', side_effect=[False, False, True]):
+            progress._tick()
+        self.assertEqual(output.getvalue().count('\x1b[?2026h'), 2)
+        self.assertEqual(output.getvalue().count('\x1b[?2026l'), 2)
+        self.assertNotIn('\x1b[?25', output.getvalue())
+        progress.discard('a')
+
     def test_nested_stream_preserves_progress_capability(self):
         output = io.StringIO()
         with patch.dict(os.environ, {'TJIKUP_CHILD': '1', 'TJIKUP_PROGRESS': '1'}), contextlib.redirect_stdout(output):
