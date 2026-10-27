@@ -54,9 +54,14 @@
     {
       "id": "08",
       "name": "steam",
-      "description": "Victorian steam-era station porter; chunky boiler-shaped head, little chimney-like crown, kind oval optical window",
+      "description": "A compact elegant retro-industrial robot with a sculpted rounded terracotta helmet, one clear turquoise optical eye, ivory lower face and a single simple external steam pipe behind the head. Confident friendly silhouette, no chimney on top, no clutter. Dusty teal, muted coral, ochre and deep plum.",
       "palette": "soot navy, muted ochre, pale turquoise and maroon",
-      "file": "robot-08-steam.png"
+      "file": "robot-08-steam.png",
+      "originalDescription": "Victorian steam-era station porter; chunky boiler-shaped head, little chimney-like crown, kind oval optical window",
+      "prompt": "Square full-bleed cover illustration for an 80px-wide left strip in a desktop notification. Original robot HEAD AND SHOULDERS PORTRAIT, large central head and upper torso. CRITICAL: robot faces SCREEN RIGHT, nose/visor pointing to the right edge, gaze directed right toward notification text; show its left cheek and left side in a clear right-facing three-quarter/profile view, NEVER facing left or staring at viewer. Keep the face within the central 60% so a narrow portrait crop preserves the eye and nose. Same cohesive art style across collection: Moebius-inspired 1960s/1970s French science-fiction bande dessinee, delicate confident black ink contours, FLAT hand-coloured shapes, sparse fine hatching, subtle paper grain, simplified elegant forms, quiet surreal charm. Strong readable silhouette at thumbnail size. No painterly brushwork, 3D render, shiny photographic lighting, gradients, bloom, dense greebles, text, logos, frame or watermark. Background a very spare alien horizon in dark muted tones compatible with a plum-purple desktop, subordinate to the portrait. No weapons. Subject and palette for this unique image: A compact elegant retro-industrial robot with a sculpted rounded terracotta helmet, one clear turquoise optical eye, ivory lower face and a single simple external steam pipe behind the head. Confident friendly silhouette, no chimney on top, no clutter. Dusty teal, muted coral, ochre and deep plum.",
+      "revision": "replacement-2026-10-27",
+      "width": 1254,
+      "height": 1254
     },
     {
       "id": "09",
@@ -68,9 +73,14 @@
     {
       "id": "10",
       "name": "telegraph",
-      "description": "1900 telegraph operator robot; wood-and-bakelite rectangular head, large brass receiver ear, simple glass lens",
+      "description": "A sleek telegraph-era communications robot with a streamlined lavender ceramic head, clear amber lens eye, small ivory ear receiver and two short copper signal contacts, subtle engraved circuit line on cheek. Elegant geometric jaw, no wires obscuring face. Lavender, muted copper, teal and dark aubergine.",
       "palette": "oxblood, ochre, buff cream and ink purple",
-      "file": "robot-10-telegraph.png"
+      "file": "robot-10-telegraph.png",
+      "originalDescription": "1900 telegraph operator robot; wood-and-bakelite rectangular head, large brass receiver ear, simple glass lens",
+      "prompt": "Square full-bleed cover illustration for an 80px-wide left strip in a desktop notification. Original robot HEAD AND SHOULDERS PORTRAIT, large central head and upper torso. CRITICAL: robot faces SCREEN RIGHT, nose/visor pointing to the right edge, gaze directed right toward notification text; show its left cheek and left side in a clear right-facing three-quarter/profile view, NEVER facing left or staring at viewer. Keep the face within the central 60% so a narrow portrait crop preserves the eye and nose. Same cohesive art style across collection: Moebius-inspired 1960s/1970s French science-fiction bande dessinee, delicate confident black ink contours, FLAT hand-coloured shapes, sparse fine hatching, subtle paper grain, simplified elegant forms, quiet surreal charm. Strong readable silhouette at thumbnail size. No painterly brushwork, 3D render, shiny photographic lighting, gradients, bloom, dense greebles, text, logos, frame or watermark. Background a very spare alien horizon in dark muted tones compatible with a plum-purple desktop, subordinate to the portrait. No weapons. Subject and palette for this unique image: A sleek telegraph-era communications robot with a streamlined lavender ceramic head, clear amber lens eye, small ivory ear receiver and two short copper signal contacts, subtle engraved circuit line on cheek. Elegant geometric jaw, no wires obscuring face. Lavender, muted copper, teal and dark aubergine.",
+      "revision": "replacement-2026-10-27",
+      "width": 1254,
+      "height": 1254
     },
     {
       "id": "11",
@@ -131,9 +141,14 @@
     {
       "id": "19",
       "name": "submarine",
-      "description": "1940s deep-sea exploration robot; brass diving-bell head, round side porthole eye, heavy neck ring",
+      "description": "An underwater exploration robot portrait with a rounded matte slate-teal pressure helmet, a clear warm amber optical eye behind a small oval glass window, ivory segmented jaw, restrained coral cheek sensor and one compact collar tube. No oversized diving cage. Slate teal, dusty rose, warm ivory and deep plum.",
       "palette": "oxidized copper, pale aqua, coral and deep indigo",
-      "file": "robot-19-submarine.png"
+      "file": "robot-19-submarine.png",
+      "originalDescription": "1940s deep-sea exploration robot; brass diving-bell head, round side porthole eye, heavy neck ring",
+      "prompt": "Square full-bleed cover illustration for an 80px-wide left strip in a desktop notification. Original robot HEAD AND SHOULDERS PORTRAIT, large central head and upper torso. CRITICAL: robot faces SCREEN RIGHT, nose/visor pointing to the right edge, gaze directed right toward notification text; show its left cheek and left side in a clear right-facing three-quarter/profile view, NEVER facing left or staring at viewer. Keep the face within the central 60% so a narrow portrait crop preserves the eye and nose. Same cohesive art style across collection: Moebius-inspired 1960s/1970s French science-fiction bande dessinee, delicate confident black ink contours, FLAT hand-coloured shapes, sparse fine hatching, subtle paper grain, simplified elegant forms, quiet surreal charm. Strong readable silhouette at thumbnail size. No painterly brushwork, 3D render, shiny photographic lighting, gradients, bloom, dense greebles, text, logos, frame or watermark. Background a very spare alien horizon in dark muted tones compatible with a plum-purple desktop, subordinate to the portrait. No weapons. Subject and palette for this unique image: An underwater exploration robot portrait with a rounded matte slate-teal pressure helmet, a clear warm amber optical eye behind a small oval glass window, ivory segmented jaw, restrained coral cheek sensor and one compact collar tube. No oversized diving cage. Slate teal, dusty rose, warm ivory and deep plum.",
+      "revision": "replacement-2026-10-27",
+      "width": 1254,
+      "height": 1254
     },
     {
       "id": "20",
@@ -250,9 +265,14 @@
     {
       "id": "36",
       "name": "analog-synth",
-      "description": "1970s analog synthesizer robot; dark wood-sided rectangular head, amber optic, two broad dial shapes at temple",
+      "description": "An analog music synthesizer robot with an angular dusty rose ceramic head, one horizontal amber optical eye, a small row of three ivory tactile keys integrated into its temple, subtle teal ear disc and lavender neck plates. Readable expressive machine face, no face-covering cable nest. Rose, teal, lavender and ink-indigo.",
       "palette": "walnut, amber, desaturated teal and deep violet",
-      "file": "robot-36-analog-synth.png"
+      "file": "robot-36-analog-synth.png",
+      "originalDescription": "1970s analog synthesizer robot; dark wood-sided rectangular head, amber optic, two broad dial shapes at temple",
+      "prompt": "Square full-bleed cover illustration for an 80px-wide left strip in a desktop notification. Original robot HEAD AND SHOULDERS PORTRAIT, large central head and upper torso. CRITICAL: robot faces SCREEN RIGHT, nose/visor pointing to the right edge, gaze directed right toward notification text; show its left cheek and left side in a clear right-facing three-quarter/profile view, NEVER facing left or staring at viewer. Keep the face within the central 60% so a narrow portrait crop preserves the eye and nose. Same cohesive art style across collection: Moebius-inspired 1960s/1970s French science-fiction bande dessinee, delicate confident black ink contours, FLAT hand-coloured shapes, sparse fine hatching, subtle paper grain, simplified elegant forms, quiet surreal charm. Strong readable silhouette at thumbnail size. No painterly brushwork, 3D render, shiny photographic lighting, gradients, bloom, dense greebles, text, logos, frame or watermark. Background a very spare alien horizon in dark muted tones compatible with a plum-purple desktop, subordinate to the portrait. No weapons. Subject and palette for this unique image: An analog music synthesizer robot with an angular dusty rose ceramic head, one horizontal amber optical eye, a small row of three ivory tactile keys integrated into its temple, subtle teal ear disc and lavender neck plates. Readable expressive machine face, no face-covering cable nest. Rose, teal, lavender and ink-indigo.",
+      "revision": "replacement-2026-10-27",
+      "width": 1254,
+      "height": 1254
     },
     {
       "id": "37",
