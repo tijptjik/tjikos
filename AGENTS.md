@@ -1,4 +1,4 @@
-# tooltjik
+# TjikOS
 
 Turborepo with Bun workspaces. Applications live in apps/; shared packages in
 packages/. mailtjik is a Go/Charm TUI with a Python archive backend.

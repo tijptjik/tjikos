@@ -2,40 +2,49 @@
   "lockfileVersion": 2,
   "configVersion": 1,
   "workspaces": {
-    "apps/bartjik": {
-      "name": "@tooltjik/bartjik",
-      "version": "0.1.0",
-    },
     "": {
-      "name": "tooltjik",
+      "name": "tjikos",
       "devDependencies": {
         "turbo": "2.5.8",
       },
     },
-    "apps/pony-rs": {
-      "name": "@tooltjik/pony-rs",
-      "version": "0.1.0",
-    },
-    "apps/tjikup": {
-      "name": "@tooltjik/tjikup",
+    "apps/bartjik": {
+      "name": "@tjikos/bartjik",
       "version": "0.1.0",
     },
     "apps/mailtjik": {
-      "name": "@tooltjik/mailtjik",
+      "name": "@tjikos/mailtjik",
       "version": "0.1.0",
     },
     "apps/notjik": {
-      "name": "@tooltjik/notjik",
+      "name": "@tjikos/notjik",
+      "version": "0.1.0",
+    },
+    "apps/greetjik": {
+      "name": "@tjikos/greetjik",
+      "version": "0.1.0",
+    },
+    "apps/runtjik": {
+      "name": "@tjikos/runtjik",
+      "version": "0.4.0",
+    },
+    "apps/tjikup": {
+      "name": "@tjikos/tjikup",
       "version": "0.1.0",
     },
   },
   "packages": {
-    "@tooltjik/bartjik": ["@tooltjik/bartjik@workspace:apps/bartjik"],
-    "@tooltjik/pony-rs": ["@tooltjik/pony-rs@workspace:apps/pony-rs"],
-    "@tooltjik/tjikup": ["@tooltjik/tjikup@workspace:apps/tjikup"],
-    "@tooltjik/mailtjik": ["@tooltjik/mailtjik@workspace:apps/mailtjik"],
+    "@tjikos/bartjik": ["@tjikos/bartjik@workspace:apps/bartjik"],
 
-    "@tooltjik/notjik": ["@tooltjik/notjik@workspace:apps/notjik"],
+    "@tjikos/mailtjik": ["@tjikos/mailtjik@workspace:apps/mailtjik"],
+
+    "@tjikos/notjik": ["@tjikos/notjik@workspace:apps/notjik"],
+
+    "@tjikos/greetjik": ["@tjikos/greetjik@workspace:apps/greetjik"],
+
+    "@tjikos/runtjik": ["@tjikos/runtjik@workspace:apps/runtjik"],
+
+    "@tjikos/tjikup": ["@tjikos/tjikup@workspace:apps/tjikup"],
 
     "turbo": ["turbo@2.5.8", "", { "optionalDependencies": { "turbo-darwin-64": "2.5.8", "turbo-darwin-arm64": "2.5.8", "turbo-linux-64": "2.5.8", "turbo-linux-arm64": "2.5.8", "turbo-windows-64": "2.5.8", "turbo-windows-arm64": "2.5.8" }, "bin": { "turbo": "bin/turbo" } }, "sha512-5c9Fdsr9qfpT3hA0EyYSFRZj1dVVsb6KIWubA9JBYZ/9ZEAijgUEae0BBR/Xl/wekt4w65/lYLTFaP3JmwSO8w=="],
 

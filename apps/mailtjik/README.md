@@ -15,7 +15,7 @@
 
 *Recorded with [Charm VHS](https://github.com/charmbracelet/vhs), using 96 synthetic messages. The recording uses ANSI image thumbnails; Kitty displays higher-resolution images through its native graphics protocol.*
 
-`tooltjik` is a Bun/Turborepo monorepo for personal CLI applications. Its first application is `apps/mailtjik`: a Go/Charm interface backed by the existing Python mail preservation engine.
+TjikOS is a Bun/Turborepo monorepo for personal CLI applications. Its first application is `apps/mailtjik`: a Go/Charm interface backed by the existing Python mail preservation engine.
 
 ## Features
 
@@ -36,7 +36,7 @@
 
 Requirements: Linux, **Bun 1.4+**, **Go 1.24+**, **Python 3.11+**, `age`, `zstd`, `rclone`, and a user systemd session for background workers. Legacy 7z imports also need `7z`. Kitty is needed for inline graphics; other colour terminals display an ANSI thumbnail.
 
-From the `tooltjik` checkout:
+From the TjikOS checkout:
 
 ```sh
 bun install

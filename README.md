@@ -1,6 +1,20 @@
-# tooltjik
+# TjikOS
 
 Linux desktop utilities and terminal tools.
+
+## <img src="docs/icons/runtjik.svg" width="40" height="40" alt=""> Runtjik
+
+![Runtjik icon grid with synthetic applications](apps/runtjik/docs/showcase.png)
+
+An on-demand Quickshell launcher with an icon grid, automatic application and
+command discovery limited to Fish history, launch statistics, and keyboard window switching. Drag the
+top-layer launcher and edit featured TOML settings through `/config`. Outside clicks
+close it without consuming the click.
+
+[Overview and controls](apps/runtjik/README.md) ·
+[Memory and startup measurements](apps/runtjik/README.md#motivation-and-measurements) ·
+[Configuration](apps/runtjik/README.md#configuration) ·
+[Provider API and future ZenTabs](apps/runtjik/README.md#provider-api-v1-and-future-zentabs)
 
 ## <img src="docs/icons/notjik.svg" width="40" height="40" alt=""> Notjik
 
@@ -46,13 +60,13 @@ and live status panels.
 [Installation](apps/bartjik/README.md#install-and-run) ·
 [Configuration](apps/bartjik/README.md#configuration-and-precedence)
 
-## <img src="docs/icons/pony.svg" width="40" height="40" alt=""> pony-rs
+## <img src="docs/icons/greetjik.svg" width="40" height="40" alt=""> greetjik
 
-![pony-rs rendering Twilight with a piped quote](apps/pony-rs/docs/showcase.png)
+![greetjik rendering Twilight with a piped quote](apps/greetjik/docs/showcase.png)
 
 The complete ponysay artwork catalogue and piped quotes in a fast native Rust
 executable, with no Python or Docker runtime.
 
-[Overview and usage](apps/pony-rs/README.md) ·
-[Installation](apps/pony-rs/README.md#build-and-install) ·
-[Motivation and benchmarks](apps/pony-rs/README.md#motivation)
+[Overview and usage](apps/greetjik/README.md) ·
+[Installation](apps/greetjik/README.md#build-and-install) ·
+[Motivation and benchmarks](apps/greetjik/README.md#motivation)

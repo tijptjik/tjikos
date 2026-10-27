@@ -2,7 +2,7 @@
 
 These self-contained SVGs are copies of the Rose Punk app icons from the
 Tijpfiles Chezmoi repository. Keeping them here makes the README work in a
-standalone Tooltjik checkout and on GitHub.
+standalone TjikOS checkout and on GitHub.
 
 Canonical artwork: `scripts/icons/local/` in the Chezmoi repository.
 Rendered exports: `home/dot_local/share/icons/rose-punk-illustrated/scalable/apps/`.

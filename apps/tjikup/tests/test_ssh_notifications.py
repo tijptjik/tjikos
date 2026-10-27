@@ -10,9 +10,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-# Works in the current dotfiles layout and the extracted tooltjik application.
+# Works in the current dotfiles layout and the extracted TjikOS application.
 ROOT = Path(__file__).resolve().parents[1]
-for source in (ROOT / 'src', ROOT / 'home/dot_local/lib', Path.home() / 'code/tooltjik/apps/tjikup/src'):
+for source in (ROOT / 'src', ROOT / 'home/dot_local/lib', Path.home() / 'code/tjikos/apps/tjikup/src'):
     if (source / 'tjikup/notifications.py').is_file():
         sys.path.insert(0, str(source))
         break

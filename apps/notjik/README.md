@@ -33,10 +33,10 @@ when it is unavailable. No pip dependencies or separate notification daemon.
 Clone the repository, then build only Notjik:
 
 ```sh
-git clone https://github.com/tijptjik/tooltjik.git
-cd tooltjik
+git clone https://github.com/tijptjik/tooltjik.git tjikos
+cd tjikos
 bun install
-bun run --filter @tooltjik/notjik build
+bun run --filter @tjikos/notjik build
 bash scripts/install.sh notjik
 notjikctl init                     # default monochrome configuration
 # Or, for a new configuration: notjikctl init --theme rose-punk
@@ -598,7 +598,7 @@ updated in place, and animated removal. Regenerate with Quickshell, Pillow and a
 active Wayland session:
 
 ```sh
-bun run --filter @tooltjik/notjik demo
+bun run --filter @tjikos/notjik demo
 ```
 
 ## Native-notification comparison
@@ -620,8 +620,8 @@ notjikctl compare stop
 ## Validation
 
 ```sh
-bun run --filter @tooltjik/notjik check
-bun run --filter @tooltjik/notjik test
+bun run --filter @tjikos/notjik check
+bun run --filter @tjikos/notjik test
 cd apps/notjik
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/integration.py
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/privacy.py

@@ -19,7 +19,7 @@ tjikup --config /path/to/workflow.json
 ```
 
 The installer builds a self-contained Python zipapp. It does not require Bun,
-Go, pip or another tooltjik application. In the monorepo, `bun run build` and
+Go, pip or another TjikOS application. In the monorepo, `bun run build` and
 `bun run check` include this workspace; `bun run --cwd apps/tjikup test` runs
 its behavior tests. Installation replaces the executable atomically.
 

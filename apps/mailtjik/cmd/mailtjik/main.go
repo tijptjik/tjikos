@@ -20,7 +20,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"tooltjik/mailtjik/internal/archiveui"
+	"tjikos/mailtjik/internal/archiveui"
 )
 
 var (

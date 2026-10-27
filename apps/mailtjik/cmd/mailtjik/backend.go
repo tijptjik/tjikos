@@ -110,7 +110,7 @@ func findBackend() (string, error) {
 			return p, nil
 		}
 	}
-	return "", fmt.Errorf("backend missing: run bun run install:local from tooltjik")
+	return "", fmt.Errorf("backend missing: run bun run install:local from the TjikOS checkout")
 }
 func (b backend) call(kind string, values map[string]interface{}, generation int) tea.Cmd {
 	return func() tea.Msg {

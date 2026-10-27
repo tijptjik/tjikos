@@ -1,3 +1,4 @@
+//@ pragma RespectSystemStyle
 import QtQuick
 import Quickshell
 import Quickshell.Wayland

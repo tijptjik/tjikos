@@ -1,4 +1,4 @@
-module tooltjik/mailtjik
+module tjikos/mailtjik
 
 go 1.24.0
 
