@@ -54,13 +54,13 @@ Rectangle {
     readonly property var urgencyInk: Logic.urgencyColors(notice.urgency, theme)
     readonly property color accent: notice.urgency === "critical" ? theme.critical : theme.accent
     readonly property string fallbackArtwork: Qt.resolvedUrl(Logic.robotArtwork(notice)).toString()
-    // Kitty supplies its terminal icon as an image; use portrait artwork for its reports.
-    readonly property bool kittyReport: [notice.app, notice.desktopEntry].some(value =>
-        /^(kitty|kitty\.desktop)$/i.test(String(value || "")))
+    // Terminal command reports use a randomly assigned robot instead of terminal icons.
+    readonly property bool terminalReport: [notice.app, notice.desktopEntry].some(value =>
+        /^(kitty|fish)(\.desktop)?$/i.test(String(value || "")))
     readonly property string cachedAvatar: Logic.cachedAvatar(notice, controller.avatarCache)
-    readonly property string artwork: kittyReport ? fallbackArtwork : (cachedAvatar || notice.image || notice.icon || fallbackArtwork)
+    readonly property string artwork: terminalReport ? fallbackArtwork : (cachedAvatar || notice.image || notice.icon || fallbackArtwork)
     readonly property string resolvedArtwork: imageSource(artwork)
-    readonly property bool imageCover: !kittyReport && !!(cachedAvatar || notice.image)
+    readonly property bool imageCover: !terminalReport && !!(cachedAvatar || notice.image)
     // Rich Telegram cards always use the full-height cover rail. When a preview
     // policy withholds the profile photo, initials occupy the same rail instead
     // of collapsing the card into the ordinary small-icon layout.

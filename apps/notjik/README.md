@@ -644,7 +644,8 @@ application and type. Repeat after selecting a popup with Super+comma. Both apps
 should receive input normally; notification focus must never trap the desktop.
 
 Notifications without sender artwork use the bundled vintage robot icon. Sender
-images and icons take precedence. See [artwork attribution](qml/icons/README.md).
+images and icons take precedence, except Kitty and Fish command reports, which use
+randomly assigned robot artwork. See [artwork attribution](qml/icons/README.md).
 
 The default icon container is 56 pixels (`style.iconSize`). Actions fill a centred footer row. Named icons use the Qt platform theme; a service launched
 without your desktop theme settings may not find the same icons as your shell.
