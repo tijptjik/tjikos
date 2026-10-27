@@ -137,6 +137,18 @@ guide for synthetic previews and deliberate switch-over/rollback.
 
 ## pony-rs
 
-Native Rust pony artwork renderer with the full ponysay catalogue and piped
-quotes. Run `fortune | pony-rs`. See [pony-rs](apps/pony-rs/README.md) for building,
-installation, coverage, and artwork licensing.
+**The complete ponysay artwork catalogue, rendered by a fast native Rust executable.**
+
+![pony-rs rendering Twilight with a piped quote](apps/pony-rs/docs/showcase.png)
+
+474 regular ponies, 103 extras, and their TTY variants, with piped quotes and no
+Python or Docker runtime. Measured median rendering time: **1.27 ms**, compared
+with **479.20 ms** for the Docker pipeline using the same pony and quote.
+
+```sh
+fortune | pony-rs
+```
+
+[Usage and installation](apps/pony-rs/README.md) ·
+[Motivation](apps/pony-rs/README.md#motivation) ·
+[Reproducible benchmark](apps/pony-rs/README.md#speed-compared-with-docker)

@@ -1,16 +1,39 @@
 # pony-rs
 
+![pony-rs rendering Twilight with a piped quote](docs/showcase.png)
+
 Pony artwork and piped quotes, rendered by a small native Rust executable.
-`pony-rs` keeps the complete upstream ponysay artwork catalogue while removing
-Docker and Python from the shell greeting.
+The complete upstream ponysay artwork catalogue is embedded in one binary.
 
 ```sh
 fortune | pony-rs
 ```
 
-Each invocation selects a random pony. Running this pipeline from Fish's
-`fish_greeting` produces a fresh fortune and pony for each interactive terminal.
-There is no background service or cached quote to maintain.
+Each invocation selects a random pony and renders the text supplied on stdin.
+Use `-f NAME` to choose a particular pony.
+
+## Motivation
+
+We run this a hundred times a day. Startup latency matters: a small pause on
+every invocation adds up. pony-rs keeps the ponies and the quotes while
+minimizing the work between input and output.
+
+The original Python ponysay also brought packaging and compatibility friction.
+Its upstream issue history documents specific examples:
+
+| Area | Reported problem |
+| --- | --- |
+| Python packaging | The custom installer tried to write to `/usr/bin` even inside a virtualenv, causing permission errors ([#176](https://github.com/erkin/ponysay/issues/176)). Standard pip installation was requested separately ([#248](https://github.com/erkin/ponysay/issues/248)). |
+| Installation dependencies and paths | Missing `makeinfo`/Texinfo caused a Fedora build to fail while generating documentation ([#207](https://github.com/erkin/ponysay/issues/207)). A later macOS report hit protected `/usr/share/info` paths despite choosing user-local executable paths ([#320](https://github.com/erkin/ponysay/issues/320)). |
+| Newer Python versions | Python 3.12 exposed invalid escape sequences in balloon docstrings, producing repeated warnings on macOS and Arch Linux ([#314](https://github.com/erkin/ponysay/issues/314), [#317](https://github.com/erkin/ponysay/issues/317)). Those reports describe working rendering with warnings, rather than failed rendering. |
+
+These reports span different releases and systems; some installation issues
+were later closed. They motivate a simpler deployment model.
+
+Containerizing ponysay isolates host packaging dependencies but adds container
+startup to each invocation. `pony-rs` keeps the artwork and text-rendering core
+in a native executable, with no Python runtime, container, resident service, or
+runtime asset downloads.
 
 ## Speed compared with Docker
 
@@ -23,23 +46,15 @@ pony and the same piped quote:
 | Native `pony-rs` | **1.27 ms** | **1.34 ms** | **1.05–2.05 ms** |
 
 The native pipeline was **about 378x faster by median elapsed time**, removing
-approximately **478 ms per greeting** in this comparison. This ratio describes
-the renderer pipeline, not the whole terminal startup.
+approximately **478 ms per invocation** in this comparison.
 
 The benchmark ran two warm-ups and 12 measured invocations per implementation,
 alternating their order. Docker was already running, its image was already
 present, and `--pull=never` excluded downloads. Each Docker sample still started
-and removed a fresh container, as the old greeting did. Both commands received
-the same text on stdin; `xargs -0` passed it as an argument to containerized
+and removed a fresh container. Both commands received the same text on stdin; `xargs -0` passed it as an argument to containerized
 ponysay. Output was captured through completion and checked for the quote and
-artwork. Fortune generation, shell initialization, and screen presentation are
-outside this timer. These are warm-cache measurements on one machine.
-
-A separate Kitty first-prompt benchmark with the fresh `fortune | pony-rs`
-greeting enabled measured **310 ms median**, with **288–331 ms** across 12
-launches after two warm-ups. Earlier terminal results included other Fish
-startup fixes, so they should not be used to attribute the entire improvement
-to Rust alone.
+artwork. Fortune generation and screen presentation are outside this timer.
+These are warm-cache measurements on one machine.
 
 ### Reproduce the comparison
 
@@ -57,8 +72,7 @@ python3 scripts/benchmark.py \
 
 The runner deliberately does not pull images. The [recorded results](docs/benchmarks/2026-10-27-docker-vs-rust.json)
 include every sample, command arguments, platform, binary version, and Docker
-image identity. The [first-prompt results](docs/benchmarks/2026-10-27-kitty-startup.json)
-record the separate Kitty measurement.
+image identity.
 
 ## Usage
 
@@ -103,8 +117,8 @@ need a runtime artwork directory or network connection.
 
 The supported scope is pony selection, artwork rendering, and piped or argument
 text. Custom balloon themes, image conversion, palette/KMS administration, and
-the built-in episode-quote database are omitted. The shell's QOTD functionality
-comes from `fortune`, invoked afresh for every terminal.
+the built-in episode-quote database are omitted. Pipe `fortune` or any other
+text source into pony-rs to supply quotes.
 
 All 1,154 entries render in the catalogue tests. Differential tests match 1,152
 upstream layouts. Upstream's `ttyponies/twilightrage` raises an exception, and
@@ -116,7 +130,7 @@ regular-artwork counterparts rather than reproducing those bugs.
 
 Building requires Rust and Cargo. Runtime dependencies are supplied by the
 compiled binary and system libraries; the two locked Rust crates are `libc`
-and `unicode-width`. Install `fortune-mod` separately for the greeting pipeline.
+and `unicode-width`. Install `fortune-mod` separately if you want random fortunes.
 
 From `apps/pony-rs`:
 
@@ -125,7 +139,7 @@ bash scripts/build.sh
 bash scripts/install.sh
 ```
 
-Or through tooltjik, using the pinned **Bun 1.4.4**:
+Or from the tooltjik workspace root:
 
 ```sh
 bun install --frozen-lockfile
@@ -136,11 +150,6 @@ bash scripts/install.sh pony-rs
 Installation places the executable in `~/.local/bin/pony-rs` and license notices
 in `~/.local/share/licenses/pony-rs`. Add `~/.local/bin` to PATH. The direct Cargo
 build and install scripts do not require Bun.
-
-The Chezmoi setup provisions Cargo and fortune-mod on client hosts, builds the
-app from tooltjik, and restores `fortune | pony-rs` in Fish's interactive greeting.
-It skips the greeting if either command is missing and does not invoke Docker.
-The `pony` Fish helper also displays a fresh greeting on demand.
 
 ## Development checks
 
