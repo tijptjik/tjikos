@@ -21,7 +21,7 @@ compositor with layer-shell support. Hyprland workspace actions target the curre
 
 ```sh
 bun install
-bun run --filter @tooltjik/bartjik build
+bun run --filter @tjikos/bartjik build
 bash scripts/install.sh bartjik
 bartjikctl init --preset desktop --theme rose-punk
 bartjikctl config --validate
@@ -324,6 +324,18 @@ and a 10-second reconciliation handles missed events. Action dispatch first focu
 the originating monitor and then selects an absolute numeric/name/special target.
 Scroll uses that monitor's current active workspace, not the clicked item's index.
 
+Set `offscreen:true` on a workspace module to show app icons in two solid bottom
+notches inside its workspace preview overlay. The left and right notches sit on
+opposite sides of the center, with a gap between them. Each appears only when its
+side has offscreen windows; each window keeps its own icon in spatial order.
+Click an icon to focus that exact window, let the scrolling layout bring it into
+view, and dismiss the preview. The buttons use themed panel tooltips. They follow
+the workspace being previewed, including inactive workspaces. Windows with more
+than eight logical pixels visible, floating/pinned/hidden windows and other
+monitors are excluded. Desktop entries supply app icons, with a generic executable
+fallback. Both notches disappear when empty. Geometry reconciles every 500ms while
+this option is enabled, including viewport gestures that emit no focus event.
+
 ### Credential sources and caching
 
 Export `COINMARKETCAP_API_KEY` and `OPENROUTER_API_KEY` to bartjik's environment.
@@ -492,9 +504,9 @@ emit typed parts rather than combined glyph/text strings.
 ## Validation
 
 ```sh
-bun run --filter @tooltjik/bartjik check
-bun run --filter @tooltjik/bartjik test
-bun run --filter @tooltjik/bartjik build
+bun run --filter @tjikos/bartjik check
+bun run --filter @tjikos/bartjik test
+bun run --filter @tjikos/bartjik build
 cd apps/bartjik
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/render.py /tmp/bartjik-previews
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/native.py

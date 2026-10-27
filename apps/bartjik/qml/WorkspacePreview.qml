@@ -31,6 +31,9 @@ DetachablePopup {
     readonly property var targetScreen: selected?.window?.screen || null
     readonly property real pixelScale: panelScreen?.devicePixelRatio || 1
     function snap(value) {return Math.round(value*pixelScale)/pixelScale;}
+    readonly property var previewRow: selected ? controller.items(selected.window.bar,selected.context.module).find(r=>r.id===selected.row.id) || selected.row : null
+    readonly property var offscreenWindows: previewRow?.offscreen || {left:[],right:[]}
+    readonly property bool hasOffscreen: offscreenWindows.left.length>0 || offscreenWindows.right.length>0
     readonly property var monitor: targetScreen ? Hyprland.monitorFor(targetScreen) : null
     readonly property var sourceList: !opened ? [] : controller.demo ? [
         {address:'demo-editor',workspace:{name:String(selected.row.workspace || selected.row.id)},lastIpcObject:{at:[0,0],size:[targetScreen.width*.65,targetScreen.height],class:'Editor',focusHistoryID:1}},
@@ -92,9 +95,16 @@ DetachablePopup {
         return Logic.panelHeld(Date.now()-controller.pointerUpdated<1500?controller.pointer:null,targetScreen?.name,selected?.context.hoverRegion,
             {x:pos.x+(side==='r'?w:0),y:pos.y+(side==='b'?h:0)},w,h,side);
     }
+    function focusOffscreen(address) {
+        if(!/^0x[0-9a-fA-F]+$/.test(address))return;
+        if(!controller.demo)Hyprland.dispatch('hl.dsp.focus({ window = "address:'+address+'" })');
+        close();
+    }
     function close() {opened=false;resetDetach();delay.stop();hide.stop();selectedKey='';hoverKey='';pending=null;}
     function capture(path) {body.grabToImage(result=>result.saveToFile(path));}
-    function inspect() {return {card:{x:attachedPosition().x,y:attachedPosition().y,width:body.width,height:body.height},opened:panelVisible,detached:detached,dragging:dragging,placement:placement(),sourceMonitor:targetScreen?.name || '',width:implicitWidth,height:implicitHeight,desktopWidth:desktop.width,desktopHeight:desktop.height,key:selectedKey,pending:delay.running,anchorX:anchorX,anchorY:anchorY,windows:sourceList.length,captured:thumbs.children.filter(c=>c.captured===true).length};}
+    function inspect() {return {card:{x:attachedPosition().x,y:attachedPosition().y,width:body.width,height:body.height},opened:panelVisible,detached:detached,dragging:dragging,placement:placement(),sourceMonitor:targetScreen?.name || '',width:implicitWidth,height:implicitHeight,desktopWidth:desktop.width,desktopHeight:desktop.height,key:selectedKey,pending:delay.running,anchorX:anchorX,anchorY:anchorY,windows:sourceList.length,captured:thumbs.children.filter(c=>c.captured===true).length,
+        offscreen:{visible:offscreenInset.visible,x:offscreenInset.x,y:offscreenInset.y,width:offscreenInset.width,height:offscreenInset.height,left:offscreenWindows.left.length,right:offscreenWindows.right.length,
+            notches:offscreenInset.children.filter(c=>c.objectName?.startsWith('workspace-offscreen-notch-')).map(c=>({side:c.modelData,visible:c.visible,x:c.x,width:c.width}))}};}
     Connections {
         target:popup.controller
         function onPointerChanged(){popup.followPointer();}
@@ -153,6 +163,53 @@ DetachablePopup {
                 }
             }
             Text {anchors.centerIn:parent;visible:popup.sourceList.length===0;text:'desktop_windows';color:popup.theme.muted;font.family:'Material Symbols Rounded';font.pixelSize:36;Accessible.name:'Empty workspace'}
+        }
+        Item {
+            id:offscreenInset
+            objectName:'workspace-offscreen-inset'
+            visible:popup.hasOffscreen
+            x:desktop.x;y:desktop.y+desktop.height-height
+            width:desktop.width;height:36
+            Repeater {
+                model:['left','right']
+                delegate:Item {
+                    id:notch
+                    required property string modelData
+                    objectName:'workspace-offscreen-notch-'+modelData
+                    readonly property bool onLeft:modelData==='left'
+                    readonly property var windows:popup.offscreenWindows[modelData]
+                    visible:windows.length>0
+                    width:Math.min(offscreenInset.width/2-20,offscreenIcons.implicitWidth+24)
+                    height:offscreenInset.height
+                    x:onLeft ? offscreenInset.width/2-10-width : offscreenInset.width/2+10
+                    Shape {
+                        anchors.fill:parent
+                        preferredRendererType:Shape.CurveRenderer
+                        ShapePath {
+                            strokeWidth:-1;fillColor:popup.theme.surface
+                            startX:-8;startY:notch.height
+                            PathQuad {x:0;y:notch.height-8;controlX:0;controlY:notch.height}
+                            PathLine {x:0;y:10}
+                            PathQuad {x:10;y:0;controlX:0;controlY:0}
+                            PathLine {x:notch.width-10;y:0}
+                            PathQuad {x:notch.width;y:10;controlX:notch.width;controlY:0}
+                            PathLine {x:notch.width;y:notch.height-8}
+                            PathQuad {x:notch.width+8;y:notch.height;controlX:notch.width;controlY:notch.height}
+                            PathLine {x:-8;y:notch.height}
+                        }
+                    }
+                    OffscreenWindows {
+                        id:offscreenIcons
+                        anchors.centerIn:parent
+                        width:implicitWidth;height:implicitHeight
+                        scale:Math.min(1,(notch.width-24)/Math.max(1,implicitWidth))
+                        windows:notch.windows
+                        side:notch.modelData
+                        theme:popup.theme
+                        onActivated:address=>popup.focusOffscreen(address)
+                    }
+                }
+            }
         }
         PanelHandle {
             visible:popup.detached;popup:popup;theme:popup.theme

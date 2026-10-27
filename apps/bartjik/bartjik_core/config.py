@@ -292,7 +292,7 @@ def module(value):
     for patch in value.get("items", {}).values():
         module(merge({"provider": value["provider"]}, patch))
     if value["provider"] == "workspaces":
-        for key in ("special", "occupiedOnly"):
+        for key in ("special", "occupiedOnly", "offscreen"):
             if key in value and not isinstance(value[key], bool):
                 raise ValueError(f"{key} must be boolean")
         labels = value.get("labels", {})

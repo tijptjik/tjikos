@@ -1,3 +1,4 @@
+//@ pragma RespectSystemStyle
 //@ pragma UseQApplication
 import QtQuick
 import Quickshell

@@ -8,6 +8,35 @@ from .model import item
 from .icons import icon
 
 
+def offscreen(snapshot, monitor, workspace_id=None):
+    """Tiled scrolling windows outside a workspace's retained viewport on this monitor."""
+    result = {"left": [], "right": []}
+    workspace = monitor.get("activeWorkspace", {}).get("id") if workspace_id is None else workspace_id
+    x = monitor.get("x", 0)
+    width = monitor.get("width", 0) / (monitor.get("scale") or 1)
+    if monitor.get("transform", 0) % 2:
+        width = monitor.get("height", 0) / (monitor.get("scale") or 1)
+    if width <= 0:
+        return result
+    for client in snapshot.get("clients", []):
+        if (client.get("monitor") != monitor.get("id")
+                or client.get("workspace", {}).get("id") != workspace
+                or client.get("mapped") is not True or client.get("hidden")
+                or client.get("floating") or client.get("pinned")
+                or client.get("fullscreenHandler") != "scrolling"):
+            continue
+        at, size = client.get("at", []), client.get("size", [])
+        if len(at) != 2 or len(size) != 2 or size[0] <= 0:
+            continue
+        # Ignore the few pixels of a neighboring border exposed by gap expansion.
+        side = "left" if at[0] + size[0] <= x + 8 else "right" if at[0] >= x + width - 8 else None
+        if side:
+            result[side].append({"address": client["address"], "app": client.get("class") or client.get("initialClass") or "Application", "title": client.get("title") or "", "x": at[0], "y": at[1]})
+    for windows in result.values():
+        windows.sort(key=lambda c: (c["x"], c["y"], c["address"]))
+    return result
+
+
 def view(snapshot, screen, options):
     monitors = {m["name"]: m for m in snapshot.get("monitors", [])}
     if screen not in monitors:
@@ -83,6 +112,8 @@ def view(snapshot, screen, options):
             )
         row["workspace"] = name if is_special or not name.isdecimal() else int(name)
         row["special"] = is_special
+        if options.get("offscreen") and wid is not None and not is_special:
+            row["offscreen"] = offscreen(snapshot, monitor, wid)
         result.append(row)
     return result
 
@@ -100,13 +131,17 @@ async def snapshot():
         monitors=[
             {
                 k: m.get(k)
-                for k in ("name", "activeWorkspace", "specialWorkspace", "focused")
+                for k in ("id", "name", "x", "y", "width", "height", "scale", "transform", "activeWorkspace", "specialWorkspace", "focused")
             }
             for m in monitors
         ],
         workspaces=[
             {k: w.get(k) for k in ("id", "name", "monitor", "windows")}
             for w in workspaces
+        ],
+        clients=[
+            {k: c.get(k) for k in ("address", "monitor", "workspace", "at", "size", "mapped", "hidden", "floating", "pinned", "fullscreenHandler", "class", "initialClass", "title")}
+            for c in clients
         ],
         urgent=[c.get("workspace", {}).get("id") for c in clients if c.get("urgent")],
     )
@@ -118,6 +153,7 @@ class Watcher:
         self.data = {}
         self.error = "connecting"
         self.task = None
+        self.track_geometry = False
 
     def start(self):
         self.task = asyncio.create_task(self.run())
@@ -151,7 +187,7 @@ class Watcher:
                 delay = 1
                 while True:
                     try:
-                        line = await asyncio.wait_for(reader.readline(), 10)
+                        line = await asyncio.wait_for(reader.readline(), 0.5 if self.track_geometry else 10)
                     except asyncio.TimeoutError:
                         await self.refresh()
                         continue

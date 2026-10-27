@@ -246,6 +246,12 @@ class Engine:
             if need_workspaces and not self.demo and not self.watcher:
                 self.watcher = workspaces.Watcher(self.changed)
                 self.watcher.start()
+            if self.watcher:
+                # Viewport gestures can move columns without a workspace/focus event.
+                self.watcher.track_geometry = any(
+                    m["provider"] == "workspaces" and m.get("offscreen", False)
+                    for b in bars for m in b["moduleConfigs"].values()
+                )
             for key, spec in needed.items():
                 if key not in self.workers:
                     self.workers[key] = Worker(spec, self.changed)
