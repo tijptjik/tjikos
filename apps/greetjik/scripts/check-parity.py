@@ -31,7 +31,7 @@ fixed_layouts = []
 count = 0
 for group, tty in [('ponies', False), ('extraponies', False), ('ttyponies', True), ('extrattyponies', True)]:
     for path in sorted((root / 'assets' / group).glob('*.pony')):
-        args = [str(root / 'target/release/pony-rs'), '-f', path.stem, '-W', '240']
+        args = [str(root / 'target/release/greetjik'), '-f', path.stem, '-W', '240']
         if group.startswith('extra'):
             args.append('--extra')
         if tty:
@@ -55,7 +55,7 @@ for group, tty in [('ponies', False), ('extraponies', False), ('ttyponies', True
             failures.append(f'{group}/{path.name}')
             if len(failures) <= 3:
                 import difflib
-                print('\n'.join(difflib.unified_diff(expected.splitlines(), actual.splitlines(), fromfile=str(path), tofile='pony-rs')))
+                print('\n'.join(difflib.unified_diff(expected.splitlines(), actual.splitlines(), fromfile=str(path), tofile='greetjik')))
 print(f'{count - len(failures) - len(fixed_layouts)} layouts match upstream; {len(fixed_layouts) + len(reference_errors)} known upstream TTY bugs covered by Rust layout tests')
 print('Fixed upstream layouts:', fixed_layouts)
 print('Upstream renderer errors:', reference_errors)

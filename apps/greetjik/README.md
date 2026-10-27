@@ -1,12 +1,14 @@
-# pony-rs
+# greetjik
 
-![pony-rs rendering Twilight with a piped quote](docs/showcase.png)
+![greetjik rendering Twilight with a piped quote](docs/showcase.png)
+
+The screenshot above was captured before the rename from `pony-rs` to `greetjik`.
 
 Pony artwork and piped quotes, rendered by a small native Rust executable.
 The complete upstream ponysay artwork catalogue is embedded in one binary.
 
 ```sh
-fortune | pony-rs
+fortune | greetjik
 ```
 
 Each invocation selects a random pony and renders the text supplied on stdin.
@@ -15,7 +17,7 @@ Use `-f NAME` to choose a particular pony.
 ## Motivation
 
 We run this a hundred times a day. Startup latency matters: a small pause on
-every invocation adds up. pony-rs keeps the ponies and the quotes while
+every invocation adds up. greetjik keeps the ponies and the quotes while
 minimizing the work between input and output.
 
 The original Python ponysay also brought packaging and compatibility friction.
@@ -31,7 +33,7 @@ These reports span different releases and systems; some installation issues
 were later closed. They motivate a simpler deployment model.
 
 Containerizing ponysay isolates host packaging dependencies but adds container
-startup to each invocation. `pony-rs` keeps the artwork and text-rendering core
+startup to each invocation. `greetjik` keeps the artwork and text-rendering core
 in a native executable, with no Python runtime, container, resident service, or
 runtime asset downloads.
 
@@ -43,7 +45,7 @@ pony and the same piped quote:
 | Quote-to-output pipeline | Median | Mean | Range |
 | --- | ---: | ---: | ---: |
 | Old `xargs -0 docker run --rm …` pipeline | 479.20 ms | 477.33 ms | 451.77–503.31 ms |
-| Native `pony-rs` | **1.27 ms** | **1.34 ms** | **1.05–2.05 ms** |
+| Native `greetjik` | **1.27 ms** | **1.34 ms** | **1.05–2.05 ms** |
 
 The native pipeline was **about 378x faster by median elapsed time**, removing
 approximately **478 ms per invocation** in this comparison.
@@ -60,32 +62,33 @@ These are warm-cache measurements on one machine.
 
 Requires Python 3 for the benchmark runner and an already-running Docker daemon
 with the old image cached. Docker and Python are not runtime requirements for
-pony-rs itself.
+greetjik itself.
 
 ```sh
-# From apps/pony-rs, after building:
+# From apps/greetjik, after building:
 python3 scripts/benchmark.py \
-  --binary ./dist/pony-rs \
+  --binary ./dist/greetjik \
   --runs 12 --warmups 2 \
   --output /tmp/pony-benchmark.json
 ```
 
 The runner deliberately does not pull images. The [recorded results](docs/benchmarks/2026-10-27-docker-vs-rust.json)
 include every sample, command arguments, platform, binary version, and Docker
-image identity.
+image identity. The dated record retains the original `pony-rs` executable name
+used for those measurements.
 
 ## Usage
 
 ```sh
-fortune | pony-rs                             # new quote and random regular pony
-printf 'Hello, world!\n' | pony-rs -f twilight
-pony-rs -f rainbowdash 'Stay awesome'
-pony-rs --list                               # 474 regular entries
-pony-rs --all --list                         # all 577 entries
-pony-rs --extra 'Hello from the extras'       # random extra pony
-pony-rs --extra -f applejack 'Extra variant'  # resolve a shared name explicitly
-pony-rs --tty -f twilight 'TTY artwork'
-fortune | pony-rs --width 100
+fortune | greetjik                             # new quote and random regular pony
+printf 'Hello, world!\n' | greetjik -f twilight
+greetjik -f rainbowdash 'Stay awesome'
+greetjik --list                               # 474 regular entries
+greetjik --all --list                         # all 577 entries
+greetjik --extra 'Hello from the extras'       # random extra pony
+greetjik --extra -f applejack 'Extra variant'  # resolve a shared name explicitly
+greetjik --tty -f twilight 'TTY artwork'
+fortune | greetjik --width 100
 ```
 
 | Option | Behavior |
@@ -99,7 +102,7 @@ fortune | pony-rs --width 100
 | `-V`, `--version` | Print the application version. |
 | `-h`, `--help` | Show usage. |
 
-With no message arguments, pony-rs reads UTF-8 text from stdin. With arguments,
+With no message arguments, greetjik reads UTF-8 text from stdin. With arguments,
 it joins them into the message; use `--` before text beginning with a dash.
 Running without text in an interactive terminal prints usage guidance instead
 of waiting for input. Unknown pony names and invalid options return an error.
@@ -118,7 +121,7 @@ need a runtime artwork directory or network connection.
 The supported scope is pony selection, artwork rendering, and piped or argument
 text. Custom balloon themes, image conversion, palette/KMS administration, and
 the built-in episode-quote database are omitted. Pipe `fortune` or any other
-text source into pony-rs to supply quotes.
+text source into greetjik to supply quotes.
 
 All 1,154 entries render in the catalogue tests. Differential tests match 1,152
 upstream layouts. Upstream's `ttyponies/twilightrage` raises an exception, and
@@ -132,35 +135,35 @@ Building requires Rust and Cargo. Runtime dependencies are supplied by the
 compiled binary and system libraries; the two locked Rust crates are `libc`
 and `unicode-width`. Install `fortune-mod` separately if you want random fortunes.
 
-From `apps/pony-rs`:
+From `apps/greetjik`:
 
 ```sh
 bash scripts/build.sh
 bash scripts/install.sh
 ```
 
-Or from the tooltjik workspace root:
+Or from the TjikOS workspace root:
 
 ```sh
 bun install --frozen-lockfile
-bun run build --filter=@tooltjik/pony-rs
-bash scripts/install.sh pony-rs
+bun run build --filter=@tjikos/greetjik
+bash scripts/install.sh greetjik
 ```
 
-Installation places the executable in `~/.local/bin/pony-rs` and license notices
-in `~/.local/share/licenses/pony-rs`. Add `~/.local/bin` to PATH. The direct Cargo
+Installation places the executable in `~/.local/bin/greetjik` and license notices
+in `~/.local/share/licenses/greetjik`. Add `~/.local/bin` to PATH. The direct Cargo
 build and install scripts do not require Bun.
 
 ## Development checks
 
 ```sh
-# From apps/pony-rs:
+# From apps/greetjik:
 cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
 cargo fmt --check
 
-# From the tooltjik root:
-bun run check --filter=@tooltjik/pony-rs
+# From the TjikOS root:
+bun run check --filter=@tjikos/greetjik
 
 # Optional comparison with a checkout of the pinned upstream:
 python3 scripts/check-parity.py /path/to/erkin-ponysay

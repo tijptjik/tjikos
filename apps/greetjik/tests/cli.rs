@@ -6,7 +6,7 @@ use std::{
 #[test]
 fn piped_quote_and_regular_extra_name_collisions() {
     let run = |extra: bool| {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_pony-rs"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_greetjik"));
         command
             .args(["-f", "applejack", "-W", "100"])
             .env("TERM", "xterm-kitty");
@@ -40,7 +40,7 @@ fn listing_and_invalid_selection() {
         (vec!["--all", "--list"], 577),
         (vec!["--extra", "--list"], 103),
     ] {
-        let output = Command::new(env!("CARGO_BIN_EXE_pony-rs"))
+        let output = Command::new(env!("CARGO_BIN_EXE_greetjik"))
             .args(options)
             .output()
             .unwrap();
@@ -50,7 +50,7 @@ fn listing_and_invalid_selection() {
             expected
         );
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_pony-rs"))
+    let output = Command::new(env!("CARGO_BIN_EXE_greetjik"))
         .args(["-f", "missing-pony", "hello"])
         .output()
         .unwrap();

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-use pony_rs::{render, PONIES};
+use greetjik::{render, PONIES};
 use std::{
     env,
     fs::File,
@@ -51,11 +51,11 @@ fn run() -> Result<(), String> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-h" | "--help" => {
-                println!("pony-rs — native pony artwork and piped quotes\n\nUsage: fortune | pony-rs [OPTIONS]\n       pony-rs [OPTIONS] MESSAGE...\n\n  -f, --pony NAME    Select any regular or extra pony\n  -l, --list         List regular pony names\n  -a, --all          Include extras in random selection/listing\n  -A, --extra        Select/list extras only\n      --tty          Use the complete upstream TTY artwork\n  -W, --width N      Wrap the quote to N terminal columns\n  -V, --version      Print version\n\nNo daemon, Docker, Python, network, or external artwork files required.");
+                println!("greetjik — native pony artwork and piped quotes\n\nUsage: fortune | greetjik [OPTIONS]\n       greetjik [OPTIONS] MESSAGE...\n\n  -f, --pony NAME    Select any regular or extra pony\n  -l, --list         List regular pony names\n  -a, --all          Include extras in random selection/listing\n  -A, --extra        Select/list extras only\n      --tty          Use the complete upstream TTY artwork\n  -W, --width N      Wrap the quote to N terminal columns\n  -V, --version      Print version\n\nNo daemon, Docker, Python, network, or external artwork files required.");
                 return Ok(());
             }
             "-V" | "--version" => {
-                println!("pony-rs {}", env!("CARGO_PKG_VERSION"));
+                println!("greetjik {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             "-f" | "--pony" => name = Some(args.next().ok_or("--pony needs a name")?),
@@ -108,7 +108,7 @@ fn run() -> Result<(), String> {
     let message = if message.is_empty() {
         if io::stdin().is_terminal() {
             return Err(
-                "Pipe a quote into pony-rs, or supply a message. Try: fortune | pony-rs".into(),
+                "Pipe a quote into greetjik, or supply a message. Try: fortune | greetjik".into(),
             );
         }
         let mut text = String::new();
@@ -131,7 +131,7 @@ fn io_error(e: io::Error) -> String {
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("pony-rs: {error}");
+        eprintln!("greetjik: {error}");
         process::exit(2);
     }
 }

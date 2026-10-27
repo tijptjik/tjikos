@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare cached Docker ponysay with pony-rs using the same pony and quote."""
+"""Compare cached Docker ponysay with greetjik using the same pony and quote."""
 import argparse
 import datetime
 import json
@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--warmups', type=int, default=2)
     parser.add_argument('--pony', default='twilight')
     parser.add_argument('--image', default='mpepping/ponysay:latest')
-    parser.add_argument('--binary', default='pony-rs')
+    parser.add_argument('--binary', default='greetjik')
     parser.add_argument('--output', type=Path, default=Path('benchmark.json'))
     args = parser.parse_args()
     if args.runs < 1 or args.warmups < 0:
