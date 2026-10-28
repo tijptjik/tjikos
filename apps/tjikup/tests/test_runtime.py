@@ -2,15 +2,38 @@ import contextlib
 import io
 import os
 from pathlib import Path
+import pty
 import re
 import sys
 import tempfile
+import termios
 import unittest
 from unittest.mock import patch
 from tjikup import runtime
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_piped_status_uses_live_terminal_width_instead_of_stale_hint(self):
+        master, slave = pty.openpty()
+        self.addCleanup(os.close, master)
+        terminal = os.fdopen(slave, "w")
+        self.addCleanup(terminal.close)
+        with patch.dict(os.environ, {"TJIKUP_COLUMNS": "120", "TJIKUP_COLOR": "0"}), \
+                contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(terminal):
+            for width in (80, 64, 100):
+                termios.tcsetwinsize(slave, (24, width))
+                self.assertEqual(runtime.terminal_columns(), width)
+                row = runtime.format_status(
+                    "APPLY", "⠋", "Chezmoi (Files and Task Preparation)", "0.1s")
+                self.assertLess(runtime.display_width(row), width)
+
+    def test_detached_status_keeps_inherited_width(self):
+        with patch.dict(os.environ, {"TJIKUP_COLUMNS": "103"}), \
+                contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(runtime.terminal_columns(), 103)
+
     def test_completion_banner_colors_and_centering(self):
         warning = "WARN\t!\tExample warning\tdetail\n"
         failure = "FAILED\t✗\tExample failure\tdetail\n"

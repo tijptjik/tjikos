@@ -23,6 +23,15 @@ class UpdateError(RuntimeError):
 
 def terminal_columns() -> int:
     """Carry terminal geometry through piped apply commands."""
+    # Streaming children pipe stdout but keep stderr on the terminal. Prefer
+    # its current width over the inherited hint, which can outlive a resize.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            columns = os.get_terminal_size(stream.fileno()).columns
+        except (OSError, ValueError, AttributeError):
+            continue
+        if columns > 0:
+            return max(24, columns)
     try:
         return max(24, int(os.environ.get("TJIKUP_COLUMNS", "")))
     except ValueError:
