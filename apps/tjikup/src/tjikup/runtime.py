@@ -91,6 +91,7 @@ def run_stream(
     timeout: int = COMMAND_TIMEOUT_SECONDS,
     stdin=None,
     formatter=None,
+    stderr_handler=None,
     check: bool = True,
 ) -> int:
     stream_env = {
@@ -123,6 +124,7 @@ def run_stream(
             env=stream_env,
             stdin=stdin,
             stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE if stderr_handler else None,
             start_new_session=os.environ.get("TJIKUP_CHILD") != "1",
         ) as process:
             deadline = time.monotonic() + timeout
@@ -156,16 +158,24 @@ def run_stream(
             try:
                 with selectors.DefaultSelector() as selector:
                     selector.register(process.stdout, selectors.EVENT_READ)
-                    while True:
+                    stderr_decoder = codecs.getincrementaldecoder(sys.stdout.encoding or "utf-8")("replace")
+                    if stderr_handler:
+                        selector.register(process.stderr, selectors.EVENT_READ)
+                    while selector.get_map():
                         remaining = deadline - time.monotonic()
-                        if remaining <= 0 or not selector.select(remaining):
+                        if remaining <= 0:
                             raise subprocess.TimeoutExpired(command, timeout)
-                        chunk = process.stdout.read1(65536)
-                        forward_output(
-                            decoder.decode(chunk, final=not chunk), final=not chunk
-                        )
-                        if not chunk:
-                            break
+                        ready = selector.select(remaining)
+                        if not ready:
+                            raise subprocess.TimeoutExpired(command, timeout)
+                        for key, _ in ready:
+                            chunk = key.fileobj.read1(65536)
+                            if key.fileobj is process.stdout:
+                                forward_output(decoder.decode(chunk, final=not chunk), final=not chunk)
+                            else:
+                                stderr_handler(stderr_decoder.decode(chunk, final=not chunk))
+                            if not chunk:
+                                selector.unregister(key.fileobj)
                 returncode = process.wait(timeout=max(0, deadline - time.monotonic()))
             except BaseException:
                 try:

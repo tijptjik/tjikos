@@ -62,6 +62,31 @@ class RuntimeTests(unittest.TestCase):
             )
         self.assertEqual(output.getvalue(), "✓")
 
+    def test_stderr_relay_is_incremental_and_drains_after_stdout_closes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ack = Path(directory) / 'ack'
+            output, errors = io.StringIO(), io.StringIO()
+
+            def receive(value):
+                errors.write(value)
+                if errors.getvalue() == 'continue? ':
+                    ack.touch()
+
+            child = (
+                "import os,pathlib,sys,time; "
+                "sys.stderr.write('continue? '); sys.stderr.flush(); "
+                "ack=pathlib.Path(sys.argv[1]); deadline=time.monotonic()+1\n"
+                "while not ack.exists() and time.monotonic()<deadline: time.sleep(.01)\n"
+                "assert ack.exists(), 'prompt was buffered'; "
+                "os.close(1); os.write(2, bytes([226])); time.sleep(.02); "
+                "os.write(2, bytes([156,147]))"
+            )
+            with contextlib.redirect_stdout(output):
+                runtime.run_stream([sys.executable, '-c', child, str(ack)], Path.cwd(),
+                                   stderr_handler=receive, timeout=3)
+            self.assertEqual(output.getvalue(), '')
+            self.assertEqual(errors.getvalue(), 'continue? ✓')
+
     def test_stream_timeout(self):
         with (
             contextlib.redirect_stdout(io.StringIO()),
