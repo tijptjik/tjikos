@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 import os
+import re
 import sys
 import threading
 import time
@@ -11,6 +12,65 @@ from . import runtime
 
 def enabled():
     return os.environ.get("TJIKUP_PROGRESS", "1" if sys.stdout.isatty() else "0") == "1" and os.environ.get("TERM") != "dumb"
+
+
+SGR = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def status_cells(value):
+    """Styled display cells, including space occupied by wide characters."""
+    cells, style, offset = [], "", 0
+
+    def append(text):
+        for char in text:
+            width = runtime.display_width(char)
+            if not width and cells:
+                index = len(cells) - 1
+                while index and not cells[index][0]:
+                    index -= 1
+                previous, color = cells[index]
+                cells[index] = (previous + char, color)
+            else:
+                cells.append((char, style))
+                cells.extend(("", style) for _ in range(max(0, width - 1)))
+
+    for match in SGR.finditer(value):
+        append(value[offset:match.start()])
+        style = "" if match.group() == "\033[0m" else style + match.group()
+        offset = match.end()
+    append(value[offset:])
+    return cells
+
+
+def changed_spans(before, after, *, group=1):
+    """Return changed cell runs; grouped cells support Kitty's 2x2 text blocks."""
+    before, after = status_cells(before), status_cells(after)
+    width = ((max(len(before), len(after)) + group - 1) // group) * group
+    before.extend([(" ", "")] * (width - len(before)))
+    after.extend([(" ", "")] * (width - len(after)))
+    dirty = set()
+    for column in range(width):
+        if before[column] != after[column]:
+            start = column // group * group
+            end = start + group
+            # Group boundaries must not split a wide character in either row.
+            while start and (not before[start][0] or not after[start][0]):
+                start = max(0, start - group)
+            while end < width and (not before[end][0] or not after[end][0]):
+                end = min(width, end + group)
+            dirty.update(range(start, end))
+    start = None
+    for column in range(width + 1):
+        if column in dirty:
+            if start is None:
+                start = column
+        elif start is not None:
+            yield start, after[start:column]
+            start = None
+
+
+def normal_text(cells):
+    return "".join("\033[0m" + style + char for char, style in cells if char) + "\033[0m"
 
 
 class Progress:
@@ -23,6 +83,8 @@ class Progress:
         self.stop = threading.Event()
         self.thread = None
         self.cursor_hidden = False
+        self.rendered = {}
+        self.columns = None
 
     def __enter__(self):
         if self.live:
@@ -66,11 +128,46 @@ class Progress:
         while not self.stop.wait(0.12):
             with self.lock:
                 if self.rows:
-                    with self._frame():
-                        self._clear()
-                        self._draw()
+                    self._refresh()
+
+    def _patch(self, before, after):
+        return "".join(
+            f"\033[{column + 1}G" + normal_text(cells)
+            for column, cells in changed_spans(runtime.format_status(*before),
+                                               runtime.format_status(*after))
+        )
+
+    def _refresh(self):
+        # Subclasses with static panels or temporarily suspended output have
+        # no cached status rows to animate.
+        if not self.height or not self.rendered:
+            return
+        if runtime.terminal_columns() != self.columns:
+            with self._frame():
+                self._clear()
+                self._draw()
+            return
+        now = time.monotonic()
+        spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[int(now * 8) % 10]
+        patches = []
+        row_height = self.height // len(self.rows)
+        for index, (key, (verb, label, started)) in enumerate(self.rows.items()):
+            current = (verb, spinner, label, f"{now - started:.1f}s")
+            previous = self.rendered.get(key)
+            if previous is not None:
+                patch = self._patch(previous, current)
+                if patch:
+                    patches.append(f"\033[{self.height - index * row_height}A" + patch
+                                   + f"\033[{self.height - index * row_height}B")
+            self.rendered[key] = current
+        if patches:
+            with self._frame():
+                # Keep the terminal cursor parked below the active rows. No
+                # erasure, newlines, labels or image placeholders on a tick.
+                self.stream.write("\0337" + "".join(patches) + "\0338")
 
     def _clear(self):
+        self.rendered.clear()
         if self.height:
             self.stream.write(f"\r\033[{self.height}A")
             for _ in range(self.height):
@@ -85,9 +182,13 @@ class Progress:
         if self.live:
             now = time.monotonic()
             spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[int(now * 8) % 10]
-            for verb, label, started in self.rows.values():
-                self._print(verb, spinner, label, f"{now - started:.1f}s")
+            self.rendered.clear()
+            for key, (verb, label, started) in self.rows.items():
+                fields = (verb, spinner, label, f"{now - started:.1f}s")
+                self._print(*fields)
+                self.rendered[key] = fields
             self.height = len(self.rows)
+            self.columns = runtime.terminal_columns()
 
     def start(self, key, label, verb="UPDATE"):
         with self.lock, self._frame():

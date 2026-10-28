@@ -8,7 +8,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from tjikup.progress import Progress
+from tjikup.progress import Progress, changed_spans, status_cells
 from tjikup import runtime
 
 
@@ -121,15 +121,84 @@ class ProgressTests(unittest.TestCase):
     def test_tick_redraw_does_not_show_cursor_between_frames(self):
         output = io.StringIO()
         progress = Progress(stream=output, live=True)
-        progress.start('a', 'Python')
+        with patch('tjikup.progress.time.monotonic', return_value=0):
+            progress.start('a', 'Python')
         output.seek(0)
         output.truncate()
-        with patch.object(progress.stop, 'wait', side_effect=[False, False, True]):
+        with patch.object(progress.stop, 'wait', side_effect=[False, False, True]), \
+                patch('tjikup.progress.time.monotonic', side_effect=[.125, .25]):
             progress._tick()
         self.assertEqual(output.getvalue().count('\x1b[?2026h'), 2)
         self.assertEqual(output.getvalue().count('\x1b[?2026l'), 2)
         self.assertNotIn('\x1b[?25', output.getvalue())
         progress.discard('a')
+
+    def test_tick_patches_spinner_and_timer_without_repainting_labels(self):
+        output = io.StringIO()
+        with patch.dict(os.environ, {'TJIKUP_COLOR': '1', 'TJIKUP_COLUMNS': '80'}):
+            progress = Progress(stream=output, live=True)
+            with patch('tjikup.progress.time.monotonic', return_value=0):
+                progress.start('a', 'Python')
+                progress.start('b', 'Icons')
+            output.seek(0)
+            output.truncate()
+            with patch('tjikup.progress.time.monotonic', return_value=.125):
+                progress._refresh()
+            frame = output.getvalue()
+            self.assertIn('\x1b[2A', frame)
+            self.assertIn('\x1b[1A', frame)
+            self.assertIn('\x1b[9G', frame)
+            self.assertIn('⠙', frame)
+            self.assertIn('\x1b7', frame)
+            self.assertIn('\x1b8', frame)
+            for repaint in ('Python', 'Icons', 'UPDATE', '\x1b[2K', '\n', '\r', '\x1b[?25'):
+                self.assertNotIn(repaint, frame)
+            self.assertEqual(progress.height, 2)
+
+    def test_unchanged_tick_emits_nothing(self):
+        output = io.StringIO()
+        progress = Progress(stream=output, live=True)
+        with patch('tjikup.progress.time.monotonic', return_value=0):
+            progress.start('a', 'Python')
+            output.seek(0)
+            output.truncate()
+            progress._refresh()
+        self.assertEqual(output.getvalue(), '')
+
+    def test_resize_redraws_once_then_returns_to_cell_patches(self):
+        output = io.StringIO()
+        progress = Progress(stream=output, live=True)
+        with patch.dict(os.environ, {'TJIKUP_COLUMNS': '80'}):
+            progress.start('a', 'Python (environment)')
+        output.seek(0)
+        output.truncate()
+        with patch.dict(os.environ, {'TJIKUP_COLUMNS': '40'}):
+            progress._refresh()
+            self.assertIn('\x1b[2K', output.getvalue())
+            self.assertEqual(progress.columns, 40)
+            output.seek(0)
+            output.truncate()
+            progress._refresh()
+            self.assertNotIn('\x1b[2K', output.getvalue())
+            self.assertNotIn('Python', output.getvalue())
+
+    def test_timer_growth_preserves_wide_text_and_grouped_cells(self):
+        for width in ('24', '40', '80'):
+            for group in (1, 2):
+                with self.subTest(width=width, group=group), patch.dict(os.environ, {
+                        'TJIKUP_COLUMNS': width, 'TJIKUP_COLOR': '1'}):
+                    before = runtime.format_status('UPDATE', '⠋', '中é文 (environment)', '9.9s')
+                    after = runtime.format_status('UPDATE', '⠙', '中é文 (environment)', '10.0s')
+                    screen = status_cells(before)
+                    expected = status_cells(after)
+                    size = ((max(len(screen), len(expected)) + group - 1) // group) * group
+                    screen.extend([(' ', '')] * (size - len(screen)))
+                    expected.extend([(' ', '')] * (size - len(expected)))
+                    for column, cells in changed_spans(before, after, group=group):
+                        self.assertEqual(column % group, 0)
+                        self.assertTrue(cells[0][0])
+                        screen[column:column + len(cells)] = cells
+                    self.assertEqual(screen, expected)
 
     def test_nested_stream_preserves_progress_capability(self):
         output = io.StringIO()
