@@ -1,0 +1,10 @@
+/init
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
+  Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
+/guide
+  Content-Type: text/plain; charset=utf-8
+  X-Content-Type-Options: nosniff
+/*
+  Strict-Transport-Security: max-age=31536000

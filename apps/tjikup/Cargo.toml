@@ -1,0 +1,24 @@
+[package]
+name = "tjikup"
+version = "0.2.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Declarative, resource-aware task runner"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+flate2 = "1.1.10"
+libc = "0.2"
+minijinja = { version = "2", features = ["loader"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+signal-hook = "0.3"
+tempfile = "3"
+unicode-width = "0.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
