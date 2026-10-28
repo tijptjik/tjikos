@@ -13,13 +13,15 @@ class BootstrapTests(unittest.TestCase):
         result = subprocess.run(['bash', str(ROOT / 'init.sh'), '--plan'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         packages = next(line for line in result.stdout.splitlines() if 'Install Fedora packages:' in line).split(':', 1)[1].split()
-        self.assertFalse(set(packages) & {'python3', 'python3-tomli', 'python3-tomli-w', 'cargo', 'gcc', 'make', 'pkgconf-pkg-config', 'unzip', 'tar', 'gzip', 'gh'})
-        for requirement in ('fish', 'git', 'chezmoi', 'age', 'openssh-clients', 'SHA-256', 'HTTPS', 'separate command'):
+        self.assertFalse(set(packages) & {'python3', 'python3-tomli', 'python3-tomli-w', 'cargo', 'gcc', 'make', 'pkgconf-pkg-config', 'unzip', 'tar', 'gzip', 'gh', 'openssh-clients'})
+        for requirement in ('fish', 'git', 'chezmoi', 'age', 'SHA-256', 'HTTPS', 'separate command'):
             self.assertIn(requirement, result.stdout)
 
     def test_reviewed_script_contains_no_unpinned_installer_pipeline(self):
         script = (ROOT / 'init.sh').read_text()
         self.assertNotIn('curl |', script)
+        for forbidden in ('github-ssh.sh', 'GHI_TOKEN', 'remote set-url', 'core.sshCommand', 'git push'):
+            self.assertNotIn(forbidden, script)
         self.assertIn('^ [0-9a-f]'.replace(' ', ''), script)
         self.assertIn('git clone --no-checkout', script)
         self.assertIn('No reset or checkout was performed', script)

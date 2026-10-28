@@ -33,8 +33,7 @@ your independently trusted GitHub checkout when checking for tampering.
 The script:
 
 1. Checks Fedora's existing Python 3.11+ for the remaining standard-library
-   helpers. It installs only `ca-certificates curl git fish chezmoi gum age jq
-   openssh-clients`. It installs no Python TOML packages, compiler, build tools,
+   helpers. It installs only `ca-certificates curl git fish chezmoi gum age jq`. It installs no Python TOML packages, compiler, build tools,
    archive tools or GitHub CLI.
 2. Fetches the two public repositories over HTTPS so no Git credential is needed
    to obtain the credential-setup code. It checks out the exact reviewed commits
@@ -51,34 +50,15 @@ The script:
 6. Initializes Chezmoi's template configuration with the selected role. It does
    not apply home or system configuration. Existing TOML is read with Python's
    built-in `tomllib` and serialized by Chezmoi itself; custom settings are retained.
-7. Configures GitHub SSH from BWS, verifies the authenticated account, then sets
-   both remotes to `git@github.com:tijptjik/...`. Initial public HTTPS fetching is
-   only the credential-free bootstrap step. Normal Git synchronization uses SSH.
-8. Prints `tjikup --plan`. Review it before running
+7. Prints `tjikup --plan`. Review it before running
    `tjikup --skip-repo-sync --show-skips` for the first apply.
 
-### GitHub SSH credentials
+### GitHub access
 
-To retrieve an existing authorized SSH private key from BWS, supply its secret ID
-(the value must be an unlocked OpenSSH private key):
-
-```bash
-bash init.sh --ssh-key-secret YOUR_BWS_SECRET_ID
-```
-
-Without that option, bootstrap reads `GHI_TOKEN` from BWS and registers a newly
-created Ed25519 key for this device. The token must be valid and have SSH-key write
-permission (`admin:public_key` for a classic GitHub token). A rejected token stops
-setup with an actionable error; bootstrap does not fall back to another account
-or GitHub CLI authentication.
-
-The private key is stored as `~/.ssh/tjikup_github_ed25519` with mode 0600. Existing
-keys are preserved. The two checkouts use a dedicated SSH configuration with
-strict host checking and GitHub host keys obtained from its HTTPS metadata API.
-The GitHub token is never stored in Git configuration or passed in process argv.
-Git author identity is initialized per checkout only if it is not already set.
-An already working managed SSH key can be reused without registering it again.
-
+New clones keep HTTPS remotes. Bootstrap does not commit or push, fetch a GitHub
+credential, generate SSH keys, or register keys with GitHub. BWS and age are needed
+only to unlock encrypted configuration. Existing checkout remotes are preserved.
+Configure GitHub write access separately on devices that should push changes.
 
 Keep Bitwarden access and recovery material outside Git. Tailscale membership,
 disk initialization, backups, desktop login and any hardware setup remain

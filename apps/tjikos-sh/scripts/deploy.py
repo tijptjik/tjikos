@@ -16,7 +16,6 @@ release = json.loads((root / 'release.json').read_text())
 for name, repository, required in (
     ('dotjik', 'dotfiles', 'scripts/device-policy.py'),
     ('tjikos', 'tjikos', 'apps/tjikup/src/device.rs'),
-    ('tjikos', 'tjikos', 'apps/tjikos-sh/helpers/github-ssh.sh'),
     ('tjikos', 'tjikos', 'apps/tjikup/scripts/fetch-release.sh'),
 ):
     revision = release.get(name + '_revision')
