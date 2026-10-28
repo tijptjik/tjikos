@@ -12,6 +12,10 @@
       "name": "@tjikos/bartjik",
       "version": "0.1.0",
     },
+    "apps/greetjik": {
+      "name": "@tjikos/greetjik",
+      "version": "0.1.0",
+    },
     "apps/mailtjik": {
       "name": "@tjikos/mailtjik",
       "version": "0.1.0",
@@ -20,27 +24,23 @@
       "name": "@tjikos/notjik",
       "version": "0.1.0",
     },
-    "apps/greetjik": {
-      "name": "@tjikos/greetjik",
-      "version": "0.1.0",
-    },
     "apps/runtjik": {
       "name": "@tjikos/runtjik",
       "version": "0.8.3",
     },
     "apps/tjikup": {
       "name": "@tjikos/tjikup",
-      "version": "0.1.0",
+      "version": "0.2.0",
     },
   },
   "packages": {
     "@tjikos/bartjik": ["@tjikos/bartjik@workspace:apps/bartjik"],
 
+    "@tjikos/greetjik": ["@tjikos/greetjik@workspace:apps/greetjik"],
+
     "@tjikos/mailtjik": ["@tjikos/mailtjik@workspace:apps/mailtjik"],
 
     "@tjikos/notjik": ["@tjikos/notjik@workspace:apps/notjik"],
-
-    "@tjikos/greetjik": ["@tjikos/greetjik@workspace:apps/greetjik"],
 
     "@tjikos/runtjik": ["@tjikos/runtjik@workspace:apps/runtjik"],
 
