@@ -47,6 +47,15 @@ autocommits, private execution receipts, and completion notifications.
 [Configuration](apps/tjikup/README.md#configuration) ·
 [Configuration managers](apps/tjikup/README.md#configuration-managers-and-templates)
 
+## Synctjik
+
+Native Rust archival and reviewed device-state synchronization. It preserves the
+existing encrypted snapshots and merge baselines, provides guided restoration,
+and keeps scheduled backups independent of configuration updates.
+
+[Overview and commands](apps/synctjik/README.md) ·
+[Bootstrap](apps/tjikos-sh/README.md)
+
 ## <img src="docs/icons/bartjik.svg" width="40" height="40" alt=""> bartjik
 
 ![bartjik status islands with synthetic data](apps/bartjik/docs/rose-punk-status-bar.png)

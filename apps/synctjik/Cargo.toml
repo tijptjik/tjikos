@@ -1,0 +1,33 @@
+[package]
+name = "synctjik"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Verified archives and reviewed device state synchronization"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sha1 = "0.10"
+md-5 = "0.10"
+aes = "0.8"
+pbkdf2 = "0.12"
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+libc = "0.2"
+tempfile = "3"
+tar = "0.4"
+zstd = "0.13"
+glob = "0.3"
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+similar = "2"
+crossterm = "0.28"
+signal-hook = "0.3"
+tjik-ui = { path = "../../packages/tjik-ui" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
