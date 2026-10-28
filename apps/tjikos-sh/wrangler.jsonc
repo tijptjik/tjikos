@@ -10,6 +10,7 @@
     "html_handling": "none",
     "not_found_handling": "none"
   },
-  "routes": [{"pattern": "sh.type.hk", "custom_domain": true}],
+  "routes": [{"pattern": "sh.type.hk", "custom_domain": true,
+              "zone_id": "bd5c5900001411ea1036620c4bb3d754"}],
   "observability": {"enabled": true}
 }

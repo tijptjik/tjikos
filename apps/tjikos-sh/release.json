@@ -2,6 +2,6 @@
   "version": 1,
   "dotjik_branch": "bootstrap/fedora-2026-10-28",
   "tjikos_branch": "bootstrap/fedora-2026-10-28",
-  "dotjik_revision": null,
-  "tjikos_revision": null
+  "dotjik_revision": "e99a71b50585811987b6fe3e26991f87fb2f3ec6",
+  "tjikos_revision": "0f4efd9d436e72398f5435e8fc0812e06113eb7c"
 }

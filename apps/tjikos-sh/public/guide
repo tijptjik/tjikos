@@ -129,7 +129,9 @@ with exact, publicly available dotfiles and tjikOS commit hashes containing the
 new runner, enrollment command, role policy, portable manifests, and matching
 recipe schema. `scripts/deploy.py` verifies key files exist at both commits,
 builds with `--release`, performs a Wrangler dry run, deploys, then byte-compares
-the public endpoint. A normal workspace build may produce an explicitly
+the public endpoint. Asset upload uses Wrangler; hostname attachment uses the
+account-level Workers custom-domain API, so deployment does not need permission
+to list or modify unrelated zone Worker routes. A normal workspace build may produce an explicitly
 non-executable draft while publication is pending.
 
 ```bash
