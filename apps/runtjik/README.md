@@ -150,6 +150,11 @@ Wayland session and its dependencies.
 
 ## Controls
 
+Mouse movement and keyboard navigation share one highlight. Moving the pointer
+over a result selects it; keyboard navigation keeps control until the pointer
+moves or scrolls again. Mouse scrolling keeps the result under the pointer
+highlighted; keyboard scrolling preserves the keyboard selection.
+
 | Input | Action |
 | --- | --- |
 | Super+Escape | Toggle the launcher on key press (fleet Hyprland binding) |

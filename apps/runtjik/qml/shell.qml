@@ -41,6 +41,7 @@ ShellRoot {
     property int indexed: 0
     property int total: 0
     property int selected: 0
+    property bool pointerSelection: false
     property int serial: 0
     property bool ready: false
     property bool busy: false
@@ -98,6 +99,7 @@ ShellRoot {
         if(items.height>0 && items.contentHeight>0 && items.contentY+items.height>=items.contentHeight-items.cellHeight*2)loadMore();
     }
     function move(delta) {
+        pointerSelection=false;
         if (!results.length) return;
         const target=(pendingSelection>=0?pendingSelection:selected)+delta;
         if(delta>0 && target>=results.length && hasMore){pendingSelection=target;loadMore();return;}
@@ -148,7 +150,7 @@ ShellRoot {
         initialMonitor=Hyprland.focusedMonitor?.name || '';
         movedMonitor='';transferring=false;centering=true;
         panel.pinned=false;panel.ownsKeyboard=true;windowEntry='';query='';searchBox.text='';
-        message='';selected=0;pendingAction=null;busy=false;
+        message='';selected=0;pointerSelection=false;pendingAction=null;busy=false;
         loadingMore=false;hasMore=false;nextOffset=0;pendingSelection=-1;
         results=homeResults;resultQuery='';view=settings.ui.view;items.positionViewAtBeginning();
         opened=true;
@@ -405,7 +407,7 @@ ShellRoot {
                             font.family:root.settings.ui.font;font.pixelSize:root.settings.ui.font_size+1
                             focus:true;clip:true;selectByMouse:true
                             readOnly:root.windowEntry!==''
-                            onTextChanged:{root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;root.query=text;root.selected=0;if(!root.windowEntry)debounce.restart();}
+                            onTextChanged:{root.pointerSelection=false;root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;root.query=text;root.selected=0;if(!root.windowEntry)debounce.restart();}
                             Text {
                                 anchors.fill:parent;verticalAlignment:Text.AlignVCenter
                                 text:root.windowEntry?'Choose a running window…':'A beginning is the time for taking the most delicate care…'
@@ -414,6 +416,7 @@ ShellRoot {
                                 fontSizeMode:Text.HorizontalFit;minimumPixelSize:11;elide:Text.ElideRight
                             }
                             Keys.onPressed:event=>{
+                                root.pointerSelection=false;
                                 if(event.key===Qt.Key_Tab || event.key===Qt.Key_Backtab){root.move((event.modifiers & Qt.ShiftModifier || event.key===Qt.Key_Backtab)?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Down){root.move(root.listMode?1:root.settings.ui.columns);event.accepted=true;}
                                 else if(event.key===Qt.Key_Up){root.move(root.listMode?-1:-root.settings.ui.columns);event.accepted=true;}
@@ -466,15 +469,52 @@ ShellRoot {
                             cellHeight:root.listMode?70:122
                             currentIndex:root.selected
                             boundsBehavior:Flickable.StopAtBounds
-                            onContentYChanged: root.maybeLoadMore()
+                            onContentYChanged: {
+                                root.maybeLoadMore();
+                                if(root.pointerSelection)Qt.callLater(()=>selectionPointer.select());
+                            }
                             ScrollBar.vertical:ScrollBar {policy:ScrollBar.AsNeeded}
+                            MouseArea {
+                                parent: items.parent
+                                anchors.fill: parent
+                                z: 1
+                                acceptedButtons: Qt.NoButton
+                                onWheel: event=>{
+                                    root.pointerSelection=true;
+                                    Qt.callLater(()=>selectionPointer.select());
+                                    event.accepted=false;
+                                }
+                            }
+                            HoverHandler {
+                                id: selectionPointer
+                                // Track the fixed frame, not GridView's scrolling content.
+                                parent: items.parent
+                                property point lastScenePosition: Qt.point(-1, -1)
+                                function select() {
+                                    const viewport=items.mapFromItem(null,point.scenePosition.x,point.scenePosition.y);
+                                    if(!root.pointerSelection || !root.opened || root.dragging || viewport.x<0 || viewport.y<0
+                                            || viewport.x>=items.width || viewport.y>=items.height)return;
+                                    const local=items.contentItem.mapFromItem(items,viewport.x,viewport.y);
+                                    const index=items.indexAt(local.x,local.y);
+                                    if(index>=0){root.pendingSelection=-1;root.selected=index;}
+                                }
+                                onPointChanged: {
+                                    const position=point.scenePosition;
+                                    // Only actual movement takes control from the keyboard.
+                                    // Mouse scrolling separately keeps the pointer's selection current.
+                                    if(position.x===lastScenePosition.x && position.y===lastScenePosition.y)return;
+                                    lastScenePosition=position;
+                                    root.pointerSelection=true;
+                                    select();
+                                }
+                            }
                             delegate:Rectangle {
                                 required property var row
                                 readonly property var modelData: row
                                 readonly property bool closing: root.closingIds.includes(modelData.id)
                                 required property int index
                                 width:root.listMode?items.cellWidth:items.cellWidth-6;height:items.cellHeight-6;radius:12
-                                color:index===root.selected?root.theme.surface:(hover.containsMouse?Qt.rgba(1,1,1,.018):'transparent')
+                                color:index===root.selected?root.theme.surface:'transparent'
                                 border.width:index===root.selected?1:0
                                 border.color:root.theme.accent
                                 property string iconSource: {

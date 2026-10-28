@@ -33,6 +33,15 @@ with private_compositor():
     time.sleep(2)
     home=temp/'app';home.mkdir()
     shutil.copytree(app/'qml',home/'qml')
+    shell=home/'qml/shell.qml'
+    shell.write_text(shell.read_text().replace('    id: root', '    id: root\n    property string testActivatedId: ""')
+        .replace('request.prepare=switchWindow', 'root.testActivatedId=request.id;request.prepare=switchWindow')
+        .replace('function testState(): string {', 'function testIndex(x: real,y: real): int {'
+        'const p=items.contentItem.mapFromItem(frame,x,y);return items.indexAt(p.x,p.y);}\n        function testState(): string {')
+        .replace('scrollY:items.contentY,rows:root.results',
+        'scrollY:items.contentY,pointer:{x:selectionPointer.point.position.x,y:selectionPointer.point.position.y,owned:root.pointerSelection},activatedId:root.testActivatedId,cells:Array.from({length:Math.min(15,items.count)},(_,i)=>{'
+        'const cell=items.itemAtIndex(i);if(!cell)return null;const p=cell.mapToItem(frame,cell.width/2,cell.height/2);'
+        'return {x:p.x,y:p.y};}),rows:root.results'))
     source=(app/'runtjik.py').read_text()
     start=source.index('def demo_entries():')
     end=source.index('def main():',start)
@@ -68,16 +77,76 @@ def demo_windows():
             def send(line):
                 ptr.stdin.write(line+'\n');ptr.stdin.flush();assert ptr.stdout.readline().strip()=='ok'
             g=status()['geometry']
-            x,y=g['x']+g['width']/2,g['y']+g['height']-80
+            def move_to(index,dx=0):
+                cell=json.loads(ipc('testState'))['cells'][index]
+                x,y=g['x']+cell['x']+dx,g['y']+cell['y']
+                send('m '+str(round((x-monitor['x'])/(monitor['width']/monitor['scale'])*10000))+' '+str(round((y-monitor['y'])/(monitor['height']/monitor['scale'])*10000)))
+                return cell['x']+dx,cell['y']
+            def scroll_tracking():
+                px,py=move_to(2,3)
+                original=status()['selected']
+                under_pointer=lambda:int(ipc('testIndex',str(px),str(py)))
+                send('s 180')
+                try:
+                    wait(lambda:under_pointer()!=original and status()['selected']==under_pointer())
+                except AssertionError:
+                    state=json.loads(ipc('testState'))
+                    raise AssertionError({'selected':status()['selected'],'underPointer':under_pointer(),
+                        'original':original,'scrollY':state['scrollY'],'pointer':state['pointer'],'target':(px,py)})
+                subprocess.run(['wtype','-k','Up'],check=True)
+                keyboard=status()['selected']
+                time.sleep(.3)
+                assert status()['selected']==keyboard,'Pointer stole keyboard selection'
+                send('s 180')
+                wait(lambda:status()['selected']==under_pointer())
+                # Movement must still track after coordinates have scrolled far
+                # beyond the viewport's height.
+                px+=2;py+=1
+                send('r 2 1')
+                wait(lambda:status()['selected']==under_pointer())
+                send('s -360')
+                wait(lambda:status()['selected']==under_pointer())
+            subprocess.run(['wtype','-k','Tab'],check=True)
+            wait(lambda:status()['selected']==1)
+            move_to(6)
+            wait(lambda:status()['selected']==6)
+            subprocess.run(['wtype','-k','Down'],check=True)
+            wait(lambda:status()['selected']==11)
+            time.sleep(.3)
+            assert status()['selected']==11,'Stationary pointer overrode keyboard navigation'
+            move_to(6,2)
+            wait(lambda:status()['selected']==6)
+            chosen=json.loads(ipc('testState'))['rows'][6]['id']
+            subprocess.run(['wtype','-k','Return'],check=True)
+            wait(lambda:json.loads(ipc('testState'))['activatedId']==chosen)
+            subprocess.run(['wtype','-M','ctrl','-k','l','-m','ctrl'],check=True)
+            wait(lambda:status()['view']=='list')
+            move_to(2)
+            wait(lambda:status()['selected']==2)
+            subprocess.run(['wtype','-k','Down'],check=True)
+            wait(lambda:status()['selected']==3)
+            move_to(2,2)
+            wait(lambda:status()['selected']==2)
+            scroll_tracking()
+            subprocess.run(['wtype','-M','ctrl','-k','l','-m','ctrl'],check=True)
+            wait(lambda:status()['view']=='grid')
+            scroll_tracking()
+            # Leave the pointer outside the results before resetting keyboard selection.
+            send('m 100 100')
+            ipc('test','Entry 259');wait(lambda:status()['results']==1)
+            ipc('test','');wait(lambda:status()['results']==100)
+            print('PASS: grid/list pointer movement and keyboard share selection; same-cell movement takes over; Enter uses pointer selection',flush=True)
+            # The final grid row is incomplete; keep the pointer in its first column.
+            x,y=g['x']+60,g['y']+g['height']-80
             send('m '+str(round((x-monitor['x'])/(monitor['width']/monitor['scale'])*10000))+' '+str(round((y-monitor['y'])/(monitor['height']/monitor['scale'])*10000)))
             for _ in range(20):
                 send('s 900');time.sleep(.15)
                 if status()['results']==262 and not status()['hasMore']:break
             wait(lambda:status()['results']==262 and not status()['hasMore'])
             send('s 2000');time.sleep(.3)
-            assert status()['selected']==0,'Wheel paging changed keyboard selection'
+            wait(lambda:status()['selected']==int(ipc('testIndex',str(x-g['x']),str(y-g['y']))))
             ipc('capture',str(temp/'paged-tail.png'));time.sleep(.3)
-            print('PASS: real wheel scrolling loads 100 → 200 → all 262 entries without changing selection',flush=True)
+            print('PASS: mouse scrolling tracks the pointer in grid/list views, resumes after keyboard use, and survives paging to 262 entries',flush=True)
             tail=json.loads(ipc('testState'))['scrollY']
             time.sleep(5.3)
             wait(lambda:status()['results']==262)
