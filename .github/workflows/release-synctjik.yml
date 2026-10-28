@@ -30,7 +30,7 @@ jobs:
       - name: Test archive and merge compatibility
         run: |
           cargo test --locked --manifest-path apps/synctjik/Cargo.toml
-          python3 -B -m unittest discover -s apps/synctjik/tests -p test_terminal.py -v
+          python3 -B -m unittest discover -s apps/synctjik/tests -p 'test_*.py' -v
       - name: Build and verify the static binary
         run: bash apps/synctjik/scripts/release.sh
       - name: Publish versioned assets

@@ -94,5 +94,8 @@ Runtime needs age for encrypted collections and rclone for remote transport; arc
 compression, SQLite, terminal review and Telegram parsing are native.
 Release installation uses `scripts/fetch-release.sh`, verifies the SHA-256 in the
 bootstrap release manifest, and atomically replaces executables. No Rust or C compiler
-is installed on the target device. Never validate a release by applying live private
+is installed on the target device. With `TJIKUP_MANAGED_CONFIG=1`, installation
+updates only the binary; Dotjik owns the compatibility command wrappers. Standalone
+installation creates wrappers relative to the selected prefix.
+Never validate a release by applying live private
 folders or replacing a pinned running archive worker.
