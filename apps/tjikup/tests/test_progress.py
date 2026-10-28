@@ -204,7 +204,7 @@ class ProgressTests(unittest.TestCase):
         output = io.StringIO()
         progress = Progress(stream=output, live=True)
         with patch.dict(os.environ, {'TJIKUP_COLUMNS': '120', 'TJIKUP_COLOR': '1'}):
-            progress.start('a', 'Chezmoi (files and task preparation)', 'APPLY')
+            progress.start('a', 'Chezmoi (home directory)', 'APPLY')
             progress.start('b', '中文配置')
         output.seek(0)
         output.truncate()

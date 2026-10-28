@@ -25,7 +25,7 @@ class RuntimeTests(unittest.TestCase):
                 termios.tcsetwinsize(slave, (24, width))
                 self.assertEqual(runtime.terminal_columns(), width)
                 row = runtime.format_status(
-                    "APPLY", "⠋", "Chezmoi (Files and Task Preparation)", "0.1s")
+                    "APPLY", "⠋", "Chezmoi (Home Directory)", "0.1s")
                 self.assertLess(runtime.display_width(row), width)
 
     def test_detached_status_keeps_inherited_width(self):
