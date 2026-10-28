@@ -40,14 +40,16 @@ for app in "$@"; do
             cp -R "$source_dir"/qml "$source_dir"/themes "$source_dir"/examples "$target_dir/"
             install -m 644 "$source_dir/telegram_media_render.py" "$source_dir/telegram_recording.py" "$source_dir/telegram_bridge.py" "$source_dir/requirements-telegram.txt" "$source_dir/install-telegram.sh" "$source_dir/notjik.py" "$source_dir/lock_watch.py" "$source_dir/comparison.py" "$source_dir/demo.py" "$source_dir/demo_cycle.py" "$source_dir/README.md" "$target_dir/"
             install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$HOME/.local/bin/"
-            install -m 644 "$source_dir/systemd/notjik.service" "$HOME/.config/systemd/user/notjik.service"
-            install -m 644 "$source_dir/systemd/notjik-telegram.service" "$HOME/.config/systemd/user/notjik-telegram.service"
-            activation_dir="${XDG_DATA_HOME:-$HOME/.local/share}/dbus-1/services"
-            install -d -m 755 "$activation_dir"
-            printf '%s\n' '# Activate the notjik desktop notification service.' '[D-BUS Service]' 'Name=org.freedesktop.Notifications' \
-                "Exec=$HOME/.local/bin/notjik" 'SystemdService=notjik.service' \
-                > "$activation_dir/org.freedesktop.Notifications.service"
-            chmod 644 "$activation_dir/org.freedesktop.Notifications.service"
+            if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
+                install -m 644 "$source_dir/systemd/notjik.service" "$HOME/.config/systemd/user/notjik.service"
+                install -m 644 "$source_dir/systemd/notjik-telegram.service" "$HOME/.config/systemd/user/notjik-telegram.service"
+                activation_dir="${XDG_DATA_HOME:-$HOME/.local/share}/dbus-1/services"
+                install -d -m 755 "$activation_dir"
+                printf '%s\n' '# Activate the notjik desktop notification service.' '[D-BUS Service]' 'Name=org.freedesktop.Notifications' \
+                    "Exec=$HOME/.local/bin/notjik" 'SystemdService=notjik.service' \
+                    > "$activation_dir/org.freedesktop.Notifications.service"
+                chmod 644 "$activation_dir/org.freedesktop.Notifications.service"
+            fi
             ;;
     esac
 done
