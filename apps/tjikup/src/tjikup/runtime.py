@@ -161,7 +161,11 @@ def run_stream(
                         line, ending = line[:-2], "\r\n"
                     elif line.endswith(("\n", "\r")):
                         line, ending = line[:-1], line[-1:]
-                    sys.stdout.write((formatter(line) if formatter else line) + ending)
+                    rendered = formatter(line)
+                    # A filtered row must not leave a blank line behind.
+                    # Preserve blank lines that were present in the source.
+                    if rendered or not line:
+                        sys.stdout.write(rendered + ending)
                 sys.stdout.flush()
 
             try:

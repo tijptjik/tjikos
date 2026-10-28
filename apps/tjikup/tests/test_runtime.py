@@ -121,6 +121,19 @@ class RuntimeTests(unittest.TestCase):
                 timeout=0.05,
             )
 
+    def test_filtered_rows_do_not_leave_blank_lines(self):
+        for ending in ('\n', '\r\n'):
+            with self.subTest(ending=ending):
+                output = io.StringIO()
+                source = ending.join(['Bitwarden', 'SKIP font migration', '', 'Chezmoi', ''])
+                with contextlib.redirect_stdout(output):
+                    runtime.run_stream(
+                        [sys.executable, '-c', 'import sys; sys.stdout.write(sys.argv[1])', source],
+                        Path.cwd(),
+                        formatter=lambda line: '' if line.startswith('SKIP') else line,
+                    )
+                self.assertEqual(output.getvalue(), ending.join(['Bitwarden', '', 'Chezmoi', '']))
+
     def test_frame_end_is_forwarded_before_child_writes_another_line(self):
         with tempfile.TemporaryDirectory() as directory:
             acknowledged = Path(directory) / 'ack'
