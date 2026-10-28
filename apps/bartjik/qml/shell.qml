@@ -7,6 +7,7 @@ import "Logic.js" as Logic
 
 ShellRoot {
     id: root
+    IconFonts { id: iconFonts }
     property var state: ({ready:false,config:{},bars:[],providers:{}})
     property bool workspaceReminder: false
     property var visibility: ({})

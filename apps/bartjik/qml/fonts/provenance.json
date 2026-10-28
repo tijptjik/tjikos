@@ -1,0 +1,11 @@
+{
+  "file": "MaterialSymbolsRounded.ttf",
+  "family": "Material Symbols Rounded",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/google/material-design-icons",
+  "revision": "10ecc14790612ca8fd164e3f4ffe9c16fc50d5b7",
+  "upstream_path": "variablefont/MaterialSymbolsRounded[FILL,GRAD,opsz,wght].ttf",
+  "git_blob_sha1": "ff99804f914a1db645bcf066dafa9449d9196f8d",
+  "size": 15235612,
+  "sha256": "7e74e36533ccee12c2b81e75bfcf3ccf123d3bb7e7e46d65d94445f23db0c97c"
+}

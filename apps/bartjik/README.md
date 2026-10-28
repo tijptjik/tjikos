@@ -232,8 +232,12 @@ Each island has one background/border/radius/padding. `iconTextGap`, `itemGap`,
 `muted`, `accent`, `radius`, `padding`, `paddingX`, `paddingY`, `borderWidth`, `minItemSize`, `maxTextWidth`.
 Per-part `style` can override font/size/color. State styles include active, focused,
 urgent, muted, disconnected, stale and hover. Qt falls back to installed fonts if
-`tijpset` or a glyph is unavailable. Material Symbols Rounded is used only by
-`kind: "symbol"`; normal text does not use ligature icons.
+`tijpset` or a glyph is unavailable. Material Symbols Rounded is vendored with
+Bartjik and registered by `qml/IconFonts.qml`; it needs no system font package
+or COPR repository. It is used only by `kind: "symbol"`; normal text does not
+use ligature icons. The pinned upstream revision, checksum and Apache-2.0
+license are in `qml/fonts/`. Updates require the isolated bundled-font render
+test, which excludes the system Material Symbols font.
 
 `layer` is background/bottom/top/overlay. Default overlay behavior is `reserve:false`;
 `reserve:true` creates **one reservation per screen/edge** using the largest requested

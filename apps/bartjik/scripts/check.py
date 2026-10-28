@@ -1,4 +1,4 @@
-import ast, json, sys
+import ast, hashlib, json, sys
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
@@ -12,4 +12,11 @@ for path in root.glob("examples/*.json"):
     load(path)
 for path in root.glob("themes/*.json"):
     json.loads(path.read_text())
-print("bartjik: Python syntax, themes and effective example configurations checked")
+fonts = root / "qml/fonts"
+provenance = json.loads((fonts / "provenance.json").read_text())
+font = (fonts / provenance["file"]).read_bytes()
+if len(font) != provenance["size"] or hashlib.sha256(font).hexdigest() != provenance["sha256"]:
+    raise SystemExit("Bundled Material Symbols Rounded font does not match its pinned provenance")
+if not (fonts / "LICENSE.txt").is_file():
+    raise SystemExit("Bundled Material Symbols Rounded license is missing")
+print("bartjik: Python syntax, themes, effective configurations and bundled font checked")
