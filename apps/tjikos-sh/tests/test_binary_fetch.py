@@ -13,20 +13,26 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class BinaryFetchTests(unittest.TestCase):
     def test_checksum_failure_preserves_existing_binary_and_success_is_cached(self):
+        self.check_fetch("tjikup")
+
+    def test_synctjik_checksum_failure_preserves_existing_binary(self):
+        self.check_fetch("synctjik")
+
+    def check_fetch(self, tool):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            app = root / 'apps/tjikup'
+            app = root / 'apps' / tool
             (app / 'scripts').mkdir(parents=True)
             (app / 'dist').mkdir()
             (root / 'apps/tjikos-sh').mkdir()
             script = app / 'scripts/fetch-release.sh'
-            shutil.copy2(ROOT / 'tjikup/scripts/fetch-release.sh', script)
+            shutil.copy2(ROOT / tool / 'scripts/fetch-release.sh', script)
             payload = b'#!/bin/sh\nexit 0\n'
-            manifest = {'tjikup_binary': {
-                'url': 'https://github.com/tijptjik/tjikos/releases/download/tjikup-v0.2.0-test/tjikup-x86_64-unknown-linux-musl',
+            manifest = {tool + '_binary': {
+                'url': f'https://github.com/tijptjik/tjikos/releases/download/{tool}-v0.2.0-test/{tool}-x86_64-unknown-linux-musl',
                 'sha256': hashlib.sha256(payload).hexdigest()}}
             (root / 'apps/tjikos-sh/release.json').write_text(json.dumps(manifest))
-            binary = app / 'dist/tjikup'
+            binary = app / 'dist' / tool
             binary.write_bytes(b'previous executable')
             tools = root / 'bin'
             tools.mkdir()
@@ -42,7 +48,7 @@ class BinaryFetchTests(unittest.TestCase):
             result = subprocess.run(['bash', str(script)], env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(binary.read_bytes(), b'previous executable')
-            self.assertFalse(list((app / 'dist').glob('.tjikup.*')))
+            self.assertFalse(list((app / 'dist').glob(f'.{tool}.*')))
             downloaded.write_bytes(payload)
             subprocess.run(['bash', str(script)], env=env, check=True)
             self.assertEqual(binary.read_bytes(), payload)
