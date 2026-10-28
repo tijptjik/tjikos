@@ -3,7 +3,7 @@
   "dotjik_branch": "bootstrap/fedora-2026-10-28",
   "tjikos_branch": "bootstrap/fedora-2026-10-28",
   "dotjik_revision": "25980c0bc75adb7e59c8cf12c97e3878451c5718",
-  "tjikos_revision": "758b0cc9e941809b11f1de5d15a22f4e3341233d",
+  "tjikos_revision": "3a5a97fe9087bc3b5f07745793818d6b8fa8ce8d",
   "tjikup_binary": {
     "url": "https://github.com/tijptjik/tjikos/releases/download/tjikup-v0.2.0-bootstrap.3/tjikup-x86_64-unknown-linux-musl",
     "sha256": "311dd0202c4adf8c0cd7c229b3fcfbe863cd04058555128124b7fd069223ca06",

@@ -7,8 +7,10 @@ optional configuration-manager adapters, not the task scheduler.
 Build with `bun run build` (or `bash scripts/build.sh`). Run `bun run check` for
 formatting and Clippy, and `bun run --cwd apps/tjikup test` for isolated behavioral
 tests. Install with `bash apps/tjikup/scripts/install.sh [prefix]`; replacement is
-atomic, so running processes retain their executable. Rust/Cargo is required to
-build from source, not to run an installed binary.
+atomic, so running processes retain their executable. The installer downloads
+the static GitHub Release executable pinned in `apps/tjikos-sh/release.json` and
+verifies its SHA-256 using `curl` and `jq`. Rust/Cargo is required only for an
+explicit source build, not for installation or ordinary updates.
 
 Native file deployment is available through `tjikup files`; see
 [Native file and template management](docs/native-files.md) for manifests,
