@@ -235,7 +235,7 @@ class Director(shared.Director):
 
 def prepare_workflow(directory):
     import base64,zlib
-    theme=Path(os.environ.get('SHOWCASE_THEME_SOURCE',str(Path.home()/'.local/share/chezmoi')))
+    theme=Path(os.environ.get('SHOWCASE_THEME_SOURCE',str(Path.home()/'.local/share/dotjik')))
     package=directory/'showcase_report';package.mkdir()
     (package/'__init__.py').write_text('')
     for name in ['icons.py','kitty_icons.py','icon_catalog.py']:
