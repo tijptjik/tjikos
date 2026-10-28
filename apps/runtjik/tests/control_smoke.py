@@ -6,8 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'bartjik'))
-from demo_cycle import private_compositor
+from private_compositor import private_compositor
 app=Path(__file__).resolve().parents[1]
 with private_compositor():
     # A nested Wayland output can appear late or disappear with its parent window.

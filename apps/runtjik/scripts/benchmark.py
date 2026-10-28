@@ -2,8 +2,8 @@
 # Run: python3 apps/runtjik/scripts/benchmark.py /tmp/new-results.json
 import json,os,platform,statistics,subprocess,time,sys,tempfile,argparse
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/"bartjik"))
-from demo_cycle import private_compositor
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tests"))
+from private_compositor import private_compositor
 original_xdg={key:os.environ.get(key) for key in ("XDG_CONFIG_HOME","XDG_CACHE_HOME","XDG_DATA_HOME")}
 from pathlib import Path
 parser=argparse.ArgumentParser(description='Fi launcher benchmark; requires a TjikOS source checkout and installed Hamr/Runtjik.')

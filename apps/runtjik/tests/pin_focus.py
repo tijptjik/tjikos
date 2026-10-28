@@ -8,8 +8,7 @@ import sys
 import time
 
 app = Path(__file__).resolve().parents[1]
-sys.path.insert(0, os.environ.get('RUNTJIK_TEST_BARTJIK', str(app.parent/'bartjik')))
-from demo_cycle import private_compositor
+from private_compositor import private_compositor
 
 
 def call(argv):
@@ -38,9 +37,8 @@ with private_compositor():
     time.sleep(2)
     call(['hyprctl','eval','hl.config({misc={layers_hog_keyboard_focus=true}})'])
     pointer = tmp/'pointer'
-    bartjik = Path(os.environ.get('RUNTJIK_TEST_BARTJIK', str(app.parent/'bartjik')))
-    subprocess.run(['wayland-scanner','client-header',str(bartjik/'demo_pointer.xml'),str(tmp/'pointer.h')],check=True)
-    subprocess.run(['wayland-scanner','private-code',str(bartjik/'demo_pointer.xml'),str(tmp/'protocol.c')],check=True)
+    subprocess.run(['wayland-scanner','client-header',str(Path(__file__).with_name('virtual_pointer.xml')),str(tmp/'pointer.h')],check=True)
+    subprocess.run(['wayland-scanner','private-code',str(Path(__file__).with_name('virtual_pointer.xml')),str(tmp/'protocol.c')],check=True)
     source = Path(os.environ.get('RUNTJIK_TEST_POINTER', str(app/'tests/pointer.c')))
     flags = shlex.split(call(['pkg-config','--cflags','--libs','wayland-client']))
     subprocess.run(['cc',str(source),str(tmp/'protocol.c'),'-I'+str(tmp),'-o',str(pointer),*flags],check=True)

@@ -9,9 +9,7 @@ import sys
 import time
 
 app=Path(__file__).resolve().parents[1]
-bartjik=Path(os.environ.get('RUNTJIK_TEST_BARTJIK',str(app.parent/'bartjik')))
-sys.path.insert(0,str(bartjik))
-from demo_cycle import private_compositor
+from private_compositor import private_compositor
 
 
 def call(argv):return subprocess.check_output(argv,text=True,stderr=subprocess.DEVNULL)
@@ -59,8 +57,8 @@ def demo_windows():
     config=temp/'config.conf';config.write_text('[theme]\nicon_theme="rose-punk"\n')
     os.environ.update(RUNTJIK_HOME=str(home),RUNTJIK_DEMO='1',RUNTJIK_CONFIG=str(config))
     pointer=temp/'pointer'
-    subprocess.run(['wayland-scanner','client-header',str(bartjik/'demo_pointer.xml'),str(temp/'pointer.h')],check=True)
-    subprocess.run(['wayland-scanner','private-code',str(bartjik/'demo_pointer.xml'),str(temp/'protocol.c')],check=True)
+    subprocess.run(['wayland-scanner','client-header',str(Path(__file__).with_name('virtual_pointer.xml')),str(temp/'pointer.h')],check=True)
+    subprocess.run(['wayland-scanner','private-code',str(Path(__file__).with_name('virtual_pointer.xml')),str(temp/'protocol.c')],check=True)
     flags=shlex.split(call(['pkg-config','--cflags','--libs','wayland-client']))
     subprocess.run(['cc',str(app/'tests/pointer.c'),str(temp/'protocol.c'),'-I'+str(temp),'-o',str(pointer),*flags],check=True)
     base=['quickshell','ipc','--path',str(home/'qml'),'call','runtjik']

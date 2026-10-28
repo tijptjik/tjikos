@@ -9,8 +9,7 @@ import time
 
 app = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(app))
-sys.path.insert(0, os.environ.get('RUNTJIK_TEST_BARTJIK', str(app.parent/'bartjik')))
-from demo_cycle import private_compositor
+from private_compositor import private_compositor
 import runtjik as r
 
 

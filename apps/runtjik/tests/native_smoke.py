@@ -1,8 +1,7 @@
 # Real Wayland regression test; launches only synthetic Kitty windows in a private compositor.
 import json,os,subprocess,time,sys
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'bartjik'))
-from demo_cycle import private_compositor
+from private_compositor import private_compositor
 app=Path(__file__).resolve().parents[1]
 base=['quickshell','ipc','--path',str(app/'qml'),'call','runtjik']
 def wait(fn):

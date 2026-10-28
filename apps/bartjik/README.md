@@ -28,8 +28,8 @@ bartjikctl config --validate
 bartjik
 ```
 
-The installer does not start or enable services, overwrite configuration, or stop
-Waybar/notjik. Source entry points are `apps/bartjik/bin/{bartjik,bartjikctl}`.
+The installer does not start or enable services or overwrite configuration.
+Source entry points are `apps/bartjik/bin/{bartjik,bartjikctl}`.
 `bartjik --config /absolute/config.json` selects a file; set `BARTJIK_CONFIG` to
 the same file for offline `bartjikctl config --validate` or `init` operations.
 `bartjik --daemon` detaches; the foreground process suits the supplied user unit.
@@ -41,58 +41,6 @@ cd apps/bartjik
 dbus-run-session --config-file tests/bus.conf -- bin/bartjik --demo --config examples/demo.json
 ```
 
-### Waybar comparison recording
-
-The directed demo recreates the current Waybar island layout on the left and
-the matching Bartjik island on the right, using a temporary 1000×680 headless
-output and bundled synthetic data. It shows one island group at a time and moves
-matching hover targets on both sides. The private Waybar copy has no
-click or scroll handlers: each hover shows a tooltip only. Bartjik retains its
-native hover behavior. The finale moves one attached panel from Bitcoin to the
-player to workspaces, then detaches BTC and SOL graph panels as widgets.
-
-```sh
-cd apps/bartjik
-bun run demo:cycle -- --plan
-bun run demo:record -- /tmp/bartjik-waybar-comparison.mp4
-```
-
-`demo:record` never overwrites a video or chapters manifest. It records lossless
-RGB first, encodes a playable H.264 MP4, and writes a matching `.chapters.json`.
-It runs a private nested Hyprland instance with its own headless capture output,
-runtime directory, configuration and input. It does not start, stop, or
-read data from the running Waybar/Bartjik services or real providers.
-
-The stage follows the Notjik comparison: title and explanatory caption above
-two centered lanes, an animated overview, then one island group at a time.
-Each hover holds for three seconds after a smooth pointer move. `--speed` is
-a playback rate, defaulting to **1.4** (40% faster), so the resulting holds are
-about 2.14 seconds. Panel tracking receives frame-paced synthetic pointer updates;
-detachment uses the actual panel origin. The private compositor disables native
-window borders. The private Waybar configuration derives
-from `~/.config/waybar/config`, `style.css`, and `colors.css`. Custom module IDs
-and the AI group retain their original styling. Native data modules use static
-synthetic replacements with corresponding CSS selectors. The tray uses the real
-Waybar SNI module on a private D-Bus session with synthetic Telegram, WhatsApp and
-VLC items and their installed legacy application icons, rather than Bartjik artwork.
-This is real Waybar with fixture data, not an unmodified live desktop capture.
-Waybar retains its natural height; Bartjik retains its taller configured height.
-Both are centered vertically and the intro preserves their natural sizes.
-The player fixture shows Karla Blum - Acid Rain as playing (no audio is recorded),
-and workspaces stop at X. All external callbacks are removed, and all Waybar hovers use native
-GTK tooltips. The original configuration and services are not modified.
-
-Recording requires Hyprland, GTK 3 and Wayland development packages, a C compiler,
-`wayland-scanner`, `grim`, `wf-recorder`, FFmpeg, Waybar and Quickshell with
-QtTest, plus `dbus-daemon`, Python D-Bus and PyGObject. A private GTK helper reports actual widget bounds, and an output-bound
-Wayland pointer drives Waybar while QtTest drives matching Bartjik targets.
-Pointer checks compensate for seat warps caused by Qt popup mapping, and a
-brief transition mask reveals the two islands only after both renderers settle.
-The recorder checks output dimensions and native tooltip visibility, and keeps
-diagnostic screenshots and logs in its printed `/tmp/bartjik-cycle-*` directory.
-The chapters manifest includes hover checks and hashes of the Waybar source
-configuration. Keep recordings and captures outside the repository.
-
 Demo does not start polling processes, native tray/MPRIS subscriptions, or actions.
 For simultaneous development instances copy `qml/` to a temporary directory and
 set `BARTJIK_QML` to it for both launcher and CLI. Quickshell identifies instances
@@ -100,7 +48,7 @@ by QML path, independently of their JSON configuration path. Its IPC sockets/log
 use `$XDG_RUNTIME_DIR/quickshell`; no separate writable state database is needed.
 Configuration lives at `$XDG_CONFIG_HOME/bartjik/config.json`.
 
-## Switch-over and rollback
+## Session setup
 
 Build and test independently before changing the desktop session. Review
 `bartjikctl config --validate`, confirm connector names with `bartjikctl monitors`,
@@ -108,19 +56,17 @@ and edit the presets for your displays. Desktop defaults use DP-1/DP-2; laptop
 uses eDP-1. Both presets contain all 16 providers. More than one bar in a section
 stacks inward. Services unavailable on a host report an unavailable state.
 
-For a deliberate switch, stop the existing Waybar service/autostart process using
-its existing session controller, then start `bartjik` in a terminal. Keep that
-terminal available during acceptance. Verify workspace ownership, audio route
-selection and panels interactively before enabling `bartjik.service`. Ensure the
-user service environment includes `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE`,
-`DBUS_SESSION_BUS_ADDRESS` and the desired API environment variables. The unit
-starts neither notjik nor the external panels.
+Start `bartjik` in a terminal and keep it available during acceptance. Verify
+workspace ownership, audio route selection and panels interactively before
+enabling `bartjik.service`. Ensure the user service environment includes
+`WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE`, `DBUS_SESSION_BUS_ADDRESS`
+and the desired API environment variables. The unit starts neither notjik nor
+the external panels.
 
-Rollback: stop bartjik (Ctrl-C or `systemctl --user stop bartjik.service`), disable
-its autostart if enabled, and start the original Waybar service/autostart entry.
-The build does not edit Waybar, monitor configuration, notjik or their startup
-entries. Do not run two production tray hosts for acceptance; the provided tests
-use a separate bus and never take the desktop notification name.
+Stop bartjik with Ctrl-C or `systemctl --user stop bartjik.service`. Preserve a
+copy of your configuration before changing it. The build does not edit monitor
+configuration or startup entries. Run one production tray host; the provided
+tests use a separate bus and never take the desktop notification name.
 
 ## Control and diagnostics
 
@@ -268,9 +214,8 @@ participate. For independent screens, add `"syncMonitors": false` to the relevan
 object in `bars`.
 
 Hovering the bar or keeping its native tray menu open also prevents hiding.
-A shared Hyprland command-socket observer samples at 50ms, independently of
-Waybar and without spawning polling processes. Detection has up to one sample
-of latency plus frame scheduling; `0` means no additional intentional delay.
+A shared Hyprland command-socket observer samples at 50ms without spawning
+polling processes. Detection has up to one sample of latency plus frame scheduling; `0` means no additional intentional delay.
 Monitor geometry refreshes every second, including scale/rotation/hotplug. The
 safety zone and activation edge never intercept desktop clicks; only fading or
 visible islands have input regions. If the observer fails, bars stay visible and
@@ -281,7 +226,7 @@ compositors retain visible bars. The observer stops when no bar needs it.
 `activationDelay:500`, `hideDelay:1000`, `keepVisibleDistance:"140px"` and
 `fadeDuration:180`. The 140px distance bridges the offset and bar height.
 The single row's lower edge is 60 physical pixels above the screen bottom.
-The central span is 50%, side overflow is inward, and the row is 28 logical pixels high. Launch it beside Waybar using
+The central span is 50%, side overflow is inward, and the row is 28 logical pixels high. Launch it using
 `bin/bartjik --config examples/comparison.json --daemon`. Touch the bottom edge
 for half a second to reveal, then move upward to the bars. All bars on the same
 activation edge reveal together, including their copies on other monitors by
@@ -348,8 +293,8 @@ that exports the variables or import the selected variables into the user servic
 manager. No credential is embedded in presets or returned in configuration.
 An optional crypto `legacyConfig` path can read an existing INI (including its
 asset definitions); environment credentials take precedence. This is an explicit
-migration option, not a dependency on `~/.config/waybar`. Keep that private file
-outside this repository and remove the option after migration.
+migration option. Keep that private file outside this repository and remove the
+option after migration.
 
 Providers retain last useful values in memory. Failed polls become stale with
 an error tooltip, initial failures become unavailable, and successful refresh clears
@@ -423,10 +368,8 @@ connection operations finish even if the panel closes.
 Both panels have matching title icons. The nearby Wi-Fi list shows up to three
 networks at a time; scroll within the list to reach the rest.
 
-These bar actions no longer launch the standalone Waybar widgets or use their
-`panelPath`, pointer observer or positioning IPC. Their controls and helpers ship
-with Bartjik; theme, monitor selection, popup lifetime and hover tracking belong
-to the shared container. The standalone widgets remain available to Waybar.
+These bar controls and helpers ship with Bartjik. Theme, monitor selection, popup
+lifetime and hover tracking belong to the shared container.
 Tray menus retain native DBusMenu popups anchored to their item and screen.
 
 Synthetic acceptance (no real network/audio mutations):
@@ -535,9 +478,8 @@ regions, zero-delay behavior, cross-monitor synchronization, opt-out, CLI visibi
 and live reload. It requires at least two screens and never moves the desktop pointer
 or invokes provider actions. Unit tests cover all four edges, scaled pixels,
 percentages, negative monitor origins, rotated monitors, failure/reconnect and
-one observer across multiple bars with reload cleanup. The live comparison was
-started with read-only pointer tracking and unchanged Waybar tray ownership;
-automated edge gestures used the isolated fixture.
+one observer across multiple bars with reload cleanup. Automated edge gestures
+use the isolated fixture.
 
 
 ### Compact comparison and crypto panel
@@ -750,8 +692,8 @@ shows weekly data; request totals require the local database. Queries do not rea
 prompts, request bodies, credentials or error-message contents. No extra polling loops
 are added for panels: they share each module's existing provider updates.
 
-The comparison preset renders native tray artwork at 21 logical pixels, matching
-Waybar's configured size. Greyscale retains luminance/detail; `monochromeIcon:false`
+The comparison preset renders native tray artwork at 21 logical pixels. Greyscale
+retains luminance/detail; `monochromeIcon:false`
 avoids flattening opaque artwork into solid white blocks. Set `greyscaleIcons:false`
 for app colors. `exclude` matches tray IDs or titles case-insensitively, with trailing `*` prefix matching.
 Solaar, Spotify, Mullvad and Input Method are excluded in the supplied presets. Workspace `appearance:"chips"`

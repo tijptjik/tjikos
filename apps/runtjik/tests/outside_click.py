@@ -1,7 +1,6 @@
 import json,os,subprocess,time,sys
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'bartjik'))
-from demo_cycle import private_compositor
+from private_compositor import private_compositor
 app=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(app))
 import runtjik as backend
@@ -28,7 +27,7 @@ with private_compositor():
         config.write('hl.monitor({output='+json.dumps(initial['name'])+',mode="1000x680@60",position="-3000x0",scale=1})\n')
     os.environ['XDG_STATE_HOME']=str(tmp/'state')
     pointer=tmp/'pointer'
-    protocol=app.parent/'bartjik/demo_pointer.xml'
+    protocol=Path(__file__).with_name('virtual_pointer.xml')
     subprocess.run(['wayland-scanner','client-header',str(protocol),str(tmp/'pointer.h')],check=True)
     subprocess.run(['wayland-scanner','private-code',str(protocol),str(tmp/'protocol.c')],check=True)
     flags=call(['pkg-config','--cflags','--libs','wayland-client']).split()
