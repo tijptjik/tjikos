@@ -1,5 +1,11 @@
 name: Release tjikup binary
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing signed tjikup release tag
+        required: true
+        type: string
   push:
     tags: ['tjikup-v*']
 permissions:
@@ -9,6 +15,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: Install release build tools
         run: |
           sudo apt-get update -qq
@@ -23,12 +31,14 @@ jobs:
       - name: Publish versioned assets
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           cat > /tmp/tjikup-release-notes.md <<'NOTES'
           Static Linux x86_64 tjikup binary for Fedora bootstrap. Download the executable directly; no compiler or archive tools are needed on the target machine.
 
           SHA256SUMS verifies the assets. build-info.json records the exact source commit, target and compiler. The bootstrap script independently pins the executable checksum.
           NOTES
-          gh release create "$GITHUB_REF_NAME" apps/tjikup/dist/release/* \
-            --verify-tag --target "$GITHUB_SHA" --title "$GITHUB_REF_NAME" \
+          case "$RELEASE_TAG" in tjikup-v*) ;; *) exit 2 ;; esac
+          gh release create "$RELEASE_TAG" apps/tjikup/dist/release/* \
+            --verify-tag --target "$(git rev-parse HEAD)" --title "$RELEASE_TAG" \
             --notes-file /tmp/tjikup-release-notes.md --prerelease --latest=false

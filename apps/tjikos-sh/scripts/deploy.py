@@ -16,6 +16,8 @@ release = json.loads((root / 'release.json').read_text())
 for name, repository, required in (
     ('dotjik', 'dotfiles', 'scripts/device-policy.py'),
     ('tjikos', 'tjikos', 'apps/tjikup/src/device.rs'),
+    ('tjikos', 'tjikos', 'apps/tjikos-sh/helpers/github-ssh.sh'),
+    ('tjikos', 'tjikos', 'apps/tjikup/scripts/fetch-release.sh'),
 ):
     revision = release.get(name + '_revision')
     if not isinstance(revision, str) or not re.fullmatch('[a-f0-9]{40}', revision):
@@ -28,6 +30,16 @@ for name, repository, required in (
 if not os.environ.get('CLOUDFLARE_API_TOKEN'):
     raise SystemExit('Provide a Cloudflare deploy token through the environment; never put it in source')
 subprocess.run([sys.executable, str(root / 'scripts/build.py'), '--release'], check=True)
+# Verify the exact downloadable executable before changing the live installer.
+import hashlib
+binary = release['tjikup_binary']
+with tempfile.TemporaryDirectory(prefix='tjikos-sh-binary-') as directory:
+    executable = Path(directory) / 'tjikup'
+    subprocess.run(['curl', '--proto', '=https', '--proto-redir', '=https',
+        '--tlsv1.2', '-fsSL', '--retry', '3', '--max-time', '180',
+        binary['url'], '-o', str(executable)], check=True)
+    if hashlib.sha256(executable.read_bytes()).hexdigest() != binary['sha256']:
+        raise SystemExit('Published runner binary does not match its pinned SHA-256')
 config = json.loads((root / 'wrangler.jsonc').read_text())
 routes = config.pop('routes')
 if len(routes) != 1 or not routes[0].get('custom_domain'):

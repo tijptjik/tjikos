@@ -2,7 +2,7 @@
 set -euo pipefail
 app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 prefix="${1:-$HOME/.local}"
-bash "$app_dir/scripts/build.sh"
+bash "$app_dir/scripts/fetch-release.sh"
 # Refuse to replace a working legacy runner underneath an incompatible workflow.
 config="${TJIKUP_INSTALL_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/tjikup/config.json}"
 if [[ -f "$config" ]]; then

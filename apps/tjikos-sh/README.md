@@ -5,8 +5,7 @@ reviewable shell script and this guide. There is no HTTP upload, enrollment API,
 credential storage, or public write endpoint. Source remains in `tijptjik/tjikos`
 and `tijptjik/dotfiles`; only authorized GitHub maintainers and Cloudflare account
 members can publish. Public readability is necessary for an unauthenticated
-new machine. Do not describe a public repository as "write-only": it is public
-read, owner-controlled write.
+new machine.
 
 ## On a new machine
 
@@ -33,29 +32,53 @@ your independently trusted GitHub checkout when checking for tampering.
 
 The script:
 
-1. Installs Fedora packages `ca-certificates curl git fish chezmoi gum age jq
-   python3 python3-tomli python3-tomli-w cargo gcc make pkgconf-pkg-config
-   openssh-clients unzip tar gzip gh`.
-2. Clones public dotfiles into `~/.local/share/dotjik` and tjikOS into
-   `~/code/tjikos` over HTTPS. SSH keys are not needed for this step.
-3. Checks out the exact commits embedded in the reviewed script on a local
-   `bootstrap` branch tracking the published bootstrap release branch, then
-   builds the Rust runner. This release uses `bootstrap/fedora-2026-10-28` in
-   both repositories; switching to `main` later requires reviewing its schema
-   compatibility first.
+1. Checks Fedora's existing Python 3.11+ for the remaining standard-library
+   helpers. It installs only `ca-certificates curl git fish chezmoi gum age jq
+   openssh-clients`. It installs no Python TOML packages, compiler, build tools,
+   archive tools or GitHub CLI.
+2. Fetches the two public repositories over HTTPS so no Git credential is needed
+   to obtain the credential-setup code. It checks out the exact reviewed commits
+   on a local `bootstrap` branch tracking `bootstrap/fedora-2026-10-28`.
+3. Downloads the uncompressed static Linux x86_64 tjikup executable from a pinned
+   GitHub Release, verifies the SHA-256 embedded in this script, and atomically
+   installs it. No compilation happens on the new device. Normal tjikup updates
+   also use the pinned binary; source builds remain an explicit developer action.
 4. Runs `tjikup new device`, asking for desktop/laptop/server and optional recipes.
 5. Runs the existing Bitwarden bootstrap. You enter the passphrase for the
    encrypted machine token on the terminal. The token remains in
    `~/.config/bws/environment` and the age identity in `~/.keys/chezmoi.txt`, both
    private. This uses Secrets Manager, not an unlocked personal `bw` vault.
 6. Initializes Chezmoi's template configuration with the selected role. It does
-   not apply home or system configuration. Chezetc's legacy role is resolved
-   through the same local profile.
-7. Offers GitHub device/web authentication via `gh`; it never embeds your GitHub
-   credential in the URL, profile, or repository. Git writes need your account's
-   existing repository permission; bootstrap does not grant anybody write access.
+   not apply home or system configuration. Existing TOML is read with Python's
+   built-in `tomllib` and serialized by Chezmoi itself; custom settings are retained.
+7. Configures GitHub SSH from BWS, verifies the authenticated account, then sets
+   both remotes to `git@github.com:tijptjik/...`. Initial public HTTPS fetching is
+   only the credential-free bootstrap step. Normal Git synchronization uses SSH.
 8. Prints `tjikup --plan`. Review it before running
    `tjikup --skip-repo-sync --show-skips` for the first apply.
+
+### GitHub SSH credentials
+
+To retrieve an existing authorized SSH private key from BWS, supply its secret ID
+(the value must be an unlocked OpenSSH private key):
+
+```bash
+bash init.sh --ssh-key-secret YOUR_BWS_SECRET_ID
+```
+
+Without that option, bootstrap reads `GHI_TOKEN` from BWS and registers a newly
+created Ed25519 key for this device. The token must be valid and have SSH-key write
+permission (`admin:public_key` for a classic GitHub token). A rejected token stops
+setup with an actionable error; bootstrap does not fall back to another account
+or GitHub CLI authentication.
+
+The private key is stored as `~/.ssh/tjikup_github_ed25519` with mode 0600. Existing
+keys are preserved. The two checkouts use a dedicated SSH configuration with
+strict host checking and GitHub host keys obtained from its HTTPS metadata API.
+The GitHub token is never stored in Git configuration or passed in process argv.
+Git author identity is initialized per checkout only if it is not already set.
+An already working managed SSH key can be reused without registering it again.
+
 
 Keep Bitwarden access and recovery material outside Git. Tailscale membership,
 disk initialization, backups, desktop login and any hardware setup remain
@@ -127,8 +150,12 @@ replace the broad client/desktop/laptop/server switches, not physical identity.
 The bootstrap must not point at an unpublished migration. Set `release.json`
 with exact, publicly available dotfiles and tjikOS commit hashes containing the
 new runner, enrollment command, role policy, portable manifests, and matching
-recipe schema. `scripts/deploy.py` verifies key files exist at both commits,
-builds with `--release`, performs a Wrangler dry run, deploys, then byte-compares
+recipe schema. Also pin `tjikup_binary.url`, `sha256`, and `source_revision` to
+the versioned GitHub Release. Its `build-info.json` records the compiler and exact
+source used for the executable; the source checkout can contain later packaging
+changes without changing the pinned runtime binary. `scripts/deploy.py` verifies key files exist at both commits,
+builds with `--release`, verifies the published binary checksum, performs a
+Wrangler dry run, deploys, then byte-compares
 the public endpoint. Asset upload uses Wrangler; hostname attachment uses the
 account-level Workers custom-domain API, so deployment does not need permission
 to list or modify unrelated zone Worker routes. A normal workspace build may produce an explicitly
@@ -147,6 +174,11 @@ static assets only, no workers.dev alias, no secret bindings. Keep GitHub write
 access owner-only and deployment tokens restricted to your account. Account
 administrators can still publish; a repository setting cannot override that.
 Use reviewed commits and retain prior release hashes for rollback.
+
+The static binary is built using `apps/tjikup/scripts/release.sh` on a build
+machine. The GitHub Actions workflow automates this from signed `tjikup-v*` tags
+once [the CI-only PR](https://github.com/tijptjik/tjikos/pull/1) is merged. The
+initial static release was built and checked in an isolated local toolchain.
 
 Acceptance requires a fresh Fedora VM run through package installation,
 interactive credential unlock and selected first apply. Local mock tests and a

@@ -12,7 +12,9 @@ class BootstrapTests(unittest.TestCase):
     def test_plan_is_non_mutating_and_lists_early_dependencies(self):
         result = subprocess.run(['bash', str(ROOT / 'init.sh'), '--plan'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        for requirement in ('fish', 'git', 'chezmoi', 'age', 'python3-tomli-w', 'cargo', 'HTTPS', 'separate command'):
+        packages = next(line for line in result.stdout.splitlines() if 'Install Fedora packages:' in line).split(':', 1)[1].split()
+        self.assertFalse(set(packages) & {'python3', 'python3-tomli', 'python3-tomli-w', 'cargo', 'gcc', 'make', 'pkgconf-pkg-config', 'unzip', 'tar', 'gzip', 'gh'})
+        for requirement in ('fish', 'git', 'chezmoi', 'age', 'openssh-clients', 'SHA-256', 'HTTPS', 'separate command'):
             self.assertIn(requirement, result.stdout)
 
     def test_reviewed_script_contains_no_unpinned_installer_pipeline(self):
@@ -24,12 +26,20 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('tjikup new device </dev/tty', script)
         self.assertNotIn('tjikup --show-skips\n', script)
 
-    def test_release_build_rejects_unpublished_revisions(self):
-        release = json.loads((ROOT / 'release.json').read_text())
-        if all(release.get(name + '_revision') for name in ('dotjik', 'tjikos')):
-            self.skipTest('release is pinned')
-        result = subprocess.run(['python3', '-B', str(ROOT / 'scripts/build.py'), '--release'], capture_output=True)
-        self.assertNotEqual(result.returncode, 0)
+    def test_release_build_rejects_unpinned_binary(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'scripts').mkdir()
+            shutil.copy2(ROOT / 'scripts/build.py', root / 'scripts/build.py')
+            shutil.copy2(ROOT / 'init.sh', root / 'init.sh')
+            release = json.loads((ROOT / 'release.json').read_text())
+            release['tjikup_binary'] = {'url': 'https://example.invalid/tjikup', 'sha256': '0' * 64}
+            (root / 'release.json').write_text(json.dumps(release))
+            result = subprocess.run(['python3', '-B', str(root / 'scripts/build.py'), '--release'], capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((root / 'dist').exists())
 
     def test_shell_syntax(self):
-        subprocess.run(['bash', '-n', str(ROOT / 'init.sh')], check=True)
+        for path in [ROOT / 'init.sh', *ROOT.glob('helpers/*.sh')]:
+            subprocess.run(['bash', '-n', str(path)], check=True)

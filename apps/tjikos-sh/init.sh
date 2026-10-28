@@ -5,29 +5,36 @@
 set -euo pipefail
 
 main() {
-    local mode="${1:-}" answer tmp dotjik_dir tjikos_dir config_dir
-    local -a packages=(ca-certificates curl git fish chezmoi gum age jq python3
-        python3-tomli python3-tomli-w cargo gcc make pkgconf-pkg-config
-        openssh-clients unzip tar gzip gh)
+    local mode="" answer dotjik_dir tjikos_dir config_dir ssh_key_secret=""
+    while (( $# )); do
+        case "$1" in
+            --help|--plan) mode="$1"; shift ;;
+            --ssh-key-secret) [[ $# -ge 2 ]] || return 2; ssh_key_secret="$2"; shift 2 ;;
+            *) echo "Unknown bootstrap option: $1" >&2; return 2 ;;
+        esac
+    done
+    local -a packages=(ca-certificates curl git fish chezmoi gum age jq openssh-clients)
     if [[ "$mode" == --help || "$mode" == --plan ]]; then
         printf '%s\n' 'TjikOS Fedora bootstrap:' \
             '  1. Verify Fedora x86_64 and a normal sudo-capable user.' \
             "  2. Install Fedora packages: ${packages[*]}" \
-            '  3. Clone dotfiles and tjikOS over HTTPS (no SSH key required).' \
-            '  4. Build the pinned Rust runner and install user commands.' \
+            '  3. Fetch pinned public sources over HTTPS; configure SSH remotes after BWS unlock.' \
+            '  4. Download the pinned static tjikup release and verify SHA-256; no compilation.' \
             '  5. Enroll this hostname: role and explicit recipe subscriptions.' \
             '  6. Unlock the existing encrypted Bitwarden token and age identity.' \
-            '  7. Initialize template configuration; optionally authenticate GitHub.' \
+            '  7. Initialize template configuration and configure GitHub SSH using BWS.' \
+            '  Python 3.11+ is checked from Fedora; no pip or TOML packages are installed.' \
             '  8. Validate and print the plan. Applying recipes is a separate command.'
         return 0
     fi
-    [[ -z "$mode" ]] || { echo 'Usage: bash init.sh [--plan | --help]' >&2; return 2; }
+    [[ -z "$mode" ]] || { echo 'Usage: bash init.sh [--plan | --help] [--ssh-key-secret BWS_SECRET_ID]' >&2; return 2; }
     [[ $EUID -ne 0 ]] || { echo 'Run as your normal user, not root or sudo bash.' >&2; return 1; }
     # Values below are pinned by the release build, never taken from the network
     # during execution of a script you have already reviewed.
+    local binary_url='@TJIKUP_BINARY_URL@' binary_sha256='@TJIKUP_BINARY_SHA256@'
     local dotjik_revision='@DOTJIK_REVISION@' tjikos_revision='@TJIKOS_REVISION@'
     local dotjik_branch='@DOTJIK_BRANCH@' tjikos_branch='@TJIKOS_BRANCH@'
-    [[ "$dotjik_revision" =~ ^[0-9a-f]{40}$ && "$tjikos_revision" =~ ^[0-9a-f]{40}$ ]] || {
+    [[ "$dotjik_revision" =~ ^[0-9a-f]{40}$ && "$tjikos_revision" =~ ^[0-9a-f]{40}$ && "$binary_sha256" =~ ^[a-f0-9]{64}$ ]] || {
         echo 'This source script is not a published release. Use a built /init artifact.' >&2; return 1;
     }
     [[ -r /etc/os-release ]] || { echo 'Cannot identify the operating system.' >&2; return 1; }
@@ -42,6 +49,9 @@ main() {
     printf 'Continue? [y/N]: ' >/dev/tty
     read -r answer </dev/tty
     [[ "$answer" == y || "$answer" == Y ]] || return 0
+    python3 -c 'import sys, tomllib; assert sys.version_info >= (3, 11)' || {
+        echo 'Fedora Python 3.11+ is required by remaining helpers. Install python3 first.' >&2; return 1;
+    }
     sudo -v </dev/tty
     sudo dnf install -y "${packages[@]}" </dev/tty
     umask 077
@@ -72,12 +82,16 @@ main() {
     [[ -f "$tjikos_dir/apps/tjikup/Cargo.toml" && -f "$dotjik_dir/scripts/device-policy.py" ]] || {
         echo 'Pinned source does not contain the cold-bootstrap workflow.' >&2; return 1;
     }
-    # Cargo is a Fedora dependency; do not execute a second downloaded installer.
-    bash "$tjikos_dir/apps/tjikup/scripts/build.sh"
     mkdir -p "$HOME/.local/bin" "$config_dir"
-    tmp="$(mktemp "$HOME/.local/bin/.tjikup.XXXXXX")"
-    install -m 755 "$tjikos_dir/apps/tjikup/dist/tjikup" "$tmp"
-    mv -f -- "$tmp" "$HOME/.local/bin/tjikup"
+    bootstrap_binary_tmp="$(mktemp "$HOME/.local/bin/.tjikup.XXXXXX")"
+    trap 'rm -f -- "${bootstrap_binary_tmp:-}"' EXIT
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 15 --max-time 180 "$binary_url" -o "$bootstrap_binary_tmp"
+    [[ "$(sha256sum "$bootstrap_binary_tmp" | cut -d ' ' -f 1)" == "$binary_sha256" ]] || {
+        echo 'Runner checksum mismatch; existing executable preserved.' >&2; return 1;
+    }
+    chmod 755 "$bootstrap_binary_tmp"
+    "$bootstrap_binary_tmp" --version >/dev/null
+    mv -f -- "$bootstrap_binary_tmp" "$HOME/.local/bin/tjikup"
     export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
     if [[ -e "$config_dir/config.json" || -L "$config_dir/config.json" ]]; then
         [[ "$(readlink -f "$config_dir/config.json")" == "$dotjik_dir/tjikup.json" ]] || {
@@ -93,18 +107,23 @@ main() {
     fish --no-config "$dotjik_dir/home/.bitwarden-setup.fish" </dev/tty
     age-keygen -y "$HOME/.keys/chezmoi.txt" >/dev/null
     python3 "$dotjik_dir/scripts/device-policy.py" configure
-    if ! gh auth status --hostname github.com >/dev/null 2>&1; then
-        printf 'Authenticate GitHub now for repository synchronization? [y/N]: ' >/dev/tty
-        read -r answer </dev/tty
-        if [[ "$answer" == y || "$answer" == Y ]]; then
-            gh auth login --hostname github.com --git-protocol https --web </dev/tty
-            gh auth setup-git --hostname github.com
-        fi
-    fi
+    local -a ssh_options=()
+    [[ -z "$ssh_key_secret" ]] || ssh_options=(--ssh-key-secret "$ssh_key_secret")
+    bash "$tjikos_dir/apps/tjikos-sh/helpers/github-ssh.sh" "${ssh_options[@]}" </dev/tty
+    local ssh_command github_id repo
+    printf -v ssh_command 'ssh -F %q' "$HOME/.ssh/tjikup-github.conf"
+    github_id="$(jq -er '.id' "$config_dir/github.json")"
+    for repo in "$dotjik_dir" "$tjikos_dir"; do
+        git -C "$repo" config core.sshCommand "$ssh_command"
+        git -C "$repo" config --get user.name >/dev/null || git -C "$repo" config user.name tijptjik
+        git -C "$repo" config --get user.email >/dev/null || git -C "$repo" config user.email "$github_id+tijptjik@users.noreply.github.com"
+    done
+    git -C "$dotjik_dir" remote set-url origin git@github.com:tijptjik/dotfiles.git
+    git -C "$tjikos_dir" remote set-url origin git@github.com:tijptjik/tjikos.git
     tjikup --check
     tjikup --plan
     printf '\n%s\n' 'Bootstrap complete. Review the plan, then run: tjikup --skip-repo-sync --show-skips' \
-        'Use ordinary tjikup after configuring GitHub access and reviewing file conflicts.' \
+        'GitHub SSH is configured. Use ordinary tjikup after reviewing file conflicts.' \
         'Device guide: https://sh.type.hk/guide'
 }
 main "$@"

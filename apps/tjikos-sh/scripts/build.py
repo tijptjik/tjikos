@@ -24,6 +24,19 @@ for name in ('dotjik', 'tjikos'):
         print(f'{name}: building a non-executable draft until source publication')
         continue
     script = script.replace('@' + name.upper() + '_REVISION@', revision)
+binary = release.get('tjikup_binary', {})
+url, digest = binary.get('url', ''), binary.get('sha256', '')
+valid = (isinstance(url, str) and isinstance(digest, str)
+         and re.fullmatch(r'https://github\.com/tijptjik/tjikos/releases/download/tjikup-v[A-Za-z0-9._-]+/tjikup-x86_64-unknown-linux-musl', url)
+         and re.fullmatch('[a-f0-9]{64}', digest)
+         and re.fullmatch('[a-f0-9]{40}', binary.get('source_revision', ''))
+         and binary.get('target') == 'x86_64-unknown-linux-musl')
+if not valid:
+    if '--release' in sys.argv:
+        raise SystemExit('Publish and pin a static tjikup binary before deploying')
+    print('binary: building a non-executable draft until release publication')
+else:
+    script = script.replace('@TJIKUP_BINARY_URL@', url).replace('@TJIKUP_BINARY_SHA256@', digest)
 subprocess.run(['bash', '-n'], input=script, text=True, check=True)
 dist = root / 'dist'
 dist.mkdir(exist_ok=True)
