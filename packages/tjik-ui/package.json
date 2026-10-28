@@ -1,0 +1,9 @@
+{
+  "name": "@tjikos/tjik-ui",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "cargo build --locked --release && mkdir -p dist && cp target/release/libtjik_ui.rlib dist/",
+    "check": "cargo fmt --check && cargo check --locked"
+  }
+}
