@@ -98,12 +98,12 @@ Commands receive `TJIKUP_REPORT_FILE` (a temporary TSV report), `TJIKUP_COLUMNS`
 into those fields. The runner owns report creation, summary, one completion
 notification and cleanup. Notifications include subjects and structured dirty-file
 counts, never raw command output or other notes. Local runs prefer a native Notjik
-status card with failure/warning counts and elapsed time/stage count. Up to three
+results table with separate completed-stage and issue counts, plus the outcome and
+elapsed time in its footer. Up to three
 issues list their stage and tool in the card body, failures first, followed by a
 count of any remaining issues. Dirty repositories use friendly names and file
 counts (for example, `Dirty Chezmoi — 48 files`); this is a warning, not a failed
-tool. A single dirty repository instead places its name at the left of the status
-row and its file count at the right, with elapsed time and stage count in the body.
+tool. Plain desktop and SSH fallbacks put each report metric on its own line.
 The generic runner failure summary is omitted when specific failures are
 available. On Hyprland, a Show window action
 returns to the launching window captured from process ancestry before the run.
@@ -133,7 +133,7 @@ for one-line commands; interactive SSH sessions already allocate a terminal.
 
 The OSC notification also carries `tjikup-status-v1` display metadata. A desktop
 Kitty `notifications.py` hook can call `tjikup.notifications.ssh_notification_filter`
-to deliver a native Notjik status card; without the hook, standard Kitty delivery
+to deliver a native Notjik results table; without the hook, standard Kitty delivery
 continues. The hook accepts no remote action commands and keeps the generic
 notification if local delivery fails. Kitty loads the hook when it starts.
 

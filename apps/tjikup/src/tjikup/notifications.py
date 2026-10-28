@@ -88,7 +88,8 @@ def completion_payload(
         status = "ALL SYSTEMS GO"
     if failed and details and not interrupted:
         status = "FAILED\n" + status
-    body = [status, f"{duration} · Stages completed: {completed} · Issues: {len(details)}"]
+    body = [status, f"Stages completed: {completed}", f"Issues: {len(details)}",
+            f"Elapsed: {duration}"]
     if dry_run:
         body.append("Preview only; no changes applied.")
     if unavailable:
@@ -97,7 +98,7 @@ def completion_payload(
         body.append("See terminal output for details.")
     data = {"state": status, "tone": "critical" if failed or interrupted else
             "warning" if issues or unavailable else "success"}
-    # Status.qml is a compact row; stage/tool names belong in the wrapping body.
+    # Keep report metrics in table rows and concrete issues in the wrapping body.
     native_body = details[:3]
     if len(details) > 3:
         native_body.append(f"+{len(details) - 3} more in terminal")
@@ -116,15 +117,14 @@ def completion_payload(
                      "FAILED" if failed and not failure_count else
                      " · ".join(counts) if counts else
                      "REPORT UNAVAILABLE" if unavailable else "ALL SYSTEMS GO")
-    data["detail"] = f"{duration} · {completed} {'stage' if completed == 1 else 'stages'}"
     if data["tone"] == "success":
-        data["rainbow-text"] = True
-    if not failed and not interrupted and len(details) == 1 and details[0].startswith("Dirty "):
-        # Give a single dirty repository the status row; timing becomes the body.
-        dirty = re.fullmatch(r"(Dirty .+?)(?: — (\d+ files?))?", details[0])
-        native_body[0] = data["detail"]
-        data["state"] = dirty.group(1)
-        data["detail"] = dirty.group(2) or ""
+        data["state"] = "Complete"
+    data["duration"] = duration
+    data["results"] = [
+        {"label": "Stages completed", "value": str(completed)},
+        {"label": "Issues", "value": "Unknown" if unavailable else str(len(details)),
+         "tone": data["tone"]},
+    ]
     return (title, escape("\n".join(body)), "critical" if failed or interrupted else "normal",
             data, "\n".join(native_body))
 
@@ -198,13 +198,25 @@ def ssh_notification_filter(command):
             return False
         payload = json.loads(metadata[len(prefix):])
         data, body = payload["data"], payload["body"]
+        report = "results" in data
         if (set(payload) != {"data", "body"} or
                 set(data) not in ({"state", "detail", "tone"},
-                                  {"state", "detail", "tone", "rainbow-text"}) or
+                                  {"state", "detail", "tone", "rainbow-text"},
+                                  {"state", "duration", "tone", "results"}) or
                 data["tone"] not in {"success", "warning", "critical"} or
                 ("rainbow-text" in data and not isinstance(data["rainbow-text"], bool)) or
                 not all(isinstance(value, str) and len(value) <= 8192
-                        for value in (body, data["state"], data["detail"]))):
+                        for value in (body, data["state"],
+                                      data["duration"] if report else data["detail"]))):
+            return False
+        if report and (not isinstance(data["results"], list) or
+                       len(data["results"]) != 2 or any(
+                           not isinstance(row, dict) or
+                           set(row) not in ({"label", "value"}, {"label", "value", "tone"}) or
+                           not all(isinstance(row[key], str) and len(row[key]) <= 200
+                                   for key in ("label", "value")) or
+                           row.get("tone", "success") not in {"success", "warning", "critical"}
+                           for row in data["results"])):
             return False
         return send_native_notification(
             command.title, body, "critical" if data["tone"] == "critical" else "normal",
@@ -223,7 +235,8 @@ def send_native_notification(title, body, urgency, data, focus_command=None):
     try:
         sent = subprocess.run(
             [native, "send", title, body, "--app", "Tjikup",
-             "--icon", str(icon), "--type", "status", "--data", json.dumps(data),
+             "--icon", str(icon), "--type", "results-table" if "results" in data else "status",
+             "--data", json.dumps(data),
              "--actions", json.dumps(actions), "--urgency", urgency,
              "--timeout", "10s" if data["tone"] == "success" else "until-dismissed"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,

@@ -28,7 +28,7 @@ class NotificationTests(unittest.TestCase):
     def test_success_deduplicates_stages(self):
         title, body, urgency = self.message("APPLY\t✓\tDotfiles\t1s\n" * 2)
         self.assertEqual(title, "Tjikup complete")
-        self.assertIn("1m 23s · Stages completed: 1 · Issues: 0", body)
+        self.assertIn("Stages completed: 1\nIssues: 0\nElapsed: 1m 23s", body)
         self.assertEqual(urgency, "normal")
         self.assertTrue(body.startswith("ALL SYSTEMS GO\n"))
 
@@ -45,9 +45,9 @@ class NotificationTests(unittest.TestCase):
 
     def test_native_status_and_focus_action(self):
         for report, result, expected, timeout in (
-            ("", 0, "ALL SYSTEMS GO", "10s"),
+            ("", 0, "Complete", "10s"),
             ("WARN\t!\tDirty State /tmp/repo\t82 files\n", 0,
-             "Dirty repo", "until-dismissed"),
+             "1 warning", "until-dismissed"),
             ("FAILED\t✗\tDotfiles\tprivate output\n", 1,
              "1 failed", "until-dismissed"),
         ):
@@ -63,16 +63,16 @@ class NotificationTests(unittest.TestCase):
                 args = send.call_args.args[0]
                 self.assertEqual(json.loads(args[args.index("--data") + 1])["state"], expected)
                 data = json.loads(args[args.index("--data") + 1])
-                self.assertEqual(data.get("rainbow-text", False), expected == "ALL SYSTEMS GO")
+                self.assertEqual(args[args.index("--type") + 1], "results-table")
                 self.assertEqual(json.loads(args[args.index("--actions") + 1]),
                                  [{"label": "Show window", "command": focus}])
                 self.assertEqual(args[args.index("--timeout") + 1], timeout)
                 self.assertNotIn("private output", " ".join(args))
                 self.assertNotIn(expected, args[3])
-                self.assertEqual(json.loads(args[args.index("--data") + 1])["detail"],
-                                 "82 files" if expected == "Dirty repo" else "1m 23s · 0 stages")
-                if expected == "Dirty repo":
-                    self.assertEqual(args[3], "1m 23s · 0 stages")
+                self.assertEqual(data["duration"], "1m 23s")
+                self.assertEqual(data["results"][0], {"label": "Stages completed", "value": "0"})
+                if expected == "1 warning":
+                    self.assertEqual(args[3], "Dirty repo — 82 files")
 
     def test_native_layout_keeps_root_cause_out_of_status_row(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -85,7 +85,9 @@ class NotificationTests(unittest.TestCase):
             _, fallback, _, data, body = notifications.completion_payload(
                 path, 1, 83, dry_run=True)
             self.assertEqual(data, {"state": "2 failed", "tone": "critical",
-                                    "detail": "1m 23s · 1 stage"})
+                                    "duration": "1m 23s", "results": [
+                                        {"label": "Stages completed", "value": "1"},
+                                        {"label": "Issues", "value": "2", "tone": "critical"}]})
             self.assertEqual(body, "Failed · CHECK: Connection failed\nFailed · Demo command\nPreview · no changes applied")
             self.assertNotIn("private output", body)
             self.assertIn("Connection failed", fallback)
@@ -102,9 +104,9 @@ class NotificationTests(unittest.TestCase):
                 with self.subTest(subject=subject, note=note):
                     path.write_text(f"WARN\t!\t{subject}\t{note}\n")
                     _, fallback, _, data, body = notifications.completion_payload(path, 0, 83)
-                    self.assertEqual(data["state"], expected.split(" — ")[0])
-                    self.assertEqual(data["detail"], note if note != "private details" else "")
-                    self.assertEqual(body, "1m 23s · 0 stages")
+                    self.assertEqual(data["state"], "1 warning")
+                    self.assertEqual(data["duration"], "1m 23s")
+                    self.assertEqual(body, expected)
                     self.assertIn(expected, fallback)
 
     def test_native_dirty_card_matches_requested_layout(self):
@@ -114,11 +116,13 @@ class NotificationTests(unittest.TestCase):
                 f"APPLY\t✓\tStage {index}\tOK\n" for index in range(46)))
             title, _, _, data, body = notifications.completion_payload(path, 0, 72)
             self.assertEqual(title, "Tjikup needs attention")
-            self.assertEqual(body, "1m 12s · 46 stages")
-            self.assertEqual(data, {"state": "Dirty Chezmoi", "detail": "106 files",
-                                    "tone": "warning"})
+            self.assertEqual(body, "Dirty Chezmoi — 106 files")
+            self.assertEqual(data, {"state": "1 warning", "duration": "1m 12s",
+                                    "tone": "warning", "results": [
+                                        {"label": "Stages completed", "value": "46"},
+                                        {"label": "Issues", "value": "1", "tone": "warning"}]})
             _, _, _, _, preview = notifications.completion_payload(path, 0, 72, dry_run=True)
-            self.assertEqual(preview, "1m 12s · 46 stages\nPreview · no changes applied")
+            self.assertEqual(preview, "Dirty Chezmoi — 106 files\nPreview · no changes applied")
 
     def test_failures_precede_warnings_and_keep_operation_names(self):
         with tempfile.TemporaryDirectory() as directory:
