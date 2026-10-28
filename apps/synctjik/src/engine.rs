@@ -140,6 +140,10 @@ impl Engine {
             .join(format!("{}.json", digest(&json!(f))))
     }
     pub fn ready(&self) -> Result<()> {
+        ensure!(
+            !self.folders(false)?.is_empty(),
+            "No collections assigned; enroll this device first"
+        );
         if self.machine == self.master {
             return Ok(());
         }

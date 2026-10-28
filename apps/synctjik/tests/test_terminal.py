@@ -73,6 +73,14 @@ class WorkflowTests(unittest.TestCase):
             if finish:
                 os.write(fd, b'A\r')
                 wait_for(b'A recovery copy will be kept.')
+                if finish == 'revisit':
+                    os.write(fd, b'n\n')
+                    wait_for(b'Return to the review?')
+                    output.clear()
+                    os.write(fd, b'y\n')
+                    wait_for(b'accepted')
+                    os.write(fd, b'\r')
+                    wait_for(b'A recovery copy will be kept.')
                 os.write(fd, b'y\n')
             else:
                 os.kill(pid, signal.SIGTERM)
@@ -97,6 +105,19 @@ class WorkflowTests(unittest.TestCase):
                 pass
             os.close(fd)
         return output
+
+
+    def test_declining_confirmation_preserves_review_decisions(self):
+        self.review_pty('revisit')
+        self.run_cli('client', 'ready')
+
+    def test_unknown_device_without_assignments_is_not_ready(self):
+        config = json.loads(self.policy.read_text())
+        config['folders']['assets']['devices'] = ['leader']
+        self.policy.write_text(json.dumps(config))
+        (self.root / 'new').mkdir()
+        self.run_cli('new', 'ready', ok=False)
+        self.run_cli('new', 'backup', ok=False)
 
     def test_two_pane_review_and_apply(self):
         self.review_pty(True)

@@ -162,8 +162,8 @@ Use reviewed commits and retain prior release hashes for rollback.
 
 The static binary is built using `apps/tjikup/scripts/release.sh` on a build
 machine. The GitHub Actions workflow automates this from signed `tjikup-v*` tags
-once [the CI-only PR](https://github.com/tijptjik/tjikos/pull/1) is merged. The
-initial static release was built and checked in an isolated local toolchain.
+when the tagged source includes the release workflow. Synctjik has its own
+`synctjik-v*` workflow, including format-compatibility and terminal tests.
 
 Acceptance requires a fresh Fedora VM run through package installation,
 interactive credential unlock and selected first apply. Local mock tests and a

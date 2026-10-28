@@ -122,7 +122,11 @@ impl Drop for Screen {
         }
     }
 }
-fn decisions(app: &Engine, plan: &Value) -> Result<Option<BTreeMap<String, String>>> {
+fn decisions(
+    app: &Engine,
+    plan: &Value,
+    previous: &BTreeMap<String, String>,
+) -> Result<Option<BTreeMap<String, String>>> {
     ensure!(
         io::stdin().is_terminal() && io::stderr().is_terminal(),
         "Interactive review needs a terminal"
@@ -161,7 +165,7 @@ fn decisions(app: &Engine, plan: &Value) -> Result<Option<BTreeMap<String, Strin
     let mut selected = 0usize;
     let mut scroll = 0usize;
     let mut focus_diff = false;
-    let mut choices = BTreeMap::new();
+    let mut choices = previous.clone();
     let mut cache = BTreeMap::new();
     let mut notice = String::new();
     let screen = Screen::enter()?;
@@ -315,10 +319,12 @@ fn decisions(app: &Engine, plan: &Value) -> Result<Option<BTreeMap<String, Strin
 }
 pub fn review(app: &Engine, path: &Path) -> Result<bool> {
     let plan = read_json(path)?;
+    let mut previous = BTreeMap::new();
     loop {
-        let Some(choices) = decisions(app, &plan)? else {
+        let Some(choices) = decisions(app, &plan, &previous)? else {
             return Ok(false);
         };
+        previous = choices.clone();
         let (_, _, conflicts) = merge::merge(
             &merge::entries(&plan["base"])?,
             &merge::entries(&plan["local"])?,
