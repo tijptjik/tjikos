@@ -74,6 +74,9 @@ def normal_text(cells):
 
 
 class Progress:
+    # Renderers using terminal-specific text sizing can opt out of cell reflow.
+    reflow_enabled = True
+
     def __init__(self, *, stream=None, live=None):
         self.stream = stream or sys.stdout
         self.live = enabled() if live is None else live
@@ -84,6 +87,7 @@ class Progress:
         self.thread = None
         self.cursor_hidden = False
         self.rendered = {}
+        self.rendered_widths = {}
         self.columns = None
 
     def __enter__(self):
@@ -166,8 +170,17 @@ class Progress:
                 # erasure, newlines, labels or image placeholders on a tick.
                 self.stream.write("\0337" + "".join(patches) + "\0338")
 
+    def _reflow_extra_lines(self, columns):
+        """Lines added when the terminal reflows previously drawn text."""
+        if not self.reflow_enabled or self.columns is None or columns >= self.columns:
+            return 0
+        return sum((width - 1) // columns for width in self.rendered_widths.values())
+
     def _clear(self):
+        if self.height:
+            self.height += self._reflow_extra_lines(runtime.terminal_columns())
         self.rendered.clear()
+        self.rendered_widths.clear()
         if self.height:
             self.stream.write(f"\r\033[{self.height}A")
             for _ in range(self.height):
@@ -183,10 +196,12 @@ class Progress:
             now = time.monotonic()
             spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[int(now * 8) % 10]
             self.rendered.clear()
+            self.rendered_widths.clear()
             for key, (verb, label, started) in self.rows.items():
                 fields = (verb, spinner, label, f"{now - started:.1f}s")
                 self._print(*fields)
                 self.rendered[key] = fields
+                self.rendered_widths[key] = len(status_cells(runtime.format_status(*fields)))
             self.height = len(self.rows)
             self.columns = runtime.terminal_columns()
 

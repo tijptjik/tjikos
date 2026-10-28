@@ -200,6 +200,46 @@ class ProgressTests(unittest.TestCase):
                         screen[column:column + len(cells)] = cells
                     self.assertEqual(screen, expected)
 
+    def test_shrink_clears_reflowed_rows_before_native_output(self):
+        output = io.StringIO()
+        progress = Progress(stream=output, live=True)
+        with patch.dict(os.environ, {'TJIKUP_COLUMNS': '120', 'TJIKUP_COLOR': '1'}):
+            progress.start('a', 'Chezmoi (files and task preparation)', 'APPLY')
+            progress.start('b', '中文配置')
+        output.seek(0)
+        output.truncate()
+        with patch.dict(os.environ, {'TJIKUP_COLUMNS': '40'}):
+            with progress.output():
+                # Each old status row now occupies three physical lines.
+                cleared = output.getvalue()
+                self.assertIn('\r\x1b[6A', cleared)
+                self.assertEqual(cleared.count('\x1b[2K'), 6)
+                self.assertEqual(progress.height, 0)
+                self.assertFalse(progress.rendered_widths)
+                output.write('Native output\n')
+            self.assertEqual(progress.height, 2)
+            self.assertEqual(progress.columns, 40)
+            output.seek(0)
+            output.truncate()
+            progress._clear()
+        self.assertIn('\r\x1b[2A', output.getvalue())
+        self.assertEqual(output.getvalue().count('\x1b[2K'), 2)
+
+    def test_terminal_specific_text_sizing_can_keep_its_own_height(self):
+        output = io.StringIO()
+        progress = Progress(stream=output, live=True)
+        progress.reflow_enabled = False
+        with patch.dict(os.environ, {'TJIKUP_COLUMNS': '79', 'TJIKUP_COLOR': '1'}):
+            progress.start('a', 'Chezmoi', 'APPLY')
+        # The icon renderer reserves two physical lines per status row.
+        progress.height = 2
+        output.seek(0)
+        output.truncate()
+        with patch.dict(os.environ, {'TJIKUP_COLUMNS': '39'}):
+            progress._clear()
+        self.assertIn('\r\x1b[2A', output.getvalue())
+        self.assertEqual(output.getvalue().count('\x1b[2K'), 2)
+
     def test_nested_stream_preserves_progress_capability(self):
         output = io.StringIO()
         with patch.dict(os.environ, {'TJIKUP_CHILD': '1', 'TJIKUP_PROGRESS': '1'}), contextlib.redirect_stdout(output):
