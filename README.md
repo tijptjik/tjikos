@@ -40,14 +40,12 @@ archives.
 
 ## <img src="docs/icons/tjikup.svg" width="40" height="40" alt=""> tjikup
 
-![tjikup running a synthetic workflow](apps/tjikup/docs/showcase.png)
-
-A configurable script runner with ordered stages, parallel groups, clear status
-rows, and completion notifications.
+A Rust recipe runner with dependency scheduling, shared resource locks, scoped
+autocommits, private execution receipts, and completion notifications.
 
 [Overview](apps/tjikup/README.md) ·
-[Installation](apps/tjikup/README.md#install-and-run) ·
-[Configuration](apps/tjikup/README.md#configuration-version-1)
+[Configuration](apps/tjikup/README.md#configuration) ·
+[Configuration managers](apps/tjikup/README.md#configuration-managers-and-templates)
 
 ## <img src="docs/icons/bartjik.svg" width="40" height="40" alt=""> bartjik
 

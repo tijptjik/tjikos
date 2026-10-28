@@ -2,7 +2,12 @@
 set -euo pipefail
 app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 prefix="${1:-$HOME/.local}"
-python3 "$app_dir/scripts/build.py"
+bash "$app_dir/scripts/fetch-release.sh"
+# Refuse to replace a working legacy runner underneath an incompatible workflow.
+config="${TJIKUP_INSTALL_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/tjikup/config.json}"
+if [[ -f "$config" ]]; then
+    "$app_dir/dist/tjikup" --config "$config" --check
+fi
 install -d -m 755 "$prefix/bin" "$prefix/share/icons"
 # Replace atomically; an in-progress run keeps its loaded executable.
 staged_binary="$(mktemp "$prefix/bin/.tjikup.XXXXXX")"

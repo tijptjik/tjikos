@@ -31,6 +31,13 @@
     "apps/tjikup": {
       "name": "@tjikos/tjikup",
       "version": "0.2.0",
+      "dependencies": {
+        "@tjikos/tjik-ui": "workspace:*",
+      },
+    },
+    "packages/tjik-ui": {
+      "name": "@tjikos/tjik-ui",
+      "version": "0.1.0",
     },
   },
   "packages": {
@@ -43,6 +50,8 @@
     "@tjikos/notjik": ["@tjikos/notjik@workspace:apps/notjik"],
 
     "@tjikos/runtjik": ["@tjikos/runtjik@workspace:apps/runtjik"],
+
+    "@tjikos/tjik-ui": ["@tjikos/tjik-ui@workspace:packages/tjik-ui"],
 
     "@tjikos/tjikup": ["@tjikos/tjikup@workspace:apps/tjikup"],
 
