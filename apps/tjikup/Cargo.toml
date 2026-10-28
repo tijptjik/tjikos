@@ -6,6 +6,7 @@ license = "GPL-3.0-or-later"
 description = "Declarative, resource-aware task runner"
 
 [dependencies]
+tjik-ui = { path = "../../packages/tjik-ui" }
 anyhow = "1"
 base64 = "0.22"
 flate2 = "1.1.10"

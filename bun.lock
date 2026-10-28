@@ -28,6 +28,13 @@
       "name": "@tjikos/runtjik",
       "version": "0.8.3",
     },
+    "apps/synctjik": {
+      "name": "@tjikos/synctjik",
+      "version": "0.1.0",
+      "dependencies": {
+        "@tjikos/tjik-ui": "workspace:*",
+      },
+    },
     "apps/tjikos-sh": {
       "name": "@tjikos/sh",
       "version": "0.1.0",
@@ -38,6 +45,13 @@
     "apps/tjikup": {
       "name": "@tjikos/tjikup",
       "version": "0.2.0",
+      "dependencies": {
+        "@tjikos/tjik-ui": "workspace:*",
+      },
+    },
+    "packages/tjik-ui": {
+      "name": "@tjikos/tjik-ui",
+      "version": "0.1.0",
     },
   },
   "packages": {
@@ -192,6 +206,10 @@
     "@tjikos/runtjik": ["@tjikos/runtjik@workspace:apps/runtjik"],
 
     "@tjikos/sh": ["@tjikos/sh@workspace:apps/tjikos-sh"],
+
+    "@tjikos/synctjik": ["@tjikos/synctjik@workspace:apps/synctjik"],
+
+    "@tjikos/tjik-ui": ["@tjikos/tjik-ui@workspace:packages/tjik-ui"],
 
     "@tjikos/tjikup": ["@tjikos/tjikup@workspace:apps/tjikup"],
 

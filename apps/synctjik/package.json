@@ -1,0 +1,14 @@
+{
+  "name": "@tjikos/synctjik",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "check": "cargo fmt --check && cargo check --locked",
+    "test": "cargo test --locked",
+    "demo": "cargo run --locked -- --demo"
+  },
+  "dependencies": {
+    "@tjikos/tjik-ui": "workspace:*"
+  }
+}

@@ -33,12 +33,12 @@ your independently trusted GitHub checkout when checking for tampering.
 The script:
 
 1. Checks Fedora's existing Python 3.11+ for the remaining standard-library
-   helpers. It installs only `ca-certificates curl git fish chezmoi gum age jq`. It installs no Python TOML packages, compiler, build tools,
+   helpers. It installs only `ca-certificates curl git fish chezmoi gum age jq rclone`. It installs no Python TOML packages, compiler, build tools,
    archive tools or GitHub CLI.
 2. Fetches the two public repositories over HTTPS so no Git credential is needed
    to obtain the credential-setup code. It checks out the exact reviewed commits
    on a local `bootstrap` branch tracking `bootstrap/fedora-2026-10-28`.
-3. Downloads the uncompressed static Linux x86_64 tjikup executable from a pinned
+3. Downloads the uncompressed static Linux x86_64 tjikup and synctjik executables from a pinned
    GitHub Release, verifies the SHA-256 embedded in this script, and atomically
    installs it. No compilation happens on the new device. Normal tjikup updates
    also use the pinned binary; source builds remain an explicit developer action.
@@ -50,7 +50,12 @@ The script:
 6. Initializes Chezmoi's template configuration with the selected role. It does
    not apply home or system configuration. Existing TOML is read with Python's
    built-in `tomllib` and serialized by Chezmoi itself; custom settings are retained.
-7. Prints `tjikup --plan`. Review it before running
+7. Prepares a dedicated archive transport, then runs `synctjik enroll` and
+   `synctjik setup`. Select the required collections and review restoration.
+   Skipped required collections keep bootstrap incomplete; rerun to resume.
+   Credentials such as `.ssh` and `.gnupg` are explicit identity-copy choices.
+8. Enables `backup-packages.timer` only after `synctjik ready` passes.
+9. Prints `tjikup --plan`. Review it before running
    `tjikup --skip-repo-sync --show-skips` for the first apply.
 
 ### GitHub access
@@ -130,7 +135,7 @@ replace the broad client/desktop/laptop/server switches, not physical identity.
 The bootstrap must not point at an unpublished migration. Set `release.json`
 with exact, publicly available dotfiles and tjikOS commit hashes containing the
 new runner, enrollment command, role policy, portable manifests, and matching
-recipe schema. Also pin `tjikup_binary.url`, `sha256`, and `source_revision` to
+recipe schema. Also pin `tjikup_binary` and `synctjik_binary` URL, SHA-256 and source revision to
 the versioned GitHub Release. Its `build-info.json` records the compiler and exact
 source used for the executable; the source checkout can contain later packaging
 changes without changing the pinned runtime binary. `scripts/deploy.py` verifies key files exist at both commits,

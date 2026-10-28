@@ -34,6 +34,14 @@ fn default_config() -> PathBuf {
 
 fn cli() -> Result<i32> {
     let mut args = std::env::args().skip(1).peekable();
+    if args.peek().is_some_and(|s| s == "arc") {
+        args.next();
+        use std::os::unix::process::CommandExt;
+        return Err(std::process::Command::new("synctjik")
+            .args(args)
+            .exec()
+            .into());
+    }
     if args.peek().is_some_and(|s| s == "new") {
         args.next();
         return device::cli(args.collect(), default_config());
@@ -73,7 +81,7 @@ fn cli() -> Result<i32> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
-                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  notify --stdin   Deliver validated display metadata to local notjikctl");
+                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  arc <command>   Delegate archival and restoration to synctjik\n  notify --stdin   Deliver validated display metadata to local notjikctl");
                 println!("\nRecipe selection (combinable):\n  --apply-dotfiles          Home configuration and its reloads only\n  --apply-sysfiles          System configuration and its reloads only\n  --apply-package-updates   Updates of installed applications only\n  --skip-package-updates    Install missing applications and configure; no updates\nSelected modes use local checks for installation dependencies; they never run installers or repository synchronization.");
                 return Ok(0);
             }

@@ -10,21 +10,8 @@ use std::{
     io::{IsTerminal, Write},
     time::Instant,
 };
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
-pub fn width(text: &str) -> usize {
-    UnicodeWidthStr::width(text)
-}
-pub fn columns() -> usize {
-    let mut size: libc::winsize = unsafe { std::mem::zeroed() };
-    unsafe {
-        libc::ioctl(2, libc::TIOCGWINSZ, &mut size);
-    }
-    if size.ws_col > 0 {
-        usize::from(size.ws_col)
-    } else {
-        80
-    }
-}
+pub use tjik_ui::{columns, width};
+use unicode_width::UnicodeWidthChar;
 fn fit(text: &str, available: usize) -> String {
     if width(text) <= available {
         return text.into();

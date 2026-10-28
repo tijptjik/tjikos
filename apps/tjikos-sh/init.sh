@@ -12,18 +12,19 @@ main() {
             *) echo "Unknown bootstrap option: $1" >&2; return 2 ;;
         esac
     done
-    local -a packages=(ca-certificates curl git fish chezmoi gum age jq)
+    local -a packages=(ca-certificates curl git fish chezmoi gum age jq rclone)
     if [[ "$mode" == --help || "$mode" == --plan ]]; then
         printf '%s\n' 'TjikOS Fedora bootstrap:' \
             '  1. Verify Fedora x86_64 and a normal sudo-capable user.' \
             "  2. Install Fedora packages: ${packages[*]}" \
             '  3. Fetch pinned public sources over HTTPS; no GitHub credentials required.' \
-            '  4. Download the pinned static tjikup release and verify SHA-256; no compilation.' \
+            '  4. Download pinned static tjikup and synctjik releases; verify SHA-256; no compilation.' \
             '  5. Enroll this hostname: role and explicit recipe subscriptions.' \
             '  6. Unlock the existing encrypted Bitwarden token and age identity.' \
             '  7. Initialize template configuration.' \
             '  Python 3.11+ is checked from Fedora; no pip or TOML packages are installed.' \
-            '  8. Validate and print the plan. Applying recipes is a separate command.'
+            '  8. Select required archive collections, review restoration, and verify readiness.' \
+            '  9. Enable scheduled backups after restoration; print the plan. Applying recipes is a separate command.'
         return 0
     fi
     [[ -z "$mode" ]] || { echo 'Usage: bash init.sh [--plan | --help]' >&2; return 2; }
@@ -31,9 +32,10 @@ main() {
     # Values below are pinned by the release build, never taken from the network
     # during execution of a script you have already reviewed.
     local binary_url='@TJIKUP_BINARY_URL@' binary_sha256='@TJIKUP_BINARY_SHA256@'
+    local synctjik_url='@SYNCTJIK_BINARY_URL@' synctjik_sha256='@SYNCTJIK_BINARY_SHA256@'
     local dotjik_revision='@DOTJIK_REVISION@' tjikos_revision='@TJIKOS_REVISION@'
     local dotjik_branch='@DOTJIK_BRANCH@' tjikos_branch='@TJIKOS_BRANCH@'
-    [[ "$dotjik_revision" =~ ^[0-9a-f]{40}$ && "$tjikos_revision" =~ ^[0-9a-f]{40}$ && "$binary_sha256" =~ ^[a-f0-9]{64}$ ]] || {
+    [[ "$dotjik_revision" =~ ^[0-9a-f]{40}$ && "$tjikos_revision" =~ ^[0-9a-f]{40}$ && "$binary_sha256" =~ ^[a-f0-9]{64}$ && "$synctjik_sha256" =~ ^[a-f0-9]{64}$ ]] || {
         echo 'This source script is not a published release. Use a built /init artifact.' >&2; return 1;
     }
     [[ -r /etc/os-release ]] || { echo 'Cannot identify the operating system.' >&2; return 1; }
@@ -91,6 +93,14 @@ main() {
     chmod 755 "$bootstrap_binary_tmp"
     "$bootstrap_binary_tmp" --version >/dev/null
     mv -f -- "$bootstrap_binary_tmp" "$HOME/.local/bin/tjikup"
+    bootstrap_binary_tmp="$(mktemp "$HOME/.local/bin/.synctjik.XXXXXX")"
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 15 --max-time 180 "$synctjik_url" -o "$bootstrap_binary_tmp"
+    [[ "$(sha256sum "$bootstrap_binary_tmp" | cut -d ' ' -f 1)" == "$synctjik_sha256" ]] || {
+        echo 'Synctjik checksum mismatch; existing executable preserved.' >&2; return 1;
+    }
+    chmod 755 "$bootstrap_binary_tmp"
+    "$bootstrap_binary_tmp" --version >/dev/null
+    mv -f -- "$bootstrap_binary_tmp" "$HOME/.local/bin/synctjik"
     export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
     if [[ -e "$config_dir/config.json" || -L "$config_dir/config.json" ]]; then
         [[ "$(readlink -f "$config_dir/config.json")" == "$dotjik_dir/tjikup.json" ]] || {
@@ -106,9 +116,10 @@ main() {
     fish --no-config "$dotjik_dir/home/.bitwarden-setup.fish" </dev/tty
     age-keygen -y "$HOME/.keys/chezmoi.txt" >/dev/null
     python3 "$dotjik_dir/scripts/device-policy.py" configure
+    bash "$tjikos_dir/apps/tjikos-sh/helpers/restore-collections.sh" "$dotjik_dir" </dev/tty
     tjikup --check
     tjikup --plan
-    printf '\n%s\n' 'Bootstrap complete. Review the plan, then run: tjikup --skip-repo-sync --show-skips' \
+    printf '\n%s\n' 'Bootstrap and required archive restoration complete. Review the plan, then run: tjikup --skip-repo-sync --show-skips' \
         'Public repositories use HTTPS. Configure write access separately if this device needs to push.' \
         'Device guide: https://sh.type.hk/guide'
 }
