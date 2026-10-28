@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,17 +113,44 @@ func findBackend() (string, error) {
 	}
 	return "", fmt.Errorf("backend missing: run bun run install:local from the TjikOS checkout")
 }
+
+// Each progress event carries the next read so Bubble Tea keeps receiving
+// updates without a shared file, polling process, or access to private mail.
+type queryProgressMsg struct {
+	Progress   QueryProgress
+	Generation int
+	Next       tea.Cmd
+}
+
+func nextBackendEvent(events <-chan tea.Msg, ctx context.Context) tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case event := <-events:
+			return event
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
 func (b backend) call(kind string, values map[string]interface{}, generation int) tea.Cmd {
 	return func() tea.Msg {
 		req := map[string]interface{}{"op": kind, "config": b.Config, "demo": b.Demo}
 		for k, v := range values {
 			req[k] = v
 		}
+		if kind == "query" {
+			req["progress"] = true
+		}
 		payload, err := json.Marshal(req)
 		if err != nil {
 			return response{Kind: kind, Err: err, Generation: generation}
 		}
-		cmd := exec.CommandContext(b.Context, "python3", b.Path)
+		ctx := b.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		cmd := exec.CommandContext(ctx, "python3", b.Path)
 		cmd.Stdin = bytes.NewReader(payload)
 		cmd.Env = append(os.Environ(), "PYTHONDONTWRITEBYTECODE=1")
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -132,21 +160,58 @@ func (b backend) call(kind string, values map[string]interface{}, generation int
 			}
 			return nil
 		}
-		output, err := cmd.Output()
+		output, err := cmd.StdoutPipe()
+		if err == nil {
+			err = cmd.Start()
+		}
 		if err != nil {
 			return response{Kind: kind, Err: fmt.Errorf("backend did not complete; check your private setup"), Generation: generation}
 		}
-		var result struct {
-			OK    bool            `json:"ok"`
-			Data  json.RawMessage `json:"data"`
-			Error string          `json:"error"`
+		events := make(chan tea.Msg)
+		send := func(event tea.Msg) bool {
+			select {
+			case events <- event:
+				return true
+			case <-ctx.Done():
+				return false
+			}
 		}
-		if err = json.Unmarshal(output, &result); err != nil {
-			return response{Kind: kind, Err: fmt.Errorf("invalid backend response"), Generation: generation}
-		}
-		if !result.OK {
-			err = fmt.Errorf("%s", result.Error)
-		}
-		return response{Kind: kind, Data: result.Data, Err: err, Generation: generation}
+		go func() {
+			defer close(events)
+			decoder := json.NewDecoder(output)
+			final := response{Kind: kind, Generation: generation, Err: fmt.Errorf("invalid backend response")}
+			for {
+				var result struct {
+					OK       bool            `json:"ok"`
+					Data     json.RawMessage `json:"data"`
+					Error    string          `json:"error"`
+					Progress *QueryProgress  `json:"progress"`
+				}
+				err := decoder.Decode(&result)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					final.Err = fmt.Errorf("invalid backend response")
+					_ = cmd.Cancel()
+					break
+				}
+				if result.Progress != nil {
+					if !send(queryProgressMsg{*result.Progress, generation, nextBackendEvent(events, ctx)}) {
+						break
+					}
+				} else {
+					final.Data, final.Err = result.Data, nil
+					if !result.OK {
+						final.Err = fmt.Errorf("%s", result.Error)
+					}
+				}
+			}
+			if err := cmd.Wait(); err != nil {
+				final.Err = fmt.Errorf("backend did not complete; check your private setup")
+			}
+			send(final)
+		}()
+		return nextBackendEvent(events, ctx)()
 	}
 }

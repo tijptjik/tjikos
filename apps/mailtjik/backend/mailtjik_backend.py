@@ -22,6 +22,7 @@ import subprocess
 import sys
 import time
 import traceback
+from mailtjik_progress import QueryProgress
 from types import SimpleNamespace
 import uuid
 import zlib
@@ -141,24 +142,32 @@ def query(config, request):
     limit = 40
     hits, rows, facets = 0, [], []
     selected = [p for p in cat['partitions'] if eligible(p, filters)]
-    def warm_index(part):
-        db = partition_db(store, part)
-        db.close()
-    # A cold all-account search must not serialize dozens of Drive round trips.
-    # Only selected indexes are fetched; message objects are opened on demand.
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        list(pool.map(warm_index, selected))
-    for p in selected:
-        db = partition_db(store, p)
-        try:
-            db.create_function('casefold', 1, lambda s: str(s).casefold(), deterministic=True)
-            count = db.execute('SELECT count(*) FROM messages' + where, params).fetchone()[0]
-            hits += count
-            facets.append({'account': p['account'], 'year': p['year'], 'available': p['messages'], 'matches': count})
-            for row in db.execute('SELECT sha256,subject,normalized_utc,from_header,to_header,cc_header,bcc_header,byte_size FROM messages' + where + ' ORDER BY normalized_utc DESC,sha256 LIMIT ?', [*params, offset + limit]):
-                rows.append({**dict(row), 'account': p['account'], 'year': p['year']})
-        finally:
+    emit = None
+    if request.get('progress'):
+        def emit(value):
+            print(json.dumps({'progress': value}, ensure_ascii=True), flush=True)
+    with QueryProgress(store, selected, emit) as progress:
+        def warm_index(part):
+            db = partition_db(store, part)
             db.close()
+            progress.index_ready()
+        # A cold all-account search must not serialize dozens of Drive round trips.
+        # Only selected indexes are fetched; message objects are opened on demand.
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(warm_index, selected))
+        progress.searching()
+        for p in selected:
+            db = partition_db(store, p)
+            try:
+                db.create_function('casefold', 1, lambda s: str(s).casefold(), deterministic=True)
+                count = db.execute('SELECT count(*) FROM messages' + where, params).fetchone()[0]
+                hits += count
+                facets.append({'account': p['account'], 'year': p['year'], 'available': p['messages'], 'matches': count})
+                for row in db.execute('SELECT sha256,subject,normalized_utc,from_header,to_header,cc_header,bcc_header,byte_size FROM messages' + where + ' ORDER BY normalized_utc DESC,sha256 LIMIT ?', [*params, offset + limit]):
+                    rows.append({**dict(row), 'account': p['account'], 'year': p['year']})
+            finally:
+                db.close()
+            progress.index_searched()
     rows.sort(key=lambda r: (r['normalized_utc'] or r['year'], r['sha256']), reverse=True)
     return {'matches': hits, 'available': sum(p['messages'] for p in cat['partitions'] if eligible(p, filters)),
             'rows': rows[offset:offset+limit], 'facets': facets, 'offset': offset, 'limit': limit}

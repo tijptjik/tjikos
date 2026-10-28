@@ -87,6 +87,7 @@ type model struct {
 	setup                                        []textinput.Model
 	setupFocus                                   int
 	overview                                     Overview
+	queryProgress                                *QueryProgress
 	results                                      *Results
 	message                                      *Message
 	selectedRow                                  MailRow
@@ -169,6 +170,7 @@ func (m *model) search(offset int) tea.Cmd {
 	m.generation++
 	m.busy = true
 	m.loading = "query"
+	m.queryProgress = nil
 	m.notice = ""
 	m.failure = false
 	m.dirty = false
@@ -235,6 +237,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+	case queryProgressMsg:
+		if msg.Generation == m.generation && m.busy && m.loading == "query" {
+			m.queryProgress = &msg.Progress
+		}
+		return m, msg.Next
 	case response:
 		if msg.Kind == "query" && msg.Generation != m.generation {
 			return m, nil
@@ -669,6 +676,12 @@ func (m model) header() string {
 	return brand + "\n" + dimStyle.Render(trim(summary, m.width-4)) + "\n"
 }
 func (m model) noticeLine() string {
+	if m.busy && m.loading == "query" {
+		if m.queryProgress != nil {
+			return m.spinner.View() + " " + m.queryProgress.title()
+		}
+		return m.spinner.View() + " Checking search indexes…"
+	}
 	if m.busy {
 		labels := map[string]string{"query": "Searching selected indexes…", "message": "Fetching and verifying this message…", "authenticate": "Complete the read-only login in your browser…", "overview": "Opening your archive…"}
 		label := labels[m.loading]
@@ -767,6 +780,9 @@ func CounterYears(parts []Partition, account string) map[string]int {
 	return counts
 }
 func (m model) resultsView(width, height int) string {
+	if m.busy && m.loading == "query" {
+		return m.indexProgressView(width, height)
+	}
 	lines := []string{}
 	if m.results == nil {
 		label := "Enter to search your archive"

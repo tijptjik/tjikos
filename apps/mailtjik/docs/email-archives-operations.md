@@ -208,3 +208,7 @@ CLI restoration uses the same authenticated parts and exact locators. Live
 provider behavior requires real login and a completed inventory/capture.
 No annual timer is installed until active mailbox/provider mappings and
 authentication are available. No original cleanup is part of this rollout.
+
+### Reader startup progress
+
+On first search, Mailtjik downloads the selected search indexes, decrypts and verifies them, then searches them. The reader displays verified indexes ready, downloaded bytes, elapsed time, and a download ETA after enough transfer data is available. The ETA covers downloading only; verification and searching follow. Later searches check the cached indexes and show search progress without a download ETA.
