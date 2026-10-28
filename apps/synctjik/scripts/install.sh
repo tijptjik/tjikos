@@ -8,6 +8,11 @@ temporary="$(mktemp "$prefix/bin/.synctjik.XXXXXX")"
 trap 'rm -f -- "$temporary"' EXIT
 install -m 755 "$app_dir/dist/synctjik" "$temporary"
 mv -f -- "$temporary" "$prefix/bin/synctjik"
+# Dotjik owns compatibility commands during managed installs. Rewriting them
+# here would invalidate the file deployer's last-applied baseline.
+if [[ "${TJIKUP_MANAGED_CONFIG:-0}" == 1 ]]; then
+    exit 0
+fi
 # Compatibility names delegate to the native engine; existing workers are untouched.
 for name in device-archives chezmoi-externals-backup; do
     temporary="$(mktemp "$prefix/bin/.synctjik.XXXXXX")"
