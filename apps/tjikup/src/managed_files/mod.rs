@@ -319,6 +319,7 @@ struct Options {
     state: PathBuf,
     json: bool,
     context: Option<PathBuf>,
+    group: Option<String>,
 }
 fn options(args: Vec<String>) -> Result<Options> {
     let mut args = args.into_iter();
@@ -329,6 +330,7 @@ fn options(args: Vec<String>) -> Result<Options> {
     let (mut manifest, mut receipt, mut state, mut root, mut json) =
         (None, None, None, PathBuf::from("/"), false);
     let mut context = None;
+    let mut group = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--manifest" => {
@@ -348,6 +350,7 @@ fn options(args: Vec<String>) -> Result<Options> {
             }
             "--root" => root = PathBuf::from(args.next().context("--root needs a path")?),
             "--json" => json = true,
+            "--group" => group = Some(args.next().context("--group needs a name")?),
             "--context-file" => {
                 context = Some(PathBuf::from(
                     args.next().context("--context-file needs a path")?,
@@ -357,7 +360,7 @@ fn options(args: Vec<String>) -> Result<Options> {
         }
     }
     if command == "restore" {
-        if receipt.is_none() || manifest.is_some() || context.is_some() {
+        if receipt.is_none() || manifest.is_some() || context.is_some() || group.is_some() {
             bail!("restore requires --receipt and no --manifest");
         }
     } else if manifest.is_none() || receipt.is_some() {
@@ -380,6 +383,7 @@ fn options(args: Vec<String>) -> Result<Options> {
         root,
         json,
         context,
+        group,
     })
 }
 
@@ -400,7 +404,8 @@ fn run(args: Vec<String>) -> Result<i32> {
     let mut restored_attrs = None;
     let mut restore_expected = BTreeMap::new();
     let (id, entries) = if let Some(path) = &opts.manifest {
-        let (manifest, entries) = Manifest::load(path, opts.context.as_deref())?;
+        let (manifest, entries) =
+            Manifest::load(path, opts.context.as_deref(), opts.group.as_deref())?;
         (manifest.id, entries)
     } else {
         let receipt_path = opts.receipt.as_ref().unwrap();

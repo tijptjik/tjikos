@@ -27,6 +27,7 @@ pub struct Graphics {
     pub size: (usize, usize),
     pub herdr: bool,
     next_id: u32,
+    compact: bool,
 }
 impl Graphics {
     pub fn new(path: &str, tty: bool) -> Option<Self> {
@@ -49,6 +50,7 @@ impl Graphics {
             return None;
         }
         Some(Self {
+            compact: std::env::var("TJIKUP_COMPACT").as_deref() != Ok("0"),
             sprites: serde_json::from_value(data["sprites"].clone()).ok()?,
             images: BTreeMap::new(),
             size,
@@ -58,6 +60,13 @@ impl Graphics {
     }
     pub fn has_icon(&self, key: &str) -> bool {
         self.sprites.contains_key(key)
+    }
+    pub fn rows(&self) -> usize {
+        if self.compact {
+            1
+        } else {
+            2
+        }
     }
     pub fn columns(&self) -> usize {
         2 * 32_usize.div_ceil(2 * self.size.0)
@@ -87,13 +96,26 @@ impl Graphics {
         if pixels.len() != 4096 {
             return None;
         }
-        let (width, height) = (self.columns() * self.size.0, 2 * self.size.1);
+        let (width, height) = (self.columns() * self.size.0, self.rows() * self.size.1);
         let mut canvas = vec![0; width * height * 4];
-        let left = (width - 32) / 2;
-        let top = (if self.herdr { self.size.1 } else { height }).saturating_sub(32) / 2;
-        for row in 0..32 {
-            let start = ((top + row) * width + left) * 4;
-            canvas[start..start + 128].copy_from_slice(&pixels[row * 128..row * 128 + 128]);
+        let side = 32.min(height);
+        let left = (width - side) / 2;
+        let top = (if self.herdr { self.size.1 } else { height }).saturating_sub(side) / 2;
+        // Area sampling keeps small icons readable at a single cell's height.
+        for y in 0..side {
+            for x in 0..side {
+                for channel in 0..4 {
+                    let mut sum = 0u32;
+                    let mut samples = 0;
+                    for sy in y * 32 / side..((y + 1) * 32 / side) {
+                        for sx in x * 32 / side..((x + 1) * 32 / side) {
+                            sum += u32::from(pixels[(sy * 32 + sx) * 4 + channel]);
+                            samples += 1;
+                        }
+                    }
+                    canvas[((top + y) * width + left + x) * 4 + channel] = (sum / samples) as u8;
+                }
+            }
         }
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&canvas).ok()?;
@@ -104,8 +126,9 @@ impl Graphics {
         for (i, chunk) in chunks.iter().enumerate() {
             let header = if i == 0 {
                 format!(
-                    "a=T,f=32,o=z,s={width},v={height},i={id},U=1,c={},r=2,q=2,",
-                    self.columns()
+                    "a=T,f=32,o=z,s={width},v={height},i={id},U=1,c={},r={},q=2,",
+                    self.columns(),
+                    self.rows()
                 )
             } else {
                 String::new()
@@ -133,7 +156,7 @@ impl Graphics {
         text
     }
     pub fn text(&self, text: &str) -> String {
-        if self.herdr {
+        if self.herdr || self.compact {
             text.to_owned()
         } else {
             centred(text)
@@ -148,12 +171,17 @@ impl Graphics {
                 self.placeholders(id, 0),
                 self.text(rest)
             );
-            if indent > 0 {
-                eprint!("\x1b[{indent}C");
+            if self.rows() == 2 {
+                if indent > 0 {
+                    eprint!("\x1b[{indent}C");
+                }
+                eprint!("{}\r\n", self.placeholders(id, 1));
             }
-            eprint!("{}\r\n", self.placeholders(id, 1));
         } else {
-            eprintln!("{prefix}{rest}\n");
+            eprintln!("{prefix}{rest}");
+            if self.rows() == 2 {
+                eprintln!();
+            }
         }
     }
 }

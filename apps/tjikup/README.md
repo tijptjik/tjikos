@@ -196,8 +196,9 @@ Headless and unsupported remote terminals stay silent.
 The native Rust renderer preserves the original rainbow splash, coloured section
 headings, repository PULL/PUSH cells, right-aligned notes and completion banner.
 Kitty and Herdr use the existing 32px sprite catalogue with scrolling Unicode
-placeholders. Kitty vertically centres normal-size text across two rows; Herdr
-uses ordinary text. Other terminals use configured glyphs, and redirected output
+placeholders. Results use one terminal row, scaling icons to fit the cell height.
+Set `TJIKUP_COMPACT=0` to restore the spacious two-row layout. Other terminals
+use configured glyphs, and redirected output
 is plain text. Spinner updates only patch repository text, leaving images intact.
 
 Root `presentation` configures `splash` (boolean), `url`, `icons` (a path to the
@@ -266,3 +267,29 @@ A root `device_file` opts into profiles; `legacy_hosts` lists explicitly retaine
 unenrolled hosts. Recipes declare `optional`, `roles`, and `hosts`. `needs` pulls
 in prerequisites; `after` only orders recipes already selected. Removing a
 subscription does not uninstall or delete previously managed files.
+
+### Installation, configuration and updates
+
+Recipes may declare `operation`: `install`, `configure`, `update`, or `prepare`.
+Configuration recipes also declare `scope`: `home` or `system`. Use `needs` for
+required dependencies and `after` for ordering only. Application configuration
+should need its own installer, whose `check` tests local presence without fetching
+release metadata. All updates wait for the selected non-update work to finish.
+
+- `tjikup`: install missing applications, configure them, then update packages.
+- `tjikup --skip-package-updates`: install and configure without updating.
+- `tjikup --apply-dotfiles`: home configuration and associated reloads.
+- `tjikup --apply-sysfiles`: system configuration and associated reloads.
+- `tjikup --apply-package-updates`: update installed applications.
+
+The three `--apply-*` flags combine. Explicit selectors exclude uncategorized
+capture/Git recipes. An installer needed by selected configuration becomes a
+local presence check; if missing, the run fails with an installation instruction
+and never calls the installer. Preparation dependencies remain available. An
+unselected configuration dependency is rejected rather than silently changing
+another scope. `--plan`, `--dry-run`, and `--check` never execute any commands.
+
+Optional `application` and `ecosystem` strings describe policy ownership.
+`part_of` makes companion configure/update recipes inherit their parent's device
+subscription without making that parent an execution dependency. The dotfiles
+repository owns the checks, install/update commands, and configuration groups.

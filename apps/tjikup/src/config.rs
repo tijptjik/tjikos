@@ -86,6 +86,15 @@ pub struct Render {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Recipe {
+    pub operation: Option<crate::selection::Operation>,
+    pub scope: Option<crate::selection::Scope>,
+    #[serde(default)]
+    pub application: String,
+    #[serde(default)]
+    pub ecosystem: String,
+    pub part_of: Option<String>,
+    #[serde(skip)]
+    pub installed_gate: bool,
     #[serde(default)]
     pub optional: bool,
     #[serde(default)]
@@ -297,26 +306,26 @@ fn expand_value(
 
 impl Config {
     pub fn load(path: &Path, flags: &BTreeSet<String>) -> Result<Self> {
+        Self::load_selected(path, flags, &crate::selection::Selection::default())
+    }
+
+    pub fn load_selected(
+        path: &Path,
+        flags: &BTreeSet<String>,
+        selection: &crate::selection::Selection,
+    ) -> Result<Self> {
         let mut config = Self::catalog(path, flags)?;
-        let mut enrolled = false;
         if let Some(path) = &config.device_file.clone() {
             if let Some((device, bytes)) = crate::device::load(path)? {
                 config.snapshots.insert(path.clone(), bytes);
                 device.select(&mut config)?;
-                enrolled = true;
             } else if !config.legacy_hosts.contains(&crate::device::hostname()?) {
                 bail!(
                     "device is not enrolled; run tjikup new device before applying this workflow"
                 );
             }
         }
-        if !enrolled {
-            for recipe in &mut config.recipes {
-                recipe.needs.extend(recipe.after.clone());
-                recipe.needs.sort();
-                recipe.needs.dedup();
-            }
-        }
+        selection.apply(&mut config)?;
         config.validate()?;
         Ok(config)
     }
@@ -422,6 +431,10 @@ impl Config {
                     "version",
                     "show-skips",
                     "demo",
+                    "apply-dotfiles",
+                    "apply-sysfiles",
+                    "apply-package-updates",
+                    "skip-package-updates",
                 ]
                 .contains(&name.as_str())
             {
@@ -511,6 +524,9 @@ impl Config {
             argv(&manager.command)?;
         }
         for r in &self.recipes {
+            if r.operation == Some(crate::selection::Operation::Configure) && r.scope.is_none() {
+                bail!("{}: configure recipes require a home or system scope", r.id);
+            }
             if r.roles
                 .iter()
                 .any(|role| !["desktop", "laptop", "server"].contains(&role.as_str()))
@@ -628,11 +644,31 @@ impl Config {
                 }
             }
         }
+        for recipe in &self.recipes {
+            let mut ancestors = BTreeSet::from([recipe.id.as_str()]);
+            let mut parent = recipe.part_of.as_deref();
+            while let Some(id) = parent {
+                if !ancestors.insert(id) {
+                    bail!("{}: cycle in part_of subscriptions", recipe.id);
+                }
+                let owner = self
+                    .recipes
+                    .iter()
+                    .find(|r| r.id == id)
+                    .with_context(|| format!("{}: unknown part_of recipe {id}", recipe.id))?;
+                parent = owner.part_of.as_deref();
+            }
+        }
         let mut done = BTreeSet::new();
         while done.len() < ids.len() {
             let before = done.len();
             for r in &self.recipes {
-                if r.needs.iter().chain(&r.after).any(|n| !ids.contains(n)) {
+                if r.needs
+                    .iter()
+                    .chain(&r.after)
+                    .chain(r.part_of.iter())
+                    .any(|n| !ids.contains(n))
+                {
                     bail!("{}: unknown dependency", r.id);
                 }
                 if r.needs.iter().chain(&r.after).all(|n| done.contains(n)) {

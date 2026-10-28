@@ -23,13 +23,18 @@ impl Fixture {
         self.dir.path().join(name)
     }
     fn run(&self, operation: &str) -> Output {
+        self.run_args(operation, &[])
+    }
+    fn run_args(&self, operation: &str, args: &[&str]) -> Output {
         fs::write(
             self.path("manifest.json"),
             serde_json::to_vec(&self.manifest).unwrap(),
         )
         .unwrap();
         Command::new(env!("CARGO_BIN_EXE_tjikup"))
-            .args(["files", operation, "--manifest"])
+            .args(["files", operation])
+            .args(args)
+            .arg("--manifest")
             .arg(self.path("manifest.json"))
             .arg("--root")
             .arg(self.path("root"))
@@ -539,4 +544,39 @@ fn shared_entry_and_context_files_reload_and_reject_traversal() {
     );
     f.manifest["context_files"] = json!(["../escape.json"]);
     assert_eq!(f.run("apply").status.code(), Some(2));
+}
+
+#[test]
+fn grouped_apply_preserves_other_groups_state_and_drift_checks() {
+    let f = Fixture::new(json!([
+        {"kind":"file","path":"/a","source":"source","group":"a"},
+        {"kind":"file","path":"/b","source":"source","group":"b"}
+    ]));
+    success(&f.run_args("apply", &["--group", "a"]));
+    assert!(!f.path("root/b").exists());
+    success(&f.run_args("apply", &["--group", "b"]));
+    let state: Value =
+        serde_json::from_slice(&fs::read(f.path("state/fixture.json")).unwrap()).unwrap();
+    assert_eq!(state["files"].as_object().unwrap().len(), 2);
+    fs::write(f.path("root/a"), "local edit").unwrap();
+    success(&f.run_args("check", &["--group", "b"]));
+    assert!(!f.run_args("apply", &["--group", "a"]).status.success());
+    assert_eq!(fs::read_to_string(f.path("root/a")).unwrap(), "local edit");
+    assert!(!f.run_args("plan", &["--group", "typo"]).status.success());
+}
+#[test]
+fn group_selection_excludes_other_templates_before_rendering_or_secret_resolution() {
+    let f = Fixture::new(json!([
+        {"kind":"file","path":"/a","source":"source","group":"a"},
+        {"kind":"file","path":"/secret","source":"secret","template":true,"group":"secret"}
+    ]));
+    fs::write(
+        f.path("secret"),
+        "{{ secret('11111111-2222-3333-4444-555555555555') }}",
+    )
+    .unwrap();
+    success(&f.run_args("apply", &["--group", "a"]));
+    assert!(!f.path("root/secret").exists());
+    assert!(!f.run("plan").status.success());
+    assert!(!f.run_args("restore", &["--group", "a"]).status.success());
 }

@@ -16,6 +16,9 @@ struct Terminal {
 }
 impl Terminal {
     fn spawn(args: &[&str], dir: &std::path::Path, graphics: bool) -> Self {
+        Self::spawn_spacing(args, dir, graphics, true)
+    }
+    fn spawn_spacing(args: &[&str], dir: &std::path::Path, graphics: bool, compact: bool) -> Self {
         let mut master = 0;
         let mut slave = 0;
         let size = libc::winsize {
@@ -45,6 +48,7 @@ impl Terminal {
             .env("TJIKUP_NOTIFY", "0")
             .env("TERM", "xterm-kitty")
             .env("TJIKUP_COLOR", "1")
+            .env("TJIKUP_COMPACT", if compact { "1" } else { "0" })
             .env("TJIKUP_KITTY_ICONS", if graphics { "1" } else { "0" })
             .env_remove("TJIKUP_NO_SPIN")
             .env_remove("TMUX")
@@ -172,7 +176,11 @@ fn kitty_protocol_uses_scrollable_sprites_without_retransmission_on_ticks() {
         5,
         "one upload for each of three repo and two task images"
     );
-    assert!(text.contains("\u{10eeee}") && text.contains("\x1b]66;"));
+    assert!(text.contains("\u{10eeee}"));
+    assert!(text.contains(",r=1,"));
+    assert!(!text.contains(",r=2,"));
+    assert!(!text.contains("\u{10eeee}\u{30d}"));
+    assert!(!text.contains("\x1b]66;"));
     assert!(!text.contains("\x1b[0C"));
     assert!(text.contains("\x1b[94;1mRecipes"));
     assert!(text.contains("38;2;255;95;95"));
@@ -433,4 +441,14 @@ fn new_device_prompts_for_role_subscriptions_and_confirmation_without_applying()
     assert_eq!(value["role"], "laptop");
     assert_eq!(value["subscriptions"], json!(["editor"]));
     assert!(!dir.path().join("must-not-run").exists());
+}
+
+#[test]
+fn spacious_graphics_remains_available() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut terminal = Terminal::spawn_spacing(&["--demo", "changed"], dir.path(), true, false);
+    let text = terminal.finish();
+    assert!(text.contains(",r=2,"));
+    assert!(text.contains("\u{10eeee}\u{30d}"));
+    assert!(text.contains("\x1b]66;"));
 }

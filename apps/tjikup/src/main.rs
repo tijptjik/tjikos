@@ -10,6 +10,7 @@ mod process;
 mod progress;
 mod report;
 mod scheduler;
+mod selection;
 
 use anyhow::{bail, Context, Result};
 use config::Config;
@@ -68,10 +69,12 @@ fn cli() -> Result<i32> {
     let mut show_skips = false;
     let mut demo_mode = None;
     let mut flags = BTreeSet::new();
+    let mut selection = selection::Selection::default();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
                 println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  notify --stdin   Deliver validated display metadata to local notjikctl");
+                println!("\nRecipe selection (combinable):\n  --apply-dotfiles          Home configuration and its reloads only\n  --apply-sysfiles          System configuration and its reloads only\n  --apply-package-updates   Updates of installed applications only\n  --skip-package-updates    Install missing applications and configure; no updates\nSelected modes use local checks for installation dependencies; they never run installers or repository synchronization.");
                 return Ok(0);
             }
             "--version" => {
@@ -87,6 +90,10 @@ fn cli() -> Result<i32> {
                 )
             }
             "--show-skips" => show_skips = true,
+            "--apply-dotfiles" => selection.home = true,
+            "--apply-sysfiles" => selection.system = true,
+            "--apply-package-updates" => selection.updates = true,
+            "--skip-package-updates" => selection.skip_updates = true,
             "--demo" => {
                 demo_mode = Some(if args.peek().is_some_and(|arg| !arg.starts_with("--")) {
                     args.next().unwrap()
@@ -106,12 +113,12 @@ fn cli() -> Result<i32> {
         bail!("choose --check or --plan");
     }
     if let Some(mode) = demo_mode {
-        if check || plan || jobs.is_some() || !flags.is_empty() {
+        if check || plan || jobs.is_some() || !flags.is_empty() || selection != Default::default() {
             bail!("--demo supports only a preview mode and --show-skips");
         }
         return demo::run(&mode, show_skips);
     }
-    let mut config = Config::load(&path, &flags)?;
+    let mut config = Config::load_selected(&path, &flags, &selection)?;
     config.show_skips = show_skips;
     if let Some(jobs) = jobs {
         if jobs == 0 || jobs > 256 {
@@ -141,6 +148,21 @@ fn cli() -> Result<i32> {
                     ""
                 }
             );
+            if let Some(operation) = recipe.operation {
+                println!(
+                    "  operation: {}{}{}",
+                    operation.name(),
+                    recipe
+                        .scope
+                        .map(|s| format!(" · {}", s.name()))
+                        .unwrap_or_default(),
+                    if recipe.installed_gate {
+                        " · installed check only"
+                    } else {
+                        ""
+                    }
+                );
+            }
         }
         return Ok(0);
     }

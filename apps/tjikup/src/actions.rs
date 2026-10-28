@@ -330,6 +330,15 @@ impl Contextual<'_> {
         if let Some(check) = &self.recipe.check {
             match self.run(check)? {
                 0 => return Ok(State::Unchanged.into()),
+                1 if self.recipe.installed_gate => {
+                    use std::io::Write;
+                    writeln!(
+                        &*self.log,
+                        "CHECK   ! {}  not installed; run tjikup to install",
+                        self.recipe.label
+                    )?;
+                    return Ok(State::Failed.into());
+                }
                 1 if !self.recipe.prerequisite
                     && (self.recipe.apply.is_some()
                         || self.recipe.files.is_some()

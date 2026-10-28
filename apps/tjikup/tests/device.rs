@@ -159,3 +159,35 @@ fn enrollment_and_loading_share_the_xdg_profile_path() {
         assert!(xdg.join("tjikup/device.json").is_file());
     }
 }
+
+#[test]
+fn companions_follow_subscriptions_and_survive_operation_selection() {
+    let dir = setup();
+    let path = dir.path().join("config.json");
+    let mut config: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    config["recipes"] = json!([
+        {"id":"base","operation":"configure","scope":"home","apply":["true"]},
+        {"id":"editor","optional":true,"operation":"install","check":["true"],"apply":["touch","installed"]},
+        {"id":"editor:config","part_of":"editor","operation":"configure","scope":"home","needs":["editor"],"apply":["touch","configured"]},
+        {"id":"editor:update","part_of":"editor","operation":"update","apply":["touch","updated"]}
+    ]);
+    fs::write(&path, serde_json::to_vec(&config).unwrap()).unwrap();
+    assert!(enroll(&dir, "laptop", "none").status.success());
+    let output = run(&dir, &["--plan"]);
+    assert!(output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("editor ·"));
+    let mut device: Value =
+        serde_json::from_slice(&fs::read(dir.path().join("device.json")).unwrap()).unwrap();
+    device["subscriptions"] = json!(["editor"]);
+    fs::write(
+        dir.path().join("device.json"),
+        serde_json::to_vec(&device).unwrap(),
+    )
+    .unwrap();
+    assert!(run(&dir, &["--apply-dotfiles"]).status.success());
+    assert!(dir.path().join("configured").exists());
+    assert!(!dir.path().join("installed").exists());
+    assert!(!dir.path().join("updated").exists());
+    assert!(run(&dir, &["--apply-package-updates"]).status.success());
+    assert!(dir.path().join("updated").exists());
+}

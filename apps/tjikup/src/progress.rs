@@ -379,7 +379,7 @@ impl Progress {
             }
             self.repo_last.push(text);
         }
-        self.repo_lines = self.repos.len() * if self.graphics.is_some() { 2 } else { 1 };
+        self.repo_lines = self.repos.len() * self.graphics.as_ref().map_or(1, Graphics::rows);
     }
     fn patch_repos(&mut self) {
         if !self.tty || !self.repo_open {
@@ -399,7 +399,7 @@ impl Progress {
             if self.repo_last[i] == text {
                 continue;
             }
-            let height = if self.graphics.is_some() { 2 } else { 1 };
+            let height = self.graphics.as_ref().map_or(1, Graphics::rows);
             let up = self.repo_lines - i * height;
             let indent = self
                 .graphics

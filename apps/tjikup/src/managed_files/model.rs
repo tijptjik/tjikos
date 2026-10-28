@@ -28,6 +28,8 @@ pub struct Manifest {
 #[derive(Deserialize)]
 struct Entry {
     path: String,
+    #[serde(default)]
+    group: String,
     #[serde(flatten)]
     content: Content,
     mode: Option<String>,
@@ -127,7 +129,11 @@ fn source(base: &Path, name: &str) -> Result<Vec<u8>> {
 }
 
 impl Manifest {
-    pub fn load(path: &Path, context_file: Option<&Path>) -> Result<(Self, Vec<Desired>)> {
+    pub fn load(
+        path: &Path,
+        context_file: Option<&Path>,
+        group: Option<&str>,
+    ) -> Result<(Self, Vec<Desired>)> {
         let path = path.canonicalize()?;
         let mut manifest: Self =
             serde_json::from_slice(&std::fs::read(&path)?).context("invalid file manifest")?;
@@ -165,6 +171,12 @@ impl Manifest {
             let entries: Vec<Entry> =
                 serde_json::from_slice(&source(base, file)?).context("invalid entries file")?;
             manifest.entries.extend(entries);
+        }
+        if let Some(group) = group {
+            if group.is_empty() || !manifest.entries.iter().any(|entry| entry.group == group) {
+                bail!("unknown file group: {group}");
+            }
+            manifest.entries.retain(|entry| entry.group == group);
         }
         let mut env = Environment::new();
         env.set_undefined_behavior(UndefinedBehavior::Strict);

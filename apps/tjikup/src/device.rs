@@ -67,11 +67,21 @@ impl Device {
             config
                 .recipes
                 .iter()
-                .filter(|r| !r.optional && self.allows(r))
+                .filter(|r| !r.optional && r.part_of.is_none() && self.allows(r))
                 .map(|r| r.id.clone()),
         );
         loop {
             let before = selected.len();
+            for recipe in &config.recipes {
+                if recipe
+                    .part_of
+                    .as_ref()
+                    .is_some_and(|id| selected.contains(id))
+                    && self.allows(recipe)
+                {
+                    selected.insert(recipe.id.clone());
+                }
+            }
             for recipe in &config.recipes {
                 if !selected.contains(&recipe.id) {
                     continue;
@@ -105,16 +115,8 @@ impl Device {
             recipe
                 .env
                 .insert("TJIKUP_SUBSCRIPTIONS".into(), subscriptions.clone());
-            // Ordering-only predecessors do not pull unselected applications in.
-            recipe.needs.extend(
-                recipe
-                    .after
-                    .iter()
-                    .filter(|id| selected.contains(*id))
-                    .cloned(),
-            );
-            recipe.needs.sort();
-            recipe.needs.dedup();
+            // Ordering edges are resolved after operation selection, so a
+            // file-only invocation never pulls installation or updates in.
         }
         Ok(())
     }
