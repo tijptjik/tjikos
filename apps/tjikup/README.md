@@ -135,7 +135,7 @@ command returning a JSON object, and the scripts to prepare:
   "id": "prepare",
   "render": {
     "native": "{config_dir}/templates/inputs.json",
-    "context_command": ["python3", "{config_dir}/scripts/context.py"],
+    "context_command": ["tjikup", "workflow", "--repo", "{config_dir}", "context"],
     "templates": [{
       "name": "setup.fish",
       "source": "{config_dir}/templates/setup.fish.j2",
@@ -144,6 +144,9 @@ command returning a JSON object, and the scripts to prepare:
   }
 }
 ```
+
+This example uses an enrolled fleet repository. Other repositories can supply
+static context in the input manifest and omit `context_command`.
 
 The input manifest has `version: 1`, optional `context`, `context_files` (JSON
 objects), `includes` (name-to-relative-file mapping), and `bitwarden` using the

@@ -1,8 +1,8 @@
 # Native file and template management
 
-`tjikup files` manages an explicitly declared set of files natively. It is a separate command so existing recipes can call it through their
-normal `check` and `apply` argv arrays. Existing `files` manager adapters and
-Go-template rendering retain their original behavior.
+`tjikup files` manages an explicitly declared set of files natively. Recipes call
+it through their normal `check` and `apply` argv arrays. MiniJinja manifests are
+authoritative; no external configuration-manager adapter is required.
 
 The dotfiles repository owns fleet manifests and recipes, including `system/`.
 Fi system files and all declared home files use this engine, including captured
@@ -59,8 +59,10 @@ path needs no change. Removing an entry from the manifest never deletes its targ
 Regular files default to mode `0644`; uid/gid default to the invoking effective
 identity. Declare numeric uid/gid explicitly for deployments that cross privilege
 boundaries. Special permission bits are unsupported. Sensitive files require
-owner-only modes. Destination directories are created as needed; managed directory
-metadata, recursive tree pruning and encrypted sources are not implemented.
+owner-only modes. Destination directories are created as needed; explicit
+`directory` entries manage directory permissions and ownership. Recursive tree
+pruning is not supported. The native workflow helper decrypts encrypted system
+inputs before invoking this engine.
 
 ## Commands and recipe integration
 
@@ -87,13 +89,14 @@ receipts outside the configuration repository. Use one state directory per
 privilege scope, shared by native file recipes to serialize their deployments.
 Each destination should have one owning manifest.
 
-A future system recipe can use the existing runner's ordinary command interface:
+A fleet system recipe uses the native workflow helper, which verifies the
+root-owned runtime and preserves the declared protection guards:
 
 ```json
 {
   "id": "system:native-files",
-  "check": ["sudo", "-n", "/home/io/.local/bin/tjikup", "files", "check", "--manifest", "{config_dir}/native/fi/manifest.json", "--state-dir", "/var/lib/tjikup/files"],
-  "apply": ["sudo", "-n", "/home/io/.local/bin/tjikup", "files", "apply", "--manifest", "{config_dir}/native/fi/manifest.json", "--state-dir", "/var/lib/tjikup/files"],
+  "check": ["tjikup", "workflow", "--repo", "{config_dir}", "files", "system", "check"],
+  "apply": ["tjikup", "workflow", "--repo", "{config_dir}", "files", "system", "apply"],
   "resources": ["system-files"]
 }
 ```
