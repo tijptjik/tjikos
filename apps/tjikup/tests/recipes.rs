@@ -642,3 +642,19 @@ fn show_skips_is_a_builtin_and_composes_with_workflow_flags() {
     config["flags"] = json!({"show-skips":"USER_FLAG"});
     assert!(!invoke(dir.path(), &config, &["--check"]).status.success());
 }
+
+#[test]
+fn grouped_results_keep_sections_together_across_async_completion() {
+    let (dir, mut config) = fixture(json!([
+        {"id":"a","apply":["true"],"display":{"section":"Configuration"}},
+        {"id":"b","apply":["true"],"needs":["a"],"display":{"section":"Services"}},
+        {"id":"c","apply":["true"],"needs":["b"],"display":{"section":"Configuration"}}
+    ]));
+    config["presentation"] = json!({"grouped_results":true});
+    let output = invoke(dir.path(), &config, &[]);
+    ok(&output);
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(text.matches("\nConfiguration\n").count(), 1);
+    assert_eq!(text.matches("\nServices\n").count(), 1);
+    assert!(text.find("Configuration").unwrap() < text.find("Services").unwrap());
+}

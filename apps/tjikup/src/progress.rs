@@ -94,6 +94,7 @@ pub struct Progress {
     section: String,
     queued: Vec<Event>,
     visible: usize,
+    updates_started: bool,
 }
 impl Progress {
     pub fn new(config: &Config) -> Self {
@@ -123,7 +124,20 @@ impl Progress {
             section: String::new(),
             queued: Vec::new(),
             visible: 0,
+            updates_started: false,
         };
+        if config.show_other_devices {
+            for recipe in &config.excluded {
+                this.queued.push(Event {
+                    icon_key: recipe.display.icon.clone(),
+                    verb: "SKIP".into(),
+                    icon: "-".into(),
+                    subject: recipe.label.clone(),
+                    note: "not selected for this device".into(),
+                    section: "Other devices and subscriptions".into(),
+                });
+            }
+        }
         if tty && config.presentation.splash {
             this.splash();
         }
@@ -315,7 +329,7 @@ impl Progress {
                 if repo.skipped[col] {
                     " (skipped)"
                 } else {
-                    " (current)"
+                    ""
                 }
             } else {
                 ""
@@ -434,6 +448,13 @@ impl Progress {
     }
     pub fn start(&mut self, index: usize, recipe: &Recipe) {
         self.clear();
+        if self.presentation.grouped_results
+            && !self.updates_started
+            && recipe.operation == Some(crate::selection::Operation::Update)
+        {
+            self.flush_grouped();
+            self.updates_started = true;
+        }
         if recipe.interactive {
             self.restore_cursor();
         } else {
@@ -494,8 +515,17 @@ impl Progress {
                 {
                     ("SKIP", "-", "condition not met")
                 }
-                State::Unchanged if recipe.prerequisite => {
+                State::Unchanged if recipe.prerequisite || recipe.display.verb == "REQUIRE" => {
                     ("REQUIRE", "✓", "prerequisite satisfied")
+                }
+                State::Unchanged if recipe.check.is_some() && recipe.display.verb == "ACTIVATE" => {
+                    ("SKIP", "✓", "already active")
+                }
+                State::Unchanged
+                    if recipe.check.is_some()
+                        && recipe.operation == Some(crate::selection::Operation::Install) =>
+                {
+                    ("SKIP", "✓", "already installed")
                 }
                 State::Unchanged if recipe.check.is_some() => ("SKIP", "✓", "already current"),
                 State::Unchanged if recipe.autocommit.is_some() => {
@@ -547,7 +577,7 @@ impl Progress {
                     "Recipes".into()
                 };
             }
-            if self.repo_open {
+            if self.repo_open || self.presentation.grouped_results && !event.issue() {
                 self.queued.push(event);
             } else {
                 self.event(&event);
@@ -575,11 +605,43 @@ impl Progress {
             }
         }
         self.repo_open = false;
-        for event in std::mem::take(&mut self.queued) {
+        if !self.presentation.grouped_results {
+            for event in std::mem::take(&mut self.queued) {
+                self.event(&event);
+            }
+        }
+    }
+    fn flush_grouped(&mut self) {
+        let mut events = std::mem::take(&mut self.queued);
+        let sections = [
+            "Prerequisites",
+            "Capture settings",
+            "Preparation",
+            "Repositories",
+            "Install applications",
+            "Configuration",
+            "Services",
+            "Package updates",
+            "Verification",
+            "Other devices and subscriptions",
+        ];
+        events.sort_by_key(|e| {
+            sections
+                .iter()
+                .position(|s| *s == e.section)
+                .unwrap_or(sections.len())
+        });
+        for event in events {
             self.event(&event);
         }
     }
     fn title(&self, label: &str) -> String {
+        let label = self
+            .presentation
+            .titles
+            .get(label)
+            .map(String::as_str)
+            .unwrap_or(label);
         let (base, subtype) = label
             .split_once(" (")
             .map(|(a, b)| (a, Some(b)))
@@ -591,23 +653,7 @@ impl Progress {
             .map(String::as_str)
             .unwrap_or(base);
         if let Some(subtype) = subtype {
-            let words: Vec<_> = subtype
-                .split(' ')
-                .enumerate()
-                .map(|(i, word)| {
-                    if (i > 0 && ["and", "of", "for", "to", "the"].contains(&word))
-                        || word.chars().any(char::is_uppercase)
-                    {
-                        word.to_string()
-                    } else {
-                        let mut c = word.chars();
-                        c.next()
-                            .map(|v| v.to_uppercase().to_string() + c.as_str())
-                            .unwrap_or_default()
-                    }
-                })
-                .collect();
-            format!("{base} ({}", words.join(" "))
+            format!("{base} ({subtype}")
         } else {
             base.into()
         }
@@ -700,6 +746,7 @@ impl Progress {
         self.clear();
         self.active.clear();
         self.close_repos();
+        self.flush_grouped();
         if self.visible == 0 && !attention {
             self.event(&Event {
                 icon_key: String::new(),

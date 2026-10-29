@@ -108,6 +108,12 @@ impl Device {
             }
         }
         let subscriptions = selected.iter().cloned().collect::<Vec<_>>().join(",");
+        config.excluded = config
+            .recipes
+            .iter()
+            .filter(|r| !selected.contains(&r.id))
+            .cloned()
+            .collect();
         config.recipes.retain(|r| selected.contains(&r.id));
         for recipe in &mut config.recipes {
             recipe.after.retain(|id| selected.contains(id));

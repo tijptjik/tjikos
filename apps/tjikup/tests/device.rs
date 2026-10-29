@@ -191,3 +191,25 @@ fn companions_follow_subscriptions_and_survive_operation_selection() {
     assert!(run(&dir, &["--apply-package-updates"]).status.success());
     assert!(dir.path().join("updated").exists());
 }
+
+#[test]
+fn legacy_roles_filter_execution_even_when_showing_other_devices() {
+    let dir = setup();
+    let path = dir.path().join("config.json");
+    let mut config: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    config["legacy_roles"] = json!({hostname(): "desktop"});
+    fs::write(path, serde_json::to_vec(&config).unwrap()).unwrap();
+    let output = run(&dir, &["--show-skips"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("not selected for this device"));
+    assert!(dir.path().join("editor-ran").exists());
+    assert!(!dir.path().join("server-ran").exists());
+    let output = run(&dir, &["--show-skips-and-other-devices"]);
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("not selected for this device"));
+    assert!(!dir.path().join("server-ran").exists());
+}

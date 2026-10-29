@@ -9,6 +9,7 @@ pub struct Presentation {
     pub url: String,
     pub links: Vec<PresentationLink>,
     pub splash: bool,
+    pub grouped_results: bool,
     pub icons: String,
     pub icon_aliases: BTreeMap<String, String>,
     pub glyphs: BTreeMap<String, String>,
@@ -156,6 +157,8 @@ struct Document {
     #[serde(default)]
     legacy_hosts: Vec<String>,
     #[serde(default)]
+    legacy_roles: BTreeMap<String, String>,
+    #[serde(default)]
     presentation: Presentation,
     version: u32,
     #[serde(default)]
@@ -182,6 +185,9 @@ struct Document {
 pub struct Config {
     pub device_file: Option<PathBuf>,
     pub legacy_hosts: Vec<String>,
+    pub legacy_roles: BTreeMap<String, String>,
+    pub excluded: Vec<Recipe>,
+    pub show_other_devices: bool,
     pub show_skips: bool,
     pub presentation: Presentation,
     pub title: String,
@@ -322,6 +328,25 @@ impl Config {
             if let Some((device, bytes)) = crate::device::load(path)? {
                 config.snapshots.insert(path.clone(), bytes);
                 device.select(&mut config)?;
+            } else if let Some(role) = config
+                .legacy_roles
+                .get(&crate::device::hostname()?)
+                .cloned()
+            {
+                let mut device = crate::device::Device {
+                    version: 1,
+                    hostname: crate::device::hostname()?,
+                    role,
+                    subscriptions: BTreeSet::new(),
+                };
+                // Preserve legacy opt-ins while enforcing host and role eligibility.
+                device.subscriptions = config
+                    .recipes
+                    .iter()
+                    .filter(|r| r.optional && device.allows(r))
+                    .map(|r| r.id.clone())
+                    .collect();
+                device.select(&mut config)?;
             } else if !config.legacy_hosts.contains(&crate::device::hostname()?) {
                 bail!(
                     "device is not enrolled; run tjikup new device before applying this workflow"
@@ -340,6 +365,9 @@ impl Config {
         let mut config = Self {
             device_file: None,
             legacy_hosts: vec![],
+            legacy_roles: BTreeMap::new(),
+            excluded: vec![],
+            show_other_devices: false,
             show_skips: false,
             presentation: Presentation::default(),
             title: "Tjikup".into(),
@@ -397,6 +425,7 @@ impl Config {
         let mut env = environment(&document.env, directory, inherited)?;
         if root {
             self.legacy_hosts = document.legacy_hosts;
+            self.legacy_roles = document.legacy_roles;
             self.device_file = document
                 .device_file
                 .as_ref()
@@ -419,6 +448,7 @@ impl Config {
         } else if !document.flags.is_empty()
             || document.device_file.is_some()
             || !document.legacy_hosts.is_empty()
+            || !document.legacy_roles.is_empty()
         {
             bail!("workflow flags and device_file belong in the root configuration");
         }
@@ -433,6 +463,7 @@ impl Config {
                     "jobs",
                     "version",
                     "show-skips",
+                    "show-skips-and-other-devices",
                     "demo",
                     "apply-dotfiles",
                     "apply-sysfiles",

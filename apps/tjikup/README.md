@@ -294,3 +294,18 @@ repository owns the checks, install/update commands, and configuration groups.
 
 `tjikup sync <command>` forwards arguments and exit status to `synctjik`,
 including `tjikup sync status` and `tjikup sync setup`.
+
+### Grouped results and device diagnostics
+
+`presentation.grouped_results: true` keeps completed rows together by section
+while workers continue running concurrently. Activity remains live and failures
+are shown immediately. The installation/configuration results flush before the
+first package update; update and verification results flush at completion.
+Dependencies and resource locks are unchanged.
+
+Root workflows can declare `legacy_roles`, a hostname-to-role map, for existing
+machines that have not enrolled yet. These machines retain available legacy
+opt-ins but now pass through the same host/role filter as enrolled machines.
+An explicit device profile always takes precedence. `--show-skips` never adds
+excluded recipes. `--show-skips-and-other-devices` lists excluded recipes as
+informational rows and does not execute them.
