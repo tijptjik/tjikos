@@ -9,7 +9,7 @@ Rclone is a transport dependency for remote stores, not the synchronization engi
 synctjik enroll --role laptop                 # source and collection selection
 synctjik setup                               # native two-pane review, then confirm
 synctjik ready                               # nonzero until every required collection is restored
-synctjik schedule                            # enable the historical backup-packages.timer
+synctjik schedule                            # enable synctjik-dotfiles-lfs-backup.timer
 synctjik backup                              # snapshot only; never implicitly synchronize
 synctjik plan .ssh --from fi                  # create a pinned plan without applying
 synctjik review /private/path/to/plan.json     # review and explicitly confirm application
@@ -75,7 +75,9 @@ config, and runs collection enrollment and restoration before declaring readines
 `~/.config/synctjik/rclone.conf` is used when present; explicit `RCLONE_CONFIG` wins.
 Media mounts and unrelated rclone configuration are untouched.
 
-Scheduling keeps `backup-packages.timer` to prevent duplicate old/new timers. The
+Scheduling uses `synctjik-dotfiles-lfs-backup.timer`. Migration disables
+the old `backup-packages.timer` and refuses to proceed while its archive job
+is running; it never stops the job. The
 service invokes `synctjik ready` before `synctjik backup`. Desktop/laptop/server slots
 are 00:00/00:15/00:30 local time. Existing running workers are not restarted during
 installation. Backups still require the user systemd manager to be running.
@@ -137,3 +139,6 @@ Cloudflare Resources backs up DNS, Workers KV and R2 objects from Cloudflare. Pr
 are the configured documents, projects, resources and media folders. Old pinned
 releases without `native_backends: 1` must not overwrite a capable installed
 runner; fresh installations require a compatible published release.
+
+The dotfiles LFS schedule archives enrolled application state to R2 via rclone,
+using tar/zstd and age for encrypted collections. It does not use Restic.
