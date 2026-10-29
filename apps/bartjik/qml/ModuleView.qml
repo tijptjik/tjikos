@@ -89,12 +89,20 @@ Item {
                     context: ({barKey:moduleView.bar.key,bar:moduleView.bar.id,monitor:moduleView.bar.screen,module:moduleView.moduleId})
                 }
                 Part {
+                    id:mediaArtist
                     kind:'artist';visible:entry.media && !!entry.row.artist?.value
                     row:entry.row;theme:moduleView.theme;moduleConfig:moduleView.moduleConfig
                     controller:moduleView.controller;window:moduleView.window
                     context:({barKey:moduleView.bar.key,bar:moduleView.bar.id,monitor:moduleView.bar.screen,module:moduleView.moduleId})
                 }
-                Text {visible:entry.media && !!entry.row.artist?.value;text:'·';color:moduleView.theme.muted;font.pixelSize:14;anchors.verticalCenter:parent.verticalCenter}
+                Text {
+                    visible:mediaArtist.visible
+                    text:'·';color:moduleView.theme.muted
+                    font.family:mediaArtist.style.font;font.pixelSize:mediaArtist.style.fontSize
+                    // A fallback font's line metrics must not enlarge the media island.
+                    height:mediaArtist.height;verticalAlignment:Text.AlignVCenter
+                    anchors.verticalCenter:parent.verticalCenter
+                }
                 Part {
                     kind:'track';visible:entry.media
                     row:entry.row;theme:moduleView.theme;moduleConfig:moduleView.moduleConfig
