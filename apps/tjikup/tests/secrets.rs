@@ -22,6 +22,9 @@ impl Fixture {
         Self { dir, manifest }
     }
     fn run(&self, mode: &str) -> Output {
+        self.run_timed(mode, false)
+    }
+    fn run_timed(&self, mode: &str, timed: bool) -> Output {
         let p = self.dir.path();
         fs::write(
             p.join("manifest.json"),
@@ -36,6 +39,7 @@ impl Fixture {
             .arg("--state-dir")
             .arg(p.join("state"))
             .env_remove("BWS_ACCESS_TOKEN")
+            .env("TJIKUP_SECRET_TIMING", if timed { "1" } else { "0" })
             .output()
             .unwrap()
     }
@@ -151,4 +155,20 @@ fn wrong_host_is_rejected_before_contacting_bitwarden() {
     fixture.manifest["host"] = json!("not-this-host.invalid");
     assert_eq!(fixture.run("plan").status.code(), Some(2));
     assert!(!fixture.dir.path().join("calls").exists());
+}
+
+#[test]
+fn timing_diagnostics_expose_only_counts_and_elapsed_time() {
+    let f = Fixture::new(&format!(
+        "{{{{ secret('{ID}') }}}} {{{{ secret('{ID}') }}}}"
+    ));
+    let output = f.run_timed("plan", true);
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Bitwarden: 1 requests,"));
+    assert!(stderr.contains("provider time"));
+    for private in [ID, "SYNTHETIC-TOKEN", "SYNTHETIC-SECRET"] {
+        assert!(!stderr.contains(private));
+    }
+    assert!(!f.dir.path().join("root/secret").exists());
 }

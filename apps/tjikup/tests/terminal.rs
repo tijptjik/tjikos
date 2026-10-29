@@ -512,7 +512,7 @@ fn execution_groups_stream_settled_rows_before_slow_peers_finish() {
     fs::write(&path, serde_json::to_vec(&json!({"version":2,"jobs":2,
         "presentation":{"grouped_results":true},"recipes":[
         {"id":"slow","label":"Slow worker","display":{"section":"Configuration"},
-         "apply":["sh","-c","touch slow-started; n=0; while [ ! -e release ]; do n=$((n+1)); [ $n -lt 100 ] || exit 8; sleep 0.05; done; touch slow-done; echo 'APPLY   ✓ Finished slow'"]},
+         "apply":["sh","-c","touch slow-started; n=0; while [ ! -e release ]; do n=$$((n+1)); [ $$n -lt 100 ] || exit 8; sleep 0.05; done; touch slow-done; echo 'APPLY   ✓ Finished slow'"]},
         {"id":"fast","label":"Fast worker","display":{"section":"Configuration"},
          "apply":["sh","-c","sleep 0.1; echo 'APPLY   ✓ Finished fast'"]},
         {"id":"update","label":"Update worker","display":{"section":"Package updates"},

@@ -9,7 +9,7 @@ use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Mutex,
 };
 use std::time::{Duration, Instant};
@@ -29,6 +29,8 @@ pub struct Secrets {
     config: Bitwarden,
     cache: Mutex<BTreeMap<String, String>>,
     pub used: AtomicBool,
+    requests: AtomicU64,
+    request_millis: AtomicU64,
 }
 impl Secrets {
     pub fn new(config: Bitwarden) -> Result<Self> {
@@ -39,6 +41,8 @@ impl Secrets {
             config,
             cache: Mutex::new(BTreeMap::new()),
             used: AtomicBool::new(false),
+            requests: AtomicU64::new(0),
+            request_millis: AtomicU64::new(0),
         })
     }
     fn token(&self) -> Result<String> {
@@ -143,6 +147,9 @@ impl Secrets {
                 bail!("Bitwarden response timed out");
             }
         };
+        self.requests.fetch_add(1, Ordering::Relaxed);
+        self.request_millis
+            .fetch_add(started.elapsed().as_millis() as u64, Ordering::Relaxed);
         if !status.success() {
             bail!("Bitwarden secret lookup failed; verify authentication and access policy");
         }
@@ -160,6 +167,19 @@ impl Secrets {
             .to_owned();
         cache.insert(id.to_owned(), value.clone());
         Ok(value)
+    }
+}
+
+impl Drop for Secrets {
+    fn drop(&mut self) {
+        // Opt-in diagnostics contain counts/timing only, never values or IDs.
+        if std::env::var("TJIKUP_SECRET_TIMING").as_deref() == Ok("1") {
+            eprintln!(
+                "Bitwarden: {} requests, {:.3}s provider time",
+                self.requests.load(Ordering::Relaxed),
+                self.request_millis.load(Ordering::Relaxed) as f64 / 1000.
+            );
+        }
     }
 }
 

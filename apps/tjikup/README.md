@@ -297,11 +297,19 @@ including `tjikup sync status` and `tjikup sync setup`.
 
 ### Grouped results and device diagnostics
 
-`presentation.grouped_results: true` keeps completed rows together by section
-while workers continue running concurrently. Activity remains live and failures
-are shown immediately. The installation/configuration results flush before the
-first package update; update and verification results flush at completion.
-Dependencies and resource locks are unchanged.
+`presentation.grouped_results: true` executes one section at a time, with
+parallel workers inside the section and results shown immediately in completion
+order. There is no alphabetical buffering. Activity timing uses the right-hand
+status column. Dependencies and resource locks remain authoritative: a task from
+a later section can run early when it is a prerequisite of the current section;
+only that prerequisite's row waits for its own section. This handles cross-section
+dependency chains without introducing cycles or stalling the workflow. Failed
+and blocked rows retain their sections. Repository matrix updates remain live.
+
+`TJIKUP_SECRET_TIMING=1` reports aggregate Bitwarden request counts and provider
+time for troubleshooting; it never prints secret values or identifiers. Secret
+lookups remain fresh per render and are currently sequential, with repeated IDs
+cached in memory for that render only.
 
 Enroll machines with `tjikup new device` to choose their role and explicit
 recipe subscriptions. `--show-skips` never adds
