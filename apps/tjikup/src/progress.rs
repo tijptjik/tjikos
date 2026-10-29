@@ -380,7 +380,10 @@ impl Progress {
             }
             self.repo_last.push(text);
         }
-        self.repo_lines = self.repos.len() * self.graphics.as_ref().map_or(1, Graphics::rows);
+        // Reserve a blank line above the activity spinner. Include it in the
+        // cursor offsets so patches still land on each repository's first row.
+        eprintln!();
+        self.repo_lines = self.repos.len() * self.graphics.as_ref().map_or(1, Graphics::rows) + 1;
     }
     fn patch_repos(&mut self) {
         if !self.tty || !self.repo_open {
