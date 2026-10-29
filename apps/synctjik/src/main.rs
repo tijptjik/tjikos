@@ -47,6 +47,48 @@ enum Cmd {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Hold protection locks across an explicit reviewed routing migration.
+    #[command(disable_help_flag = true)]
+    ProtectionMigration {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Google Drive export backups and verified restoration.
+    #[command(disable_help_flag = true)]
+    Drive {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Consistent application snapshots.
+    #[command(disable_help_flag = true)]
+    AppBackup {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Independent application backup copy and health.
+    #[command(disable_help_flag = true)]
+    AppPull {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Verified application restoration into empty destinations.
+    #[command(disable_help_flag = true)]
+    AppRestore {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Guarded SnapRAID maintenance and writer recovery.
+    #[command(disable_help_flag = true)]
+    Snapraid {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// SnapRAID incident and recovery notifications.
+    #[command(disable_help_flag = true)]
+    SnapraidNotify {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Validate policy and dependencies without restoring or backing up.
     Check,
     /// Enable the backup timer only after restoration readiness passes.
@@ -249,7 +291,7 @@ fn run() -> Result<()> {
         Some(Cmd::MigrateSchedules { retire }) => return schedule_migration::run(*retire),
         Some(Cmd::Capabilities) => {
             return print(
-                &json!({"cloudflare_backup":true,"private_assets":true,"native_backends":1,"dependencies":["rclone","restic"]}),
+                &json!({"cloudflare_backup":true,"private_assets":true,"native_backends":1,"protection_backends":1,"drive":true,"app_backup":true,"app_pull":true,"app_restore":true,"snapraid":true,"snapraid_notify":true,"dependencies":["rclone","restic"]}),
             )
         }
         Some(Cmd::Cloudflare { args }) | Some(Cmd::PrivateAssets { args }) => {
@@ -259,6 +301,75 @@ fn run() -> Result<()> {
                 matches!(cli.command, Some(Cmd::Cloudflare { .. })),
                 args,
             );
+        }
+        Some(Cmd::ProtectionMigration { args }) => {
+            return synctjik::backends::protection_exec("protection-migration", args);
+        }
+        Some(Cmd::Drive { args }) => {
+            ensure!(
+                cli.config.is_none()
+                    && cli.home.is_none()
+                    && cli.machine.is_none()
+                    && cli.state.is_none()
+                    && !cli.json,
+                "Use the integration --policy option"
+            );
+            return synctjik::backends::protection_exec("drive", args);
+        }
+        Some(Cmd::AppBackup { args }) => {
+            ensure!(
+                cli.config.is_none()
+                    && cli.home.is_none()
+                    && cli.machine.is_none()
+                    && cli.state.is_none()
+                    && !cli.json,
+                "Use the integration --policy option"
+            );
+            return synctjik::backends::protection_exec("app-backup", args);
+        }
+        Some(Cmd::AppPull { args }) => {
+            ensure!(
+                cli.config.is_none()
+                    && cli.home.is_none()
+                    && cli.machine.is_none()
+                    && cli.state.is_none()
+                    && !cli.json,
+                "Use the integration --policy option"
+            );
+            return synctjik::backends::protection_exec("app-pull", args);
+        }
+        Some(Cmd::AppRestore { args }) => {
+            ensure!(
+                cli.config.is_none()
+                    && cli.home.is_none()
+                    && cli.machine.is_none()
+                    && cli.state.is_none()
+                    && !cli.json,
+                "Use the integration --policy option"
+            );
+            return synctjik::backends::protection_exec("app-restore", args);
+        }
+        Some(Cmd::Snapraid { args }) => {
+            ensure!(
+                cli.config.is_none()
+                    && cli.home.is_none()
+                    && cli.machine.is_none()
+                    && cli.state.is_none()
+                    && !cli.json,
+                "Use the integration --policy option"
+            );
+            return synctjik::backends::protection_exec("snapraid", args);
+        }
+        Some(Cmd::SnapraidNotify { args }) => {
+            ensure!(
+                cli.config.is_none()
+                    && cli.home.is_none()
+                    && cli.machine.is_none()
+                    && cli.state.is_none()
+                    && !cli.json,
+                "Use the integration --policy option"
+            );
+            return synctjik::backends::protection_exec("snapraid-notify", args);
         }
         _ => (),
     }
@@ -274,7 +385,14 @@ fn run() -> Result<()> {
         Cmd::MigrateSchedules { .. }
         | Cmd::Capabilities
         | Cmd::Cloudflare { .. }
-        | Cmd::PrivateAssets { .. } => unreachable!(),
+        | Cmd::PrivateAssets { .. }
+        | Cmd::ProtectionMigration { .. }
+        | Cmd::Drive { .. }
+        | Cmd::AppBackup { .. }
+        | Cmd::AppPull { .. }
+        | Cmd::AppRestore { .. }
+        | Cmd::Snapraid { .. }
+        | Cmd::SnapraidNotify { .. } => unreachable!(),
         Cmd::Schedule {
             role,
             print: preview,
@@ -572,6 +690,10 @@ fn run_dependency(name: &str) -> Result<()> {
 fn main() {
     if let Err(e) = run() {
         eprintln!("synctjik: {}", tjik_ui::safe(&e.to_string()));
-        std::process::exit(1)
+        std::process::exit(if synctjik::backends::is_busy(&e) {
+            75
+        } else {
+            1
+        })
     }
 }

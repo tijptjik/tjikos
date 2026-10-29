@@ -44,8 +44,28 @@ impl Runner {
     pub fn guarded(
         &self,
         command: &mut Command,
+        guard: Option<&mut Child>,
+        allow_failure: bool,
+    ) -> Result<(i32, Vec<u8>)> {
+        self.execute(command, guard, allow_failure, None, None)
+    }
+    /// Stream large database exports to a caller-owned private file.
+    pub fn run_to(&self, command: &mut Command, output: &File) -> Result<()> {
+        self.execute(command, None, false, Some(output), None)?;
+        output.sync_all()?;
+        Ok(())
+    }
+    /// Preserve dependency diagnostics in a private log without exposing them.
+    pub fn logged(&self, command: &mut Command, log: &File) -> Result<(i32, Vec<u8>)> {
+        self.execute(command, None, true, None, Some(log))
+    }
+    fn execute(
+        &self,
+        command: &mut Command,
         mut guard: Option<&mut Child>,
         allow_failure: bool,
+        output: Option<&File>,
+        log: Option<&File>,
     ) -> Result<(i32, Vec<u8>)> {
         self.check()?;
         if let Some(guard) = guard.as_mut() {
@@ -56,10 +76,10 @@ impl Runner {
         }
         // Files avoid pipe deadlocks and keep subprocess diagnostics private.
         let mut out = tempfile::tempfile()?;
-        let err = tempfile::tempfile()?;
+        let mut err = tempfile::tempfile()?;
         command
-            .stdout(out.try_clone()?)
-            .stderr(err)
+            .stdout(output.unwrap_or(&out).try_clone()?)
+            .stderr(err.try_clone()?)
             .process_group(0);
         let mut child = ManagedChild(
             command
@@ -84,19 +104,34 @@ impl Runner {
                 out.seek(SeekFrom::Start(0))?;
                 let mut data = Vec::new();
                 out.read_to_end(&mut data)?;
+                if let Some(mut log) = log {
+                    use std::io::Write;
+                    log.write_all(&data)?;
+                    err.seek(SeekFrom::Start(0))?;
+                    std::io::copy(&mut err, &mut log)?;
+                    log.sync_all()?;
+                }
                 return Ok((code, data));
             }
             std::thread::sleep(Duration::from_millis(100));
         }
     }
     pub fn interactive(&self, command: &mut Command) -> Result<()> {
+        self.visible(command, false)
+    }
+    /// Keep cutover descendants inside the lifetime of the held legacy locks.
+    pub fn supervised(&self, command: &mut Command) -> Result<()> {
+        command.process_group(0);
+        self.visible(command, true)
+    }
+    fn visible(&self, command: &mut Command, group: bool) -> Result<()> {
         self.check()?;
         // age must retain terminal access for its passphrase prompt.
         let mut child = ManagedChild(
             command
                 .spawn()
                 .context("Unable to start interactive dependency")?,
-            false,
+            group,
         );
         loop {
             self.check()?;
@@ -153,7 +188,11 @@ impl Drop for ManagedChild {
 pub struct Lock(File);
 impl Lock {
     pub fn take(path: &Path, wait: bool, runner: &Runner) -> Result<Self> {
-        crate::util::private_dir(path.parent().context("Missing lock directory")?)?;
+        // /run/lock is shared with other services: never chmod an existing parent.
+        let parent = path.parent().context("Missing lock directory")?;
+        if !parent.exists() {
+            crate::util::private_dir(parent)?;
+        }
         let file = OpenOptions::new()
             .create(true)
             .append(true)

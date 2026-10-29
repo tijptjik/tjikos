@@ -142,3 +142,53 @@ runner; fresh installations require a compatible published release.
 
 The dotfiles LFS schedule archives enrolled application state to R2 via rclone,
 using tar/zstd and age for encrypted collections. It does not use Restic.
+
+## Drive, application recovery and storage protection
+
+`capabilities` reports `protection_backends: 1` for these native engines:
+
+```sh
+synctjik drive check --policy /path/to/drive.json
+synctjik app-backup check --policy /path/to/application.json
+synctjik app-pull check --policy /path/to/pull.json
+synctjik snapraid check --policy /path/to/maintenance.json
+synctjik snapraid-notify check --policy /path/to/notifications.json
+```
+
+These checks parse policy without invoking dependencies or accessing credentials.
+Use each command's `--help` for operations. Drive supports backup, snapshots and
+verified restore; application backup uses SQLite online snapshots and locked
+MariaDB logical dumps. Independent copies retain all selected snapshots and run
+Restic's full data check. `app-restore stage` requires an exact snapshot ID and a
+new destination, checks its databases, and leaves live services alone. Explicit
+`install` requires empty allowlisted destinations and stopped writers;
+`import-mariadb` records a durable started marker before any database import.
+
+SnapRAID checks disk identities and layout, enforces deletion limits, and retains
+pause ownership for interrupted-writer recovery. `status` returns 75 when busy.
+Sync/scrub are real maintenance operations: never use them against live storage
+as migration tests. Notification health checks can send configured alerts.
+
+Dotjik owns source selection, exclusions, host identities, mount expectations,
+retention and notification policy. `${HOME}` and `${XDG_RUNTIME_DIR}` expand in
+policy values. Existing credential/state paths and repository formats remain
+unchanged. External dependencies are explicit: rclone/FUSE, Restic, rsync,
+Docker/MariaDB, findmnt, mountpoint, SSH, systemctl, timeout and SnapRAID; Plex's
+SQLite tool is required only for configured Plex databases. Python is test-only.
+
+See [the compatibility contract](docs/protection-contract.md) for schemas and
+failure behavior. `protection-migration --policy POLICY -- COMMAND...` holds the
+existing locks and refuses active workers before a reviewed routing change.
+It never enables timers or stops/restarts jobs. Install a capable root-owned
+binary for system units before applying their routing. Published releases and
+release pins are a separate step; the installer rejects older protection engines.
+
+```sh
+cargo test --locked
+python3 -B -m unittest discover -s tests -p 'test_protection.py' -v
+```
+
+The protection suite uses generated SQLite data, fake mounts/processes and
+localhost notification servers, plus real encrypted Restic repositories in
+temporary directories for Drive, application and independent-copy restore/hash
+rehearsals. These are synthetic recovery proofs, not live backup acceptance.
