@@ -1,11 +1,15 @@
 mod actions;
 mod bitwarden_install;
+mod commands;
 mod config;
 mod demo;
+mod desktop;
 mod device;
 mod fedora_release;
+mod git_commands;
 mod graphics;
 mod icons;
+mod installers;
 mod managed_files;
 mod notifications;
 mod process;
@@ -42,6 +46,14 @@ fn default_config() -> PathBuf {
 
 fn cli() -> Result<i32> {
     let mut args = std::env::args().skip(1).peekable();
+    if args.peek().is_some_and(|s| s == "git") {
+        args.next();
+        return git_commands::cli(args.collect());
+    }
+    if args.peek().is_some_and(|s| s == "config") {
+        args.next();
+        return commands::config(args.collect());
+    }
     if args.peek().is_some_and(|s| s == "workflow") {
         args.next();
         return workflow::cli(args.collect());

@@ -128,6 +128,69 @@ fn source(base: &Path, name: &str) -> Result<Vec<u8>> {
     std::fs::read(path).with_context(|| format!("read source {name}"))
 }
 
+/// Locate a declared source without rendering its contents or fetching secrets.
+pub fn source_path(
+    path: &Path,
+    live: &serde_json::Value,
+    target: &Path,
+) -> Result<Option<PathBuf>> {
+    absolute(target)?;
+    let path = path.canonicalize()?;
+    let base = path.parent().unwrap();
+    let mut manifest: Manifest = serde_json::from_slice(&std::fs::read(&path)?)?;
+    if manifest.version != 1 {
+        bail!("expected file manifest version 1");
+    }
+    let mut context = BTreeMap::new();
+    for file in &manifest.context_files {
+        context.extend(
+            serde_json::from_slice::<BTreeMap<String, serde_json::Value>>(&source(base, file)?)?,
+        );
+    }
+    context.extend(manifest.context);
+    context.extend(
+        live.as_object()
+            .context("context must be an object")?
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone())),
+    );
+    for file in &manifest.entries_files {
+        manifest
+            .entries
+            .extend(serde_json::from_slice::<Vec<Entry>>(&source(base, file)?)?);
+    }
+    let mut env = Environment::new();
+    env.set_undefined_behavior(UndefinedBehavior::Strict);
+    let mut found = None;
+    for entry in manifest.entries {
+        if let Some(condition) = entry.when {
+            if !env
+                .compile_expression(&condition)?
+                .eval(&context)?
+                .is_true()
+            {
+                continue;
+            }
+        }
+        let destination = env.render_str(&entry.path, &context)?;
+        if Path::new(&destination) != target {
+            continue;
+        }
+        let candidate = match entry.content {
+            Content::File { source: name, .. } => {
+                source(base, &name)?;
+                base.join(name).canonicalize()?
+            }
+            _ => path.clone(),
+        };
+        if found.is_some() {
+            bail!("duplicate source for {}", target.display());
+        }
+        found = Some(candidate);
+    }
+    Ok(found)
+}
+
 impl Manifest {
     pub fn load(
         path: &Path,

@@ -4,7 +4,7 @@ app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 prefix="${1:-$HOME/.local}"
 bash "$app_dir/scripts/fetch-release.sh"
 # External native manifests may require features not visible to --check.
-"$app_dir/dist/tjikup" capabilities | python3 -c 'import json,sys; assert json.load(sys.stdin).get("encrypted_credentials", 0) >= 1' || {
+"$app_dir/dist/tjikup" capabilities | jq -e '.encrypted_credentials >= 1' >/dev/null || {
     echo 'Pinned Tjikup release lacks encrypted credential cache support; existing runner preserved.' >&2
     exit 1
 }

@@ -404,6 +404,10 @@ fn verify(repo: &Path, args: &[String]) -> Result<i32> {
     Ok(command.code().unwrap_or(1))
 }
 pub fn cli(args: Vec<String>) -> Result<i32> {
+    if args.is_empty() || args == ["--help"] || args == ["-h"] {
+        println!("tjikup workflow [--repo PATH] COMMAND\n\n  context | role | configure\n  files <home|home-files|credentials|system> <check|plan|diff|apply> [--group NAME]\n  bootstrap-archives      Prepare missing archive policy and private transport\n  package <check|skip-update|run> NAME [-- COMMAND ...]\n  repositories <check|apply>\n  bitwarden [--upgrade]\n  assets <fonts|icons> --run-dir PATH\n  services [--check] [--unit NAME] [--exclude-unit NAME]\n  activate <bartjik|notjik>\n  verify APP\n  cache-install NAME --input PATH --output PATH -- COMMAND ...\n  capture [--dry-run]\n  fedora-release\n\nDefaults to DOTJIK_REPO or the Dotjik checkout under XDG_DATA_HOME.");
+        return Ok(0);
+    }
     if args == ["fedora-release"] {
         return crate::fedora_release::run();
     }
@@ -416,9 +420,7 @@ pub fn cli(args: Vec<String>) -> Result<i32> {
         args.remove(0);
         repo
     } else {
-        PathBuf::from(
-            std::env::var_os("DOTJIK_REPO").context("set DOTJIK_REPO or pass --repo PATH")?,
-        )
+        crate::commands::repository()
     };
     match args.first().map(String::as_str) {
         Some("context" | "role" | "configure") if args.len() == 1 => {
@@ -431,6 +433,9 @@ pub fn cli(args: Vec<String>) -> Result<i32> {
             Ok(0)
         }
         Some("bitwarden") => crate::bitwarden_install::cli(&args[1..]),
+        Some("install") => crate::installers::cli(&repo, &args[1..]),
+        Some("desktop") => crate::desktop::cli(&repo, &args[1..]),
+        Some("bootstrap-archives") if args.len() == 1 => crate::commands::bootstrap_archives(&repo),
         Some("files") => crate::workflow_files::run(&repo, &args[1..]),
         Some("services") => crate::workflow_services::refresh(&repo, &args[1..]),
         Some("activate") => crate::workflow_services::activate(&repo, &args[1..]),
@@ -441,7 +446,7 @@ pub fn cli(args: Vec<String>) -> Result<i32> {
         Some("package") => package(&repo, &args[1..]),
         Some("fedora-release") => crate::fedora_release::run(),
         Some("assets") => assets(&args[1..]),
-        _ => bail!("usage: tjikup workflow [--repo PATH] <context|role|configure|package|assets>"),
+        _ => bail!("unknown workflow command; run tjikup workflow --help"),
     }
 }
 #[cfg(test)]

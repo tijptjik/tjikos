@@ -14,6 +14,14 @@ use std::os::fd::AsRawFd;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
+pub fn source_path(
+    manifest: &Path,
+    context: &serde_json::Value,
+    target: &Path,
+) -> Result<Option<PathBuf>> {
+    model::source_path(manifest, context, target)
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Pending {
