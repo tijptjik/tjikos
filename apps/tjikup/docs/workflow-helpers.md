@@ -60,3 +60,19 @@ runtimes and development/test tools are a separate dependency category.
 No full package installation, service refresh or backup run is required to
 validate these helpers. Use synthetic homes, mocked commands, native tests,
 read-only capture previews and maintenance-template syntax checks first.
+
+## Maintenance render cache
+
+A native render batch can set `"cache": true` when its context and generated
+scripts contain no credentials. The private cache under
+`$XDG_CACHE_HOME/tjikup/templates` (default `~/.cache/tjikup/templates`) is keyed
+by the runner executable, template definitions and bytes, merged runtime/data
+context, and declared include bytes. There is no time-based refresh interval.
+
+Cache hits verify each script's content hash, copy it into the isolated run
+staging directory, and syntax-check it with the current validators. They do not
+re-render the templates. Successful hits report SKIP with `N recipes cached`
+when skipped tasks are shown. Failed validation never publishes a partial batch.
+Batches with a Bitwarden provider always bypass this script cache; secrets use
+the separate encrypted credential cache. Runtime context is still obtained on
+each run so enrollment or policy changes invalidate cached scripts immediately.

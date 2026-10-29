@@ -45,6 +45,7 @@ fn read(base: &Path, name: &str) -> Result<Vec<u8>> {
 }
 
 pub struct Renderer {
+    pub fingerprint: Option<String>,
     environment: Environment<'static>,
     context: minijinja::Value,
 }
@@ -81,6 +82,15 @@ impl Renderer {
                     .map_err(|_| anyhow::anyhow!("native include is not UTF-8"))?,
             );
         }
+        // Secret-bearing renderers never persist generated scripts.
+        let fingerprint = if inputs.bitwarden.is_none() {
+            Some(format!(
+                "{:x}",
+                Sha256::digest(serde_json::to_vec(&(&context, &includes))?)
+            ))
+        } else {
+            None
+        };
         env.add_function(
             "include",
             move |name: String| -> std::result::Result<String, minijinja::Error> {
@@ -119,14 +129,14 @@ impl Renderer {
             });
         }
         Ok(Self {
+            fingerprint,
             environment: env,
             context,
         })
     }
-    pub fn render(&self, path: &Path) -> Result<Vec<u8>> {
-        let source = std::fs::read_to_string(path).context("cannot read native template")?;
+    pub fn render_source(&self, source: &str) -> Result<Vec<u8>> {
         self.environment
-            .render_str(&source, &self.context)
+            .render_str(source, &self.context)
             .map(String::into_bytes)
             .map_err(|_| {
                 anyhow::anyhow!(

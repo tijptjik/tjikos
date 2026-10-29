@@ -516,20 +516,45 @@ impl Contextual<'_> {
                     .transpose()?;
                 let renderer =
                     crate::templates::Renderer::load(Path::new(inputs), runtime.as_deref())?;
-                // Do not publish any script until the whole batch renders and validates.
+                let sources = batch
+                    .templates
+                    .iter()
+                    .map(|template| std::fs::read(&template.source).map_err(anyhow::Error::from))
+                    .collect::<Result<Vec<_>>>()?;
+                let cache = crate::template_cache::Cache::new(
+                    batch,
+                    renderer.fingerprint.as_deref(),
+                    &sources,
+                )?;
+                let cached = cache.as_ref().and_then(|cache| cache.restore(batch));
+                let hit = cached.is_some();
+                let scripts = match cached {
+                    Some(scripts) => scripts,
+                    None => batch
+                        .templates
+                        .iter()
+                        .zip(&sources)
+                        .map(|(template, source)| {
+                            if Path::new(&template.source)
+                                .extension()
+                                .is_some_and(|ext| ext == "j2")
+                            {
+                                renderer
+                                    .render_source(std::str::from_utf8(source)?)
+                                    .with_context(|| format!("render {}", template.name))
+                            } else {
+                                Ok(source.clone())
+                            }
+                        })
+                        .collect::<Result<Vec<_>>>()?,
+                };
+                // Never publish a partial batch. Even cache hits are checked by
+                // the current validators before any dependent recipe can run.
                 let staging = tempfile::tempdir_in(self.run_dir)?;
-                for template in &batch.templates {
-                    let source = Path::new(&template.source);
-                    let contents = if source.extension().is_some_and(|ext| ext == "j2") {
-                        renderer
-                            .render(source)
-                            .with_context(|| format!("render {}", template.name))?
-                    } else {
-                        std::fs::read(source)?
-                    };
+                for (template, contents) in batch.templates.iter().zip(&scripts) {
                     use std::io::Write;
                     let script = staging.path().join(&template.name);
-                    process::private_file(&script)?.write_all(&contents)?;
+                    process::private_file(&script)?.write_all(contents)?;
                     let syntax: Vec<_> = template
                         .syntax
                         .iter()
@@ -556,11 +581,26 @@ impl Contextual<'_> {
                         );
                     }
                 }
+                if !hit {
+                    if let Some(cache) = &cache {
+                        cache.store(batch, &scripts)?;
+                    }
+                }
                 for template in &batch.templates {
                     std::fs::rename(
                         staging.path().join(&template.name),
                         self.run_dir.join(&template.name),
                     )?;
+                }
+                if hit {
+                    use std::io::Write;
+                    writeln!(
+                        &*self.log,
+                        "SKIP    ✓ {}  {} recipes cached",
+                        self.recipe.label,
+                        batch.templates.len()
+                    )?;
+                    return Ok(State::Unchanged.into());
                 }
                 return Ok(State::Done.into());
             }

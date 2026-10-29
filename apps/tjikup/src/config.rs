@@ -81,6 +81,9 @@ pub struct Template {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Render {
+    /// Opt in only for maintenance scripts containing no credentials.
+    #[serde(default)]
+    pub cache: bool,
     #[serde(default)]
     pub manager: String,
     pub native: Option<String>,
@@ -676,7 +679,7 @@ impl Config {
                 if batch.templates.is_empty()
                     || (batch.native.is_some() && !batch.manager.is_empty())
                     || (batch.native.is_none() && !self.managers.contains_key(&batch.manager))
-                    || (batch.native.is_none() && batch.context_command.is_some())
+                    || (batch.native.is_none() && (batch.context_command.is_some() || batch.cache))
                 {
                     bail!("{}: invalid render batch", r.id);
                 }

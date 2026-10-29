@@ -12,6 +12,7 @@ mod progress;
 mod report;
 mod scheduler;
 mod selection;
+mod template_cache;
 mod templates;
 mod workflow;
 mod workflow_capture;

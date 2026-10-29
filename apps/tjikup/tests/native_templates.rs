@@ -13,6 +13,7 @@ fn run(root: &Path, recipes: Value) -> Output {
     Command::new(env!("CARGO_BIN_EXE_tjikup"))
         .args(["--config", root.join("config.json").to_str().unwrap()])
         .env("XDG_STATE_HOME", root.join("state"))
+        .env("XDG_CACHE_HOME", root.join("cache"))
         .env("TJIKUP_NOTIFY", "0")
         .output()
         .unwrap()
@@ -156,4 +157,78 @@ fn preparation_reports_recipe_count_without_show_skips() {
     assert!(result.status.success());
     let output = String::from_utf8_lossy(&result.stderr);
     assert!(output.contains("2 recipes"), "{output}");
+}
+
+#[test]
+fn maintenance_cache_reuses_only_identical_inputs_and_intact_scripts() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    fs::write(root.join("data.json"), r#"{"value":"one"}"#).unwrap();
+    fs::write(root.join("helper"), "# first\n").unwrap();
+    fs::write(root.join("runtime.json"), r#"{"host":"first"}"#).unwrap();
+    fs::write(
+        root.join("inputs.json"),
+        r#"{"version":1,"context_files":["data.json"],"includes":{"helper":"helper"}}"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("task.sh.j2"),
+        "{{ include('helper') }}# {{ host }} {{ value }}\ntrue\n",
+    )
+    .unwrap();
+    let mut recipe = batch(json!([template("task.sh")]));
+    recipe["render"]["cache"] = json!(true);
+    recipe["render"]["context_command"] = json!(["cat", root.join("runtime.json")]);
+    let invoke = || {
+        let result = run(
+            root,
+            json!([recipe.clone(), {"id":"consume","needs":["render"],"apply":["sh","{run_dir}/task.sh"]}]),
+        );
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let logs = root.join("state/tjikup/logs");
+        let latest = fs::read_dir(logs)
+            .unwrap()
+            .map(|e| e.unwrap().path().join("receipt.json"))
+            .max_by_key(|p| fs::metadata(p).unwrap().modified().unwrap())
+            .unwrap();
+        let receipt: Value = serde_json::from_slice(&fs::read(latest).unwrap()).unwrap();
+        receipt["recipes"]["render"]["state"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    assert_eq!(invoke(), "done");
+    assert_eq!(invoke(), "unchanged");
+    for (name, value) in [
+        ("data.json", r#"{"value":"two"}"#),
+        ("runtime.json", r#"{"host":"second"}"#),
+        ("helper", "# second\n"),
+        ("task.sh.j2", "# new template\ntrue\n"),
+    ] {
+        fs::write(root.join(name), value).unwrap();
+        assert_eq!(invoke(), "done", "{name}");
+        assert_eq!(invoke(), "unchanged", "{name}");
+    }
+    for entry in fs::read_dir(root.join("cache/tjikup/templates")).unwrap() {
+        fs::write(entry.unwrap().path().join("task.sh"), "echo corrupted\n").unwrap();
+    }
+    assert_eq!(invoke(), "done");
+}
+
+#[test]
+fn secret_capable_batches_never_persist_script_cache() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    fs::write(root.join("inputs.json"), r#"{"version":1,"bitwarden":{}}"#).unwrap();
+    fs::write(root.join("task.sh.j2"), "true\n").unwrap();
+    let mut recipe = batch(json!([template("task.sh")]));
+    recipe["render"]["cache"] = json!(true);
+    for _ in 0..2 {
+        assert!(run(root, json!([recipe.clone()])).status.success());
+    }
+    assert!(!root.join("cache/tjikup/templates").exists());
 }
