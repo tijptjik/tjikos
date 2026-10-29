@@ -64,7 +64,7 @@ ShellRoot {
     property bool applyingResults: false
     property int nextOffset: 0
     property int pendingSelection: -1
-    readonly property string commandQuery: query.startsWith('!') && !query.startsWith('!!') ? '/' + query.slice(1).trimStart() : query
+    readonly property string commandQuery: query.startsWith('!') && !query.startsWith('!!') ? '/' + query.slice(1).replace(/^\s+/, '') : query
     readonly property bool runMode: commandQuery === '/run' || commandQuery.startsWith('/run ') || query.startsWith('!!')
     readonly property bool runningMode: query.startsWith('?') || query==='/processes' || query.startsWith('/processes ')
     readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(commandQuery)
@@ -452,7 +452,7 @@ ShellRoot {
                             Keys.onPressed:event=>{
                                 root.pointerSelection=false;
                                 if((event.modifiers & Qt.ControlModifier) && (event.key===Qt.Key_Up || event.key===Qt.Key_Down)){root.browseHistory(event.key===Qt.Key_Up?-1:1);event.accepted=true;}
-                                else if(event.key===Qt.Key_Z && (event.modifiers & Qt.ControlModifier) && root.galleryMode){root.send({op:'undo-trash',query:root.query});event.accepted=true;}
+                                else if(event.key===Qt.Key_Z && (event.modifiers & Qt.ControlModifier) && root.galleryMode){if(!root.busy){root.busy=true;root.send({op:'undo-trash',query:root.query});}event.accepted=true;}
                                 else if(event.key===Qt.Key_Tab || event.key===Qt.Key_Backtab){root.move((event.modifiers & Qt.ShiftModifier || event.key===Qt.Key_Backtab)?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Down){root.move(root.listMode?1:root.gridColumns);event.accepted=true;}
                                 else if(event.key===Qt.Key_Up){root.move(root.listMode?-1:-root.gridColumns);event.accepted=true;}
@@ -554,7 +554,7 @@ ShellRoot {
                                 border.width:index===root.selected?1:0
                                 border.color:root.theme.accent
                                 property string iconSource: {
-                                    if(root.galleryMode && modelData.thumbnail)return 'file://'+modelData.thumbnail;
+                                    if(modelData.thumbnail)return 'file://'+modelData.thumbnail;
                                     const icon=modelData.icon || 'application-x-executable';
                                     if(icon.startsWith('/'))return 'file://'+icon;
                                     const found=Quickshell.iconPath(icon,true);
@@ -570,8 +570,8 @@ ShellRoot {
                                         onRunningChanged: if(!running)art.opacity=1
                                     }
                                     x:root.galleryMode?6:root.listMode?16:(parent.width-width)/2;y:root.galleryMode?6:root.wordMode?14:root.listMode?(parent.height-height)/2:13
-                                    width:root.galleryMode?parent.width-12:root.wordMode?28:root.listMode?40:root.settings.ui.icon_size
-                                    height:root.galleryMode?parent.height-38:width
+                                    width:root.galleryMode?parent.width-12:modelData.thumbnail?100:root.wordMode?28:root.listMode?40:root.settings.ui.icon_size
+                                    height:root.galleryMode?parent.height-38:modelData.thumbnail?54:width
                                     source:parent.iconSource;sourceSize.width:width*2;sourceSize.height:height*2
                                     fillMode:Image.PreserveAspectFit;asynchronous:true
                                 }
@@ -588,7 +588,7 @@ ShellRoot {
                                 }
                                 Item {
                                     id:titleArea
-                                    x:root.wordMode?56:root.listMode?70:7;y:root.galleryMode?parent.height-26:root.listMode?12:76
+                                    x:modelData.thumbnail && !root.galleryMode?130:root.wordMode?56:root.listMode?70:7;y:root.galleryMode?parent.height-26:root.listMode?12:76
                                     width:parent.width-x-(root.listMode?14:7)
                                     height:label.height
                                     Row {

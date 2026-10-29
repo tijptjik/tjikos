@@ -27,7 +27,7 @@ with private_compositor():
             wait_for(lambda: 'runtjik' in subprocess.check_output(['hyprctl','-j','layers'], text=True))
             code = "import json,runtjik,desktop_plugins as d;print(json.dumps(d.Screenshots().capture({'capture':'region'},runtjik.config()['plugin_settings']['Screenshots'])),flush=True)"
             helper = subprocess.Popen([sys.executable, '-B', '-c', code], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            wait_for(lambda: 'slurp' in subprocess.check_output(['hyprctl', '-j', 'layers'], text=True))
+            wait_for(lambda: any(name in subprocess.check_output(['hyprctl', '-j', 'layers'], text=True) for name in ('slurp', 'selection')))
             def send(command):
                 ptr.stdin.write(command+'\n');ptr.stdin.flush();assert ptr.stdout.readline().strip()=='ok'
             send('m 2000 2000');send('b 1');send('m 6000 6000');send('b 0')

@@ -177,7 +177,7 @@ highlighted; keyboard scrolling preserves the keyboard selection.
 | `/stats` | Show cumulative launches and window switches |
 | `/cliphist [text]` | Search existing clipboard history; Enter copies text or image data. |
 | `/rec`, `/screenrecord` | Recording targets, Stop recording, and previous recordings. |
-| `/grab`, `/shot`, `/screenshot` | Screenshot targets and previous screenshots. |
+| `/grab`, `/shot`, `/screenshot`, `/ss`, `/snap` | Screenshot targets and previous screenshots. |
 | `/define word`, `/synonym word` | Look up definitions/examples or synonyms; Results appear inline after a typing pause; Enter opens a source while retaining results. |
 | `/config` | Browse and edit featured settings |
 | `/shortcuts`, `/bindings` | Show this shortcut guide inside the launcher |
@@ -652,3 +652,22 @@ After selecting a region/screen/workspace, a visible countdown appears on that
 monitor. Escape cancels before any recorder is started; the overlay disappears
 before capture begins. Window recording counts down before opening the portal
 picker. The countdown requires system Python with GTK 3 and GtkLayerShell.
+
+`!ss` and `!snap` also open the screenshot plugin. Screen and window choices are
+sorted by name. Ctrl+Up / Ctrl+Down browse previously used launcher commands and
+restore the draft when moving past the newest entry. History is private, bounded
+to 100 distinct entries, and obeys `history.enabled`.
+
+In screenshot/recording history, Ctrl+Enter moves the selected file to the desktop
+Trash. Ctrl+Z restores the most recent Runtjik trash action (including after a
+launcher restart), without overwriting an existing file. The private undo stack
+lives in `$XDG_STATE_HOME/runtjik/trash-undo.json`. This requires the desktop GIO/GVfs
+Trash service; files on filesystems without Trash support are left untouched.
+
+`plugin_settings.Screenshots.viewer` is an argv array, default `["imv"]`.
+imv opens the selected image and its directory for next/previous navigation.
+This changes how Runtjik opens screenshots; it does not change system MIME
+associations. Dotjik installs imv and floats its windows as centered lightboxes.
+
+Clipboard images have asynchronous, session-private previews generated with
+ImageMagick. Decoded previews stay outside the repository and launcher history.

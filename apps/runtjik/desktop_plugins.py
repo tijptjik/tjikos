@@ -13,11 +13,12 @@ import socket
 import subprocess
 import sys
 import time
+import tempfile
 import uuid
 
 DEFAULT_OPTIONS = {
     'Clipboard': {'max_results': 50},
-    'Screenshots': {'directory': 'xdg:PICTURES/screenshots', 'copy_to_clipboard': True, 'viewer': ['loupe'], 'max_results': 40, 'gallery_columns': 3, 'gallery_rows': 3},
+    'Screenshots': {'directory': 'xdg:PICTURES/screenshots', 'copy_to_clipboard': True, 'viewer': ['imv'], 'max_results': 40, 'gallery_columns': 3, 'gallery_rows': 3},
     'Recorder': {'directory': 'xdg:VIDEOS', 'audio': False, 'fps': 30, 'max_results': 40, 'gallery_columns': 3, 'gallery_rows': 3, 'countdown_seconds': 3},
 }
 
@@ -108,6 +109,8 @@ def selection():
     result = subprocess.run(['slurp'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, timeout=120)
     if result.returncode:
+        if result.returncode == 1 and result.stderr.strip() in (b'', b'selection cancelled'):
+            return None
         if result.stderr.strip():
             raise RuntimeError('Region selector failed: ' + result.stderr.decode(errors='replace').strip())
         return None
@@ -168,7 +171,39 @@ class Clipboard(DesktopProvider):
     icon = 'edit-paste'
     commands = {'/cliphist': 'Search clipboard history · Enter copies an item'}
 
+    def __init__(self, demo=False):
+        super().__init__(demo)
+        self.executor = ThreadPoolExecutor(max_workers=2)
+        # Session-private previews disappear with the provider, never enter history.
+        self.preview_dir = tempfile.TemporaryDirectory(prefix='runtjik-clipboard-', dir=os.environ.get('XDG_RUNTIME_DIR'))
+        self.previews = {}
+        self.pending = False
+
+    def render_preview(self, ident):
+        target = Path(self.preview_dir.name) / (ident + '.png')
+        try:
+            if self.demo:
+                target = target.with_suffix('.svg')
+                target.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#41365c"/><circle cx="160" cy="90" r="60" fill="#fb92ba"/></svg>')
+            else:
+                data = run(['cliphist', 'decode'], input=ident.encode())
+                run(['magick', '-limit', 'memory', '64MiB', '-limit', 'map', '128MiB',
+                     '-[0]', '-thumbnail', '320x180>', str(target)], input=data, timeout=10)
+            target.chmod(0o600)
+            return str(target)
+        except Exception:
+            target.unlink(missing_ok=True)
+            return ''
+
+    def preview(self, ident):
+        if ident not in self.previews:
+            self.previews[ident] = self.executor.submit(self.render_preview, ident)
+        future = self.previews[ident]
+        self.pending = self.pending or not future.done()
+        return future.result() if future.done() else ''
+
     def query(self, query, settings):
+        self.pending = False
         command, _, term = query.partition(' ')
         if command != '/cliphist':
             return []
@@ -180,7 +215,14 @@ class Clipboard(DesktopProvider):
         for line in lines:
             ident, separator, preview = line.partition('\t')
             if separator and ident.isdigit() and term.casefold() in preview.casefold():
-                rows.append(self.row(ident, preview, 'Enter copies to clipboard', clip_id=ident))
+                is_image = preview.startswith('[[ binary data ') and bool(re.search(r'\b(png|jpeg|jpg|gif|webp|bmp|tiff)\b', preview, re.I))
+                title = preview
+                if is_image:
+                    kind = re.search(r'\b(png|jpeg|jpg|gif|webp|bmp|tiff)\b', preview, re.I).group().upper()
+                    size = re.search(r'\b\d+x\d+\b', preview)
+                    title = kind + ' image' + (' · ' + size.group().replace('x', '×') if size else '')
+                rows.append(self.row(ident, title, 'Enter copies to clipboard', clip_id=ident,
+                                     thumbnail=self.preview(ident) if is_image else ''))
             if len(rows) >= settings['plugin_settings'][self.name]['max_results']:
                 break
         return rows or [self.row('empty', 'No matching clipboard items', 'History comes from cliphist; its wl-paste watcher must be running')]
@@ -311,7 +353,11 @@ class CaptureProvider(DesktopProvider):
                         raise ValueError('Stop recording before moving it to Trash')
                 return {**trash_action('trash', path), 'refresh_query': self.base + ' history'}
             argv = options['viewer'] if self.name == 'Screenshots' else ['xdg-open']
-            subprocess.Popen([*argv, str(path)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            if self.name == 'Screenshots' and Path(argv[0]).name == 'imv':
+                argv = [*argv, '-n', str(path), str(path.parent)]
+            else:
+                argv = [*argv, str(path)]
+            subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             return {'kind': 'activated'}
         if entry.data.get('stop'):
             status = recorder_request('stop')
