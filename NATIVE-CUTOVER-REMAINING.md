@@ -1,102 +1,132 @@
-# Tjikup / Synctjik migration audit
+# Native cutover status — 2026-10-30
 
-Read-only code and live fleet audit, 2026-10-30. The migration is **not fully
-complete**. A successful selected workflow on Fi or Li does not establish that
-every fleet entry point, optional command, installation path and document has
-been migrated.
+The release and deployment preparation is complete through the safe waiting
+point. **The fleet is not yet fully cut over:** Si is waiting for its existing
+backup and restore validation; Li went offline during deployment. Neither is
+reported as successfully completed.
 
-## Release and installed runtime state
+## Completed
 
-| Component | Verified state | Remaining work |
-| --- | --- | --- |
-| User Tjikup and weekly runtime | Fi, Li and Si use the published static `tjikup-v0.2.0-bootstrap.6`, checksum `2419a610…0f55af` | Keep both entry points on verified releases |
-| Privileged Tjikup helper | All three retain an older dynamic build at `/usr/local/lib/tjikup/tjikup`, checksum `46c39790…409` | Converge privileged copies through the native system-runtime installation path |
-| Synctjik | Native engines exist on all three; Fi/Si use local build `098a01f6…dc3`, Li uses the newer Fish-probe fix `d8b95a6a…dd5` | Publish a compatible release and deploy the same verified artifact without replacing active pinned workers |
-| Synctjik installer pin | `apps/tjikos-sh/release.json` still pins `synctjik-v0.1.0-bootstrap.2` | Advance it after release verification; current installer deliberately retains a capable existing binary or rejects a fresh incompatible install |
+- Published signed `synctjik-v0.1.0-bootstrap.4` from
+  `2c0963bfc806f100dc292b2036e9cb83823eeba8`.
+  Static Linux x86_64 executable SHA-256:
+  `eaf2e98fcd4bc0ad41d324170ceca763ad5161d224982146914c89e520e0a426`.
+  Downloaded assets, checksum manifest, source provenance, static linking and
+  native/protection capabilities were verified.
+- Fixed `private-assets crypt-password` to use BWS directly with the existing
+  private token file or environment. It no longer invokes the removed Fish
+  helper. Synthetic tests cover successful encryption, provider failures,
+  mismatched secret IDs, token-file permissions and preservation of old output.
+  No live encryption password was changed.
+- Fixed a directory-order-dependent application-backup bug: SQLite snapshot
+  replacement removes staged WAL/SHM/journal files; the scanner now skips those
+  deliberately removed paths. The live source database remains untouched.
+- Fixed release CI's sparse checkout to include shared Fish completion files
+  and installed its real restore-test dependencies. The earlier `.3` tag failed
+  CI and produced no release; its immutable tag was not rewritten.
+- Updated binary and source pins, removed obsolete Python enrollment guidance,
+  and deployed `https://sh.type.hk`. The public `/init` and `/guide` were compared
+  byte-for-byte with the reviewed artifacts. Worker version:
+  `0d52a790-96b6-49ea-aec6-b27becfe84ec`.
+- Fi now runs the published Synctjik binary; readiness passes and schedule
+  migration reports current. Its next scheduled jobs use this binary.
+- Fi, Li and Si user, weekly and privileged Tjikup copies converge on published
+  `tjikup-v0.2.0-bootstrap.6`, SHA-256
+  `2419a610a0cc47f6d96b7d590b022cf870638ebd0afc0b4ba9af39599e0f55af`.
+  Native system applies found 19/20/90 unchanged files respectively.
+- Merged Li and Si's equivalent Telegram-policy commits into shared history.
+  Both remote checkouts were clean when inspected. Published policy revision
+  `a28c5f8046b16bcdd6594818671bb63192fc9f72` includes removal rules for an older
+  `chezup` launcher and obsolete Python Tjikup/Chezup modules discovered during
+  this pass. Fi's copies were moved to private recovery storage.
+- Preserved all unrelated local icon edits and all running archive workers.
 
-The new release must include native backup/protection engines, schedule metadata
-and permission fixes, and the Fish-compatible backup probe. Fix the dangling
-optional command below before calling the entire native interface complete.
+## Si: queued behind real backup and restore evidence
 
-## Si still has active Python entry points
+The backup and validator remained running with unchanged PIDs 1910018 and
+1919892. Validation status was `running`, phase `waiting-for-backup` at the
+last check. Its installed user/root Synctjik binaries remain unchanged because
+that running validator invokes the user binary again during restoration.
 
-Observed on Si:
+The new release is downloaded and checksum-verified in the TjikOS checkout.
+`tjikup-si-native-cutover.service` remains queued after those existing jobs.
+The reviewed script now:
 
-- `~/.local/bin/device-archives` and `~/.local/bin/private-storage` are Python
-  executables, unlike Fi/Li's shell wrappers delegating to native Synctjik.
-- `backup-packages.timer` is enabled. Its service calls `device-archives ready`
-  and `device-archives backup`, so this scheduled route still executes Python.
-- `~/.local/lib/fleet_ssh.py` and `~/.local/lib/tjik_git.py` remain installed.
-- `tjikup-si-native-cutover.service` has a waiting start job; the Drive
-  restore-validation service is actively running. Both `queued-run.exit` and
-  `queued-run.finished` are absent. An inactive unit with default exit status 0
-  is not evidence that the queued cutover completed.
-- The inspected system application-backup route already calls
-  `/usr/local/bin/synctjik app-backup backup`. System and home cutovers have
-  different completion states.
+1. Requires the validator's durable status to be `passed` / `complete`, exit 0.
+2. Checks the reviewed policy/tool revisions, clean tracked worktrees, and
+   Tjikup/staged Synctjik checksums. The old script's stale revision/checksum
+   guards were corrected; live baseline snapshots still matched before queuing.
+3. Preserves previous runtimes, installs the staged release for user and root,
+   and retains obsolete Python deployment modules in private recovery storage.
+4. Runs native baseline adoption under protection locks, then Tjikup with
+   repository synchronization and package upgrades skipped.
+5. Checks nginx, storage, Compose, retired Python entry points and native
+   archive readiness. Conflicting changes fail closed rather than being forced.
 
-Let the pinned restore-validation job finish, inspect its result, then complete
-the guarded home apply. Verify removal/replacement of Python entry points and
-legacy schedules, native readiness, receipts and a representative restore.
-Do not interrupt the worker merely to complete cleanup.
+Private evidence remains under
+`~/.local/state/tjikup/si-native-cutover-20261029T151734Z/`:
+`queued-run.log`, `queued-run.exit`, `queued-run.finished`.
+The old script and binary recovery copies are retained there. No completion
+marker is inferred from an inactive systemd unit.
 
-## Broken or stale migration references
+On Si, inspect:
 
-1. `apps/synctjik/src/backends/private_assets.rs`, `crypt_password()`, still
-   invokes `~/.local/share/dotjik/home/.bws-wrapper.fish`. That helper is absent
-   from current policy and was confirmed absent on Fi and Si. This optional
-   command has not been fully migrated; use the supported secret provider
-   rather than recreating the old deployment helper.
-2. `apps/tjikos-sh/README.md` and generated `apps/tjikos-sh/public/guide` still
-   instruct users to execute `scripts/device-policy.py configure`. The script
-   is absent. Replace the instruction with the native configuration workflow,
-   rebuild the guide and include it in the next site deployment. The public
-   website itself was not fetched in this audit.
+```sh
+systemctl --user list-jobs
+systemctl --user status tjikup-si-native-cutover.service
+cat ~/.local/state/tjikup/si-native-cutover-20261029T151734Z/queued-run.exit
+```
 
-## Legacy names and files remain
+## Li: automatic catch-up when reachable
 
-- Li keeps a compatibility `chezmoi` symlink, the old `chezetc` checkout and a
-  `tooltjik` symlink. Si retains old checkout directories. These were observed,
-  not removed by this audit.
-- Old `~/.keys/chezmoi.txt` identities remain on all three machines; Tjikup has
-  an explicit migration fallback. Retire only after checking neutral identity
-  copies, references and recovery coverage; never delete keys for cosmetic
-  terminology cleanup.
-- `device-archives` / `private-storage` compatibility commands and their state
-  directory names remain. Native archives deliberately preserve existing
-  baselines and lock paths. Rename them only as a coordinated state migration.
-- Icon policy still contains `chezmoi` / `chezetc` names and maps Dotjik/Systjik
-  aliases to them. This is active naming debt, not evidence of a deployment
-  engine dependency.
-- Numerous legacy paths in manifests are **`kind: absent` removal entries**.
-  Those are cleanup rules, not installed Python modules. Removing those strings
-  would weaken the migration for machines that still have the old files.
+Li's privileged Tjikup update completed before the laptop became unreachable.
+Its Synctjik update is **not yet verified**.
 
-## Python scope
+Fi has a one-off user service, `tjikup-li-native-release-catchup.service`, that
+retries every ten minutes and is enabled across Fi restarts. It uses pinned
+native SSH resolution and the reviewed script under
+`~/.local/state/tjikup/li-native-release-catchup-20261030/`.
+It accepts only clean checkouts that can fast-forward to the reviewed revisions,
+defers while Synctjik is running, installs/verifies the released binary,
+preserves obsolete Python modules, and checks readiness and schedule routing.
+It stops on review-required exit status 2 and disables itself after success.
+It does not initiate a new backup or replace Li's existing verified Restic data.
 
-Tjikup/Synctjik's native runner and backup engines are Rust, but neither the
-whole fleet nor the entire TjikOS repository is Python-free:
+On Fi, inspect:
 
-- Synctjik retains frozen Python implementations under `tests/legacy` as
-  compatibility oracles. Python tests/fixtures are not shipped by its binary
-  installer. Deleting those is a separate test-retirement decision.
-- `tjikos-sh` still uses Python build/deployment scripts, and Dotjik uses Python
-  validation and development utilities.
-- Runtime/application integrations remain Python-based: Codex-LB environment
-  setup, Gitfetch's Python installation, Kitty's notification extension, Herdr's
-  local-file helper, and parts of Bartjik, Greetjik, Mailtjik, Notjik and Runtjik.
-  These are separate applications or host extension APIs, not automatically
-  responsibilities of the Tjikup orchestration or Synctjik backup engines.
+```sh
+systemctl --user status tjikup-li-native-release-catchup.service
+journalctl --user -u tjikup-li-native-release-catchup.service -n 30
+```
 
-## Recommended finish order
+## Remaining names and wider Python scope
 
-1. Fix the dangling secret-helper call and obsolete onboarding instructions.
-2. Publish and pin a compatible Synctjik binary; retain Tjikup's current release.
-3. Complete Si's guarded home cutover after its active validation finishes.
-4. Converge native binary versions across user, privileged and weekly paths.
-5. Retire verified-unused aliases/modules and reconcile icon/documentation names.
-6. Treat any wider removal of Python application/build/test code as a separately
-   scoped migration, rather than claiming it happened with the runner cutover.
+This is not a claim that every historical string or Python file has vanished.
 
-No services, credentials, legacy files or running workers were modified by this
-audit. Remote audit results are a point-in-time observation.
+- Keep removal tombstones until obsolete clients have converged. Old lock,
+  baseline and receipt paths remain compatibility contracts.
+- Existing age identity recovery copies and the migration fallback are retained.
+- Si's old checkout paths remain until home acceptance. Li's old links/checkouts
+  cannot be retired while it is offline. Fi's old Tooltjik checkout is clean
+  and its commit is ancestral to TjikOS, but an open Fish shell still uses it
+  as its working directory, so it was not moved.
+- Icon catalog aliases still use legacy names. Their files overlap unrelated
+  ongoing icon work, which was preserved; this cosmetic cleanup remains separate
+  from native runner acceptance.
+- Frozen Python test oracles, build/test utilities and Python application or
+  host extensions remain. They are not all responsibilities of Tjikup/Synctjik.
+
+## Validation
+
+- Published release CI: 24 Rust tests passed, one intentionally ignored;
+  all 75 Python compatibility/protection tests passed.
+- Local protection rerun after the WAL fix: 28 passed, including synthetic
+  Restic restore verification. Installer tests: 7 passed.
+- Workspace `bun install` / `bun run build`: all nine build tasks passed.
+- Bootstrap checks: 10 passed; deployed installer and guide byte checks passed.
+- Policy validation: 321 tests, nine skipped, passed; native task templates
+  rendered for Fi, Li and Si. An initial isolated rendering failure passed its
+  focused rerun and subsequent full validation runs.
+
+Fleet results are observations at deployment time. Successful release tests and
+Fi readiness do not establish Si restore success or Li deployment completion.
