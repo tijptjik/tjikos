@@ -362,6 +362,61 @@ fn dirty_repository_counts_stay_in_terminal_rows_without_inline_errors() {
 }
 
 #[test]
+fn recipe_rows_prefer_explicit_artwork_over_known_label_artwork() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut sprites: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/icons32.json")).unwrap();
+    sprites["sprites"]["Templates"] = sprites["sprites"]["Systemd"].clone();
+    fs::write(
+        dir.path().join("icons32.json"),
+        serde_json::to_vec(&sprites).unwrap(),
+    )
+    .unwrap();
+    let recipes: Vec<_> = ["Tjikup", "Templates (system)", "Templates (home)"]
+        .into_iter()
+        .enumerate()
+        .map(|(index, label)| {
+            json!({
+                "id":format!("fixture-{index}"), "label":label, "apply":["true"],
+                "display":{"icon":"Tjikup", "section":"Preparation", "verb":"CHECK"}
+            })
+        })
+        .collect();
+    let path = dir.path().join("config.json");
+    fs::write(
+        &path,
+        serde_json::to_vec(&json!({"version":2,"recipes":recipes,
+            "presentation":{"alphabetical_results":true,"icons":"{config_dir}/icons32.json",
+                "glyphs":{"Tjikup":"U","Templates":"G"}}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    for graphics in [true, false] {
+        let mut terminal =
+            Terminal::spawn(&["--config", path.to_str().unwrap()], dir.path(), graphics);
+        let text = terminal.finish();
+        for subtype in ["system", "home"] {
+            assert!(text.contains(&format!("({subtype}")));
+        }
+        if graphics {
+            assert_eq!(
+                text.matches("a=T,f=32").count(),
+                1,
+                "all running indicators and queued results must reuse the Tjikup image"
+            );
+        } else {
+            assert_eq!(
+                text.matches("✓\x1b[0m U \x1b[97mTemplates").count(),
+                2,
+                "{text}"
+            );
+            assert!(!text.contains("G \x1b[97mTemplates"), "{text}");
+        }
+    }
+}
+
+#[test]
 fn subtask_rows_resolve_recipe_and_alias_icons_in_graphics_and_glyph_modes() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(

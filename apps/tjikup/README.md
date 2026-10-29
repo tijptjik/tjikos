@@ -210,11 +210,12 @@ to replace the single title/URL with multiple project links. Links appear side
 by side when the terminal is wide enough and stack on narrower terminals.
 The splash and project links are centered within the terminal width.
 
-Subtask rows use their own known service icon, an explicit `icon_aliases` mapping,
-or their recipe's `display.icon` key. If no explicit key is set, the recipe label
-is used as the fallback. Thus “Tailnet connection” can inherit the Tailscale
-icon without coupling artwork to changing status text. The same resolution
-applies to both sprite and glyph rendering.
+Recipe rows and their running indicator prefer the explicit `display.icon` over
+artwork associated with the recipe label. Subtask rows use their own known service
+icon, an explicit `icon_aliases` mapping, or their recipe's `display.icon` key. If
+no explicit key is set, the recipe label is used as the fallback. Thus “Tailnet
+connection” can inherit the Tailscale icon without coupling artwork to changing
+status text. The same resolution applies to both sprite and glyph rendering.
 
 Each recipe may supply `display`:
 

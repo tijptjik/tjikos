@@ -135,7 +135,7 @@ impl Progress {
         if config.show_other_devices {
             for recipe in &config.excluded {
                 this.queued.push(Event {
-                    icon_key: recipe.display.icon.clone(),
+                    icon_key: this.icon_key(&recipe.display.icon, &recipe.label),
                     verb: "SKIP".into(),
                     icon: "-".into(),
                     subject: recipe.label.clone(),
@@ -499,7 +499,7 @@ impl Progress {
         // Repository tasks already animate their persistent pull/push cells.
         // Reserve the transient activity row for work without a dedicated row.
         if self.live && !recipe.interactive && !self.repo_recipes.contains_key(&index) {
-            let icon = self.icon_key(&recipe.label, &recipe.display.icon);
+            let icon = self.icon_key(&recipe.display.icon, &recipe.label);
             self.active
                 .insert(index, (plain(&recipe.label), icon, Instant::now()));
         }
@@ -602,10 +602,18 @@ impl Progress {
             if recipe.prerequisite {
                 event.verb = "REQUIRE".into();
             }
-            event.icon_key = if recipe.display.icon.is_empty() {
-                recipe.label.clone()
+            event.icon_key = if event.subject == recipe.label {
+                // A recipe's own row uses its explicit artwork before label artwork.
+                self.icon_key(&recipe.display.icon, &recipe.label)
             } else {
-                recipe.display.icon.clone()
+                self.icon_key(
+                    &event.subject,
+                    if recipe.display.icon.is_empty() {
+                        &recipe.label
+                    } else {
+                        &recipe.display.icon
+                    },
+                )
             };
             if event.section.is_empty() {
                 event.section = if !recipe.display.section.is_empty() {
@@ -745,7 +753,11 @@ impl Progress {
         }
     }
     fn event(&mut self, event: &Event) {
-        let icon_key = self.icon_key(&event.subject, &event.icon_key);
+        let icon_key = if event.icon_key.is_empty() {
+            self.icon_key(&event.subject, "")
+        } else {
+            event.icon_key.clone()
+        };
         self.clear();
         self.remove_activity_gap();
         if self.section != event.section {

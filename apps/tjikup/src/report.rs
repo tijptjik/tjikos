@@ -1,6 +1,7 @@
 //! Status protocol shared by existing hooks and the native renderer.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Event {
+    // Resolved by Progress before queuing; empty events fall back to their subject.
     pub icon_key: String,
     pub verb: String,
     pub icon: String,
