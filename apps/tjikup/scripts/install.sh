@@ -4,8 +4,11 @@ app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 prefix="${1:-$HOME/.local}"
 bash "$app_dir/scripts/fetch-release.sh"
 # External native manifests may require features not visible to --check.
-"$app_dir/dist/tjikup" capabilities | jq -e '.encrypted_credentials >= 1' >/dev/null || {
-    echo 'Pinned Tjikup release lacks encrypted credential cache support; existing runner preserved.' >&2
+"$app_dir/dist/tjikup" capabilities | jq -e '
+    .encrypted_credentials >= 1 and .bootstrap_archives >= 1 and
+    .native_commands >= 1 and .native_installers >= 1 and .native_maintenance >= 1
+' >/dev/null || {
+    echo 'Pinned Tjikup release lacks required native workflows; existing runner preserved. Publication and pin updates are still required.' >&2
     exit 1
 }
 # Refuse to replace a working legacy runner underneath an incompatible workflow.

@@ -32,9 +32,8 @@ your independently trusted GitHub checkout when checking for tampering.
 
 The script:
 
-1. Checks Fedora's existing Python 3.11+ for the remaining standard-library
-   helpers. It installs only `ca-certificates curl git fish chezmoi gum age jq rclone`. It installs no Python TOML packages, compiler, build tools,
-   archive tools or GitHub CLI.
+1. Installs `ca-certificates curl git fish gum age jq rclone`. Fleet bootstrap
+   needs no Python interpreter, compiler or GitHub CLI.
 2. Fetches the two public repositories over HTTPS so no Git credential is needed
    to obtain the credential-setup code. It checks out the exact reviewed commits
    on a local `bootstrap` branch tracking `bootstrap/fedora-2026-10-28`.
@@ -45,11 +44,10 @@ The script:
 4. Runs `tjikup new device`, asking for desktop/laptop/server and optional recipes.
 5. Runs the existing Bitwarden bootstrap. You enter the passphrase for the
    encrypted machine token on the terminal. The token remains in
-   `~/.config/bws/environment` and the age identity in `~/.keys/chezmoi.txt`, both
+   `~/.config/bws/environment` and the age identity in `~/.keys/age.txt`, both
    private. This uses Secrets Manager, not an unlocked personal `bw` vault.
-6. Initializes Chezmoi's template configuration with the selected role. It does
-   not apply home or system configuration. Existing TOML is read with Python's
-   built-in `tomllib` and serialized by Chezmoi itself; custom settings are retained.
+6. Validates native template context using the enrolled role. It does not apply
+   home or system configuration.
 7. Prepares a dedicated archive transport, then runs `synctjik enroll` and
    `synctjik setup`. Select the required collections and review restoration.
    Skipped required collections keep bootstrap incomplete; rerun to resume.
@@ -168,3 +166,7 @@ when the tagged source includes the release workflow. Synctjik has its own
 Acceptance requires a fresh Fedora VM run through package installation,
 interactive credential unlock and selected first apply. Local mock tests and a
 successful Worker deployment alone do not establish that acceptance.
+
+Release publication and pin updates are deferred. Existing published pins do
+not contain this migration. Required native capabilities are checked before
+replacing an installed runner.

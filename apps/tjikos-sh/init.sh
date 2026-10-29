@@ -88,6 +88,13 @@ main() {
     }
     chmod 755 "$bootstrap_binary_tmp"
     "$bootstrap_binary_tmp" --version >/dev/null
+    "$bootstrap_binary_tmp" capabilities | jq -e '
+        .native_workflow == 1 and .bootstrap_archives == 1 and
+        .native_commands == 1 and .native_installers == 1 and .native_maintenance == 1
+    ' >/dev/null || {
+        echo 'Pinned Tjikup release lacks the required native workflows. Publish a compatible release and update pins; existing executable preserved.' >&2
+        return 1
+    }
     mv -f -- "$bootstrap_binary_tmp" "$HOME/.local/bin/tjikup"
     bootstrap_binary_tmp="$(mktemp "$HOME/.local/bin/.synctjik.XXXXXX")"
     curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 15 --max-time 180 "$synctjik_url" -o "$bootstrap_binary_tmp"
@@ -111,7 +118,7 @@ main() {
     tjikup --check
     tjikup workflow --repo "$dotjik_dir" bitwarden
     fish --no-config "$dotjik_dir/native/tasks/bootstrap/setup-bitwarden.fish" </dev/tty
-    age-keygen -y "$HOME/.keys/chezmoi.txt" >/dev/null
+    age-keygen -y "$HOME/.keys/age.txt" >/dev/null
     tjikup workflow --repo "$dotjik_dir" configure
     bash "$tjikos_dir/apps/tjikos-sh/helpers/restore-collections.sh" "$dotjik_dir" </dev/tty
     tjikup --check
