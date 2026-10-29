@@ -536,3 +536,49 @@ pub fn cli(repo: &Path, args: &[String]) -> Result<i32> {
     _=>bail!("desktop icons | cleanup --check|--apply | zed --channel CHANNEL -- COMMAND | ini-has FILE SECTION KEY"),
 }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn launcher_icon_edits_preserve_actions_and_launch_commands() {
+        let text = "[Desktop Entry]\nName=Example\nExec=example --safe %U\nIcon=/old.png\n\n[Desktop Action New]\nIcon=other\nExec=example --new\n";
+        let updated = ini_setting(text, "Desktop Entry", "Icon", "example");
+        assert_eq!(updated, text.replace("Icon=/old.png", "Icon=example"));
+        assert_eq!(
+            ini_setting(&updated, "Desktop Entry", "Icon", "example"),
+            updated
+        );
+        assert_eq!(
+            ini_setting(
+                "[Desktop Entry]\nExec=example\n[Desktop Action New]\nIcon=other\n",
+                "Desktop Entry",
+                "Icon",
+                "new"
+            ),
+            "[Desktop Entry]\nExec=example\nIcon=new\n[Desktop Action New]\nIcon=other\n"
+        );
+    }
+    #[test]
+    fn ini_theme_updates_preserve_geometry_and_other_sections() {
+        let text="[SettingsWindow]\ngeometry=@ByteArray(\\x1\\xd9)\n\n[Appearance]\nstyle=Fusion\nicon_theme=old\n";
+        let updated = ini_setting(text, "Appearance", "icon_theme", "rose-punk");
+        assert_eq!(
+            updated,
+            text.replace("icon_theme=old", "icon_theme=rose-punk")
+        );
+        assert_eq!(
+            ini_setting(&updated, "Appearance", "icon_theme", "rose-punk"),
+            updated
+        );
+        assert_eq!(
+            ini_setting(
+                "[Settings]\nother=1\n[Next]\nx=2\n",
+                "Settings",
+                "gtk-icon-theme-name",
+                "rose-punk"
+            ),
+            "[Settings]\nother=1\ngtk-icon-theme-name=rose-punk\n[Next]\nx=2\n"
+        );
+    }
+}

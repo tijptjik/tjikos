@@ -29,7 +29,7 @@ pub fn context(repo: &Path) -> Result<Value> {
         "is_client": device.role != "server", "is_desktop":device.role == "desktop",
         "is_laptop":device.role == "laptop", "is_server":device.role == "server",
         "enrolled":true,"subscriptions":subscriptions,"user":{"name":name,"home":home},
-        "repo_dir":repo,"home_source":repo.join("home"),"system_source":repo.join("system/etc"),
+        "repo_dir":repo,"home_source":repo.join("native/home"),"system_source":repo.join("system/native"),
         "os":"linux","anthropic_model_provider":"zai"}))
 }
 fn expanded(value: &str) -> PathBuf {
@@ -405,7 +405,7 @@ fn verify(repo: &Path, args: &[String]) -> Result<i32> {
 }
 pub fn cli(args: Vec<String>) -> Result<i32> {
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("tjikup workflow [--repo PATH] COMMAND\n\n  context | role | configure\n  files <home|home-files|credentials|system> <check|plan|diff|apply> [--group NAME]\n  bootstrap-archives      Prepare missing archive policy and private transport\n  package <check|skip-update|run> NAME [-- COMMAND ...]\n  repositories <check|apply>\n  bitwarden [--upgrade]\n  assets <fonts|icons> --run-dir PATH\n  services [--check] [--unit NAME] [--exclude-unit NAME]\n  activate <bartjik|notjik>\n  verify APP\n  cache-install NAME --input PATH --output PATH -- COMMAND ...\n  capture [--dry-run]\n  fedora-release\n\nDefaults to DOTJIK_REPO or the Dotjik checkout under XDG_DATA_HOME.");
+        println!("tjikup workflow [--repo PATH] COMMAND\n\n  context | role | configure\n  files <home|home-files|credentials|system> <check|plan|diff|apply> [--group NAME]\n  bootstrap-archives      Prepare missing archive policy and private transport\n  package <check|skip-update|run> NAME [-- COMMAND ...]\n  repositories <check|apply>\n  bitwarden [--upgrade]\n  install NAME [--metadata]\n  desktop icons | cleanup --check|--apply | zed --channel CHANNEL -- COMMAND\n  timing take PATH | accept DIRECTORY\n  assets <fonts|icons> --run-dir PATH\n  services [--check] [--unit NAME] [--exclude-unit NAME]\n  activate <bartjik|notjik>\n  verify APP\n  cache-install NAME --input PATH --output PATH -- COMMAND ...\n  capture [--dry-run]\n  fedora-release\n\nDefaults to DOTJIK_REPO or the Dotjik checkout under XDG_DATA_HOME.");
         return Ok(0);
     }
     if args == ["fedora-release"] {
@@ -435,6 +435,8 @@ pub fn cli(args: Vec<String>) -> Result<i32> {
         Some("bitwarden") => crate::bitwarden_install::cli(&args[1..]),
         Some("install") => crate::installers::cli(&repo, &args[1..]),
         Some("desktop") => crate::desktop::cli(&repo, &args[1..]),
+        Some("timing") => crate::remote::timing(&args[1..]),
+        Some("progress") => crate::stage_progress::cli(&args[1..]),
         Some("bootstrap-archives") if args.len() == 1 => crate::commands::bootstrap_archives(&repo),
         Some("files") => crate::workflow_files::run(&repo, &args[1..]),
         Some("services") => crate::workflow_services::refresh(&repo, &args[1..]),

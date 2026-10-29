@@ -1,7 +1,6 @@
 # Native file and template management
 
-`tjikup files` manages an explicitly declared set of files without Chezmoi or
-Chezetc. It is a separate command so existing recipes can call it through their
+`tjikup files` manages an explicitly declared set of files natively. It is a separate command so existing recipes can call it through their
 normal `check` and `apply` argv arrays. Existing `files` manager adapters and
 Go-template rendering retain their original behavior.
 
@@ -100,7 +99,7 @@ A future system recipe can use the existing runner's ordinary command interface:
 ```
 
 Use the actual deployed binary and manifest path for the recipe's declaring
-directory. Do not enable this alongside Chezetc writes to the same destinations.
+directory. Do not enable this alongside other writers to the same destinations.
 Tjikup does not elevate itself. Home and root file deployments can belong to the
 same feature, while keeping explicit identity, ownership and state boundaries.
 
@@ -142,7 +141,7 @@ private plaintext; encryption and retention policy remain separate work.
 operations: repeat-apply inode/timestamp stability, conflict preflight, templates,
 symlinks, ownership defaults, modes, create-only files, explicit deletion,
 interruption recovery, extended attributes and checked restoration. The dotfiles `system/`
-comparison script additionally verifies all Fi candidates against Chezetc rendering
+integration suite verifies native manifests against isolated destination roots
 and root ownership using an isolated destination, then previews live drift.
 
 ## Bitwarden Secrets Manager

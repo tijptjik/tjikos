@@ -1,8 +1,8 @@
 # tjikup
 
 A Rust runner for declarative, resource-aware recipes. The binary has no Python
-runtime dependency. Recipes may invoke any executable. Chezmoi and Chezetc are
-optional configuration-manager adapters, not the task scheduler.
+runtime dependency. Native commands own configuration, Git synchronization,
+fleet SSH, installers and system maintenance. Recipes may invoke executables.
 
 Build with `bun run build` (or `bash scripts/build.sh`). Run `bun run check` for
 formatting and Clippy, and `bun run --cwd apps/tjikup test` for isolated behavioral
@@ -14,8 +14,9 @@ explicit source build, not for installation or ordinary updates.
 
 Native file deployment is available through `tjikup files`; see
 [Native file and template management](docs/native-files.md) for manifests,
-conflict handling, isolated verification and recovery. Existing Chezmoi adapters
-and native MiniJinja maintenance templates are supported.
+conflict handling, isolated verification and recovery. MiniJinja templates can
+produce configuration files or executable maintenance tasks. See
+[workflow helpers](docs/workflow-helpers.md) for the native commands.
 
 ## Configuration
 

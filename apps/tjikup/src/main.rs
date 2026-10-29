@@ -1,5 +1,6 @@
 mod actions;
 mod bitwarden_install;
+mod command_io;
 mod commands;
 mod config;
 mod demo;
@@ -14,9 +15,12 @@ mod managed_files;
 mod notifications;
 mod process;
 mod progress;
+mod remote;
 mod report;
 mod scheduler;
 mod selection;
+mod stage_progress;
+mod system_maintenance;
 mod template_cache;
 mod templates;
 mod workflow;
@@ -46,6 +50,14 @@ fn default_config() -> PathBuf {
 
 fn cli() -> Result<i32> {
     let mut args = std::env::args().skip(1).peekable();
+    if args.peek().is_some_and(|s| s == "system") {
+        args.next();
+        return system_maintenance::cli(args.collect());
+    }
+    if args.peek().is_some_and(|s| s == "ssh") {
+        args.next();
+        return remote::cli(args.collect());
+    }
     if args.peek().is_some_and(|s| s == "git") {
         args.next();
         return git_commands::cli(args.collect());
@@ -100,7 +112,9 @@ fn cli() -> Result<i32> {
         if args.next().is_some() {
             bail!("usage: tjikup capabilities");
         }
-        println!(r#"{{"encrypted_credentials":1,"credential_recovery":1,"native_workflow":1}}"#);
+        println!(
+            r#"{{"encrypted_credentials":1,"credential_recovery":1,"native_workflow":1,"bootstrap_archives":1,"native_commands":1,"native_installers":1,"native_maintenance":1}}"#
+        );
         return Ok(0);
     }
     let mut path = default_config();
@@ -115,7 +129,7 @@ fn cli() -> Result<i32> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
-                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --refresh-secrets   Refresh referenced Bitwarden secrets, bypassing the local cache\n  --alphabetical   Buffer each section and sort its results by application name\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --show-skips-and-other-devices   Also list excluded recipes; never execute them\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  workflow <command>   Native repository policy helpers (see docs/workflow-helpers.md)\n  sync <command>   Delegate archival and restoration to synctjik\n  notify --stdin   Deliver validated display metadata to local notjikctl");
+                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --refresh-secrets   Refresh referenced Bitwarden secrets, bypassing the local cache\n  --alphabetical   Buffer each section and sort its results by application name\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --show-skips-and-other-devices   Also list excluded recipes; never execute them\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  config <home|system>   Plan, apply, locate or edit configuration\n  git <push|sync>   Synchronize declared repositories with shared locks\n  ssh HOST   Connect once using pinned fleet identity\n  system <command>   Native host maintenance (system --help)\n  workflow <command>   Native policy helpers (workflow --help)\n  sync <command>   Delegate archival and restoration to synctjik\n  notify --stdin   Deliver validated display metadata to local notjikctl");
                 println!("\nRecipe selection (combinable):\n  --apply-dotfiles          Home configuration and its reloads only\n  --apply-sysfiles          System configuration and its reloads only\n  --apply-package-updates   Updates of installed applications only\n  --skip-package-updates    Install missing applications and configure; no updates\nSelected modes use local checks for installation dependencies; they never run installers or repository synchronization.");
                 return Ok(0);
             }

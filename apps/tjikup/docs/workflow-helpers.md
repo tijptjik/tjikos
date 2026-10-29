@@ -48,18 +48,29 @@ Maintenance preparation reports the number of recipes rendered and syntax
 checked. It does not execute them. The former bootstrap batch is gone:
 Bitwarden runs natively in Prerequisites, and font consolidation was removed.
 
-## Remaining Python boundary
+## Public commands and ownership
 
-The recipe graph's orchestration is native. Some rendered application installers
-still invoke Python: Obsidian, Zed launcher preservation, Rose Punk theme
-installation, and embedded upstream release installers. Si's NSS/storage,
-SnapRAID and application-update utilities also remain Python. These are still
-migration work, so the Python prerequisite is retained. Python-based application
-runtimes and development/test tools are a separate dependency category.
+`config home|system` provides plan/check/apply/source-path/edit. `git push|sync`
+shares repository locks and never stages or commits. `ssh HOST` resolves pinned
+fleet identity and executes the remote command once. Use each command's help.
 
-No full package installation, service refresh or backup run is required to
-validate these helpers. Use synthetic homes, mocked commands, native tests,
-read-only capture previews and maintenance-template syntax checks first.
+`workflow bootstrap-archives` creates missing private archive transport and
+policy. Synctjik owns enrollment, restoration, readiness and backup scheduling.
+`workflow install NAME` loads native/installers.json, verifies release identity,
+SHA-256 and installed bytes, and preserves newer installed versions.
+`workflow desktop` owns Zed launcher preservation, icon override retirement and
+duplicate-launcher cleanup. `timing take|accept` validates report transfers;
+`progress` displays bounded transfer metrics without reading terminal input.
+
+`tjikup system --help` lists native NSS, storage, provisioning, permissions,
+media guard, Transmission cleanup and app-update operations. Host and root
+checks use /etc/tjikup/maintenance.json. Backups and restoration belong in
+Synctjik. Python applications and development tests retain their runtimes;
+fleet orchestration has no Python prerequisite.
+
+Validate with synthetic homes, mock commands and isolated file roots. Release
+publication and bootstrap pins remain deferred; these source changes alone do
+not update deployed binaries or published cold-bootstrap artifacts.
 
 ## Maintenance render cache
 

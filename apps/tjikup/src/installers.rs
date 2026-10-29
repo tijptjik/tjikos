@@ -142,15 +142,19 @@ fn metadata(url: &str) -> Result<Value> {
     if !result.status.success() {
         bail!("GitHub metadata lookup failed; check network access and GitHub authentication");
     }
-    Ok(serde_json::from_slice(&result.stdout).context("invalid GitHub release metadata")?)
+    serde_json::from_slice(&result.stdout).context("invalid GitHub release metadata")
 }
 fn release(policy: &Policy) -> Result<Value> {
-    if policy.repository.split('/').count() != 2
-        || !policy
-            .repository
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || b"-_/ .".contains(&c))
-        || policy.repository.contains([' ', '.'])
+    let parts: Vec<_> = policy.repository.split('/').collect();
+    if parts.len() != 2
+        || parts.iter().any(|part| {
+            part.is_empty()
+                || *part == "."
+                || *part == ".."
+                || !part
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || b"-_.".contains(&c))
+        })
     {
         bail!("invalid release repository");
     }
@@ -246,6 +250,26 @@ fn extract_binary(archive: &Path, name: &str, target: &Path) -> Result<()> {
     }
     Ok(())
 }
+fn binary_digest(target: &Path) -> Result<String> {
+    let mut file = fs::File::open(target)?;
+    let mut hash = Sha256::new();
+    let mut buffer = [0u8; 65536];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hash.update(&buffer[..n]);
+    }
+    Ok(format!("{:x}", hash.finalize()))
+}
+fn installed_binary_matches(prefix: &Path, target: &Path) -> bool {
+    fs::symlink_metadata(target).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+        && binary_digest(target)
+            .ok()
+            .zip(fs::read_to_string(prefix.join(".installed-binary")).ok())
+            .is_some_and(|(actual, recorded)| actual == recorded.trim())
+}
 fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
     let specs: BTreeMap<String, Policy> =
         serde_json::from_slice(&fs::read(repo.join("native/installers.json"))?)?;
@@ -305,7 +329,11 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
     let mut old_version = None;
     if let Some(link) = declared_links.first() {
         if let Ok(target) = link.canonicalize() {
-            if let Some(parent) = target.parent() {
+            if let Some(parent) = target
+                .ancestors()
+                .skip(1)
+                .find(|p| p.parent() == prefix.parent())
+            {
                 let old = parent
                     .file_name()
                     .and_then(|s| s.to_str())
@@ -342,7 +370,7 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
                 .unwrap_or_default()
                 .trim()
                 != revision
-                || !target.is_file()
+                || !installed_binary_matches(&prefix, &target)
             {
                 let missing: Vec<_> = policy
                     .packages
@@ -422,7 +450,7 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
                 bail!("unexpected release asset origin");
             }
             let current = fs::read_to_string(prefix.join(".installed")).unwrap_or_default();
-            if !target.is_file() || current.trim() != expected {
+            if !installed_binary_matches(&prefix, &target) || current.trim() != expected {
                 let download = temp.path().join("download");
                 run(Command::new("curl")
                     .args([
@@ -492,6 +520,17 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
             }
         }
         if changed && !marker.is_empty() {
+            if !fs::metadata(&target)
+                .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            {
+                bail!("build did not produce an executable");
+            }
+            let integrity = temp.path().join("binary-digest");
+            fs::write(&integrity, binary_digest(&target)?)?;
+            run(admin(policy, "install")
+                .args(["-m", "644"])
+                .arg(&integrity)
+                .arg(prefix.join(".installed-binary")))?;
             let file = temp.path().join("marker");
             fs::write(&file, format!("{marker}\n"))?;
             run(admin(policy, "install")
@@ -560,4 +599,42 @@ pub fn cli(repo: &Path, args: &[String]) -> Result<i32> {
         );
     }
     Ok(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn archive_refuses_links_and_duplicate_executables() {
+        for symlinked in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("release.tar.gz");
+            let gzip = flate2::write::GzEncoder::new(
+                fs::File::create(&path).unwrap(),
+                flate2::Compression::default(),
+            );
+            let mut archive = tar::Builder::new(gzip);
+            for _ in 0..if symlinked { 1 } else { 2 } {
+                let mut header = tar::Header::new_gnu();
+                header.set_mode(0o755);
+                if symlinked {
+                    header.set_entry_type(tar::EntryType::Symlink);
+                    header.set_link_name("/outside").unwrap();
+                    header.set_size(0);
+                } else {
+                    header.set_size(1);
+                }
+                header.set_cksum();
+                archive
+                    .append_data(
+                        &mut header,
+                        "dir/tool",
+                        if symlinked { &b""[..] } else { &b"x"[..] },
+                    )
+                    .unwrap();
+            }
+            archive.into_inner().unwrap().finish().unwrap();
+            assert!(extract_binary(&path, "tool", &dir.path().join("candidate")).is_err());
+        }
+    }
 }

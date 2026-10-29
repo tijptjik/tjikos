@@ -10,6 +10,66 @@ use std::{
 fn home() -> Result<PathBuf> {
     Ok(std::env::var_os("HOME").context("HOME required")?.into())
 }
+fn system_runtime(apply: bool) -> Result<bool> {
+    let source = std::env::current_exe()?;
+    let target = Path::new("/usr/local/lib/tjikup/tjikup");
+    let desired = fs::read(&source)?;
+    if fs::symlink_metadata(target)
+        .is_ok_and(|m| m.is_file() && m.uid() == 0 && m.mode() & 0o777 == 0o755)
+        && fs::read(target).is_ok_and(|bytes| bytes == desired)
+    {
+        return Ok(true);
+    }
+    if !apply {
+        return Ok(false);
+    }
+    let invoke = |args: &[&str]| -> Result<()> {
+        if !Command::new("sudo")
+            .args(["-n", "--"])
+            .args(args)
+            .status()?
+            .success()
+        {
+            bail!("system runtime installation failed");
+        }
+        Ok(())
+    };
+    invoke(&["install", "-d", "-m", "755", "/usr/local/lib/tjikup"])?;
+    let output = Command::new("sudo")
+        .args([
+            "-n",
+            "--",
+            "mktemp",
+            "/usr/local/lib/tjikup/.runtime.XXXXXXXX",
+        ])
+        .output()?;
+    if !output.status.success() {
+        bail!("cannot stage system runtime");
+    }
+    let temporary = String::from_utf8(output.stdout)?.trim().to_owned();
+    let result = (|| -> Result<()> {
+        invoke(&[
+            "install",
+            "-m",
+            "755",
+            "-o",
+            "root",
+            "-g",
+            "root",
+            source.to_str().context("invalid executable path")?,
+            &temporary,
+        ])?;
+        invoke(&["mv", "-Tf", &temporary, target.to_str().unwrap()])
+    })();
+    if result.is_err() {
+        let _ = invoke(&["rm", "-f", &temporary]);
+    }
+    result?;
+    if fs::read(target)? != desired {
+        bail!("system runtime verification failed");
+    }
+    Ok(true)
+}
 fn migration(retire: bool) -> Result<i32> {
     let mut cmd = Command::new("synctjik");
     cmd.arg("migrate-schedules");
@@ -43,6 +103,9 @@ pub fn run(repo: &Path, args: &[String]) -> Result<i32> {
     let action = if action == "diff" { "plan" } else { action };
     if !["check", "plan", "apply"].contains(&action) {
         bail!("unknown files action");
+    }
+    if action == "apply" {
+        crate::commands::age_identity(true)?;
     }
     let group = if args.len() > 2 {
         if args.len() != 4 || args[2] != "--group" {
@@ -158,6 +221,12 @@ pub fn run(repo: &Path, args: &[String]) -> Result<i32> {
             println!("SKIP: no machine-specific system files enrolled");
             return Ok(0);
         }
+        if action == "check" && !system_runtime(false)? {
+            return Ok(1);
+        }
+        if action == "apply" {
+            system_runtime(true)?;
+        }
         let mapping = base.join("encrypted.json");
         let encrypted: std::collections::BTreeMap<String, String> = if mapping.exists() {
             serde_json::from_slice(&fs::read(mapping)?)?
@@ -182,7 +251,7 @@ pub fn run(repo: &Path, args: &[String]) -> Result<i32> {
                 }
                 let result = Command::new("age")
                     .args(["--decrypt", "--identity"])
-                    .arg(home.join(".keys/chezmoi.txt"))
+                    .arg(crate::commands::age_identity(action == "apply")?)
                     .arg(base.join(source))
                     .output()?;
                 if !result.status.success() {

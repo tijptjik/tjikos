@@ -314,16 +314,21 @@ impl Parent {
                             desired.path.display()
                         );
                     }
-                    let label = string(String::from_utf8(output.stdout)?.trim().as_bytes())?;
-                    checked(unsafe {
-                        libc::fsetxattr(
-                            fd,
-                            c"security.selinux".as_ptr(),
-                            label.as_ptr().cast(),
-                            label.as_bytes_with_nul().len(),
-                            0,
-                        )
-                    })?;
+                    let context = String::from_utf8(output.stdout)?;
+                    // No matching policy rule means keep the label assigned by
+                    // the kernel at creation; <<none>> is not a security context.
+                    if context.trim() != "<<none>>" {
+                        let label = string(context.trim().as_bytes())?;
+                        checked(unsafe {
+                            libc::fsetxattr(
+                                fd,
+                                c"security.selinux".as_ptr(),
+                                label.as_ptr().cast(),
+                                label.as_bytes_with_nul().len(),
+                                0,
+                            )
+                        })?;
+                    }
                 }
                 staged.as_file().sync_all()?;
             }

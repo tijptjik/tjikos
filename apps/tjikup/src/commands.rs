@@ -10,6 +10,53 @@ use std::{
 pub fn home() -> Result<PathBuf> {
     Ok(std::env::var_os("HOME").context("HOME is required")?.into())
 }
+/// Preserve an existing age identity while adopting the neutral credential path.
+/// The previous filename is only consulted here; it is never a public command.
+pub fn age_identity(migrate: bool) -> Result<PathBuf> {
+    use std::io::{Read, Write};
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let home = home()?;
+    let target = home.join(".keys/age.txt");
+    if target.try_exists()? {
+        return Ok(target);
+    }
+    let previous = home.join(".keys/chezmoi.txt");
+    if !migrate {
+        return Ok(if previous.is_file() { previous } else { target });
+    }
+    let mut source = match fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&previous)
+    {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(target),
+        Err(e) => return Err(e.into()),
+    };
+    let info = source.metadata()?;
+    if !info.is_file()
+        || info.uid() != unsafe { libc::geteuid() }
+        || info.mode() & 0o077 != 0
+        || info.len() > 65536
+    {
+        bail!("existing age identity must be a private regular file owned by this user");
+    }
+    let mut bytes = Vec::new();
+    source.read_to_end(&mut bytes)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(target.parent().unwrap())?;
+    temporary.write_all(&bytes)?;
+    temporary.as_file().sync_all()?;
+    match temporary.persist_noclobber(&target) {
+        Ok(_) => (),
+        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
+            if fs::read(&target)? != bytes {
+                bail!("age identity changed during migration");
+            }
+        }
+        Err(e) => return Err(e.error.into()),
+    }
+    Ok(target)
+}
 pub fn repository() -> PathBuf {
     std::env::var_os("DOTJIK_REPO")
         .map(PathBuf::from)

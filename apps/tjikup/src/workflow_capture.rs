@@ -290,7 +290,7 @@ fn preserve(value: &Value, source: &Value, home: &str, expression: &str) -> Valu
                 .as_str()
                 .filter(|v| *v == home || v.starts_with(&format!("{home}/")));
             if let Some(original) = source.as_str().filter(|s| s.contains("{{")) {
-                if original.contains("user.home") || original.contains(".chezmoi.homeDir") {
+                if original.contains("user.home") {
                     if let Some(path) = home_path {
                         return json!(format!("{expression}{}", &path[home.len()..]));
                     }
@@ -348,7 +348,7 @@ fn transform(rule: &Rule, source: &str, target: &str, home: &str, host: &str) ->
                 {
                     bail!("unsupported capture control template");
                 }
-                if ["user.home", ".chezmoi.homeDir"].contains(&word) {
+                if word == "user.home" {
                     expression = action;
                 }
             }
