@@ -1,4 +1,5 @@
 mod actions;
+mod bitwarden_install;
 mod config;
 mod demo;
 mod device;
@@ -12,6 +13,10 @@ mod report;
 mod scheduler;
 mod selection;
 mod templates;
+mod workflow;
+mod workflow_capture;
+mod workflow_files;
+mod workflow_services;
 
 use anyhow::{bail, Context, Result};
 use config::Config;
@@ -35,6 +40,10 @@ fn default_config() -> PathBuf {
 
 fn cli() -> Result<i32> {
     let mut args = std::env::args().skip(1).peekable();
+    if args.peek().is_some_and(|s| s == "workflow") {
+        args.next();
+        return workflow::cli(args.collect());
+    }
     if args.peek().is_some_and(|s| s == "sync") {
         args.next();
         use std::os::unix::process::CommandExt;
@@ -77,7 +86,7 @@ fn cli() -> Result<i32> {
         if args.next().is_some() {
             bail!("usage: tjikup capabilities");
         }
-        println!(r#"{{"encrypted_credentials":1,"credential_recovery":1}}"#);
+        println!(r#"{{"encrypted_credentials":1,"credential_recovery":1,"native_workflow":1}}"#);
         return Ok(0);
     }
     let mut path = default_config();
@@ -92,7 +101,7 @@ fn cli() -> Result<i32> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
-                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --refresh-secrets   Refresh referenced Bitwarden secrets, bypassing the local cache\n  --alphabetical   Buffer each section and sort its results by application name\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --show-skips-and-other-devices   Also list excluded recipes; never execute them\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  sync <command>   Delegate archival and restoration to synctjik\n  notify --stdin   Deliver validated display metadata to local notjikctl");
+                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --refresh-secrets   Refresh referenced Bitwarden secrets, bypassing the local cache\n  --alphabetical   Buffer each section and sort its results by application name\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --show-skips-and-other-devices   Also list excluded recipes; never execute them\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  workflow <command>   Native repository policy helpers (see docs/workflow-helpers.md)\n  sync <command>   Delegate archival and restoration to synctjik\n  notify --stdin   Deliver validated display metadata to local notjikctl");
                 println!("\nRecipe selection (combinable):\n  --apply-dotfiles          Home configuration and its reloads only\n  --apply-sysfiles          System configuration and its reloads only\n  --apply-package-updates   Updates of installed applications only\n  --skip-package-updates    Install missing applications and configure; no updates\nSelected modes use local checks for installation dependencies; they never run installers or repository synchronization.");
                 return Ok(0);
             }
