@@ -356,7 +356,7 @@ fn dirty_repository_counts_stay_in_terminal_rows_without_inline_errors() {
             assert!(!visible.contains(hidden), "unexpected {hidden}: {visible}");
         }
         if graphics {
-            assert_eq!(text.matches("a=T,f=32").count(), 3);
+            assert_eq!(text.matches("a=T,f=32").count(), 2);
         }
     }
 }
@@ -681,4 +681,28 @@ fn alphabetical_review_buffers_each_section_but_keeps_parallel_execution() {
     let output = terminal.finish();
     assert!(output.find("Alpha result").unwrap() < output.find("Zulu result").unwrap());
     assert!(output.find("Zulu result").unwrap() < output.find("Services").unwrap());
+}
+
+#[test]
+fn repository_cells_replace_the_spinner_but_later_tasks_keep_it() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("config.json"), serde_json::to_vec(&json!({"version":2,"recipes":[
+        {"id":"repo","label":"Duplicate repository activity","apply":["sleep","0.2"],"display":{"repository":"dotjik","operation":"pull"}},
+        {"id":"later","label":"Later worker","needs":["repo"],"apply":["sleep","0.2"]}
+    ]})).unwrap()).unwrap();
+    let mut terminal = Terminal::spawn(
+        &["--config", dir.path().join("config.json").to_str().unwrap()],
+        dir.path(),
+        false,
+    );
+    let text = terminal.finish();
+    assert!(text.contains("PULL"));
+    assert!(
+        !text.contains("Duplicate repository activity"),
+        "repository activity belongs only in its permanent cells"
+    );
+    assert!(
+        text.matches("Later worker").count() > 1,
+        "later work retains live activity and its completion row"
+    );
 }
