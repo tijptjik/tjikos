@@ -1,6 +1,6 @@
 # Synctjik
 
-Verified archives and reviewed device-state synchronization, implemented in Rust.
+Verified Dotfiles LFS backups and reviewed device-state synchronization, implemented in Rust.
 Tjikup orchestrates prerequisites and readiness; Synctjik owns snapshots, transfer,
 merge review, restoration, retention and recovery. Dotjik owns personal policy.
 Rclone is a transport dependency for remote stores, not the synchronization engine.
