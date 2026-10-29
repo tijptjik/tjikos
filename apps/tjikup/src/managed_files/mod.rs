@@ -571,6 +571,12 @@ fn run(args: Vec<String>) -> Result<i32> {
         state,
         restored_attrs.as_ref(),
     )?;
+    if std::env::var_os("TJIKUP_REPORT_FILE").is_some() {
+        println!(
+            "__stage_verb__:{}",
+            if changed == 0 { "SKIP" } else { "APPLY" }
+        );
+    }
     println!(
         "{}: {changed} changed, {} unchanged",
         if changed == 0 { "SKIP" } else { "APPLY" },

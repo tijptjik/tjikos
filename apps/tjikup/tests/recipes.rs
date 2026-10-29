@@ -766,3 +766,51 @@ fn alphabetical_repository_rows_follow_capture_and_sort_by_name() {
     assert!(text.find("Alpha").unwrap() < text.find("Zulu").unwrap());
     assert_eq!(text.matches("Repositories").count(), 1);
 }
+
+#[test]
+fn successful_noop_reports_do_not_become_apply_when_hidden() {
+    for report in ["SKIP    ✓ Config  current", "__stage_verb__:SKIP"] {
+        let (dir, config) =
+            fixture(json!([{"id":"config","label":"Config","apply":["printf","%s\n",report]}]));
+        let output = invoke(dir.path(), &config, &[]);
+        ok(&output);
+        assert_eq!(
+            receipt(dir.path())["recipes"]["config"]["state"],
+            "unchanged"
+        );
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("APPLY"));
+    }
+    let (dir, config) = fixture(
+        json!([{"id":"changed","apply":["printf","UPDATE  ✓ Config  changed\nSKIP    ✓ Config  current\n"]}]),
+    );
+    ok(&invoke(dir.path(), &config, &[]));
+    assert_eq!(receipt(dir.path())["recipes"]["changed"]["state"], "done");
+}
+
+#[test]
+fn native_file_apply_reports_unchanged_on_the_second_run() {
+    let (dir, mut config) = fixture(json!([]));
+    let root = dir.path();
+    fs::create_dir(root.join("root")).unwrap();
+    fs::write(root.join("source"), "same bytes\n").unwrap();
+    fs::write(root.join("manifest.json"), serde_json::to_vec(&json!({"version":1,"id":"config","entries":[{"kind":"file","path":"/target","source":"source","mode":"0600"}]})).unwrap()).unwrap();
+    config["recipes"] = json!([{"id":"files","apply":[env!("CARGO_BIN_EXE_tjikup"),"files","apply","--manifest",root.join("manifest.json"),"--state-dir",root.join("files-state"),"--root",root.join("root")]}]);
+    let first = invoke(root, &config, &[]);
+    if !first.status.success() {
+        for entry in fs::read_dir(root.join("state/tjikup/logs")).unwrap() {
+            eprintln!(
+                "{}",
+                fs::read_to_string(entry.unwrap().path().join("files.log")).unwrap()
+            );
+        }
+    }
+    ok(&first);
+    let output = invoke(root, &config, &["--show-skips"]);
+    ok(&output);
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert!(text.contains("SKIP") && !text.contains("APPLY"), "{text}");
+    assert_eq!(
+        fs::read_to_string(root.join("root/target")).unwrap(),
+        "same bytes\n"
+    );
+}

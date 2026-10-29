@@ -330,6 +330,9 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                         .rsplit_once(crate::actions::RETRY_BOUNDARY)
                         .map(|(_, last)| last)
                         .unwrap_or(&log_text);
+                    if state == State::Done && crate::report::unchanged(&report, final_log) {
+                        state = State::Unchanged;
+                    }
                     let mut events = crate::report::parse(&report, final_log, config.show_skips);
                     if let Some(note) = failure_note {
                         events.push(crate::report::Event {

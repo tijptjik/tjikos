@@ -163,6 +163,27 @@ pub fn parse(report: &str, log: &str, show_skips: bool) -> Vec<Event> {
     selected
 }
 
+/// Inspect outcomes before presentation filters hide SKIP lines.
+pub fn unchanged(report: &str, log: &str) -> bool {
+    let events = parse(report, log, true);
+    let mut skipped = false;
+    for event in events {
+        if event.issue() || !matches!(event.verb.as_str(), "SKIP" | "CHECK") {
+            return false;
+        }
+        skipped |= event.verb == "SKIP";
+    }
+    for line in log.lines().map(plain) {
+        if let Some(verb) = line.strip_prefix("__stage_verb__:") {
+            if !matches!(verb, "SKIP" | "CHECK") {
+                return false;
+            }
+            skipped |= verb == "SKIP";
+        }
+    }
+    skipped
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
