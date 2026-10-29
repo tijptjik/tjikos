@@ -1,6 +1,6 @@
 # Source inventory
 
-Inspected in `/home/io/.local/share/chezmoi` before implementation:
+Inspected in the Dotjik policy checkout before implementation:
 
 | Source | Retained behavior / implementation |
 | --- | --- |

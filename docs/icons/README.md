@@ -1,12 +1,12 @@
 # README icons
 
 These self-contained SVGs are copies of the Rose Punk app icons from the
-Tijpfiles Chezmoi repository. Keeping them here makes the README work in a
+Dotjik policy repository. Keeping them here makes the README work in a
 standalone TjikOS checkout and on GitHub.
 
-Canonical artwork: `scripts/icons/local/` in the Chezmoi repository.
-Rendered exports: `home/dot_local/share/icons/rose-punk-illustrated/scalable/apps/`.
-After changing the source, run `python3 scripts/icons/fullset.py` there and copy
+Canonical artwork: `scripts/icons/local/` in the Dotjik repository.
+Rendered exports: `native/home/files/.local/share/icons/rose-punk/scalable/apps/`.
+After changing the source, run `python3 scripts/icons/release.py build` there and copy
 these six exports here again.
 
 Mailtjik uses the shared 40-unit rounded-square identity with a dark inset,

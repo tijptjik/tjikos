@@ -59,7 +59,7 @@ The Gmail All Mail view is named `Gmail Archive` and excludes messages that
 also belong to another folder for the same account. Those memberships remain
 available in the manifest and index.
 
-The age identity is the managed `~/.keys/chezmoi.txt` key, recoverable from
+The age identity is the managed `~/.keys/age.txt` key, recoverable from
 Bitwarden. The identity was checked against the configured archive recipient.
 
 ## Restore and read
@@ -67,7 +67,7 @@ Bitwarden. The identity was checked against the configured archive recipient.
 Decrypt an MBOX reader view and pipe it to a standard MBOX file:
 
 ```sh
-age -d -i ~/.keys/chezmoi.txt account-mailbox.part-0001.mbox.zst.age \
+age -d -i ~/.keys/age.txt account-mailbox.part-0001.mbox.zst.age \
   | zstd -d > restored.mbox
 ```
 
@@ -77,7 +77,7 @@ another MBOX-compatible mail client. No custom mail interface is required.
 Restore the raw messages or attachment collection with:
 
 ```sh
-age -d -i ~/.keys/chezmoi.txt raw-messages.tar.zst.age \
+age -d -i ~/.keys/age.txt raw-messages.tar.zst.age \
   | zstd -d | tar -xf -
 ```
 

@@ -15,7 +15,7 @@ Run `bash scripts/install-email-archives.sh` from this repository. It builds
 the pinned Bubble Tea/Lip Gloss tree selector and installs only this command
 and its Python modules. Python uses the standard library; runtime dependencies
 are age, zstd, rclone, and 7z for legacy 7z sources. Go is needed to build the
-selector. This does not run a broad Chezmoi apply or change backup timers.
+selector. This leaves configuration deployment and backup timers unchanged.
 
 Keep private job directories, OAuth clients/tokens, provider configuration,
 plans, indexes, manifests, restored mail and credentials outside Git. Jobs set
