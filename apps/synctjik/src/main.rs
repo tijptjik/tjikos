@@ -27,6 +27,20 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Cmd {
+    /// Report supported integrations without loading policy or accessing data.
+    Capabilities,
+    /// Cloudflare DNS, KV and R2 backups through rclone and Restic.
+    #[command(disable_help_flag = true)]
+    Cloudflare {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Local-first private assets: sync, backup, snapshots, restore and mounts.
+    #[command(disable_help_flag = true)]
+    PrivateAssets {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Validate policy and dependencies without restoring or backing up.
     Check,
     /// Enable the backup timer only after restoration readiness passes.
@@ -225,6 +239,26 @@ fn run() -> Result<()> {
         ui::demo();
         return Ok(());
     }
+    match &cli.command {
+        Some(Cmd::Capabilities) => {
+            return print(
+                &json!({"cloudflare_backup":true,"private_assets":true,"dependencies":["rclone","restic","python3"]}),
+            )
+        }
+        Some(Cmd::Cloudflare { args }) | Some(Cmd::PrivateAssets { args }) => {
+            ensure!(cli.config.is_none() && cli.home.is_none() && cli.machine.is_none() && cli.state.is_none() && !cli.json,
+                "Archive-engine global options do not apply to backup integrations; see subcommand --help");
+            return synctjik::backends::exec(
+                if matches!(cli.command, Some(Cmd::Cloudflare { .. })) {
+                    synctjik::backends::CLOUDFLARE
+                } else {
+                    synctjik::backends::PRIVATE_ASSETS
+                },
+                args,
+            );
+        }
+        _ => (),
+    }
     let (app, profile, profile_path) = load(&cli)?;
     let _lock = app.lock()?;
     let command = cli.command.context("Choose a command; see --help")?;
@@ -234,6 +268,7 @@ fn run() -> Result<()> {
         .unwrap_or(&app.master)
         .to_owned();
     match command {
+        Cmd::Capabilities | Cmd::Cloudflare { .. } | Cmd::PrivateAssets { .. } => unreachable!(),
         Cmd::Schedule {
             role,
             print: preview,
@@ -259,6 +294,9 @@ fn run() -> Result<()> {
             }
         }
         Cmd::Check => {
+            for dependency in ["python3", "rclone", "restic"] {
+                run_dependency(dependency)?;
+            }
             for f in app.folders(false)? {
                 let p = app.policy(&f)?;
                 if encrypted(p) {

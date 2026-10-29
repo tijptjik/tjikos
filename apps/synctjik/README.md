@@ -99,3 +99,39 @@ updates only the binary; Dotjik owns the compatibility command wrappers. Standal
 installation creates wrappers relative to the selected prefix.
 Never validate a release by applying live private
 folders or replacing a pinned running archive worker.
+
+## Private assets and Cloudflare backups
+
+Synctjik owns the existing local-first private-assets and Cloudflare backup
+engines. They are embedded Python-standard-library implementations in the Rust
+executable, not calls to a separately managed Dotjik implementation. Each worker
+executes the engine bytes from the binary it started with. Existing unit names,
+locks, receipts, credential locations, retention and restore gates are retained.
+
+```sh
+synctjik capabilities
+synctjik private-assets status
+synctjik private-assets sync documents
+synctjik private-assets backup --scheduled
+synctjik cloudflare check
+synctjik cloudflare backup
+```
+
+Both `rclone` and `restic`, plus Python 3, are runtime dependencies. Managed
+installation provisions them. `cloudflare check` validates policy and dependency
+availability without reading credentials, accessing remote data or writing state.
+It is not a backup or restore test. `cloudflare backup --dry-run` still exports
+remote data into private temporary files; it is not an offline validation command.
+
+Device policy belongs in the dotfiles repository. Cloudflare's non-secret policy
+is deployed to `~/.config/synctjik/cloudflare.json`: mount UUID/path, repository,
+account ID, expected bucket count, remote and credential-file paths. Private
+assets retain `~/.config/private-storage/config.json`, including explicit SSH
+transport/host selection and mount roots. No account settings or credentials are
+embedded in Synctjik. The compatibility commands `private-storage` and
+`cloudflare-restic-backup` delegate to these subcommands.
+
+Cloudflare covers DNS, Workers KV and R2 objects; it is not Git LFS. Private assets
+are the configured documents, projects, resources and media folders. Old pinned
+releases without these integrations must not overwrite a capable installed
+runner; fresh installations require a compatible published release.

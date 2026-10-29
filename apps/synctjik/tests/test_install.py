@@ -45,6 +45,24 @@ class InstallTests(unittest.TestCase):
                                         capture_output=True, text=True, check=True)
                 self.assertEqual(result.stdout, expected)
 
+    def test_incompatible_pinned_release_retains_capable_installed_runner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app, prefix = self.fixture(Path(directory))
+            installed = prefix / 'bin/synctjik'
+            shutil.copy2(app / 'dist/synctjik', installed)
+            before = installed.read_bytes()
+            (app / 'dist/synctjik').write_text('#!/bin/sh\necho old-release\n')
+            self.install(app, prefix, managed=True)
+            self.assertEqual(installed.read_bytes(), before)
+
+    def test_incompatible_release_is_rejected_on_fresh_install(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app, prefix = self.fixture(Path(directory))
+            (app / 'dist/synctjik').write_text('#!/bin/sh\necho old-release\n')
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.install(app, prefix, managed=True)
+            self.assertFalse((prefix / 'bin/synctjik').exists())
+
     def fixture(self, root):
         app, prefix = root / 'app', root / 'custom prefix'
         (app / 'scripts').mkdir(parents=True)
@@ -52,7 +70,8 @@ class InstallTests(unittest.TestCase):
         (prefix / 'bin').mkdir(parents=True)
         shutil.copy2(ROOT / 'scripts/install.sh', app / 'scripts/install.sh')
         (app / 'scripts/fetch-release.sh').write_text('#!/bin/sh\nexit 0\n')
-        (app / 'dist/synctjik').write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+        (app / 'dist/synctjik').write_text("#!/bin/sh\nif [ \"$1\" = capabilities ]; then echo '{\"cloudflare_backup\":true,\"private_assets\":true}'; else printf '%s\\n' \"$@\"; fi\n")
+        (app / 'dist/synctjik').chmod(0o755)
         return app, prefix
 
     def install(self, app, prefix, managed):

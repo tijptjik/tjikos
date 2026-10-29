@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod backends;
 pub mod engine;
 pub mod fs;
 pub mod merge;
