@@ -96,14 +96,24 @@ fn api(
         .json(&payload)
         .send()
         .map_err(|_| anyhow::anyhow!("Telegram transport failed"))?;
-    ensure!(
-        response.status().is_success(),
-        "Telegram {method} failed (HTTP {})",
-        response.status().as_u16()
-    );
+    let status = response.status();
     let body: Value = response
         .json()
         .map_err(|_| anyhow::anyhow!("Invalid Telegram response"))?;
+    // A retry after an acknowledged edit can encounter already-current server state.
+    if method == "editMessageText"
+        && status.as_u16() == 400
+        && body["description"]
+            .as_str()
+            .is_some_and(|s| s.starts_with("Bad Request: message is not modified"))
+    {
+        return Ok(Value::Bool(true));
+    }
+    ensure!(
+        status.is_success(),
+        "Telegram {method} failed (HTTP {})",
+        status.as_u16()
+    );
     ensure!(body["ok"] == true, "Telegram rejected {method}");
     Ok(body["result"].clone())
 }
@@ -173,14 +183,34 @@ fn destination() -> Result<Destination> {
         metadata.mode() & 0o077 == 0,
         "Telegram credentials must be private (0600)"
     );
-    let destination: Destination =
-        serde_json::from_slice(&fs::read(credentials)?).context("Invalid Telegram credentials")?;
+    let config: Value = serde_json::from_slice(&fs::read(credentials)?)
+        .context("Invalid Telegram configuration")?;
+    let destination = resolve_destination(config)?;
     ensure!(
         !destination.bot_token.is_empty()
             && (destination.chat_id.is_string() || destination.chat_id.is_i64()),
         "Missing Telegram token or chat ID"
     );
     Ok(destination)
+}
+
+fn resolve_destination(config: Value) -> Result<Destination> {
+    if let Some(id) = config.get("bws_secret_id") {
+        let id = id.as_str().context("Invalid Telegram BWS secret ID")?;
+        let provider: crate::managed_files::secrets::Bitwarden = serde_json::from_value(
+            config
+                .get("bitwarden")
+                .context("Missing Telegram BWS provider")?
+                .clone(),
+        )
+        .context("Invalid Telegram BWS provider")?;
+        let secrets = crate::managed_files::secrets::Secrets::new(provider)?;
+        let value = secrets.get(id)?;
+        serde_json::from_str(&value)
+            .map_err(|_| anyhow::anyhow!("BWS Telegram secret must contain destination JSON"))
+    } else {
+        serde_json::from_value(config).map_err(|_| anyhow::anyhow!("Invalid Telegram credentials"))
+    }
 }
 
 fn relay_report(argv: &[String], text: &str) -> Result<()> {
@@ -407,12 +437,19 @@ mod tests {
                     r#"{"ok":false}"#
                 } else if index == 0 {
                     r#"{"ok":true,"result":{"message_id":42}}"#
+                } else if index == 2 {
+                    r#"{"ok":false,"description":"Bad Request: message is not modified"}"#
                 } else {
                     r#"{"ok":true,"result":true}"#
                 };
                 write!(
                     socket,
-                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    "HTTP/1.1 {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    if index == 2 {
+                        "400 Bad Request"
+                    } else {
+                        "200 OK"
+                    },
                     result.len(),
                     result
                 )
@@ -452,5 +489,22 @@ mod tests {
         let value: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
         assert_eq!(value["text"], "synthetic status");
         assert!(value["host"].is_string());
+    }
+    #[test]
+    fn bws_destination_uses_native_provider_without_exposing_value() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let token = dir.path().join("environment");
+        fs::write(&token, "BWS_ACCESS_TOKEN=synthetic-auth\n").unwrap();
+        fs::set_permissions(&token, fs::Permissions::from_mode(0o600)).unwrap();
+        let provider = dir.path().join("bws");
+        fs::write(&provider, r#"#!/bin/sh
+printf '%s' '{"id":"00000000-0000-0000-0000-000000000001","value":"{\"bot_token\":\"123:synthetic\",\"chat_id\":42}"}'
+"#).unwrap();
+        fs::set_permissions(&provider, fs::Permissions::from_mode(0o700)).unwrap();
+        let config = json!({"bws_secret_id":"00000000-0000-0000-0000-000000000001", "bitwarden":{"command":[provider],"access_token_file":token}});
+        let destination = resolve_destination(config).unwrap();
+        assert_eq!(destination.chat_id, 42);
+        assert_eq!(destination.bot_token, "123:synthetic");
     }
 }

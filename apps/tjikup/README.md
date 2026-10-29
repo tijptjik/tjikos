@@ -430,12 +430,20 @@ The fleet's Dotjik policy owns `tjikup-weekly.timer` (Sunday 09:00
 `Asia/Hong_Kong`, persistent catch-up) and its user service. No standalone DNF
 updater is needed; package updates run through the ordinary Tjikup recipes.
 
-A relay avoids distributing the bot credential: set `TJIKUP_TELEGRAM_RELAY` to
-an argv-array JSON file. The command receives only `{host,text}` on stdin and
-must exit zero after delivery. On the notification server, `tjikup scheduled
---report-stdin` reads that payload and uses the server's local credentials to
-update a separate pinned message for each host. The fleet runs this through
-pinned SSH to si; the bot credential remains at `/etc/si-notifications/telegram.json`.
+For BWS-backed delivery, the mode-0600 configuration contains only a reference:
+
+```json
+{
+  "bws_secret_id": "<secret UUID>",
+  "bitwarden": {"access_token_file": "/home/user/.config/bws/environment"}
+}
+```
+
+The BWS value is destination JSON (`bot_token`, `chat_id`, optional `topic_id`).
+Each run uses the native secret provider and keeps the credential in memory.
+The fleet uses the existing notification secret on all three devices, with no
+SSH relay or plaintext bot-credential file.
+
 The root-owned `/usr/local/libexec/tjikup-weekly` is the tested scheduled runtime,
 so ordinary application installs cannot replace it with a release that predates
 scheduled reporting. Update that runtime when deploying new scheduling support.
