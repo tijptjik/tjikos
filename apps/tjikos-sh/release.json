@@ -2,8 +2,8 @@
   "version": 1,
   "dotjik_branch": "main",
   "tjikos_branch": "main",
-  "dotjik_revision": "a28c5f8046b16bcdd6594818671bb63192fc9f72",
-  "tjikos_revision": "7c703afd36e16a1b9d3dabbd7b7d70cb98d710af",
+  "dotjik_revision": "58b328a7c9ce13fce663d576d2a64a76664a8f4e",
+  "tjikos_revision": "9043dfab374367bcd864d7851619dc5ea42a1197",
   "tjikup_binary": {
     "url": "https://github.com/tijptjik/tjikos/releases/download/tjikup-v0.2.0-bootstrap.6/tjikup-x86_64-unknown-linux-musl",
     "sha256": "2419a610a0cc47f6d96b7d590b022cf870638ebd0afc0b4ba9af39599e0f55af",
