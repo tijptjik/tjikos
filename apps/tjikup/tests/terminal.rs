@@ -483,6 +483,11 @@ fn spacious_graphics_is_the_default() {
     assert!(text.contains(",r=2,"));
     assert!(text.contains("\u{10eeee}\u{30d}"));
     assert!(text.contains("\x1b]66;"));
+    assert!(
+        text.contains("\r\x1b7"),
+        "repository patches anchor their cursor origin"
+    );
+    assert_eq!(text.matches("\x1b7").count(), text.matches("\x1b8").count());
 }
 
 #[test]

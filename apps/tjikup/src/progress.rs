@@ -409,8 +409,10 @@ impl Progress {
                 .unwrap_or_else(|| width(&self.glyph(&repo.label)));
             // Only patch the text to the right of the image. Placeholders are
             // never erased by spinner updates, so sprites do not flash.
+            // Restore the exact origin: relative movement back down can drift
+            // when Kitty's two-row text changes the cursor's vertical position.
             eprint!(
-                "\x1b[{up}A\x1b[{}G{}\x1b[{up}B\r",
+                "\r\x1b7\x1b[{up}A\x1b[{}G{}\x1b8",
                 indent + 1,
                 self.graphics
                     .as_ref()
