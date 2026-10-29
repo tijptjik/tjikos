@@ -40,11 +40,15 @@ with tempfile.TemporaryDirectory(prefix="runtjik-empty-", dir="/dev/shm") as emp
                 if 'history' in query:
                     assert rows[0]['empty_state'] and rows[0]['disabled']
                 else:
+                    assert [row['name'] for row in rows[:4]] == ['Region', 'Window', 'Workspace', 'Screen']
                     assert len({r['icon'] for r in rows}) == len(rows)
                     assert all(Path(r['icon']).is_file() for r in rows)
                 time.sleep(.4)
                 ipc('capture', str(temp / (name + '.png')))
                 wait_for(lambda: (temp / (name + '.png')).exists())
+                if 'history' in query:
+                    subprocess.run(['wtype', '-k', 'Return'], check=True)
+                    wait_for(lambda: state().get('resultQuery') == query.split()[0])
             print('PASS: distinct capture artwork and disabled empty history states', temp)
         finally:
             process.terminate()

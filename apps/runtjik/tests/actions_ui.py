@@ -28,7 +28,7 @@ with private_compositor():
         process=subprocess.Popen(['quickshell','--path',str(home/'qml'),'--no-duplicate'],env=env,stdout=log,stderr=log)
         try:
             wait_for(lambda:state().get('rows'),timeout=20)
-            query('!ss');key('-k','Return')
+            query('!ss');key('-k','Tab','-k','Tab','-k','Tab','-k','Return')
             wait_for(lambda:state().get('resultQuery')=='/grab screen')
             query('!snap history');key('-k','Return');time.sleep(.2)
             query('!rec')

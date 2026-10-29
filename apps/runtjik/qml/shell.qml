@@ -69,9 +69,10 @@ ShellRoot {
     readonly property bool runningMode: query.startsWith('?') || query==='/processes' || query.startsWith('/processes ')
     readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(commandQuery)
     readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(commandQuery)
+    readonly property bool captureMenu: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord)$/.test(commandQuery.trim())
     readonly property bool galleryEmpty: galleryMode && results.length === 1 && !!results[0].empty_state
     readonly property string galleryProvider: /^\/(rec|screenrecord) /.test(commandQuery) ? 'Recorder' : 'Screenshots'
-    readonly property int gridColumns: galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
+    readonly property int gridColumns: captureMenu ? 2 : galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
     readonly property int galleryRows: settings.plugin_settings?.[galleryProvider]?.gallery_rows || 3
     property bool providerPending: false
     property var commandHistory: []
@@ -94,7 +95,7 @@ ShellRoot {
         searchBox.cursorPosition=searchBox.text.length;
         navigatingHistory=false;
     }
-    readonly property bool listMode: !galleryMode && (view === 'list' || windowEntry !== '' || (commandQuery.startsWith('/') && !runMode && !runningMode))
+    readonly property bool listMode: !captureMenu && !galleryMode && (view === 'list' || windowEntry !== '' || (commandQuery.startsWith('/') && !runMode && !runningMode))
     // Capture the focused screen once; keyboard navigation must not move the panel.
     property string movedMonitor: ''
     property string initialMonitor: ''
@@ -142,6 +143,7 @@ ShellRoot {
     }
     function activate(switchWindow, closeWindow=false) {
         if (busy || !results[selected]) return;
+        if (galleryEmpty && !closeWindow) { searchBox.text = galleryProvider === 'Recorder' ? '/rec' : '/grab'; return; }
         if (results[selected].disabled) return;
         if (!windowEntry && (debounce.running || resultQuery !== query)) {
             debounce.stop();pendingAction={switchWindow:switchWindow,closeWindow:closeWindow};search();return;
@@ -503,7 +505,7 @@ ShellRoot {
                                 NumberAnimation {properties:'x,y';duration:220;easing.type:Easing.OutCubic}
                             }
                             cellWidth:root.listMode?width:width/root.gridColumns
-                            cellHeight:root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
+                            cellHeight:root.captureMenu?height/4:root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
                             currentIndex:root.selected
                             boundsBehavior:Flickable.StopAtBounds
                             onContentYChanged: {
@@ -551,7 +553,7 @@ ShellRoot {
                                 readonly property var modelData: row
                                 readonly property bool closing: root.closingIds.includes(modelData.id)
                                 required property int index
-                                width:root.listMode?items.cellWidth:items.cellWidth-6;height:items.cellHeight-6;radius:12
+                                width:root.captureMenu && index===4 && root.results.length===5?items.width-6:root.listMode?items.cellWidth:items.cellWidth-6;height:root.captureMenu && index>=4?items.height/2-6:items.cellHeight-6;radius:12
                                 color:index===root.selected?root.theme.surface:'transparent'
                                 border.width:index===root.selected?1:0
                                 border.color:root.theme.accent
@@ -571,8 +573,8 @@ ShellRoot {
                                         NumberAnimation {to:1;duration:450;easing.type:Easing.InOutSine}
                                         onRunningChanged: if(!running)art.opacity=1
                                     }
-                                    x:root.galleryMode?6:root.listMode?16:(parent.width-width)/2;y:root.galleryMode?6:root.wordMode?14:root.listMode?(parent.height-height)/2:13
-                                    width:root.galleryMode?parent.width-12:modelData.thumbnail?100:root.wordMode?28:root.listMode?40:root.settings.ui.icon_size
+                                    x:root.galleryMode?6:root.listMode?16:(parent.width-width)/2;y:root.captureMenu?(index>=4?parent.height/2-48:10):root.galleryMode?6:root.wordMode?14:root.listMode?(parent.height-height)/2:13
+                                    width:root.captureMenu?40:root.galleryMode?parent.width-12:modelData.thumbnail?100:root.wordMode?28:root.listMode?40:root.settings.ui.icon_size
                                     height:root.galleryMode?parent.height-38:modelData.thumbnail?54:width
                                     source:parent.iconSource;sourceSize.width:width*2;sourceSize.height:height*2
                                     fillMode:Image.PreserveAspectFit;asynchronous:true
@@ -590,7 +592,7 @@ ShellRoot {
                                 }
                                 Item {
                                     id:titleArea
-                                    x:modelData.thumbnail && !root.galleryMode?130:root.wordMode?56:root.listMode?70:7;y:root.galleryMode?parent.height-26:root.listMode?12:76
+                                    x:modelData.thumbnail && !root.galleryMode?130:root.wordMode?56:root.listMode?70:7;y:root.captureMenu?art.y+art.height+5:root.galleryMode?parent.height-26:root.listMode?12:76
                                     width:parent.width-x-(root.listMode?14:7)
                                     height:label.height
                                     Row {
@@ -617,7 +619,8 @@ ShellRoot {
                                     }
                                 }
                                 Text {
-                                    visible:root.listMode
+                                    visible:root.listMode || root.captureMenu
+                                    horizontalAlignment:root.captureMenu?Text.AlignHCenter:Text.AlignLeft
                                     x:titleArea.x;y:titleArea.y+titleArea.height+4;width:titleArea.width
                                     text:modelData.subtitle
                                     textFormat:Text.PlainText

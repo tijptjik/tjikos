@@ -33,7 +33,7 @@ class DesktopPluginTests(unittest.TestCase):
         for alias, canonical in (('/shot', '/grab'), ('/screenshot', '/grab'), ('/screenrecord', '/rec')):
             self.assertEqual(launcher.query(alias)['results'], launcher.query(canonical)['results'])
             self.assertIn(canonical, {row['id'] for row in launcher.query(alias[:4])['results']})
-        row = launcher.query('/grab')['results'][0]
+        row = next(row for row in launcher.query('/grab')['results'] if row['name'] == 'Screen')
         self.assertEqual(launcher.activate(row['id']), {'kind': 'edit', 'text': '/grab screen'})
         row = launcher.query('/grab screen')['results'][0]
         self.assertTrue(row['hide_launcher'])
