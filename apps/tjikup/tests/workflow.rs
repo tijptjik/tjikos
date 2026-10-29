@@ -96,3 +96,58 @@ fn service_refresh_never_restarts_active_oneshot() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("refusing to restart job"));
 }
+
+#[test]
+fn home_file_groups_are_read_from_the_declared_array() {
+    let dir = fixture();
+    let host = String::from_utf8(Command::new("hostname").output().unwrap().stdout)
+        .unwrap()
+        .trim()
+        .to_owned();
+    let profile = dir.path().join("device.json");
+    fs::write(
+        &profile,
+        serde_json::to_vec(
+            &json!({"version":1,"hostname":host,"role":"desktop","subscriptions":[]}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("tjikup.json"),
+        serde_json::to_vec(
+            &json!({"version":2,"device_file":profile,"recipes":[{"id":"base","apply":["true"]}]}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let policy = dir.path().join("native/home");
+    fs::create_dir_all(&policy).unwrap();
+    fs::write(policy.join("groups.json"), r#"["base","zed"]"#).unwrap();
+    fs::write(policy.join("portable-files.json"), r#"[{"group":"base"}]"#).unwrap();
+    fs::write(policy.join("source"), "example\n").unwrap();
+    let target = dir.path().join("home/example");
+    fs::create_dir_all(target.parent().unwrap()).unwrap();
+    fs::write(policy.join("files-device.json"), serde_json::to_vec(&json!({"version":1,"id":"fixture","entries":[{"kind":"file","path":target,"source":"source","mode":"0600","group":"base"}]})).unwrap()).unwrap();
+    let run = |group: &str| {
+        binary()
+            .args(["workflow", "--repo"])
+            .arg(dir.path())
+            .args(["files", "home-files", "plan", "--group", group])
+            .env("HOME", dir.path().join("home"))
+            .env("XDG_STATE_HOME", dir.path().join("state"))
+            .output()
+            .unwrap()
+    };
+    let base = run("base");
+    assert_eq!(
+        base.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&base.stderr)
+    );
+    assert!(String::from_utf8_lossy(&base.stdout).contains("CREATE"));
+    assert!(!target.exists());
+    let unknown = run("unknown");
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("unknown home file group"));
+}

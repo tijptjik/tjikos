@@ -86,9 +86,9 @@ pub fn run(repo: &Path, args: &[String]) -> Result<i32> {
             specific
         };
         if let Some(group) = group {
-            let groups: Value =
+            let groups: Vec<String> =
                 serde_json::from_slice(&fs::read(repo.join("native/home/groups.json"))?)?;
-            if groups.get(group).is_none() {
+            if !groups.iter().any(|known| known == group) {
                 bail!("unknown home file group {group}");
             }
             let entries: Vec<Value> = serde_json::from_slice(&fs::read(repo.join(if portable {
