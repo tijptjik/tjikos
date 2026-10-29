@@ -4,14 +4,17 @@ app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 prefix="${1:-$HOME/.local}"
 bash "$app_dir/scripts/fetch-release.sh"
 supports_backups() {
-    "$1" capabilities 2>/dev/null | grep -Eq '"native_backends"[[:space:]]*:[[:space:]]*1([,}])'
+    local capabilities
+    capabilities="$("$1" capabilities 2>/dev/null)" || return 1
+    grep -Eq '"native_backends"[[:space:]]*:[[:space:]]*1([,}])' <<< "$capabilities" &&
+        grep -Eq '"protection_backends"[[:space:]]*:[[:space:]]*1([,}])' <<< "$capabilities"
 }
 if ! supports_backups "$app_dir/dist/synctjik"; then
     if [[ -x "$prefix/bin/synctjik" ]] && supports_backups "$prefix/bin/synctjik"; then
         echo 'Synctjik: awaiting compatible release; installed runner retained.'
         exit 0
     fi
-    echo 'Pinned Synctjik release lacks native Rust backup integrations; publish a compatible release before installing.' >&2
+    echo 'Pinned Synctjik release lacks native protection engines; publish a compatible release before installing.' >&2
     exit 1
 fi
 install -d -m 755 "$prefix/bin"

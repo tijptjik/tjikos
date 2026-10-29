@@ -63,6 +63,16 @@ class InstallTests(unittest.TestCase):
                 self.install(app, prefix, managed=True)
             self.assertFalse((prefix / 'bin/synctjik').exists())
 
+    def test_native_only_release_cannot_replace_protection_engine(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app, prefix = self.fixture(Path(directory))
+            installed = prefix / 'bin/synctjik'
+            shutil.copy2(app / 'dist/synctjik', installed)
+            before = installed.read_bytes()
+            (app / 'dist/synctjik').write_text("#!/bin/sh\necho '{\"native_backends\":1}'\n")
+            self.install(app, prefix, managed=True)
+            self.assertEqual(installed.read_bytes(), before)
+
     def fixture(self, root):
         app, prefix = root / 'app', root / 'custom prefix'
         (app / 'scripts').mkdir(parents=True)
@@ -70,7 +80,7 @@ class InstallTests(unittest.TestCase):
         (prefix / 'bin').mkdir(parents=True)
         shutil.copy2(ROOT / 'scripts/install.sh', app / 'scripts/install.sh')
         (app / 'scripts/fetch-release.sh').write_text('#!/bin/sh\nexit 0\n')
-        (app / 'dist/synctjik').write_text("#!/bin/sh\nif [ \"$1\" = capabilities ]; then echo '{\"cloudflare_backup\":true,\"private_assets\":true,\"native_backends\":1}'; else printf '%s\\n' \"$@\"; fi\n")
+        (app / 'dist/synctjik').write_text("#!/bin/sh\nif [ \"$1\" = capabilities ]; then echo '{\"cloudflare_backup\":true,\"private_assets\":true,\"native_backends\":1,\"protection_backends\":1}'; else printf '%s\\n' \"$@\"; fi\n")
         (app / 'dist/synctjik').chmod(0o755)
         return app, prefix
 
