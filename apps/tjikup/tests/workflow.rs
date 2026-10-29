@@ -41,6 +41,46 @@ fn context_reuses_enrollment_aliases_and_dependencies() {
     assert_eq!(context["role"], "desktop");
 }
 #[test]
+fn capture_preserves_other_hosts_preferences_before_reading_sources() {
+    let dir = fixture();
+    let home = dir.path().join("home");
+    fs::create_dir(&home).unwrap();
+    fs::write(dir.path().join("preferences"), "desktop settings").unwrap();
+    fs::write(home.join("preferences"), "server settings").unwrap();
+    fs::write(home.join("shared"), "shared changes").unwrap();
+    fs::write(dir.path().join("shared"), "original").unwrap();
+    fs::write(
+        dir.path().join("tjikup/capture.json"),
+        serde_json::to_vec(&json!([
+            {"name":"desktop","source":"preferences","target":"preferences","kind":"copy","hosts":["other-host.invalid"]},
+            {"name":"absent","source":"absent","target":"absent","kind":"copy","hosts":["other-host.invalid"]},
+            {"name":"shared","source":"shared","target":"shared","kind":"copy"}
+        ]))
+        .unwrap(),
+    )
+    .unwrap();
+    let output = binary()
+        .args(["workflow", "--repo"])
+        .arg(dir.path())
+        .arg("capture")
+        .env("HOME", &home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("preferences")).unwrap(),
+        "desktop settings"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("shared")).unwrap(),
+        "shared changes"
+    );
+}
+#[test]
 fn capture_preflights_every_rule_before_writing() {
     let dir = fixture();
     let home = dir.path().join("home");

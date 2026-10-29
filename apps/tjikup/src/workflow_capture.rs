@@ -23,6 +23,8 @@ struct Rule {
     field: String,
     #[serde(default)]
     short_hostname: bool,
+    #[serde(default)]
+    hosts: Vec<String>,
 }
 fn actions(source: &str) -> Result<Vec<(usize, usize)>> {
     let mut result = Vec::new();
@@ -375,6 +377,10 @@ pub fn run(repo: &Path, args: &[String]) -> Result<i32> {
     let host = crate::device::hostname()?;
     let mut pending = Vec::new();
     for rule in rules {
+        if !rule.hosts.is_empty() && !rule.hosts.contains(&host) {
+            println!("SKIP    - {}  not selected on this host", rule.name);
+            continue;
+        }
         if rule.source.is_absolute()
             || rule.target.is_absolute()
             || rule

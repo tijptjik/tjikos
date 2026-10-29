@@ -44,6 +44,11 @@ already recorded in state. Metadata changes retain ordinary backups/receipts.
 Synctjik owns `synctjik migrate-schedules [--retire]`. It checks all old jobs
 before disabling old timers and checks again afterwards. It never stops jobs.
 
+Capture rules may declare `hosts` to limit shared preferences to named machines.
+Excluded rules are skipped before reading either file. Host-specific text maps
+can still capture each machine independently; server runs need not replace a
+desktop session or application preferences with older server copies.
+
 Maintenance preparation reports the number of recipes rendered and syntax
 checked. It does not execute them. The former bootstrap batch is gone:
 Bitwarden runs natively in Prerequisites, and font consolidation was removed.
