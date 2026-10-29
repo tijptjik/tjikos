@@ -70,7 +70,7 @@ class InstallTests(unittest.TestCase):
         (prefix / 'bin').mkdir(parents=True)
         shutil.copy2(ROOT / 'scripts/install.sh', app / 'scripts/install.sh')
         (app / 'scripts/fetch-release.sh').write_text('#!/bin/sh\nexit 0\n')
-        (app / 'dist/synctjik').write_text("#!/bin/sh\nif [ \"$1\" = capabilities ]; then echo '{\"cloudflare_backup\":true,\"private_assets\":true}'; else printf '%s\\n' \"$@\"; fi\n")
+        (app / 'dist/synctjik').write_text("#!/bin/sh\nif [ \"$1\" = capabilities ]; then echo '{\"cloudflare_backup\":true,\"private_assets\":true,\"native_backends\":1}'; else printf '%s\\n' \"$@\"; fi\n")
         (app / 'dist/synctjik').chmod(0o755)
         return app, prefix
 

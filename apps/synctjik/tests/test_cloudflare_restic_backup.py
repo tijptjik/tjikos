@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 
-SCRIPT = (Path(__file__).parents[1] / "runtime/cloudflare_backup.py")
+SCRIPT = (Path(__file__).parents[1] / "tests/legacy/backends/cloudflare_backup.py")
 LOADER = SourceFileLoader("cloudflare_restic_backup", str(SCRIPT))
 SPEC = importlib.util.spec_from_loader("cloudflare_restic_backup", LOADER)
 backup = importlib.util.module_from_spec(SPEC)

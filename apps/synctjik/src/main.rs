@@ -242,18 +242,14 @@ fn run() -> Result<()> {
     match &cli.command {
         Some(Cmd::Capabilities) => {
             return print(
-                &json!({"cloudflare_backup":true,"private_assets":true,"dependencies":["rclone","restic","python3"]}),
+                &json!({"cloudflare_backup":true,"private_assets":true,"native_backends":1,"dependencies":["rclone","restic"]}),
             )
         }
         Some(Cmd::Cloudflare { args }) | Some(Cmd::PrivateAssets { args }) => {
             ensure!(cli.config.is_none() && cli.home.is_none() && cli.machine.is_none() && cli.state.is_none() && !cli.json,
                 "Archive-engine global options do not apply to backup integrations; see subcommand --help");
             return synctjik::backends::exec(
-                if matches!(cli.command, Some(Cmd::Cloudflare { .. })) {
-                    synctjik::backends::CLOUDFLARE
-                } else {
-                    synctjik::backends::PRIVATE_ASSETS
-                },
+                matches!(cli.command, Some(Cmd::Cloudflare { .. })),
                 args,
             );
         }
@@ -294,7 +290,7 @@ fn run() -> Result<()> {
             }
         }
         Cmd::Check => {
-            for dependency in ["python3", "rclone", "restic"] {
+            for dependency in ["rclone", "restic"] {
                 run_dependency(dependency)?;
             }
             for f in app.folders(false)? {

@@ -103,9 +103,10 @@ folders or replacing a pinned running archive worker.
 ## Private assets and Cloudflare backups
 
 Synctjik owns the existing local-first private-assets and Cloudflare backup
-engines. They are embedded Python-standard-library implementations in the Rust
-executable, not calls to a separately managed Dotjik implementation. Each worker
-executes the engine bytes from the binary it started with. Existing unit names,
+engines, implemented directly in Rust. HTTPS exports use Rustls; transfers use
+rclone and Restic. No local or remote Python interpreter executes backup policy.
+A small shell helper holds the remote flock; Rust validates its receipts and
+stops transfer process groups if the lock connection disappears. Existing unit names,
 locks, receipts, credential locations, retention and restore gates are retained.
 
 ```sh
@@ -117,7 +118,8 @@ synctjik cloudflare check
 synctjik cloudflare backup
 ```
 
-Both `rclone` and `restic`, plus Python 3, are runtime dependencies. Managed
+Both `rclone` and `restic` are runtime dependencies; Python is not.
+The remote backup host needs POSIX shell, flock and coreutils. Managed
 installation provisions them. `cloudflare check` validates policy and dependency
 availability without reading credentials, accessing remote data or writing state.
 It is not a backup or restore test. `cloudflare backup --dry-run` still exports
@@ -131,7 +133,7 @@ transport/host selection and mount roots. No account settings or credentials are
 embedded in Synctjik. The compatibility commands `private-storage` and
 `cloudflare-restic-backup` delegate to these subcommands.
 
-Cloudflare covers DNS, Workers KV and R2 objects; it is not Git LFS. Private assets
+Cloudflare Resources backs up DNS, Workers KV and R2 objects from Cloudflare. Private assets
 are the configured documents, projects, resources and media folders. Old pinned
-releases without these integrations must not overwrite a capable installed
+releases without `native_backends: 1` must not overwrite a capable installed
 runner; fresh installations require a compatible published release.

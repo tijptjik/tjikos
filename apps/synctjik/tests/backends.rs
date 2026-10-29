@@ -39,6 +39,11 @@ fn integrations_do_not_load_archive_policy_or_execute_backups_for_checks() {
             )
             .output()
             .unwrap();
+        if args == ["capabilities"] {
+            let capabilities: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+            assert_eq!(capabilities["native_backends"], 1);
+            assert_eq!(capabilities["dependencies"], json!(["rclone", "restic"]));
+        }
         assert!(
             out.status.success(),
             "{args:?}: {}",

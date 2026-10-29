@@ -6,7 +6,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-SOURCE = Path(__file__).resolve().parents[1] / 'runtime/private_assets.py'
+SOURCE = Path(__file__).resolve().parents[1] / 'tests/legacy/backends/private_assets.py'
 loader = importlib.machinery.SourceFileLoader('private_storage', str(SOURCE))
 spec = importlib.util.spec_from_loader(loader.name, loader)
 storage = importlib.util.module_from_spec(spec)
