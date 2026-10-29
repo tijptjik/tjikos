@@ -152,7 +152,7 @@ fn preparation_reports_recipe_count_without_show_skips() {
         fs::write(root.join(format!("{name}.j2")), "true\n").unwrap();
     }
     let mut recipe = batch(json!([template("one.sh"), template("two.sh")]));
-    recipe["label"] = json!("Maintenance scripts (home)");
+    recipe["label"] = json!("Templates (home)");
     let result = run(root, json!([recipe]));
     assert!(result.status.success());
     let output = String::from_utf8_lossy(&result.stderr);
