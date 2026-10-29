@@ -533,9 +533,13 @@ impl Progress {
                 || state == State::Done
                     && !recipe.display.quiet
                     && !recipe.display.reports
-                    && recipe.render.is_none()
                     && !recipe.prerequisite)
         {
+            let prepared = recipe
+                .render
+                .as_ref()
+                .map(|r| format!("{} recipes prepared", r.templates.len()))
+                .unwrap_or_default();
             let (verb, icon, note) = match state {
                 State::Failed => ("FAIL", "✗", "failed"),
                 State::Stopped => ("CHECK", "!", "needs attention"),
@@ -568,7 +572,7 @@ impl Progress {
                     ("SKIP", "-", "recipe returned a skip status")
                 }
                 State::Unchanged => ("SKIP", "✓", "already current"),
-                State::Done if recipe.render.is_some() => ("CHECK", "✓", "templates prepared"),
+                State::Done if recipe.render.is_some() => ("CHECK", "✓", prepared.as_str()),
                 State::Done if recipe.files.is_some() => {
                     ("CHECK", "✓", "file application completed")
                 }

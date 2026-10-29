@@ -141,3 +141,19 @@ fn bitwarden_values_are_fish_quoted_without_evaluation_or_provider_logs() {
         assert!(!text.contains(value));
     }
 }
+
+#[test]
+fn preparation_reports_recipe_count_without_show_skips() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    fs::write(root.join("inputs.json"), r#"{"version":1}"#).unwrap();
+    for name in ["one.sh", "two.sh"] {
+        fs::write(root.join(format!("{name}.j2")), "true\n").unwrap();
+    }
+    let mut recipe = batch(json!([template("one.sh"), template("two.sh")]));
+    recipe["label"] = json!("Maintenance scripts (home)");
+    let result = run(root, json!([recipe]));
+    assert!(result.status.success());
+    let output = String::from_utf8_lossy(&result.stderr);
+    assert!(output.contains("2 recipes prepared"), "{output}");
+}
