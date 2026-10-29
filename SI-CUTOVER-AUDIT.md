@@ -1,7 +1,46 @@
 # Si local-policy audit
 
-Inspected 2026-10-29 through the existing pinned SSH identity. No files, containers,
-timers, credentials or archive workers on Si were changed.
+Initially inspected read-only on 2026-10-29 through the existing pinned SSH
+identity. The user subsequently authorized reconciliation and a Tjikup run.
+
+## Cutover execution
+
+- Preserved both old checkouts as verified private worktree archives and Git
+  bundles under
+  `/home/m/.local/state/tjikup/si-native-cutover-20261029T151734Z/`.
+  Local Telegram edits are also retained in recovery commits `94260ca` (home)
+  and `8c46d83` (system).
+- Merged the home changes into their equivalent native paths. The server policy
+  checkout is at `2375e2d`; TjikOS is at `52adbe5`. No repository was pushed.
+- Installed native Tjikup for the user and at the root-owned system runtime.
+  Existing native Synctjik binaries already supported protection backends and
+  were retained. Enrolled Si explicitly as a server and installed Fish completions.
+- Applied the reviewed system policy through the Synctjik guard: 42 changes,
+  with private rollback receipt
+  `/var/lib/tjikup/files/receipt-HfxMj0/receipt.json`. System checks now converge.
+  Backup, SnapRAID and Transmission units call native commands. Nginx validation
+  and storage checks pass; timer enablement and container IDs are unchanged.
+- Preserved Si's existing Herdr session. Shared desktop captures now select only
+  Fi/Li. Corrected the legacy age identity from 0644 to 0600; native Tjikup created
+  its private `age.txt` copy without changing key material.
+
+The home run is **pending**, not successful yet. It reached the normal guard and
+returned 75 because `drive-restic-backup.service` still holds its lock. The
+existing backup and `synctjik-drive-restore-validation-20261029.service` were left
+running. A one-shot `tjikup-si-native-cutover.service` is queued after both jobs.
+It checks the approved Git revisions and live-file snapshots, records reviewed
+migration baselines through the native file engine, corrects exactly two
+root-owned Beets helper paths with recovery receipts, then runs:
+
+```sh
+tjikup --skip-repo-sync --skip-package-updates --show-skips
+```
+
+It retains the ordinary protection guards and stops if reviewed inputs changed.
+Logs, exit status and completion timestamp will be written to `queued-run.log`,
+`queued-run.exit` and `queued-run.finished` in the private cutover directory.
+Check the unit's queued job with `systemctl --user list-jobs`; an inactive state
+alone does not mean a queued one-shot has completed.
 
 ## What the local edits contain
 
@@ -52,14 +91,11 @@ repair does not change the daemon image, RPC settings, downloads or cleanup jobs
 
 ## Remaining cutover gates
 
-1. Preserve both dirty checkouts and reconcile them with the native layouts.
-2. Install and verify capable user/system Tjikup and Synctjik runners; Si still
-   has the Python Tjikup runner and lacks the native Synctjik entrypoints.
-3. Review a Si-specific home/system plan against its live mounts, container
-   policy, ownership, services, protection locks and current receipts.
-4. Apply only through the native protection guards, without interrupting pinned
-   workers; verify fresh backup/restore evidence separately from service health.
+1. Let the existing backup and restore validation finish; inspect their evidence
+   separately from the Tjikup cutover result.
+2. Confirm the queued home run exits successfully and its native home/system
+   checks converge. Investigate any new conflict; do not force an overwrite.
+3. Retire remaining legacy path aliases and entrypoints after home acceptance.
+   Keep the private recovery material until it is no longer needed.
 
-This audit resolves the known local-diff question. It does not substitute for
-the live server plan and protection checks, and it does not authorize a reset,
-clean, whole-stack recreation, or deletion of the old recovery material.
+No archive worker or container was stopped or replaced during this cutover.

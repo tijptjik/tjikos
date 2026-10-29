@@ -40,6 +40,11 @@ Completed in this checkpoint:
   explicitly select it. This was a brief launch check; user visual acceptance
   and sustained use remain separate. See Dotjik's `docs/transmission-desktop.md`
   for installation, evidence and rollback. Li and Si were not updated.
+- Fixed the subsequent Fi failure on application-written `mimeapps.list` and
+  Transmission settings. These are now seeded only when absent; runtime
+  preferences survive normal reapplication. The live home/system configuration
+  run completed with `ALL SYSTEMS GO`. Native capture also supports host filters,
+  preserving Fi/Li desktop captures while excluding Si's older copies.
 
 ### Application review
 
@@ -67,7 +72,7 @@ Open acceptance items:
   Reconcile the naming decision before calling the terminology cleanup complete.
 
 Validation: workspace `bun run build` passed with a writable temporary Go cache;
-8 completion tests and 7 installer tests passed; Dotjik validation passed 320 tests with 9 skipped,
+8 completion tests and 7 installer tests passed; Dotjik validation passed 321 tests with 9 skipped,
 including Fi/Li/Si template rendering. The first validation encountered icon
 files changing concurrently; the completed second run passed.
 
@@ -79,31 +84,28 @@ and running workers, then install capable native runners and review the home
 and system plans separately. Repeat the desktop acceptance check before retiring
 the old installation. Do not substitute an unverified remembered IP address.
 
-## 3. Si: reconcile before applying
+## 3. Si: system cut over; home queued behind backup
 
-The trusted public SSH endpoint is reachable. Its installed Tjikup is still the
-Python runner; neither the home nor system Synctjik executable was present.
-The Dotjik checkout is at `a607309`, with a modified Docker Compose template
-and untracked Telegram archive files; the separate system checkout also has
-an nginx-site edit. The read-only comparison found all these additions already
-represented in native policy. See [SI-CUTOVER-AUDIT.md](SI-CUTOVER-AUDIT.md) for
-the file-by-file findings and server-specific gates. Preserve that work before
-updating the checkouts; do not run a blanket apply against them.
+The Telegram edits were preserved in verified private archives and recovery
+commits, then reconciled with their equivalent native policy. Native Tjikup is
+installed for user and system commands; the capable native Synctjik binaries
+installed by the parallel protection-validation work were retained.
 
-Next steps, in order:
+The guarded system deployment completed with a rollback receipt. Native unit
+routes, nginx validation and mounted storage passed; timer enablement and the
+running container IDs were preserved. The subsequent home run correctly stopped
+at the active Drive backup lock. `tjikup-si-native-cutover.service` is queued
+after that backup and its existing restore-validation job, with approved-source
+and live-file checks before the remaining apply. Package upgrades and Git
+publication are excluded from the queued run.
 
-1. Inventory active archive/backup jobs, locks, receipts and current server
-   policy. Do not restart or replace pinned workers.
-2. Preserve and reconcile the dirty checkout with the current native policy.
-3. Install matching native Tjikup and Synctjik builds for both user and system
-   entrypoints; verify protection capabilities before any protected-file apply.
-4. Review home and system plans separately, apply through the protection guard,
-   then verify native unit commands, schedules and fresh recovery evidence.
-5. Retire legacy entrypoints only after the native acceptance checks pass.
+See [SI-CUTOVER-AUDIT.md](SI-CUTOVER-AUDIT.md) for the preservation commits,
+receipts, queued-run logs and remaining acceptance gates. Home convergence and
+legacy-entrypoint retirement are still pending; do not report the queued run as
+successful before its exit status and receipts exist.
 
 Fi's old backup-health failure predates the native unit deployment. Its current
 unit calls `synctjik app-pull health`. A fresh successful health check and backup
 receipt are still needed; the old failure was not cleared to imply success.
 
-Release publication and pin advancement remain deferred. No remote files were
-changed during this checkpoint.
+Release publication and pin advancement remain deferred.
