@@ -1,4 +1,4 @@
-# TjikOS
+# tjikOS
 
 Odds, ends, and mildly opinionated machinery for a Linux desktop.
 
