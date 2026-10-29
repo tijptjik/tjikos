@@ -658,3 +658,20 @@ fn grouped_results_keep_sections_together_across_async_completion() {
     assert_eq!(text.matches("\nServices\n").count(), 1);
     assert!(text.find("Configuration").unwrap() < text.find("Services").unwrap());
 }
+
+#[test]
+fn blocked_results_keep_groups_and_sort_by_display_title() {
+    let (dir, mut config) = fixture(json!([
+        {"id":"fail","label":"Failure","apply":["false"],"display":{"section":"Preparation"}},
+        {"id":"z","label":"Zulu","needs":["fail"],"apply":["true"],"display":{"section":"Configuration"}},
+        {"id":"s","label":"Service","needs":["fail"],"apply":["true"],"display":{"section":"Services"}},
+        {"id":"a","label":"Internal","needs":["fail"],"apply":["true"],"display":{"section":"Configuration"}}
+    ]));
+    config["presentation"] = json!({"grouped_results":true,"titles":{"Internal":"Alpha"}});
+    let output = invoke(dir.path(), &config, &[]);
+    assert!(!output.status.success());
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(text.matches("\nConfiguration\n").count(), 1);
+    assert!(text.find("Alpha").unwrap() < text.find("Zulu").unwrap());
+    assert!(text.find("Zulu").unwrap() < text.find("\nServices\n").unwrap());
+}

@@ -577,7 +577,7 @@ impl Progress {
                     "Recipes".into()
                 };
             }
-            if self.repo_open || self.presentation.grouped_results && !event.issue() {
+            if self.repo_open || self.presentation.grouped_results {
                 self.queued.push(event);
             } else {
                 self.event(&event);
@@ -626,10 +626,14 @@ impl Progress {
             "Other devices and subscriptions",
         ];
         events.sort_by_key(|e| {
-            sections
-                .iter()
-                .position(|s| *s == e.section)
-                .unwrap_or(sections.len())
+            (
+                sections
+                    .iter()
+                    .position(|s| *s == e.section)
+                    .unwrap_or(sections.len()),
+                e.section.to_lowercase(),
+                plain(&self.title(&e.subject)).to_lowercase(),
+            )
         });
         for event in events {
             self.event(&event);
