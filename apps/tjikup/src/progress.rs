@@ -538,7 +538,7 @@ impl Progress {
             let prepared = recipe
                 .render
                 .as_ref()
-                .map(|r| format!("{} recipes prepared", r.templates.len()))
+                .map(|r| format!("{} recipes", r.templates.len()))
                 .unwrap_or_default();
             let (verb, icon, note) = match state {
                 State::Failed => ("FAIL", "✗", "failed"),
