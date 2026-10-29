@@ -76,7 +76,7 @@ class DesktopPluginTests(unittest.TestCase):
         provider = d.Screenshots()
         monitor = {'name': 'DP-1', 'activeWorkspace': {'id': 2, 'name': '2'}}
         with patch.object(d, 'hypr', return_value=[monitor]), patch.object(d.shutil, 'which', return_value='/tool'), patch.object(d, 'recorder_request', return_value=None):
-            self.assertEqual(provider.query('/grab workspace', self.settings), provider.query('/grab screen', self.settings))
+            self.assertEqual(provider.query('/grab workspace', self.settings), [])
             recorder = d.Recorder()
             rows = recorder.query('/rec workspace', self.settings)
             self.assertEqual(rows[0]['data']['workspace'], 2)

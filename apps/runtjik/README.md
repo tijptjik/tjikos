@@ -505,8 +505,7 @@ Bundled desktop plugins:
   a hidden workspace. A Stop row controls only Runtjik's recorder, never another
   recording tool or the existing `screen-record.service`.
 - **Screenshots** registers `/grab`, with `/shot` and `/screenshot` as aliases.
-  Screen selects a monitor; the legacy screenshot `workspace` command aliases
-  Screen. Window focuses the selected
+  Screen selects a monitor. Window focuses the selected
   window and captures its visible rectangle; region uses `slurp` (Escape cancels).
   Uses `grim`, and optionally copies the saved PNG with `wl-copy`. Window screenshots
   capture the composited area, so overlapping overlays can be included.

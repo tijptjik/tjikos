@@ -293,11 +293,9 @@ class CaptureProvider(DesktopProvider):
             return []
         base = self.base
         term = term.strip()
-        if self.name == 'Screenshots' and term == 'workspace':
-            term = 'screen'  # Compatibility for saved launcher commands.
         if term == 'history' or term.startswith('history '):
             return self.history(term[7:].strip(), settings)
-        if term in ('screen', 'workspace', 'window'):
+        if term in (('screen', 'workspace', 'window') if self.name == 'Recorder' else ('screen', 'window')):
             if self.demo:
                 return [self.row('target', 'Demo ' + term, 'Synthetic target · no capture', capture=term, target='demo')]
             if term == 'window':
