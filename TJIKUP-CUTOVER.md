@@ -1,6 +1,6 @@
 # Tjikup cutover checkpoints
 
-Updated 2026-10-29 after the Fi application review.
+Updated 2026-10-29 after the Fi application review, Transmission repair and Si audit.
 
 ## 1. Fi: native deployment and desktop acceptance
 
@@ -28,6 +28,18 @@ Completed in this checkpoint:
   `~/.local/state/tjikup/cutover-fi-20261029/`.
 - Retired obsolete home helper files through the native manifest. Existing
   credential recovery material and backup/archive workers were preserved.
+- Added Fish completions for all seven CLI apps, both control commands and the
+  managed wrappers. App installers now install them; Fi's normal Fish shell
+  autoloads the installed files. Eight completion tests and seven installer tests
+  pass without invoking application workloads.
+- Repaired Transmission 4.1.3's favicon-worker self-join crash with a pinned,
+  GTK-only build. The original lifetime regression aborts and the patched one
+  passes. Both a fresh synthetic profile and the backed-up real profile ran
+  with transfers paused and exited successfully. The real window was observed
+  mapped and `/proc/PID/exe` identified the repaired binary. Desktop menu actions
+  explicitly select it. This was a brief launch check; user visual acceptance
+  and sustained use remain separate. See Dotjik's `docs/transmission-desktop.md`
+  for installation, evidence and rollback. Li and Si were not updated.
 
 ### Application review
 
@@ -48,11 +60,6 @@ start-minimized preference, but no mapped window was confirmed.
 
 Open acceptance items:
 
-- The real Transmission profile aborted with `Resource deadlock avoided`.
-  An empty temporary profile opened successfully; a synthetic rendering of the
-  managed policy also ran and exited normally. No saved torrents were copied,
-  no transfers were started in these diagnostics, and the real profile was not
-  reset. The original-profile failure remains unresolved.
 - Visual confirmation from the user is still needed. Successful launches and
   parser checks do not establish that every appearance setting is correct.
 - A concurrent icon workstream restored legacy asset names with new-name
@@ -60,7 +67,7 @@ Open acceptance items:
   Reconcile the naming decision before calling the terminology cleanup complete.
 
 Validation: workspace `bun run build` passed with a writable temporary Go cache;
-7 installer tests passed; Dotjik validation passed 318 tests with 9 skipped,
+8 completion tests and 7 installer tests passed; Dotjik validation passed 320 tests with 9 skipped,
 including Fi/Li/Si template rendering. The first validation encountered icon
 files changing concurrently; the completed second run passed.
 
@@ -77,8 +84,11 @@ the old installation. Do not substitute an unverified remembered IP address.
 The trusted public SSH endpoint is reachable. Its installed Tjikup is still the
 Python runner; neither the home nor system Synctjik executable was present.
 The Dotjik checkout is at `a607309`, with a modified Docker Compose template
-and untracked Telegram archive files. Preserve that work before updating the
-checkout; do not run a blanket apply against it.
+and untracked Telegram archive files; the separate system checkout also has
+an nginx-site edit. The read-only comparison found all these additions already
+represented in native policy. See [SI-CUTOVER-AUDIT.md](SI-CUTOVER-AUDIT.md) for
+the file-by-file findings and server-specific gates. Preserve that work before
+updating the checkouts; do not run a blanket apply against them.
 
 Next steps, in order:
 
