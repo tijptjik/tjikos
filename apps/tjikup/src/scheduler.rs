@@ -64,6 +64,64 @@ pub fn state_root() -> PathBuf {
         .join("tjikup")
 }
 
+// Display groups are execution phases, but an earlier phase may need a task
+// owned by a later group. Include that task's dependency closure rather than
+// inventing edges that would introduce cycles into an otherwise valid graph.
+pub(crate) fn group(recipe: &crate::config::Recipe) -> String {
+    if recipe.prerequisite {
+        "Prerequisites".into()
+    } else if !recipe.display.repository.is_empty() {
+        "Repositories".into()
+    } else if !recipe.display.section.is_empty() {
+        recipe.display.section.clone()
+    } else {
+        "Recipes".into()
+    }
+}
+pub(crate) fn group_rank(section: &str) -> usize {
+    [
+        "Prerequisites",
+        "Capture settings",
+        "Repositories",
+        "Preparation",
+        "Install applications",
+        "Configuration",
+        "Services",
+        "Recipes",
+        "Package updates",
+        "Verification",
+        "Other devices and subscriptions",
+    ]
+    .iter()
+    .position(|s| *s == section)
+    .unwrap_or(10)
+}
+fn phase_work(config: &Config, phase: &str, pending: &BTreeSet<usize>) -> BTreeSet<usize> {
+    let indices: BTreeMap<_, _> = config
+        .recipes
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (r.id.as_str(), i))
+        .collect();
+    let mut work = BTreeSet::new();
+    let mut visit: Vec<_> = pending
+        .iter()
+        .copied()
+        .filter(|i| group(&config.recipes[*i]) == phase)
+        .collect();
+    while let Some(i) = visit.pop() {
+        if !pending.contains(&i) || !work.insert(i) {
+            continue;
+        }
+        for need in &config.recipes[i].needs {
+            if let Some(&parent) = indices.get(need.as_str()) {
+                visit.push(parent);
+            }
+        }
+    }
+    work
+}
+
 pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathBuf)> {
     let root = state_root();
     DirBuilder::new()
@@ -118,6 +176,15 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
     let mut stop = false;
     let mut exclusive_running = false;
     let mut progress = crate::progress::Progress::new(&config);
+    let mut groups: Vec<_> = config.recipes.iter().map(group).collect();
+    groups.sort_by_key(|name| (group_rank(name), name.clone()));
+    groups.dedup();
+    let mut phase = 0;
+    if config.presentation.grouped_results {
+        if let Some(name) = groups.first() {
+            progress.enter_group(name);
+        }
+    }
     while !pending.is_empty() || !running.is_empty() {
         let now = Instant::now();
         for &i in &pending {
@@ -155,9 +222,31 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                 stop = true;
             }
         }
+        let allowed = if config.presentation.grouped_results && !stop {
+            while phase < groups.len()
+                && !pending
+                    .iter()
+                    .chain(running.keys())
+                    .any(|i| group(&config.recipes[*i]) == groups[phase])
+            {
+                phase += 1;
+                if let Some(name) = groups.get(phase) {
+                    progress.enter_group(name);
+                }
+            }
+            groups
+                .get(phase)
+                .map(|name| phase_work(&config, name, &pending))
+                .unwrap_or_default()
+        } else {
+            pending.clone()
+        };
         if !stop && !exclusive_running {
             // Configuration order is the stable tie-breaker, never BTreeMap ID order.
             for i in pending.clone() {
+                if !allowed.contains(&i) {
+                    continue;
+                }
                 if running.len() >= config.jobs {
                     break;
                 }

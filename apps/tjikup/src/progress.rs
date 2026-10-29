@@ -6,7 +6,7 @@ use crate::{
     report::Event,
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io::{IsTerminal, Write},
     time::Instant,
 };
@@ -94,7 +94,8 @@ pub struct Progress {
     section: String,
     queued: Vec<Event>,
     visible: usize,
-    updates_started: bool,
+    entered_groups: BTreeSet<String>,
+    current_group: String,
 }
 impl Progress {
     pub fn new(config: &Config) -> Self {
@@ -124,7 +125,8 @@ impl Progress {
             section: String::new(),
             queued: Vec::new(),
             visible: 0,
-            updates_started: false,
+            entered_groups: BTreeSet::new(),
+            current_group: String::new(),
         };
         if config.show_other_devices {
             for recipe in &config.excluded {
@@ -453,13 +455,6 @@ impl Progress {
     }
     pub fn start(&mut self, index: usize, recipe: &Recipe) {
         self.clear();
-        if self.presentation.grouped_results
-            && !self.updates_started
-            && recipe.operation == Some(crate::selection::Operation::Update)
-        {
-            self.flush_grouped();
-            self.updates_started = true;
-        }
         if recipe.interactive {
             self.restore_cursor();
         } else {
@@ -582,7 +577,9 @@ impl Progress {
                     "Recipes".into()
                 };
             }
-            if self.repo_open || self.presentation.grouped_results {
+            if self.repo_open
+                || self.presentation.grouped_results && event.section != self.current_group
+            {
                 self.queued.push(event);
             } else {
                 self.event(&event);
@@ -610,36 +607,36 @@ impl Progress {
             }
         }
         self.repo_open = false;
-        if !self.presentation.grouped_results {
+        if self.presentation.grouped_results {
+            self.flush_entered();
+        } else {
             for event in std::mem::take(&mut self.queued) {
                 self.event(&event);
             }
         }
     }
+    pub fn enter_group(&mut self, name: &str) {
+        self.current_group = name.into();
+        self.entered_groups.insert(name.into());
+        if !self.repo_open {
+            self.flush_entered();
+        }
+    }
+    fn flush_entered(&mut self) {
+        let events = std::mem::take(&mut self.queued);
+        let (mut ready, waiting): (Vec<_>, Vec<_>) = events
+            .into_iter()
+            .partition(|e| self.entered_groups.contains(&e.section));
+        self.queued = waiting;
+        ready.sort_by_key(|e| (crate::scheduler::group_rank(&e.section), e.section.clone()));
+        for event in ready {
+            self.event(&event);
+        }
+    }
     fn flush_grouped(&mut self) {
         let mut events = std::mem::take(&mut self.queued);
-        let sections = [
-            "Prerequisites",
-            "Capture settings",
-            "Preparation",
-            "Repositories",
-            "Install applications",
-            "Configuration",
-            "Services",
-            "Package updates",
-            "Verification",
-            "Other devices and subscriptions",
-        ];
-        events.sort_by_key(|e| {
-            (
-                sections
-                    .iter()
-                    .position(|s| *s == e.section)
-                    .unwrap_or(sections.len()),
-                e.section.to_lowercase(),
-                plain(&self.title(&e.subject)).to_lowercase(),
-            )
-        });
+        // Preserve completion order inside each group, including blocked rows.
+        events.sort_by_key(|e| (crate::scheduler::group_rank(&e.section), e.section.clone()));
         for event in events {
             self.event(&event);
         }
@@ -752,10 +749,14 @@ impl Progress {
         // have their own icons and never get repainted for animation.
         if let Some((label, started)) = self.active.values().next() {
             let note = format!("{:.1}s", started.elapsed().as_secs_f64());
+            let available = columns().saturating_sub(1);
+            let label = fit(label, available.saturating_sub(width(&note) + 3));
+            let gap = available.saturating_sub(2 + width(&label) + width(&note));
             eprint!(
-                "\r{} {} {}\x1b[K",
+                "\r{} {}{}{}\x1b[K",
                 self.paint("36", &SPINNER[self.frame % 10].to_string()),
-                fit(label, columns().saturating_sub(note.len() + 5)),
+                label,
+                " ".repeat(gap),
                 self.paint("90", &note)
             );
             self.transient = true;
