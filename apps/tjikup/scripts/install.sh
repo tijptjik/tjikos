@@ -6,7 +6,8 @@ bash "$app_dir/scripts/fetch-release.sh"
 # External native manifests may require features not visible to --check.
 "$app_dir/dist/tjikup" capabilities | jq -e '
     .encrypted_credentials >= 1 and .bootstrap_archives >= 1 and
-    .native_commands >= 1 and .native_installers >= 1 and .native_maintenance >= 1
+    .native_commands >= 1 and .native_installers >= 1 and .native_maintenance >= 1 and
+    .scheduled_telegram >= 1 and .scheduled_telegram_bws >= 1
 ' >/dev/null || {
     echo 'Pinned Tjikup release lacks required native workflows; existing runner preserved. Publication and pin updates are still required.' >&2
     exit 1

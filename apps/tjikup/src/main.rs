@@ -114,7 +114,7 @@ fn cli(arguments: Vec<String>, completed: &mut Option<scheduler::Receipt>) -> Re
             bail!("usage: tjikup capabilities");
         }
         println!(
-            r#"{{"encrypted_credentials":1,"credential_recovery":1,"native_workflow":1,"bootstrap_archives":1,"native_commands":1,"native_installers":1,"native_maintenance":1}}"#
+            r#"{{"encrypted_credentials":1,"credential_recovery":1,"native_workflow":1,"bootstrap_archives":1,"native_commands":1,"native_installers":1,"native_maintenance":1,"scheduled_telegram":1,"scheduled_telegram_bws":1}}"#
         );
         return Ok(0);
     }

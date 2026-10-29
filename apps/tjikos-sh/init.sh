@@ -90,7 +90,8 @@ main() {
     "$bootstrap_binary_tmp" --version >/dev/null
     "$bootstrap_binary_tmp" capabilities | jq -e '
         .native_workflow == 1 and .bootstrap_archives == 1 and
-        .native_commands == 1 and .native_installers == 1 and .native_maintenance == 1
+        .native_commands == 1 and .native_installers == 1 and .native_maintenance == 1 and
+        .scheduled_telegram >= 1 and .scheduled_telegram_bws >= 1
     ' >/dev/null || {
         echo 'Pinned Tjikup release lacks the required native workflows. Publish a compatible release and update pins; existing executable preserved.' >&2
         return 1
@@ -116,6 +117,7 @@ main() {
         tjikup new device </dev/tty
     fi
     tjikup --check
+    bash "$dotjik_dir/scripts/install-tjikup.sh"
     tjikup workflow --repo "$dotjik_dir" bitwarden
     fish --no-config "$dotjik_dir/native/tasks/bootstrap/setup-bitwarden.fish" </dev/tty
     age-keygen -y "$HOME/.keys/age.txt" >/dev/null

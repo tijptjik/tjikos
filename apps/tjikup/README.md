@@ -444,8 +444,9 @@ Each run uses the native secret provider and keeps the credential in memory.
 The fleet uses the existing notification secret on all three devices, with no
 SSH relay or plaintext bot-credential file.
 
-The root-owned `/usr/local/libexec/tjikup-weekly` is the tested scheduled runtime,
-so ordinary application installs cannot replace it with a release that predates
-scheduled reporting. Update that runtime when deploying new scheduling support.
-Install or refresh that runtime with `bash apps/tjikup/scripts/install-weekly.sh`
-after building. This replaces only the executable, never a running process.
+The fleet installer provisions both the user executable and root-owned
+`/usr/local/libexec/tjikup-weekly` from the checksum-pinned release. Capability
+checks reject releases without BWS-backed reporting. Missing weekly runtimes
+are repaired during normal provisioning. `bash apps/tjikup/scripts/install-weekly.sh`
+remains available for targeted repair. Replacements are atomic and do not restart
+a running job.
