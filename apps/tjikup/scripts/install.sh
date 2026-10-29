@@ -22,6 +22,7 @@ staged_binary="$(mktemp "$prefix/bin/.tjikup.XXXXXX")"
 trap 'rm -f "$staged_binary"' EXIT
 install -m 755 "$app_dir/dist/tjikup" "$staged_binary"
 mv -f "$staged_binary" "$prefix/bin/tjikup"
+bash "$app_dir/../../scripts/install-completions.sh" "$prefix" tjikup
 install -m 644 "$app_dir/assets/tjikup.png" "$prefix/share/icons/tjikup.png"
 # Named icon for notifications arriving through an SSH terminal.
 install -d -m 755 "$prefix/share/icons/hicolor/256x256/apps"

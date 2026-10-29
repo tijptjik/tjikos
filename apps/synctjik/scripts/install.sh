@@ -32,6 +32,7 @@ temporary="$(mktemp "$prefix/bin/.synctjik.XXXXXX")"
 trap 'rm -f -- "$temporary"' EXIT
 install -m 755 "$source_binary" "$temporary"
 mv -f -- "$temporary" "$prefix/bin/synctjik"
+bash "$app_dir/../../scripts/install-completions.sh" "$prefix" synctjik
 # Dotjik owns compatibility commands during managed installs. Rewriting them
 # here would invalidate the file deployer's last-applied baseline.
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" == 1 ]]; then

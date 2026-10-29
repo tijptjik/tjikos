@@ -95,11 +95,14 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(installed.read_bytes(), before)
 
     def fixture(self, root):
-        app, prefix = root / 'app', root / 'custom prefix'
+        app, prefix = root / 'repo/apps/synctjik', root / 'custom prefix'
         (app / 'scripts').mkdir(parents=True)
         (app / 'dist').mkdir()
         (prefix / 'bin').mkdir(parents=True)
         shutil.copy2(ROOT / 'scripts/install.sh', app / 'scripts/install.sh')
+        (root / 'repo/scripts').mkdir(parents=True)
+        shutil.copy2(ROOT.parents[1] / 'scripts/install-completions.sh', root / 'repo/scripts/install-completions.sh')
+        shutil.copytree(ROOT.parents[1] / 'completions', root / 'repo/completions')
         (app / 'scripts/fetch-release.sh').write_text('#!/bin/sh\nexit 0\n')
         (app / 'dist/synctjik').write_text("#!/bin/sh\nif [ \"$1\" = capabilities ]; then echo '{\"cloudflare_backup\":true,\"private_assets\":true,\"native_backends\":1,\"protection_backends\":1}'; else printf '%s\\n' \"$@\"; fi\n")
         (app / 'dist/synctjik').chmod(0o755)

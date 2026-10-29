@@ -24,6 +24,7 @@ for directory in qml examples docs; do
 done
 install -m 644 "$root_dir/dist/runtjik.py" "$root_dir/dist/control.py" "$root_dir/dist/README.md" "$target/"
 install -m 755 "$root_dir/dist/bin/runtjik" "$install_home/.local/bin/runtjik"
+bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" runtjik
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 && ! -e "$config_root/runtjik/runtjik.conf" ]]; then
     install -m 644 "$root_dir/dist/examples/runtjik.conf" "$config_root/runtjik/runtjik.conf"
 fi

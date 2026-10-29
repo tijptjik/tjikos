@@ -32,6 +32,7 @@ for app in "$@"; do
             install -d -m 755 "$HOME/.local/bin" "$HOME/.local/lib/mailtjik"
             install -m 755 "$root_dir/apps/mailtjik/dist/mailtjik" "$HOME/.local/bin/mailtjik"
             install -m 644 "$root_dir"/apps/mailtjik/dist/backend/*.py "$HOME/.local/lib/mailtjik/"
+            bash "$root_dir/scripts/install-completions.sh" "$HOME/.local" mailtjik
             ;;
         notjik)
             source_dir="$root_dir/apps/notjik/dist"
@@ -40,6 +41,7 @@ for app in "$@"; do
             cp -R "$source_dir"/qml "$source_dir"/themes "$source_dir"/examples "$target_dir/"
             install -m 644 "$source_dir/telegram_media_render.py" "$source_dir/telegram_recording.py" "$source_dir/telegram_bridge.py" "$source_dir/requirements-telegram.txt" "$source_dir/install-telegram.sh" "$source_dir/notjik.py" "$source_dir/lock_watch.py" "$source_dir/comparison.py" "$source_dir/demo.py" "$source_dir/demo_cycle.py" "$source_dir/README.md" "$target_dir/"
             install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$HOME/.local/bin/"
+            bash "$root_dir/scripts/install-completions.sh" "$HOME/.local" notjik
             if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
                 install -m 644 "$source_dir/systemd/notjik.service" "$HOME/.config/systemd/user/notjik.service"
                 install -m 644 "$source_dir/systemd/notjik-telegram.service" "$HOME/.config/systemd/user/notjik-telegram.service"
