@@ -2,8 +2,37 @@
 
 Recorded 2026-10-30 (Hong Kong time). **Package updates and configuration
 convergence now both report ALL SYSTEMS GO.** Docker and Tailscale are active;
-Synctjik enrollment, readiness and schedules are verified. A fresh manual backup
-verification remains blocked by automatic approval review, as detailed below.
+Synctjik enrollment, readiness and schedules are verified. Following explicit
+confirmation of the folders and destination, a fresh Restic backup and sample
+restore verification also succeeded.
+
+## Verified backup after explicit confirmation
+
+The 01:00 scheduled backup exposed a native compatibility bug: its repository
+probe used POSIX syntax through Si's Fish login shell. Fixed the probe to invoke
+`sh` explicitly and pass the repository as a quoted positional argument
+(`d517d72`). Five focused tests passed, including real Fish/POSIX probes with
+spaces, apostrophes and shell metacharacters in the path. Release build and the
+workspace build passed (9 tasks). Release CI now installs Fish for this test.
+
+Installed the verified binary on Li with workers inactive and ran the approved
+native backup of documents, projects, resources and media to Si. Evidence:
+
+- `synctjik-li-verified-backup.service`: exit 0.
+- Log: `verified-backup.log` in the private recovery directory; native repository
+  check and retention completed successfully.
+- New snapshot: **`f372bebb`**, hostname `li`, created
+  **2026-10-30 01:05:58 HKT**, containing all four configured source folders.
+- Local success receipt: `20261029T170637Z`; Si's coordination receipt agrees.
+- Restored one small documents file into the private audit directory and
+  confirmed it matches the local file byte-for-byte. This is a representative
+  restore check, not a full restore of all four folders.
+
+Bisync remains the two-way synchronization path to encrypted Drive. Restic is
+the separate recoverable-history layer on Si; it does not replace bisync.
+The old error receipt remains historical and predates the successful backup.
+Earlier approval-boundary notes below describe prior checkpoints and are now
+superseded for this operation.
 
 ## Final catch-up after approval of all remaining work
 
@@ -44,14 +73,12 @@ old LAN address had no route, while discovered tailnet IPv6
 `fd7a:115c:a1e0::32f:dc65` returned hostname `si` with the existing pinned
 `HostKeyAlias=ssh.type.hk`. The shared policy now prefers that verified route.
 
-The user approved running all remaining actions, but automatic approval review
-still rejected the immediate manual backup because it requires user confirmation
-that names both the payload and destination. The exact proposed operation is:
-back up Li's `/home/io/documents`, `/home/io/projects`, `/home/io/resources` and
+Automatic approval review initially required confirmation naming both the
+payload and destination. The user subsequently supplied that confirmation for
+Li's `/home/io/documents`, `/home/io/projects`, `/home/io/resources` and
 `/home/io/media` into the existing encrypted Restic repository on Si at
 `/mnt/storage/private/backups/clients/li`. Native policy excludes `.git`,
-dependency caches and trash. The manual backup did not start; existing approved
-schedules remain enabled. Do not bypass this outstanding approval boundary.
+dependency caches and trash. The successful run is recorded above.
 
 Validation: the two native schedule-migration tests passed; the Synctjik release
 build passed; `bun install` and the workspace build passed (9 tasks). All 52

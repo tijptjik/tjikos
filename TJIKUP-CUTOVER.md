@@ -76,7 +76,7 @@ Validation: workspace `bun run build` passed with a writable temporary Go cache;
 including Fi/Li/Si template rendering. The first validation encountered icon
 files changing concurrently; the completed second run passed.
 
-## 2. Li: native cutover and updates complete; fresh backup proof pending
+## 2. Li: native cutover, updates and fresh backup verified
 
 Li is reachable through the pinned native fleet resolver. Its paused rebase and
 live settings were reconciled, including a separate Li Herdr session template.
@@ -90,11 +90,12 @@ as a laptop follower of Fi with eight restored shared collections; readiness
 passes and all three native backup/sync timers are enabled. The real repository
 directory is now Dotjik, with the old name retained as a compatibility symlink.
 
-A fresh manual backup verification is still blocked by automatic approval review,
-which requires user confirmation naming the four private folders and their
-existing encrypted Restic destination on Si. No fresh backup success is claimed.
-See [LI-CUTOVER-AUDIT.md](LI-CUTOVER-AUDIT.md) for the exact approval request,
-validation limits, recovery evidence and the unresolved 82-second Plymouth stall.
+After explicit confirmation of the folders and destination, the native Restic
+backup succeeded with snapshot `f372bebb`; repository checks and a representative
+restored-file comparison passed. A Fish login-shell compatibility bug in the
+repository probe was fixed and tested. Bisync to Drive remains separate from
+these recoverable snapshots on Si. See [LI-CUTOVER-AUDIT.md](LI-CUTOVER-AUDIT.md)
+for evidence, validation limits and the unresolved 82-second Plymouth stall.
 
 ## 3. Si: system cut over; home queued behind backup
 
