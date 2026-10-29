@@ -265,12 +265,15 @@ fn assets(args: &[String]) -> Result<i32> {
             println!("FAIL    ✗ {title}  setup failed; see private step log");
             return Ok(output.status.code().unwrap_or(1));
         }
-        changed |= String::from_utf8_lossy(&output.stdout).lines().any(|line| {
-            let l = crate::report::plain(line);
-            ["UPDATE", "INSTALL", "CONFIG", "SYNC", "APPLY"]
-                .iter()
-                .any(|verb| l.starts_with(&format!("{verb} ")))
-        });
+        let report = fs::read_to_string(directory.join(format!("{kind}-step-{index}.report")))
+            .unwrap_or_default();
+        changed |= crate::report::parse(&report, &String::from_utf8_lossy(&output.stdout), false)
+            .iter()
+            .any(|event| {
+                event.visible()
+                    && ["UPDATE", "INSTALL", "CONFIG", "SYNC", "APPLY"]
+                        .contains(&event.verb.as_str())
+            });
     }
     println!(
         "{}    ✓ {title}  {}",

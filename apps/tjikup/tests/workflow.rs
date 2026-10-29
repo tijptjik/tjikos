@@ -151,3 +151,31 @@ fn home_file_groups_are_read_from_the_declared_array() {
     let unknown = run("unknown");
     assert!(String::from_utf8_lossy(&unknown.stderr).contains("unknown home file group"));
 }
+
+#[test]
+fn asset_steps_with_no_change_notes_do_not_report_updated() {
+    let dir = fixture();
+    let bin = dir.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    let fish = bin.join("fish");
+    fs::write(
+        &fish,
+        "#!/bin/sh\nprintf 'UPDATE  ✓ Rose Punk icons  no changes\\n'\n",
+    )
+    .unwrap();
+    fs::set_permissions(fish, fs::Permissions::from_mode(0o755)).unwrap();
+    let result = binary()
+        .args(["workflow", "--repo"])
+        .arg(dir.path())
+        .args(["assets", "icons", "--run-dir"])
+        .arg(dir.path())
+        .env("PATH", bin)
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    let text = String::from_utf8_lossy(&result.stdout);
+    assert!(
+        text.contains("SKIP") && text.contains("current") && !text.contains("updated"),
+        "{text}"
+    );
+}
