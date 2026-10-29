@@ -57,15 +57,14 @@ class InstallTests(unittest.TestCase):
                     else:
                         self.assertFalse(path.exists())
 
-    def test_standalone_install_creates_working_prefix_relative_wrappers(self):
+    def test_standalone_install_creates_archive_alias_without_retired_command(self):
         with tempfile.TemporaryDirectory() as directory:
             app, prefix = self.fixture(Path(directory))
             self.install(app, prefix, managed=False)
-            for name, expected in [('device-archives', 'status\nfolder with spaces\n'),
-                                   ('chezmoi-externals-backup', 'backup\nstatus\nfolder with spaces\n')]:
-                result = subprocess.run([str(prefix / 'bin' / name), 'status', 'folder with spaces'],
-                                        capture_output=True, text=True, check=True)
-                self.assertEqual(result.stdout, expected)
+            result = subprocess.run([str(prefix / 'bin/device-archives'), 'status', 'folder with spaces'],
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(result.stdout, 'status\nfolder with spaces\n')
+            self.assertFalse((prefix / 'bin/chezmoi-externals-backup').exists())
 
     def test_incompatible_pinned_release_retains_capable_installed_runner(self):
         with tempfile.TemporaryDirectory() as directory:

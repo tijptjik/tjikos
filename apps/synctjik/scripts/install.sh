@@ -37,14 +37,8 @@ mv -f -- "$temporary" "$prefix/bin/synctjik"
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" == 1 ]]; then
     exit 0
 fi
-# Compatibility names delegate to the native engine; existing workers are untouched.
-for name in device-archives chezmoi-externals-backup; do
-    temporary="$(mktemp "$prefix/bin/.synctjik.XXXXXX")"
-    if [[ "$name" == device-archives ]]; then
-        printf '%s\n' '#!/usr/bin/env bash' 'exec "$(dirname -- "$0")/synctjik" "$@"' > "$temporary"
-    else
-        printf '%s\n' '#!/usr/bin/env bash' 'exec "$(dirname -- "$0")/synctjik" backup "$@"' > "$temporary"
-    fi
-    chmod 755 "$temporary"
-    mv -f -- "$temporary" "$prefix/bin/$name"
-done
+# Keep the archive CLI alias; retired deployment commands are not installed.
+temporary="$(mktemp "$prefix/bin/.synctjik.XXXXXX")"
+printf '%s\n' '#!/usr/bin/env bash' 'exec "$(dirname -- "$0")/synctjik" "$@"' > "$temporary"
+chmod 755 "$temporary"
+mv -f -- "$temporary" "$prefix/bin/device-archives"
