@@ -487,6 +487,10 @@ fn spacious_graphics_is_the_default() {
         text.contains("\r\x1b7"),
         "repository patches anchor their cursor origin"
     );
+    assert!(
+        text.contains("\r\x1b7\x1b[7A"),
+        "three two-line repo rows plus the spinner gap"
+    );
     assert_eq!(text.matches("\x1b7").count(), text.matches("\x1b8").count());
 }
 
