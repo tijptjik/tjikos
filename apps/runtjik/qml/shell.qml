@@ -69,6 +69,7 @@ ShellRoot {
     readonly property bool runningMode: query.startsWith('?') || query==='/processes' || query.startsWith('/processes ')
     readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(commandQuery)
     readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(commandQuery)
+    readonly property bool galleryEmpty: galleryMode && results.length === 1 && !!results[0].empty_state
     readonly property string galleryProvider: /^\/(rec|screenrecord) /.test(commandQuery) ? 'Recorder' : 'Screenshots'
     readonly property int gridColumns: galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
     readonly property int galleryRows: settings.plugin_settings?.[galleryProvider]?.gallery_rows || 3
@@ -545,6 +546,7 @@ ShellRoot {
                                 }
                             }
                             delegate:Rectangle {
+                                visible: !root.galleryEmpty
                                 required property var row
                                 readonly property var modelData: row
                                 readonly property bool closing: root.closingIds.includes(modelData.id)
@@ -640,6 +642,48 @@ ShellRoot {
                                 MouseArea {
                                     id:hover;anchors.fill:parent;hoverEnabled:true;cursorShape:modelData.disabled?Qt.ArrowCursor:Qt.PointingHandCursor
                                     onClicked:mouse=>{root.selected=index;root.activate(!!(mouse.modifiers & Qt.ShiftModifier));}
+                                }
+                            }
+                            Column {
+                                parent: items.parent
+                                anchors.centerIn: parent
+                                width: Math.min(parent.width-48, 400)
+                                spacing: 14
+                                visible: root.galleryEmpty
+                                Image {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: 160; height: 112
+                                    source: "icons/capture-empty.svg"
+                                    sourceSize.width: 320; sourceSize.height: 224
+                                }
+                                Text {
+                                    width: parent.width
+                                    text: root.galleryEmpty ? root.results[0].name : ''
+                                    horizontalAlignment: Text.AlignHCenter
+                                    color: root.theme.text
+                                    font.family: root.settings.ui.font; font.pixelSize: 18
+                                }
+                                Text {
+                                    width: parent.width
+                                    text: root.galleryEmpty ? root.results[0].subtitle : ''
+                                    horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
+                                    color: root.theme.muted
+                                    font.family: root.settings.ui.font; font.pixelSize: 13
+                                }
+                                Rectangle {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: emptyAction.implicitWidth + 32; height: 38; radius: 10
+                                    color: emptyMouse.containsMouse ? root.theme.surface : 'transparent'
+                                    border.color: root.theme.border
+                                    Text {
+                                        id: emptyAction; anchors.centerIn: parent
+                                        text: root.galleryProvider === 'Recorder' ? 'Record something' : 'Take a screenshot'
+                                        color: root.theme.accent; font.family: root.settings.ui.font; font.pixelSize: 13
+                                    }
+                                    MouseArea {
+                                        id: emptyMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onClicked: searchBox.text = root.galleryProvider === 'Recorder' ? '/rec' : '/grab'
+                                    }
                                 }
                             }
                             Text {

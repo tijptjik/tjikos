@@ -23,6 +23,10 @@ DEFAULT_OPTIONS = {
 }
 
 
+def capture_icon(action, recording=False):
+    return str(Path(__file__).parent / 'qml' / 'icons' / f'capture-{"record" if recording else "shot"}-{action}.svg')
+
+
 def validate_options(settings):
     for name, defaults in DEFAULT_OPTIONS.items():
         options = settings[name]
@@ -250,6 +254,12 @@ class CaptureProvider(DesktopProvider):
         self.thumbnails = {}
         self.pending = False
 
+    def row(self, key, title, subtitle='', **data):
+        row = super().row(key, title, subtitle, **data)
+        action = data.get('capture') or (key if key in ('screen', 'workspace', 'window', 'region', 'history', 'stop') else 'history')
+        row['icon'] = capture_icon(action, self.name == 'Recorder')
+        return row
+
     def thumbnail(self, path):
         if self.name == 'Screenshots':
             return str(path)
@@ -339,7 +349,8 @@ class CaptureProvider(DesktopProvider):
         active = status.get('file') if status else None
         rows = [self.row(str(path), path.name, datetime.fromtimestamp(stamp).strftime('%Y-%m-%d %H:%M') + ' · ' + str(directory), file=str(path), thumbnail=self.thumbnail(path))
                 for stamp, path in sorted(files, reverse=True)[:settings['plugin_settings'][self.name]['max_results']] if str(path) != active]
-        return rows[:settings['plugin_settings'][self.name]['max_results']] or [self.row('empty', 'No captures found', str(directory))]
+        return rows[:settings['plugin_settings'][self.name]['max_results']] or [self.row('empty', 'No matching captures' if term else ('No recordings yet' if self.name == 'Recorder' else 'No screenshots yet'),
+            'Try another search or clear the filter.' if term else ('Record your screen, a window, or a region.' if self.name == 'Recorder' else 'Capture your screen, a window, or a region.'), empty_state=True, disabled=True)]
 
     def activate(self, entry, settings, mode):
         if 'edit' in entry.data:
@@ -450,7 +461,7 @@ class CaptureProvider(DesktopProvider):
 class Screenshots(CaptureProvider):
     name = 'Screenshots'
     base = '/grab'
-    icon = 'camera-photo'
+    icon = capture_icon('screen')
     commands = {'/grab': 'Take a screenshot or browse previous screenshots'}
     aliases = {'/shot': '/grab', '/screenshot': '/grab', '/ss': '/grab', '/snap': '/grab'}
 
@@ -458,6 +469,6 @@ class Screenshots(CaptureProvider):
 class Recorder(CaptureProvider):
     name = 'Recorder'
     base = '/rec'
-    icon = 'media-record'
+    icon = capture_icon('screen', True)
     commands = {'/rec': 'Record screen, workspace, window or region · previous recordings'}
     aliases = {'/screenrecord': '/rec'}

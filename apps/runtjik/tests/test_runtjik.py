@@ -528,7 +528,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(rows, {"/processes":"runtjik-stats", "/run":"org.gnome.Terminal", "/refresh":"runtjik-refresh", "/pin":"runtjik-pin",
                                "/grid":"runtjik-grid", "/list":"runtjik-list",
                                "/stats":"runtjik-stats", "/config":"runtjik-config",
-                               "/bindings":"runtjik-shortcuts", "/define":"accessories-dictionary", "/synonym":"accessories-dictionary", "/cliphist":"edit-paste", "/rec":"media-record", "/grab":"camera-photo"})
+                               "/bindings":"runtjik-shortcuts", "/define":"accessories-dictionary", "/synonym":"accessories-dictionary", "/cliphist":"edit-paste", "/rec":r.Recorder.icon, "/grab":r.Screenshots.icon})
         self.assertEqual({row["icon"] for row in launcher.query("/config")["results"]}, {"runtjik-config"})
         self.assertEqual({row["icon"] for row in launcher.query("/shortcuts")["results"]}, {"runtjik-shortcuts"})
         launcher._icons.resolve.side_effect = OSError("Artwork unavailable")

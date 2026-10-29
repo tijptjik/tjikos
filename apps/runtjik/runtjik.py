@@ -1062,7 +1062,7 @@ class Launcher:
                     raise ValueError("Provider result ID must be namespaced")
                 self.current = {e.id: e for e in entries}
                 rows = [{**{k: v for k, v in asdict(e).items() if k not in ("data", "keywords")},
-                         "icon": self.control_icon(e.icon), "hide_launcher": bool(e.data.get("capture")), "keep_open": bool(e.data.get("keep_open")), "thumbnail": e.data.get("thumbnail", ""), "disabled": bool(e.data.get("disabled")), "count": 0, "windows": 0} for e in entries[offset:offset + limit]]
+                         "icon": self.control_icon(e.icon), "hide_launcher": bool(e.data.get("capture")), "keep_open": bool(e.data.get("keep_open")), "thumbnail": e.data.get("thumbnail", ""), "empty_state": bool(e.data.get("empty_state")), "disabled": bool(e.data.get("disabled")), "count": 0, "windows": 0} for e in entries[offset:offset + limit]]
                 return self.payload(rows, query=display_query, pending=bool(getattr(self.providers[name], "pending", False)), total=len(entries), offset=offset,
                                     next_offset=offset + len(rows), has_more=offset + len(rows) < len(entries))
             except Exception as exc:
