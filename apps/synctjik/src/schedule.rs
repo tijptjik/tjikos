@@ -1,6 +1,6 @@
 use crate::{engine::Engine, util::*};
 use anyhow::{ensure, Result};
-use std::{fs, io::Write, path::Path, process::Command};
+use std::{fs, io::Write, os::unix::fs::PermissionsExt, path::Path, process::Command};
 /// Dotfiles LFS units use the same domain/target/action names as fleet policy.
 pub fn units(role: &str) -> Result<(String, String)> {
     let minute = match role {
@@ -44,6 +44,9 @@ pub fn install(app: &Engine, role: &str, config_dir: &Path) -> Result<()> {
         ensure!(!path.is_symlink(), "Refusing symlinked schedule unit");
         let mut tmp = tempfile::NamedTempFile::new_in(&dir)?;
         tmp.write_all(data.as_bytes())?;
+        // Match declarative unit policy so enrollment does not create mode drift.
+        tmp.as_file()
+            .set_permissions(fs::Permissions::from_mode(0o644))?;
         tmp.as_file().sync_all()?;
         tmp.persist(path)?;
     }
