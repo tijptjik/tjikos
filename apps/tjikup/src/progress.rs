@@ -386,8 +386,8 @@ impl Progress {
         if !self.tty || !self.repo_open {
             return;
         }
-        self.clear();
         if self.repo_width != columns() {
+            self.clear();
             eprint!("\x1b[{}A\r\x1b[J", self.repo_lines);
             if let Some(graphics) = &mut self.graphics {
                 graphics.size = crate::graphics::geometry().unwrap_or(graphics.size);
@@ -723,27 +723,39 @@ impl Progress {
         self.visible += 1;
     }
     pub fn tick(&mut self) {
+        // Paint the repository cells and activity line as one terminal frame.
+        // Kitty (and other supporting terminals) must not display intermediate
+        // cursor moves or half-written rows.
+        if self.live {
+            eprint!("\x1b[?2026h");
+        }
         if !self.active.is_empty() {
             self.hide_cursor();
         }
         self.frame += 1;
         self.patch_repos();
         if !self.live || self.active.is_empty() {
+            if self.live {
+                eprint!("\x1b[?2026l");
+                let _ = std::io::stderr().flush();
+            }
             return;
         }
-        self.clear();
+        // Overwrite first, then clear only the old trailing characters. Erasing
+        // the whole line before writing makes the activity text blink.
         // One transient activity line keeps the terminal quiet. Settled results
         // have their own icons and never get repainted for animation.
         if let Some((label, started)) = self.active.values().next() {
             let note = format!("{:.1}s", started.elapsed().as_secs_f64());
             eprint!(
-                "{} {} {}",
+                "\r{} {} {}\x1b[K",
                 self.paint("36", &SPINNER[self.frame % 10].to_string()),
                 fit(label, columns().saturating_sub(note.len() + 5)),
                 self.paint("90", &note)
             );
             self.transient = true;
         }
+        eprint!("\x1b[?2026l");
         let _ = std::io::stderr().flush();
     }
     pub fn complete(&mut self, attention: bool) {

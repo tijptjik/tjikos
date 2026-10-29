@@ -209,6 +209,24 @@ fn kitty_protocol_uses_scrollable_sprites_without_retransmission_on_ticks() {
         "do not flash the cursor between frames"
     );
     assert!(text.ends_with("\x1b[?25h"), "restore on completion");
+    let begin = "\x1b[?2026h";
+    let end = "\x1b[?2026l";
+    assert!(
+        text.matches(begin).count() > 3,
+        "animation uses synchronized frames"
+    );
+    assert_eq!(text.matches(begin).count(), text.matches(end).count());
+    for frame in text.split(begin).skip(1) {
+        let frame = frame.split_once(end).unwrap().0;
+        assert!(
+            !frame.contains("\x1b[2K"),
+            "steady frames must not blank the activity line"
+        );
+    }
+    assert!(
+        text.contains("\x1b[K"),
+        "clear stale text only after overwriting"
+    );
 }
 #[test]
 fn resize_during_repository_activity_keeps_graphics_and_completes() {
