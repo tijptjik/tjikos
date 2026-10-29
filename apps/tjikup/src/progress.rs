@@ -496,7 +496,9 @@ impl Progress {
             self.repos[row].running[col] = true;
             self.patch_repos();
         }
-        if self.live && !recipe.interactive {
+        // Repository tasks already animate their persistent pull/push cells.
+        // Reserve the transient activity row for work without a dedicated row.
+        if self.live && !recipe.interactive && !self.repo_recipes.contains_key(&index) {
             let icon = self.icon_key(&recipe.label, &recipe.display.icon);
             self.active
                 .insert(index, (plain(&recipe.label), icon, Instant::now()));
