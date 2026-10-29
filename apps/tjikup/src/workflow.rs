@@ -89,7 +89,18 @@ fn predicate(item: &Value, rpms: Option<&BTreeSet<String>>) -> Result<bool> {
             "executable" => executable(&expanded(v)),
             "path" => expanded(v).exists(),
             "rpm" => match rpms {
-                Some(set) => set.contains(v),
+                Some(set) => {
+                    if set.contains(v) {
+                        true
+                    } else {
+                        // Some manifest entries name an RPM-owned command (crontab,
+                        // blueman-manager). Never accept an arbitrary PATH executable.
+                        let path = Path::new("/usr/bin").join(v);
+                        !v.contains('/')
+                            && executable(&path)
+                            && success(Command::new("rpm").args(["-qf", "--"]).arg(path))?
+                    }
+                }
                 None => success(Command::new("rpm").args(["-q", v]))?,
             },
             "flatpak" => {
@@ -158,7 +169,11 @@ fn package(repo: &Path, args: &[String]) -> Result<i32> {
     }
     let rpms = if applicable && ecosystem == Some("rpm") {
         let output = Command::new("rpm")
-            .args(["-qa", "--qf", "%{NAME}\n"])
+            .args([
+                "-qa",
+                "--qf",
+                "%{NAME}\n[%{PROVIDENAME}\n][%{OBSOLETENAME}\n]",
+            ])
             .output()?;
         if !output.status.success() {
             bail!("RPM database query failed");

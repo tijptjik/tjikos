@@ -393,3 +393,8 @@ Root workflows may declare `subscription_aliases`, mapping retired recipe IDs to
 existing optional recipes when related operations are merged. Existing device
 profiles remain valid and selecting both names still executes the merged recipe
 once. Alias targets must be real optional recipes; alias chains are not supported.
+
+RPM presence checks read the installed RPM names, provides, and obsoletes on every
+run. Command-named entries also accept an executable in `/usr/bin` if RPM owns it.
+There is no persistent presence cache: installing or removing packages takes
+effect on the next check without explicit invalidation.

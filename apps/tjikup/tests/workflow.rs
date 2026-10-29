@@ -179,3 +179,80 @@ fn asset_steps_with_no_change_notes_do_not_report_updated() {
         "{text}"
     );
 }
+
+#[test]
+fn rpm_checks_use_fresh_providers_replacements_and_owned_commands() {
+    let dir = fixture();
+    let profile = dir.path().join("device.json");
+    let host = String::from_utf8(Command::new("hostname").output().unwrap().stdout).unwrap();
+    fs::write(
+        &profile,
+        serde_json::to_vec(
+            &json!({"version":1,"hostname":host.trim(),"role":"desktop","subscriptions":[]}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("tjikup.json"),
+        serde_json::to_vec(
+            &json!({"version":2,"device_file":profile,"recipes":[{"id":"noop","apply":["true"]}]}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("tjikup/package-checks.json"),
+        r#"{"rpm":{"packages":"rpm"}}"#,
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("native/tasks")).unwrap();
+    fs::create_dir(dir.path().join("bin")).unwrap();
+    let rpm = dir.path().join("bin/rpm");
+    fs::write(&rpm, "#!/bin/sh\ncase \"$1\" in\n-qa) case \"$3\" in *PROVIDENAME*OBSOLETENAME*) cat \"$INVENTORY\";; *) exit 9;; esac;;\n-qf) test \"$3\" = /usr/bin/sh;;\n*) exit 9;;\nesac\n").unwrap();
+    fs::set_permissions(&rpm, fs::Permissions::from_mode(0o755)).unwrap();
+    let inventory = dir.path().join("inventory");
+    fs::write(&inventory, "fish\nvirtual-provider\nobsolete-name\n").unwrap();
+    for (names, expected) in [
+        (
+            json!(["fish", "virtual-provider", "obsolete-name", "sh"]),
+            true,
+        ),
+        (json!(["fish", "truly-missing-package"]), false),
+        (json!(["cat"]), false), // executable, but not owned according to this RPM DB
+    ] {
+        fs::write(
+            dir.path().join("native/tasks/data.json"),
+            serde_json::to_vec(&json!({"packages":{"common":{"rpm":names}}})).unwrap(),
+        )
+        .unwrap();
+        let run = || {
+            binary()
+                .args(["workflow", "--repo"])
+                .arg(dir.path())
+                .args(["package", "check", "rpm"])
+                .env(
+                    "PATH",
+                    format!("{}:/usr/bin:/bin", dir.path().join("bin").display()),
+                )
+                .env("INVENTORY", &inventory)
+                .output()
+                .unwrap()
+        };
+        let output = run();
+        assert_eq!(
+            output.status.success(),
+            expected,
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if expected {
+            fs::write(&inventory, "").unwrap();
+            assert!(
+                !run().status.success(),
+                "removal must invalidate presence immediately"
+            );
+            fs::write(&inventory, "fish\nvirtual-provider\nobsolete-name\n").unwrap();
+        }
+    }
+}
