@@ -32,6 +32,23 @@ impl std::fmt::Display for DirtyRepository {
 }
 impl std::error::Error for DirtyRepository {}
 
+/// Public command outcome without command arguments or captured output.
+#[derive(Debug)]
+pub struct CommandFailure {
+    pub phase: &'static str,
+    pub code: i32,
+}
+impl std::fmt::Display for CommandFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} exited {}", self.phase, self.code)?;
+        if self.phase == "check" {
+            write!(f, "; apply was not run")?;
+        }
+        Ok(())
+    }
+}
+impl std::error::Error for CommandFailure {}
+
 #[derive(Debug)]
 pub struct UntrackedCaptureFiles {
     pub files: Vec<String>,
@@ -448,7 +465,13 @@ impl Contextual<'_> {
                         || self.recipe.render.is_some()
                         || self.recipe.autocommit.is_some()
                         || self.recipe.git.is_some()) => {}
-                code => bail!("check exited {code}; apply was not run"),
+                code => {
+                    return Err(CommandFailure {
+                        phase: "check",
+                        code,
+                    }
+                    .into())
+                }
             }
         }
         if self.recipe.autocommit.is_some() {
@@ -652,7 +675,11 @@ impl Contextual<'_> {
         } else if self.recipe.stop_codes.contains(&code) {
             Ok(State::Stopped.into())
         } else {
-            bail!("apply exited {code}")
+            Err(CommandFailure {
+                phase: "apply",
+                code,
+            }
+            .into())
         }
     }
 }

@@ -306,6 +306,16 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                                 .map(UntrackedCaptureFiles::status)
                                 .or_else(|| {
                                     error
+                                        .downcast_ref::<crate::actions::CommandFailure>()
+                                        .map(ToString::to_string)
+                                })
+                                .or_else(|| {
+                                    error
+                                        .downcast_ref::<DirtyRepository>()
+                                        .map(ToString::to_string)
+                                })
+                                .or_else(|| {
+                                    error
                                         .downcast_ref::<crate::actions::CredentialFailure>()
                                         .map(|e| e.0.to_string())
                                 });
@@ -353,6 +363,20 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                             state = State::Failed;
                             error = Some(format!("task reported failure: {}", event.subject));
                         }
+                    }
+                    if state == State::Failed
+                        && !events
+                            .iter()
+                            .any(|event| matches!(event.icon.as_str(), "✗" | "X"))
+                    {
+                        events.push(crate::report::Event {
+                            icon_key: String::new(),
+                            verb: "FAIL".into(),
+                            icon: "✗".into(),
+                            subject: config.recipes[i].label.clone(),
+                            note: "failed; see step log below".into(),
+                            section: String::new(),
+                        });
                     }
                     let _ = send.send((
                         i,
@@ -470,6 +494,18 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
     );
     let path = directory.join("receipt.json");
     serde_json::to_writer_pretty(process::private_file(&path)?, &receipt)?;
+    for recipe in &config.recipes {
+        if let Some(outcome) = receipt.recipes.get(&recipe.id) {
+            if outcome.state == State::Failed {
+                progress.diagnostic(&format!(
+                    "Failed: {} ({})\n  Log: {}",
+                    crate::report::plain(&recipe.label),
+                    recipe.id,
+                    crate::report::plain(&outcome.log.display().to_string()),
+                ));
+            }
+        }
+    }
     // Rendered scripts can contain secrets and are deleted even on failed runs.
     drop(prepared);
     Ok((receipt, path))

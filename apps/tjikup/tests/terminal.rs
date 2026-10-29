@@ -299,7 +299,7 @@ fn repository_counts_reach_terminal_with_positive_and_zero_totals() {
 }
 
 #[test]
-fn dirty_repository_counts_stay_in_terminal_rows_without_inline_errors() {
+fn dirty_repository_counts_stay_in_rows_with_failure_logs_below() {
     for graphics in [false, true] {
         let dir = tempfile::tempdir().unwrap();
         fs::write(
@@ -346,15 +346,19 @@ fn dirty_repository_counts_stay_in_terminal_rows_without_inline_errors() {
         let text = terminal.finish_with_code(1);
         let visible = visible_text(&text);
         for (label, count) in [("dotjik", 2), ("tjikOS", 3)] {
-            let row = visible.rsplit_once(label).unwrap().1;
+            let rows = visible.split("Failed:").next().unwrap();
+            let row = rows.rsplit_once(label).unwrap().1;
             let count = format!("({count} files)");
             assert!(row.contains(&count), "missing final count: {visible}");
             assert!(row.find("PULL") < row.find("PUSH"), "{visible}");
             assert!(row.find("PUSH") < row.find(&count), "{visible}");
         }
-        for hidden in ["Log:", "commit or stash", "dirty repository", ".log"] {
+        for hidden in ["commit or stash", "dirty repository"] {
             assert!(!visible.contains(hidden), "unexpected {hidden}: {visible}");
         }
+        assert!(visible.contains("Log:"), "{visible}");
+        assert!(visible.contains("dotjik:pull.log"), "{visible}");
+        assert!(visible.contains("tjikOS:pull.log"), "{visible}");
         if graphics {
             assert_eq!(text.matches("a=T,f=32").count(), 2);
         }

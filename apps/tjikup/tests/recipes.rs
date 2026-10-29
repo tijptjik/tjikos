@@ -43,6 +43,33 @@ fn script(dir: &Path, name: &str, content: &str) -> Value {
 }
 
 #[test]
+fn failed_command_reports_exit_and_log_even_after_success_status() {
+    let (dir, config) = fixture(json!([
+        {"id":"install","label":"Synthetic installer","apply":["sh","-c","echo 'UPDATE  ✓ Earlier step  completed'; echo private-diagnostic >&2; exit 23"]}
+    ]));
+    let output = invoke(dir.path(), &config, &[]);
+    assert!(!output.status.success());
+    let terminal = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(terminal.contains("FAIL"), "{terminal}");
+    assert!(terminal.contains("apply exited 23"), "{terminal}");
+    assert!(
+        terminal.contains("Failed: Synthetic installer (install)"),
+        "{terminal}"
+    );
+    let r = receipt(dir.path());
+    let log = r["recipes"]["install"]["log"].as_str().unwrap();
+    assert!(terminal.contains(log), "{terminal}");
+    assert!(!terminal.contains("private-diagnostic"));
+    assert!(fs::read_to_string(log)
+        .unwrap()
+        .contains("private-diagnostic"));
+}
+
+#[test]
 fn validates_whole_graph_before_any_command() {
     for recipes in [
         json!([{"id":"a","apply":["touch","bad"],"needs":["missing"]}]),
