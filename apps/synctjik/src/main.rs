@@ -1,3 +1,4 @@
+mod schedule_migration;
 mod wizard;
 use anyhow::{bail, ensure, Context, Result};
 use clap::{Parser, Subcommand};
@@ -29,6 +30,11 @@ struct Cli {
 enum Cmd {
     /// Report supported integrations without loading policy or accessing data.
     Capabilities,
+    /// Retire old backup timers without stopping active jobs.
+    MigrateSchedules {
+        #[arg(long)]
+        retire: bool,
+    },
     /// Cloudflare DNS, KV and R2 backups through rclone and Restic.
     #[command(disable_help_flag = true)]
     Cloudflare {
@@ -240,6 +246,7 @@ fn run() -> Result<()> {
         return Ok(());
     }
     match &cli.command {
+        Some(Cmd::MigrateSchedules { retire }) => return schedule_migration::run(*retire),
         Some(Cmd::Capabilities) => {
             return print(
                 &json!({"cloudflare_backup":true,"private_assets":true,"native_backends":1,"dependencies":["rclone","restic"]}),
@@ -264,7 +271,10 @@ fn run() -> Result<()> {
         .unwrap_or(&app.master)
         .to_owned();
     match command {
-        Cmd::Capabilities | Cmd::Cloudflare { .. } | Cmd::PrivateAssets { .. } => unreachable!(),
+        Cmd::MigrateSchedules { .. }
+        | Cmd::Capabilities
+        | Cmd::Cloudflare { .. }
+        | Cmd::PrivateAssets { .. } => unreachable!(),
         Cmd::Schedule {
             role,
             print: preview,
