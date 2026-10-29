@@ -14,9 +14,11 @@ import urllib.request
 root = Path(__file__).resolve().parents[1]
 release = json.loads((root / 'release.json').read_text())
 for name, repository, required in (
-    ('dotjik', 'dotfiles', 'scripts/device-policy.py'),
+    ('dotjik', 'dotfiles', 'native/home/files-device.json'),
+    ('dotjik', 'dotfiles', 'scripts/install-tjikup.sh'),
     ('tjikos', 'tjikos', 'apps/tjikup/src/device.rs'),
     ('tjikos', 'tjikos', 'apps/tjikup/scripts/fetch-release.sh'),
+    ('tjikos', 'tjikos', 'apps/tjikup/scripts/install-weekly.sh'),
     ('tjikos', 'tjikos', 'apps/tjikos-sh/helpers/restore-collections.sh'),
     ('tjikos', 'tjikos', 'apps/synctjik/src/engine.rs'),
 ):
