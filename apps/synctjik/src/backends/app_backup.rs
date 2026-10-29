@@ -173,9 +173,12 @@ impl Policy {
         let mut active = Vec::new();
         let mut historical = Vec::new();
         let mut seen = std::collections::HashSet::new();
+        let mut removed_sidecars = std::collections::HashSet::new();
         for (root, _) in &self.sources {
-            for staged in walk(&self.stage.join(root.strip_prefix("/")?))? {
-                if !seen.insert(staged.clone()) {
+            let mut staged_files = walk(&self.stage.join(root.strip_prefix("/")?))?;
+            staged_files.sort();
+            for staged in staged_files {
+                if removed_sidecars.contains(&staged) || !seen.insert(staged.clone()) {
                     continue;
                 }
                 let mut header = [0; 16];
@@ -246,7 +249,11 @@ impl Policy {
                 f.sync_all()?;
                 fs::rename(&tmp, &staged)?;
                 for suffix in ["-wal", "-shm", "-journal"] {
-                    remove(&PathBuf::from(format!("{}{suffix}", staged.display())))?;
+                    let sidecar = PathBuf::from(format!("{}{suffix}", staged.display()));
+                    remove(&sidecar)?;
+                    // walk() captured these paths before the SQLite snapshot
+                    // replaced its database. Do not reopen files we removed.
+                    removed_sidecars.insert(sidecar);
                 }
                 active.push(json!({"path":source, "quickCheck":"ok", "rebuiltIndexesInBackupOnly":repaired, "bytes":staged.metadata()?.len()}));
             }
