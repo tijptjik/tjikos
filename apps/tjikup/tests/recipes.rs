@@ -608,7 +608,7 @@ fn show_skips_explains_checks_conditions_and_reports_without_changing_execution(
         "disabled",
         "condition not met",
         "required",
-        "prerequisite satisfied",
+        "satisfied",
         "silent",
         "no status reported",
         "recipe returned a skip status",
@@ -747,4 +747,22 @@ fn credential_recovery_requires_dedicated_codes_and_explicit_retry_safety() {
         assert!(!invoke(dir.path(), &config, &[]).status.success());
         assert!(!dir.path().join("must-not-run").exists());
     }
+}
+
+#[test]
+fn alphabetical_repository_rows_follow_capture_and_sort_by_name() {
+    let (dir, config) = fixture(json!([
+        {"id":"capture","label":"Captured settings","apply":["true"],
+         "display":{"section":"Capture changes"}},
+        {"id":"z","label":"Zulu","apply":["true"],"needs":["capture"],
+         "display":{"repository":"Zulu","operation":"pull"}},
+        {"id":"a","label":"Alpha","apply":["true"],"needs":["capture"],
+         "display":{"repository":"Alpha","operation":"pull"}}
+    ]));
+    let output = invoke(dir.path(), &config, &["--alphabetical"]);
+    ok(&output);
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert!(text.find("Capture changes").unwrap() < text.find("Repositories").unwrap());
+    assert!(text.find("Alpha").unwrap() < text.find("Zulu").unwrap());
+    assert_eq!(text.matches("Repositories").count(), 1);
 }

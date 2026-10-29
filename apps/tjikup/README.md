@@ -384,3 +384,12 @@ but stale first-attempt status rows cannot turn a recovered retry into failure.
 Existing recipes without this declaration are never automatically retried. A
 service runner owns its own authentication checks and refresh policy; Tjikup does
 not schedule service refreshes or infer authentication failures from log text.
+
+Use `--alphabetical` to buffer each section until its tasks finish, then display
+its rows alphabetically by application title. Execution remains parallel within
+the section; the default continues to stream results in completion order.
+
+Root workflows may declare `subscription_aliases`, mapping retired recipe IDs to
+existing optional recipes when related operations are merged. Existing device
+profiles remain valid and selecting both names still executes the merged recipe
+once. Alias targets must be real optional recipes; alias chains are not supported.

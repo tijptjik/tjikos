@@ -210,3 +210,29 @@ fn enrolled_devices_filter_execution_even_when_showing_other_devices() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("not selected for this device"));
     assert!(!dir.path().join("server-ran").exists());
 }
+
+#[test]
+fn merged_subscription_aliases_select_one_recipe_without_rewriting_profile() {
+    let dir = setup();
+    let path = dir.path().join("config.json");
+    let mut config: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    config["subscription_aliases"] = json!({"old-editor":"editor"});
+    fs::write(path, serde_json::to_vec(&config).unwrap()).unwrap();
+    let profile = json!({"version":1,"hostname":hostname(),"role":"desktop",
+        "subscriptions":["old-editor","editor"]});
+    let bytes = serde_json::to_vec(&profile).unwrap();
+    fs::write(dir.path().join("device.json"), &bytes).unwrap();
+    let result = run(&dir, &["--plan"]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&result.stdout)
+            .matches("editor ·")
+            .count(),
+        1
+    );
+    assert_eq!(fs::read(dir.path().join("device.json")).unwrap(), bytes);
+}

@@ -160,7 +160,7 @@ fn visible_text(text: &str) -> String {
 #[test]
 fn real_terminal_prompt_keeps_foreground_input_and_filters_fragmented_status() {
     let dir = tempfile::tempdir().unwrap();
-    fs::write(dir.path().join("prompt.sh"),"printf 'SK'\nsleep 0.1\nprintf 'IP    ✓'\nsleep 0.1\nprintf ' Fonts    no changes\\n'\nprintf 'Continue? '\nread -r answer\n[ \"$answer\" = yes ] || exit 2\nprintf 'UPDATE  ✓ Bartjik    updated\\n'\n").unwrap();
+    fs::write(dir.path().join("prompt.sh"),"printf 'SK'\nsleep 0.1\nprintf 'IP    ✓'\nsleep 0.1\nprintf ' Fonts    no changes\\n'\nprintf '__stage_note__:internal only\\n'\nprintf 'Continue? '\nread -r answer\n[ \"$answer\" = yes ] || exit 2\nprintf 'UPDATE  ✓ Bartjik    updated\\n'\n").unwrap();
     fs::write(dir.path().join("config.json"),serde_json::to_vec(&json!({"version":2,"recipes":[{"id":"before","apply":["sleep","0.15"]},{"id":"prompt","needs":["before"],"interactive":true,"apply":["sh",dir.path().join("prompt.sh")],"display":{"reports":true}}]})).unwrap()).unwrap();
     let mut terminal = Terminal::spawn(
         &["--config", dir.path().join("config.json").to_str().unwrap()],
@@ -176,6 +176,10 @@ fn real_terminal_prompt_keeps_foreground_input_and_filters_fragmented_status() {
     );
     terminal.master.write_all(b"yes\n").unwrap();
     let text = terminal.finish();
+    assert!(
+        !text.contains("__stage_note__"),
+        "internal status markers must stay private"
+    );
     assert!(!text.contains("SKIP"), "{text}");
     assert_eq!(text.matches("Bartjik").count(), 1);
     assert!(text.contains("\x1b[1;38;2;255;95;95mA"));
@@ -645,4 +649,36 @@ fn active_row_uses_application_art_and_dimmed_subtitle() {
             );
         }
     }
+}
+
+#[test]
+fn alphabetical_review_buffers_each_section_but_keeps_parallel_execution() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    fs::write(&path, serde_json::to_vec(&json!({"version":2,"jobs":2,
+      "recipes":[
+       {"id":"slow","label":"Worker A","display":{"section":"Configuration","reports":true},
+        "apply":["sh","-c","touch started; while [ ! -e release ]; do sleep 0.05; done; echo 'APPLY   ✓ Alpha result'"]},
+       {"id":"fast","label":"Worker B","display":{"section":"Configuration","reports":true},
+        "apply":["sh","-c","touch fast-done; echo 'APPLY   ✓ Zulu result'"]},
+       {"id":"last","label":"Final","display":{"section":"Services"},
+        "apply":["true"]}
+      ]})).unwrap()).unwrap();
+    let mut terminal = Terminal::spawn(
+        &["--config", path.to_str().unwrap(), "--alphabetical"],
+        dir.path(),
+        false,
+    );
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !dir.path().join("fast-done").exists() || !dir.path().join("started").exists() {
+        terminal.poll();
+        assert!(Instant::now() < deadline, "both section workers must start");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    terminal.poll();
+    assert!(!String::from_utf8_lossy(&terminal.text).contains("Zulu result"));
+    fs::write(dir.path().join("release"), "").unwrap();
+    let output = terminal.finish();
+    assert!(output.find("Alpha result").unwrap() < output.find("Zulu result").unwrap());
+    assert!(output.find("Zulu result").unwrap() < output.find("Services").unwrap());
 }

@@ -10,6 +10,7 @@ pub struct Presentation {
     pub links: Vec<PresentationLink>,
     pub splash: bool,
     pub grouped_results: bool,
+    pub alphabetical_results: bool,
     pub icons: String,
     pub icon_aliases: BTreeMap<String, String>,
     pub glyphs: BTreeMap<String, String>,
@@ -165,6 +166,8 @@ struct Document {
     #[serde(default)]
     device_file: Option<String>,
     #[serde(default)]
+    subscription_aliases: BTreeMap<String, String>,
+    #[serde(default)]
     legacy_hosts: Vec<String>,
     #[serde(default)]
     presentation: Presentation,
@@ -192,6 +195,7 @@ struct Document {
 #[derive(Debug)]
 pub struct Config {
     pub device_file: Option<PathBuf>,
+    pub subscription_aliases: BTreeMap<String, String>,
     pub legacy_hosts: Vec<String>,
     pub excluded: Vec<Recipe>,
     pub show_other_devices: bool,
@@ -352,6 +356,7 @@ impl Config {
             .with_context(|| format!("cannot open {}", path.display()))?;
         let mut config = Self {
             device_file: None,
+            subscription_aliases: BTreeMap::new(),
             legacy_hosts: vec![],
             excluded: vec![],
             show_other_devices: false,
@@ -385,6 +390,14 @@ impl Config {
             recipe.needs.dedup();
         }
         config.validate()?;
+        for (old, target) in &config.subscription_aliases {
+            if !identifier(old)
+                || config.recipes.iter().any(|r| &r.id == old)
+                || !config.recipes.iter().any(|r| &r.id == target && r.optional)
+            {
+                bail!("subscription alias {old} must name a retired ID and an existing optional recipe");
+            }
+        }
         // Without a profile, preserve the existing fleet's complete workflow.
         // Profile selection adds these edges only after subscriptions are known.
         Ok(config)
@@ -412,6 +425,7 @@ impl Config {
         let mut env = environment(&document.env, directory, inherited)?;
         if root {
             self.legacy_hosts = document.legacy_hosts;
+            self.subscription_aliases = document.subscription_aliases;
             self.device_file = document
                 .device_file
                 .as_ref()
@@ -434,6 +448,7 @@ impl Config {
         } else if !document.flags.is_empty()
             || document.device_file.is_some()
             || !document.legacy_hosts.is_empty()
+            || !document.subscription_aliases.is_empty()
         {
             bail!("workflow flags and device_file belong in the root configuration");
         }
@@ -448,6 +463,7 @@ impl Config {
                     "jobs",
                     "version",
                     "refresh-secrets",
+                    "alphabetical",
                     "show-skips",
                     "show-skips-and-other-devices",
                     "demo",

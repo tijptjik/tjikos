@@ -79,9 +79,14 @@ pub(crate) fn group(recipe: &crate::config::Recipe) -> String {
     }
 }
 pub(crate) fn group_rank(section: &str) -> usize {
+    let section = if section == "Capture settings" {
+        "Capture changes"
+    } else {
+        section
+    };
     [
         "Prerequisites",
-        "Capture settings",
+        "Capture changes",
         "Repositories",
         "Preparation",
         "Install applications",

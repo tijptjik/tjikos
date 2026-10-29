@@ -52,7 +52,11 @@ impl Device {
     pub fn select(&self, config: &mut Config) -> Result<()> {
         self.validate()?;
         let mut selected = BTreeSet::new();
-        for id in &self.subscriptions {
+        for original in &self.subscriptions {
+            let id = config
+                .subscription_aliases
+                .get(original)
+                .unwrap_or(original);
             let recipe = config
                 .recipes
                 .iter()

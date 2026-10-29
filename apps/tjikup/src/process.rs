@@ -197,6 +197,12 @@ struct StatusFilter {
     since: Option<Instant>,
 }
 impl StatusFilter {
+    fn internal(text: &str) -> bool {
+        let text = text.trim_start();
+        ["__stage_note__:", "__stage_verb__:", "__tjikup_section__:"]
+            .iter()
+            .any(|prefix| text.starts_with(prefix))
+    }
     fn write(&mut self, bytes: &[u8]) {
         for &byte in bytes {
             if self.passthrough {
@@ -209,7 +215,9 @@ impl StatusFilter {
             self.since.get_or_insert_with(Instant::now);
             self.pending.push(byte);
             if byte == b'\n' {
-                if crate::report::Event::line(&String::from_utf8_lossy(&self.pending)).is_none() {
+                if !Self::internal(&String::from_utf8_lossy(&self.pending))
+                    && crate::report::Event::line(&String::from_utf8_lossy(&self.pending)).is_none()
+                {
                     let _ = std::io::stderr().write_all(&self.pending);
                 }
                 self.pending.clear();
@@ -222,7 +230,7 @@ impl StatusFilter {
     }
     fn prompt(&mut self) {
         let text = crate::report::plain(&String::from_utf8_lossy(&self.pending));
-        if crate::report::Event::line(&text).is_some() {
+        if Self::internal(&text) || crate::report::Event::line(&text).is_some() {
             return;
         }
         // Allow split writes inside the verb/UTF-8 marker, but cap ambiguous
@@ -250,7 +258,9 @@ impl StatusFilter {
         self.passthrough = true;
     }
     fn finish(&mut self) {
-        if crate::report::Event::line(&String::from_utf8_lossy(&self.pending)).is_none() {
+        if !Self::internal(&String::from_utf8_lossy(&self.pending))
+            && crate::report::Event::line(&String::from_utf8_lossy(&self.pending)).is_none()
+        {
             let _ = std::io::stderr().write_all(&self.pending);
         }
         self.pending.clear();

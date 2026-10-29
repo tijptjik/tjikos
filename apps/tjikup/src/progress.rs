@@ -233,11 +233,24 @@ impl Progress {
                 .is_some_and(|c| r.env.get(&c.environment) != Some(&c.equals));
             this.repo_recipes.insert(i, (row, col));
         }
+        if this.presentation.alphabetical_results {
+            let old = this.repos.clone();
+            this.repos.sort_by_key(|repo| repo.label.to_lowercase());
+            for (row, _) in this.repo_recipes.values_mut() {
+                *row = this
+                    .repos
+                    .iter()
+                    .position(|repo| repo.label == old[*row].label)
+                    .unwrap();
+            }
+        }
         if !this.repos.is_empty() {
-            this.heading("Repos");
             this.repo_open = true;
-            if tty {
-                this.draw_repos();
+            if !this.presentation.alphabetical_results {
+                this.heading("Repositories");
+                if tty {
+                    this.draw_repos();
+                }
             }
         }
         this
@@ -393,7 +406,7 @@ impl Progress {
         self.repo_lines = self.repos.len() * self.graphics.as_ref().map_or(1, Graphics::rows) + 1;
     }
     fn patch_repos(&mut self) {
-        if !self.tty || !self.repo_open {
+        if !self.tty || !self.repo_open || self.presentation.alphabetical_results {
             return;
         }
         if self.repo_width != columns() {
@@ -536,7 +549,7 @@ impl Progress {
                     ("SKIP", "-", "condition not met")
                 }
                 State::Unchanged if recipe.prerequisite || recipe.display.verb == "REQUIRE" => {
-                    ("REQUIRE", "✓", "prerequisite satisfied")
+                    ("REQUIRE", "✓", "satisfied")
                 }
                 State::Unchanged if recipe.check.is_some() && recipe.display.verb == "ACTIVATE" => {
                     ("SKIP", "✓", "already active")
@@ -597,7 +610,8 @@ impl Progress {
                     "Recipes".into()
                 };
             }
-            if self.repo_open
+            if self.presentation.alphabetical_results
+                || self.repo_open
                 || self.presentation.grouped_results && event.section != self.current_group
             {
                 self.queued.push(event);
@@ -621,6 +635,12 @@ impl Progress {
             }
         }
         self.patch_repos();
+        if self.presentation.alphabetical_results {
+            self.heading("Repositories");
+            if self.tty {
+                self.draw_repos();
+            }
+        }
         if !self.tty {
             for repo in &self.repos {
                 eprintln!("{}", self.repo_text(repo));
@@ -638,25 +658,39 @@ impl Progress {
     pub fn enter_group(&mut self, name: &str) {
         self.current_group = name.into();
         self.entered_groups.insert(name.into());
-        if !self.repo_open {
+        if !self.repo_open || self.presentation.alphabetical_results {
             self.flush_entered();
         }
     }
     fn flush_entered(&mut self) {
         let events = std::mem::take(&mut self.queued);
-        let (mut ready, waiting): (Vec<_>, Vec<_>) = events
-            .into_iter()
-            .partition(|e| self.entered_groups.contains(&e.section));
+        let (mut ready, waiting): (Vec<_>, Vec<_>) = events.into_iter().partition(|e| {
+            self.entered_groups.contains(&e.section)
+                && (!self.presentation.alphabetical_results || e.section != self.current_group)
+        });
         self.queued = waiting;
-        ready.sort_by_key(|e| (crate::scheduler::group_rank(&e.section), e.section.clone()));
+        self.sort_events(&mut ready);
         for event in ready {
             self.event(&event);
         }
     }
+    fn sort_events(&self, events: &mut [Event]) {
+        events.sort_by_key(|e| {
+            (
+                crate::scheduler::group_rank(&e.section),
+                e.section.clone(),
+                if self.presentation.alphabetical_results {
+                    self.title(&e.subject).to_lowercase()
+                } else {
+                    String::new()
+                },
+            )
+        });
+    }
     fn flush_grouped(&mut self) {
         let mut events = std::mem::take(&mut self.queued);
         // Preserve completion order inside each group, including blocked rows.
-        events.sort_by_key(|e| (crate::scheduler::group_rank(&e.section), e.section.clone()));
+        self.sort_events(&mut events);
         for event in events {
             self.event(&event);
         }
@@ -676,6 +710,7 @@ impl Progress {
             .presentation
             .titles
             .get(base)
+            .filter(|title| !title.contains(" ("))
             .map(String::as_str)
             .unwrap_or(base);
         if let Some(subtype) = subtype {
