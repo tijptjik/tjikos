@@ -74,7 +74,6 @@ Si's storage layout.
 tjikup new device
 # Revise an existing enrollment:
 tjikup new device --replace
-python3 ~/.local/share/dotjik/scripts/device-policy.py configure
 tjikup --plan
 ```
 
