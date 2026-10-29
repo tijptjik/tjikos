@@ -1,7 +1,49 @@
 # Li native cutover and boot investigation
 
-Recorded 2026-10-30 (Hong Kong time). File deployment completed; the remaining
-Tjikup service-convergence workflow and package updates have not run.
+Recorded 2026-10-30 (Hong Kong time). File deployment completed. The user then
+approved service convergence and Synctjik enrollment. That workflow ran; Docker
+still fails and package updates remain pending.
+
+## Approved convergence and Synctjik enrollment
+
+The configuration workflow refreshed Hyprvoice and configured private-assets
+schedules. Docker failed with its existing firewall backend error; the final
+workflow status was `NEEDS ATTENTION`, with Tailscale convergence blocked by
+dependencies. Log on Li: `config-workflow.log` in the recovery directory below.
+
+Enrolled Synctjik with role `laptop`, source `fi`, and the eight shared
+sync/master collections already present in its policy: SSH, GnuPG, icons,
+backgrounds, fonts, Bazecor, KOReader and Sublime Text. Existing verified restore
+receipts were retained; no new identity copying or forced restoration occurred.
+`synctjik ready` returned true and `synctjik check` reported eight valid
+collections. `tjikup --check` validated 94 recipes.
+
+All three native timers are now **enabled and active**:
+
+- `synctjik-dotfiles-lfs-backup.timer`
+- `synctjik-private-assets-backup.timer`
+- `synctjik-private-assets-sync.timer`
+
+This supersedes the inactive-timer checkpoint below. Scheduling is verified;
+fresh backup success is not. The latest private-assets receipt still records
+the earlier successful sync and the backup error reaching Si. An immediate
+backup test was blocked by automatic approval review because it transfers private
+data; no manual backup was started.
+
+Docker's supported nftables backend passed configuration validation and avoided
+the iptables parser failure, but startup then required explicit IPv4 forwarding.
+Automatic approval review blocked persistent forwarding as a network-boundary
+change. The original `/etc/docker/daemon.json` was restored byte-for-byte;
+no forwarding sysctl was installed or changed. The prepared candidate and original
+remain private in the recovery directory. Docker remains failed.
+
+Automatic approval review also blocked the broad package-update workflow,
+interpreting the latest approval as limited to service convergence and Synctjik
+setup. No package upgrades ran. Further approval is needed for package upgrades,
+Docker's forwarding change and, if desired, an immediate backup verification.
+
+Concurrent weekly Tjikup scheduling edits appeared in Li's Dotjik checkout during
+the run. They were preserved and excluded from this thread's changes.
 
 ## Preservation and reconciliation
 

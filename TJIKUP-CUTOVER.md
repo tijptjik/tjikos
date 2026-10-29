@@ -76,19 +76,22 @@ Validation: workspace `bun run build` passed with a writable temporary Go cache;
 including Fi/Li/Si template rendering. The first validation encountered icon
 files changing concurrently; the completed second run passed.
 
-## 2. Li: files cut over; service convergence blocked
+## 2. Li: native files and Synctjik enrolled; Docker still failing
 
 Li is reachable through the pinned native fleet resolver. Its paused rebase and
 live settings were reconciled, including a separate Li Herdr session template.
 Native runners and completions are installed. Home, credential and system file
 deployments completed with rollback receipts, and all three final checks passed.
 
-Automatic approval review blocked the remaining service-convergence workflow
-because it can disable legacy rclone services, enable storage timers and start
-Docker. Package updates remain pending. Legacy backup timers are retired and
-replacement Synctjik timers are still inactive: scheduling is not yet converged.
-See [LI-CUTOVER-AUDIT.md](LI-CUTOVER-AUDIT.md) for the precise checkpoint,
-approval boundary, recovery evidence and the 82-second Plymouth boot stall.
+After explicit user approval, the service-convergence workflow ran. Synctjik is
+enrolled as a laptop follower of Fi with eight restored shared collections;
+readiness passes and all three native backup/sync timers are enabled and active.
+Docker still fails, preventing a successful overall configuration result.
+Its nftables alternative requires IPv4 forwarding, which automatic approval
+review blocked; the original Docker configuration was restored. Package updates
+and a fresh backup verification also remain pending after separate approval
+review blocks. See [LI-CUTOVER-AUDIT.md](LI-CUTOVER-AUDIT.md) for the precise
+checkpoint, recovery evidence and the 82-second Plymouth boot stall.
 
 ## 3. Si: system cut over; home queued behind backup
 
