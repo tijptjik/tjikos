@@ -175,7 +175,7 @@ class Clipboard(DesktopProvider):
         super().__init__(demo)
         self.executor = ThreadPoolExecutor(max_workers=2)
         # Session-private previews disappear with the provider, never enter history.
-        self.preview_dir = tempfile.TemporaryDirectory(prefix='runtjik-clipboard-', dir=os.environ.get('XDG_RUNTIME_DIR'))
+        self.preview_dir = None
         self.previews = {}
         self.pending = False
 
@@ -196,6 +196,11 @@ class Clipboard(DesktopProvider):
             return ''
 
     def preview(self, ident):
+        if self.preview_dir is None:
+            try:
+                self.preview_dir = tempfile.TemporaryDirectory(prefix='runtjik-clipboard-', dir=os.environ.get('XDG_RUNTIME_DIR'))
+            except OSError:
+                self.preview_dir = tempfile.TemporaryDirectory(prefix='runtjik-clipboard-')
         if ident not in self.previews:
             self.previews[ident] = self.executor.submit(self.render_preview, ident)
         future = self.previews[ident]
@@ -354,7 +359,7 @@ class CaptureProvider(DesktopProvider):
                 return {**trash_action('trash', path), 'refresh_query': self.base + ' history'}
             argv = options['viewer'] if self.name == 'Screenshots' else ['xdg-open']
             if self.name == 'Screenshots' and Path(argv[0]).name == 'imv':
-                argv = [*argv, '-n', str(path), str(path.parent)]
+                argv = [sys.executable, '-B', str(Path(__file__).with_name('image_viewer.py')), '--viewer', json.dumps(argv), '--', str(path)]
             else:
                 argv = [*argv, str(path)]
             subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)

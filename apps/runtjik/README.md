@@ -671,3 +671,14 @@ associations. Dotjik installs imv and floats its windows as centered lightboxes.
 
 Clipboard images have asynchronous, session-private previews generated with
 ImageMagick. Decoded previews stay outside the repository and launcher history.
+
+The `runtjik-image` opener uses imv at 90% of the active monitor's height.
+Width follows the initial image aspect ratio, capped at the screen width minus
+twice the vertical margin. The window is centered; very wide images are fitted
+inside it. Monitor scaling and rotation are accounted for. Dotjik uses this
+opener for image MIME types too. Navigating images keeps the window size stable.
+
+imv keys: Left/Right previous/next, Up/Down zoom, `r` reset, `a` actual size,
+`f` fullscreen, `d` information overlay, `h/j/k/l` pan, Ctrl+R rotate,
+`gg` first image, Shift+G last image, and `q` quit. `x` removes the current
+image from the viewing list; it does not delete the file.

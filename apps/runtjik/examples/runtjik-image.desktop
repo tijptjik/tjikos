@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=imv Lightbox
+Comment=Open images in a centered, proportionally sized imv window
+Exec=runtjik-image %F
+Terminal=false
+Type=Application
+Categories=Graphics;Viewer;
+Icon=multimedia-photo-viewer
+MimeType=image/png;image/jpeg;image/gif;image/webp;image/tiff;image/bmp;image/svg+xml;image/avif;image/heif;image/jxl;image/qoi;
