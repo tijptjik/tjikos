@@ -167,6 +167,7 @@ Acceptance requires a fresh Fedora VM run through package installation,
 interactive credential unlock and selected first apply. Local mock tests and a
 successful Worker deployment alone do not establish that acceptance.
 
-Release publication and pin updates are deferred. Existing published pins do
-not contain this migration. Required native capabilities are checked before
-replacing an installed runner.
+The published `tjikup-v0.2.0-bootstrap.6` release includes BWS-backed weekly
+reporting. Bootstrap and fleet installation require those capabilities and
+provision the root-owned weekly runtime before enabling maintenance timers.
+`release.json` pins the verified executable and reviewed source revisions.

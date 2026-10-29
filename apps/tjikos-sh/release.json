@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "dotjik_branch": "bootstrap/fedora-2026-10-28",
-  "tjikos_branch": "bootstrap/fedora-2026-10-28",
-  "dotjik_revision": "58cee3c3a006a4268255b63092dddcfbfbe03b37",
-  "tjikos_revision": "a068d2baf65b17c6db8f4fbcb365cf811b7e7e4c",
+  "dotjik_branch": "main",
+  "tjikos_branch": "main",
+  "dotjik_revision": "97dce3bb991f86ec7d60fbdd58f4e9085859795f",
+  "tjikos_revision": "6c14d2cabd728ce164402d7d83013e75d7af47e7",
   "tjikup_binary": {
-    "url": "https://github.com/tijptjik/tjikos/releases/download/tjikup-v0.2.0-bootstrap.5/tjikup-x86_64-unknown-linux-musl",
-    "sha256": "3023f9e803826947f17fec71788188b8cb1b0653372d571df350d2132b2bd0e3",
-    "source_revision": "28ce751414cba59c96db37e444b2a7847057c373",
+    "url": "https://github.com/tijptjik/tjikos/releases/download/tjikup-v0.2.0-bootstrap.6/tjikup-x86_64-unknown-linux-musl",
+    "sha256": "2419a610a0cc47f6d96b7d590b022cf870638ebd0afc0b4ba9af39599e0f55af",
+    "source_revision": "6c14d2cabd728ce164402d7d83013e75d7af47e7",
     "target": "x86_64-unknown-linux-musl"
   },
   "synctjik_binary": {
