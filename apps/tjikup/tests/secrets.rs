@@ -21,10 +21,32 @@ impl Fixture {
         let manifest = json!({"version":1,"id":"secrets","bitwarden":{"command":["python3",p.join("provider.py")],"access_token_file":p.join("credential")},"entries":[{"kind":"file","path":"/secret","source":"source","template":true,"mode":"0600","sensitive":true}]});
         Self { dir, manifest }
     }
+    fn enable_cache(&mut self) {
+        let p = self.dir.path();
+        fs::write(p.join("keyring.py"), "import sys\nfrom pathlib import Path\np=Path(__file__).parent/'key'\nif sys.argv[1]=='lookup':\n    if not p.exists():sys.exit(1)\n    print(p.read_text())\nelif sys.argv[1]=='store':\n    p.write_text(sys.stdin.read())\nelse:sys.exit(2)\n").unwrap();
+        self.manifest["bitwarden"]["cache"] =
+            json!({"directory":p.join("cache"),"keyring_command":["python3",p.join("keyring.py")]});
+    }
+    fn calls(&self) -> usize {
+        fs::read_to_string(self.dir.path().join("calls"))
+            .unwrap()
+            .lines()
+            .count()
+    }
+    fn encrypted(&self) -> Vec<std::path::PathBuf> {
+        fs::read_dir(self.dir.path().join("cache"))
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.extension().is_some_and(|e| e == "enc"))
+            .collect()
+    }
     fn run(&self, mode: &str) -> Output {
         self.run_timed(mode, false)
     }
     fn run_timed(&self, mode: &str, timed: bool) -> Output {
+        self.run_refresh(mode, timed, "", "")
+    }
+    fn run_refresh(&self, mode: &str, timed: bool, refresh: &str, generation: &str) -> Output {
         let p = self.dir.path();
         fs::write(
             p.join("manifest.json"),
@@ -39,6 +61,8 @@ impl Fixture {
             .arg("--state-dir")
             .arg(p.join("state"))
             .env_remove("BWS_ACCESS_TOKEN")
+            .env("TJIKUP_REFRESH_SECRETS", refresh)
+            .env("TJIKUP_SECRET_REFRESH_RUN", generation)
             .env("TJIKUP_SECRET_TIMING", if timed { "1" } else { "0" })
             .output()
             .unwrap()
@@ -171,4 +195,138 @@ fn timing_diagnostics_expose_only_counts_and_elapsed_time() {
         assert!(!stderr.contains(private));
     }
     assert!(!f.dir.path().join("root/secret").exists());
+}
+
+#[test]
+fn encrypted_cache_survives_processes_and_refreshes_only_when_requested() {
+    let mut f = Fixture::new(&format!("{{{{ secret('{ID}') }}}}"));
+    f.enable_cache();
+    ok(&f.run("apply"));
+    assert_eq!(f.calls(), 1);
+    let files = f.encrypted();
+    assert_eq!(files.len(), 1);
+    let bytes = fs::read(&files[0]).unwrap();
+    for private in ["SYNTHETIC-SECRET", "SYNTHETIC-TOKEN", ID] {
+        assert!(!bytes
+            .windows(private.len())
+            .any(|w| w == private.as_bytes()));
+    }
+    assert_eq!(
+        fs::metadata(&files[0]).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    fs::write(f.dir.path().join("value"), "ROTATED-SECRET").unwrap();
+    let warm = f.run_timed("apply", true);
+    ok(&warm);
+    assert_eq!(f.calls(), 1);
+    assert!(String::from_utf8_lossy(&warm.stderr).contains("0 requests"));
+    assert_eq!(
+        fs::read_to_string(f.dir.path().join("root/secret")).unwrap(),
+        "SYNTHETIC-SECRET"
+    );
+    ok(&f.run_refresh("apply", true, ID, "refresh-one"));
+    assert_eq!(f.calls(), 2);
+    assert_eq!(
+        fs::read_to_string(f.dir.path().join("root/secret")).unwrap(),
+        "ROTATED-SECRET"
+    );
+    ok(&f.run_refresh("apply", false, ID, "refresh-one"));
+    assert_eq!(f.calls(), 2, "same refresh wave is deduplicated");
+    ok(&f.run_refresh("apply", false, "all", "refresh-two"));
+    assert_eq!(f.calls(), 3);
+}
+#[test]
+fn corrupt_ciphertext_refetches_but_never_substitutes_unverified_plaintext() {
+    let mut f = Fixture::new(&format!("{{{{ secret('{ID}') }}}}"));
+    f.enable_cache();
+    ok(&f.run("apply"));
+    let file = f.encrypted().remove(0);
+    let mut bytes = fs::read(&file).unwrap();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 1;
+    fs::write(&file, &bytes).unwrap();
+    ok(&f.run("apply"));
+    assert_eq!(f.calls(), 2);
+    fs::write(&file, b"SYNTHETIC-UNENCRYPTED-ATTACK").unwrap();
+    fs::write(f.dir.path().join("provider.py"), "import sys;sys.exit(1)").unwrap();
+    assert_eq!(f.run("apply").status.code(), Some(2));
+    assert_eq!(
+        fs::read_to_string(f.dir.path().join("root/secret")).unwrap(),
+        "SYNTHETIC-SECRET"
+    );
+}
+#[test]
+fn rotated_access_token_cannot_reuse_previous_auth_scope() {
+    let mut f = Fixture::new(&format!("{{{{ secret('{ID}') }}}}"));
+    f.enable_cache();
+    ok(&f.run("apply"));
+    let p = f.dir.path();
+    fs::write(p.join("credential"), "BWS_ACCESS_TOKEN=ROTATED-TOKEN\n").unwrap();
+    let provider = fs::read_to_string(p.join("provider.py"))
+        .unwrap()
+        .replace("SYNTHETIC-TOKEN", "ROTATED-TOKEN");
+    fs::write(p.join("provider.py"), provider).unwrap();
+    ok(&f.run("apply"));
+    assert_eq!(f.calls(), 2);
+    assert_eq!(f.encrypted().len(), 2);
+}
+#[test]
+fn unavailable_keyring_uses_provider_without_plaintext_cache() {
+    let mut f = Fixture::new(&format!("{{{{ secret('{ID}') }}}}"));
+    f.enable_cache();
+    fs::write(f.dir.path().join("keyring.py"), "import sys;sys.exit(1)").unwrap();
+    let result = f.run("apply");
+    ok(&result);
+    assert!(String::from_utf8_lossy(&result.stderr).contains("no plaintext cache"));
+    ok(&f.run("apply"));
+    assert_eq!(f.calls(), 2);
+    assert!(f.encrypted().is_empty());
+}
+#[test]
+fn symlink_cache_entry_is_rejected_without_following_it() {
+    use std::os::unix::fs::symlink;
+    let mut f = Fixture::new(&format!("{{{{ secret('{ID}') }}}}"));
+    f.enable_cache();
+    ok(&f.run("apply"));
+    let file = f.encrypted().remove(0);
+    fs::remove_file(&file).unwrap();
+    let target = f.dir.path().join("unrelated");
+    fs::write(&target, "KEEP").unwrap();
+    symlink(&target, &file).unwrap();
+    assert_eq!(f.run("apply").status.code(), Some(2));
+    assert_eq!(fs::read_to_string(target).unwrap(), "KEEP");
+}
+#[test]
+fn concurrent_readers_fetch_a_missing_secret_once() {
+    let mut f = Fixture::new(&format!("{{{{ secret('{ID}') }}}}"));
+    f.enable_cache();
+    let p = f.dir.path();
+    fs::write(
+        p.join("manifest.json"),
+        serde_json::to_vec(&f.manifest).unwrap(),
+    )
+    .unwrap();
+    let mut children = Vec::new();
+    for _ in 0..3 {
+        children.push(
+            Command::new(env!("CARGO_BIN_EXE_tjikup"))
+                .args(["files", "plan", "--manifest"])
+                .arg(p.join("manifest.json"))
+                .arg("--root")
+                .arg(p.join("root"))
+                .arg("--state-dir")
+                .arg(p.join("state"))
+                .env_remove("BWS_ACCESS_TOKEN")
+                .env_remove("TJIKUP_REFRESH_SECRETS")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
+    }
+    for mut child in children {
+        assert_eq!(child.wait().unwrap().code(), Some(1));
+    }
+    assert_eq!(f.calls(), 1);
+    assert_eq!(f.encrypted().len(), 1);
 }

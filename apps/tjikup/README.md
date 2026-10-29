@@ -308,10 +308,45 @@ and blocked rows retain their sections. Repository matrix updates remain live.
 
 `TJIKUP_SECRET_TIMING=1` reports aggregate Bitwarden request counts and provider
 time for troubleshooting; it never prints secret values or identifiers. Secret
-lookups remain fresh per render and are currently sequential, with repeated IDs
-cached in memory for that render only.
+lookups use the optional encrypted cache described below; cache misses are
+fetched sequentially and repeated IDs are also cached in memory per render.
 
 Enroll machines with `tjikup new device` to choose their role and explicit
 recipe subscriptions. `--show-skips` never adds
 excluded recipes. `--show-skips-and-other-devices` lists excluded recipes as
 informational rows and does not execute them.
+
+### Encrypted Bitwarden cache
+
+Enable persistent caching in a native manifest or template-input document with
+`"bitwarden": {"command": ["bws"], "access_token_file": "...", "cache": {}}`.
+The cache is opt-in; Dotjik enables it for its user manifests. It has **no TTL,
+interval refresh, or background job**. Missing entries are fetched individually;
+normal renders reuse existing values, even when offline.
+
+Ciphertext lives in `$XDG_CACHE_HOME/tjikup/credentials` (normally
+`~/.cache/tjikup/credentials`), in owner-only directories/files. ChaCha20-Poly1305
+authenticates each entry against its secret ID, provider command and access-token
+scope. A random encryption key is stored through `secret-tool` in the user's OS
+Secret Service (oo7 on Fi), never beside the cache. The access-token file is still
+required locally; changing that token isolates the old cache. Cache corruption
+causes a fresh provider lookup, not acceptance of unverified data. Per-secret
+locks coalesce concurrent misses and refreshes. If Secret Service is unavailable,
+Tjikup warns and uses Bitwarden directly; it never creates a plaintext fallback.
+
+Refresh referenced credentials explicitly:
+
+```sh
+tjikup --apply-dotfiles --refresh-secrets
+# Or refresh only a standalone manifest:
+tjikup files apply --manifest credentials.json --state-dir /absolute/state --refresh-secrets
+```
+
+A refresh is fetched once per secret per invocation, including dependent child
+renders. Successful values replace ciphertext atomically; failed refreshes fail
+the operation rather than silently using stale values. Ordinary checks/plans do
+not deploy files, but may populate this encrypted cache when enabled. Timing
+with `TJIKUP_SECRET_TIMING=1` reports provider requests and cache hits without
+values or identifiers. `cache.directory` can select an absolute cache location;
+`cache.keyring_command` selects a Secret Service CLI compatible with
+`secret-tool lookup/store` (primarily for integration tests).

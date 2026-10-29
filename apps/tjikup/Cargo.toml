@@ -8,6 +8,7 @@ description = "Declarative, resource-aware task runner"
 [dependencies]
 tjik-ui = { path = "../../packages/tjik-ui" }
 anyhow = "1"
+chacha20poly1305 = "0.10"
 base64 = "0.22"
 flate2 = "1.1.10"
 libc = "0.2"

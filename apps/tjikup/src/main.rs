@@ -83,7 +83,7 @@ fn cli() -> Result<i32> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
-                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --show-skips-and-other-devices   Also list excluded recipes; never execute them\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  sync <command>   Delegate archival and restoration to synctjik\n  notify --stdin   Deliver validated display metadata to local notjikctl");
+                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --refresh-secrets   Refresh referenced Bitwarden secrets, bypassing the local cache\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --show-skips-and-other-devices   Also list excluded recipes; never execute them\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  sync <command>   Delegate archival and restoration to synctjik\n  notify --stdin   Deliver validated display metadata to local notjikctl");
                 println!("\nRecipe selection (combinable):\n  --apply-dotfiles          Home configuration and its reloads only\n  --apply-sysfiles          System configuration and its reloads only\n  --apply-package-updates   Updates of installed applications only\n  --skip-package-updates    Install missing applications and configure; no updates\nSelected modes use local checks for installation dependencies; they never run installers or repository synchronization.");
                 return Ok(0);
             }
@@ -99,6 +99,7 @@ fn cli() -> Result<i32> {
                         .parse::<usize>()?,
                 )
             }
+            "--refresh-secrets" => managed_files::secrets::enable_refresh()?,
             "--show-skips" => show_skips = true,
             "--show-skips-and-other-devices" => {
                 show_skips = true;

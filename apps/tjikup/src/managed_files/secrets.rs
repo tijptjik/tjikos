@@ -1,6 +1,8 @@
-//! Bitwarden Secrets Manager values stay in memory and child environments.
+//! Bitwarden values use an optional encrypted local cache and in-memory render cache.
+use super::credential_cache::{Cache, Settings};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::Read;
@@ -10,7 +12,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
-    Mutex,
+    Mutex, OnceLock,
 };
 use std::time::{Duration, Instant};
 
@@ -20,6 +22,7 @@ pub struct Bitwarden {
     #[serde(default = "default_command")]
     pub command: Vec<String>,
     pub access_token_file: Option<String>,
+    pub cache: Option<Settings>,
 }
 fn default_command() -> Vec<String> {
     vec!["bws".into()]
@@ -31,6 +34,9 @@ pub struct Secrets {
     pub used: AtomicBool,
     requests: AtomicU64,
     request_millis: AtomicU64,
+    cache_hits: AtomicU64,
+    persistent: OnceLock<Option<Cache>>,
+    refresh_run: String,
 }
 impl Secrets {
     pub fn new(config: Bitwarden) -> Result<Self> {
@@ -43,6 +49,10 @@ impl Secrets {
             used: AtomicBool::new(false),
             requests: AtomicU64::new(0),
             request_millis: AtomicU64::new(0),
+            cache_hits: AtomicU64::new(0),
+            persistent: OnceLock::new(),
+            refresh_run: std::env::var("TJIKUP_SECRET_REFRESH_RUN")
+                .unwrap_or(super::credential_cache::random_hex()?),
         })
     }
     fn token(&self) -> Result<String> {
@@ -100,6 +110,30 @@ impl Secrets {
             return Ok(value.clone());
         }
         let token = self.token()?;
+        let refresh = std::env::var("TJIKUP_REFRESH_SECRETS").unwrap_or_default();
+        let refresh = (refresh == "all" || refresh == "1" || refresh.split(',').any(|v| v == id))
+            .then_some(self.refresh_run.as_str());
+        let persistent = self.persistent.get_or_init(|| {
+            self.config.cache.as_ref().and_then(|settings| {
+                let scope = format!("{:x}", Sha256::digest(serde_json::to_vec(&(&self.config.command, &token)).expect("serializable scope")));
+                match Cache::open(settings, &scope) {
+                    Ok(cache) => Some(cache),
+                    Err(_) => {
+                        eprintln!("Credential cache unavailable; using Bitwarden directly (no plaintext cache)");
+                        None
+                    }
+                }
+            })
+        });
+        // Hold one per-secret lock across miss/fetch/save to avoid refresh stampedes.
+        let _guard = persistent.as_ref().map(|c| c.lock(id)).transpose()?;
+        if let Some(persistent) = persistent {
+            if let Some(value) = persistent.get(id, refresh)? {
+                self.cache_hits.fetch_add(1, Ordering::Relaxed);
+                cache.insert(id.into(), value.clone());
+                return Ok(value);
+            }
+        }
         let mut child = Command::new(&self.config.command[0])
             .args(&self.config.command[1..])
             .args(["secret", "get", id, "--output", "json", "--color", "no"])
@@ -165,6 +199,9 @@ impl Secrets {
             .as_str()
             .context("Bitwarden response has no string value")?
             .to_owned();
+        if let Some(persistent) = persistent {
+            persistent.put(id, &value, refresh)?;
+        }
         cache.insert(id.to_owned(), value.clone());
         Ok(value)
     }
@@ -175,12 +212,22 @@ impl Drop for Secrets {
         // Opt-in diagnostics contain counts/timing only, never values or IDs.
         if std::env::var("TJIKUP_SECRET_TIMING").as_deref() == Ok("1") {
             eprintln!(
-                "Bitwarden: {} requests, {:.3}s provider time",
+                "Bitwarden: {} requests, {:.3}s provider time; {} cache hits",
                 self.requests.load(Ordering::Relaxed),
-                self.request_millis.load(Ordering::Relaxed) as f64 / 1000.
+                self.request_millis.load(Ordering::Relaxed) as f64 / 1000.,
+                self.cache_hits.load(Ordering::Relaxed)
             );
         }
     }
+}
+
+pub fn enable_refresh() -> Result<()> {
+    std::env::set_var("TJIKUP_REFRESH_SECRETS", "all");
+    std::env::set_var(
+        "TJIKUP_SECRET_REFRESH_RUN",
+        super::credential_cache::random_hex()?,
+    );
+    Ok(())
 }
 
 pub fn fish_quote(value: &str) -> String {

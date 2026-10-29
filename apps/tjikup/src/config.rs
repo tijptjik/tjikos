@@ -437,6 +437,7 @@ impl Config {
                     "plan",
                     "jobs",
                     "version",
+                    "refresh-secrets",
                     "show-skips",
                     "show-skips-and-other-devices",
                     "demo",

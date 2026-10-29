@@ -1,4 +1,5 @@
 //! Native file deployment, deliberately independent of the recipe scheduler.
+mod credential_cache;
 mod disk;
 mod model;
 pub(crate) mod secrets;
@@ -350,6 +351,7 @@ fn options(args: Vec<String>) -> Result<Options> {
             }
             "--root" => root = PathBuf::from(args.next().context("--root needs a path")?),
             "--json" => json = true,
+            "--refresh-secrets" => secrets::enable_refresh()?,
             "--group" => group = Some(args.next().context("--group needs a name")?),
             "--context-file" => {
                 context = Some(PathBuf::from(
@@ -540,7 +542,7 @@ fn run(args: Vec<String>) -> Result<i32> {
 
 pub fn cli(args: Vec<String>) -> i32 {
     if args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h") {
-        println!("tjikup files <check|plan|apply> --manifest PATH --state-dir PATH [--root PATH] [--json]\ntjikup files restore --receipt PATH --state-dir PATH [--root PATH]\n\ncheck/plan: 0 current, 1 changes needed, 2 conflict/error; no writes.\napply: track desired files, preserve local edits, back up replacements.\nrestore: verify and restore a private receipt; refuse later edits.\n--root remaps absolute destinations into an existing staging directory.\nSee docs/native-files.md for the manifest schema and migration boundary.");
+        println!("tjikup files <check|plan|apply> --manifest PATH --state-dir PATH [--root PATH] [--json]\ntjikup files restore --receipt PATH --state-dir PATH [--root PATH]\n\ncheck/plan: 0 current, 1 changes needed, 2 conflict/error; no deployment writes (encrypted cache may populate).\napply: track desired files, preserve local edits, back up replacements.\nrestore: verify and restore a private receipt; refuse later edits.\n--root remaps absolute destinations into an existing staging directory.\n--refresh-secrets bypasses cached Bitwarden values for this invocation.\nSee docs/native-files.md for the manifest schema and migration boundary.");
         return 0;
     }
     match run(args) {
