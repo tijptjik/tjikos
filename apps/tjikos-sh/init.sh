@@ -22,7 +22,6 @@ main() {
             '  5. Enroll this hostname: role and explicit recipe subscriptions.' \
             '  6. Unlock the existing encrypted Bitwarden token and age identity.' \
             '  7. Validate native template context.' \
-            '  Python 3.11+ is checked from Fedora; no pip or TOML packages are installed.' \
             '  8. Select required archive collections, review restoration, and verify readiness.' \
             '  9. Enable scheduled backups after restoration; print the plan. Applying recipes is a separate command.'
         return 0
@@ -50,9 +49,6 @@ main() {
     printf 'Continue? [y/N]: ' >/dev/tty
     read -r answer </dev/tty
     [[ "$answer" == y || "$answer" == Y ]] || return 0
-    python3 -c 'import sys, tomllib; assert sys.version_info >= (3, 11)' || {
-        echo 'Fedora Python 3.11+ is required by remaining helpers. Install python3 first.' >&2; return 1;
-    }
     sudo -v </dev/tty
     sudo dnf install -y "${packages[@]}" </dev/tty
     umask 077
@@ -80,7 +76,7 @@ main() {
     }
     clone_release https://github.com/tijptjik/dotfiles.git "$dotjik_dir" "$dotjik_revision" "$dotjik_branch"
     clone_release https://github.com/tijptjik/tjikos.git "$tjikos_dir" "$tjikos_revision" "$tjikos_branch"
-    [[ -f "$tjikos_dir/apps/tjikup/Cargo.toml" && -f "$dotjik_dir/scripts/device-policy.py" ]] || {
+    [[ -f "$tjikos_dir/apps/tjikup/Cargo.toml" && -f "$dotjik_dir/native/home/bootstrap.json" ]] || {
         echo 'Pinned source does not contain the cold-bootstrap workflow.' >&2; return 1;
     }
     mkdir -p "$HOME/.local/bin" "$config_dir"
@@ -113,9 +109,10 @@ main() {
         tjikup new device </dev/tty
     fi
     tjikup --check
-    fish --no-config "$dotjik_dir/home/.bitwarden-setup.fish" </dev/tty
+    tjikup workflow --repo "$dotjik_dir" bitwarden
+    fish --no-config "$dotjik_dir/native/tasks/bootstrap/setup-bitwarden.fish" </dev/tty
     age-keygen -y "$HOME/.keys/chezmoi.txt" >/dev/null
-    python3 "$dotjik_dir/scripts/device-policy.py" configure
+    tjikup workflow --repo "$dotjik_dir" configure
     bash "$tjikos_dir/apps/tjikos-sh/helpers/restore-collections.sh" "$dotjik_dir" </dev/tty
     tjikup --check
     tjikup --plan
