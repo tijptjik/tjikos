@@ -76,22 +76,25 @@ Validation: workspace `bun run build` passed with a writable temporary Go cache;
 including Fi/Li/Si template rendering. The first validation encountered icon
 files changing concurrently; the completed second run passed.
 
-## 2. Li: native files and Synctjik enrolled; Docker still failing
+## 2. Li: native cutover and updates complete; fresh backup proof pending
 
 Li is reachable through the pinned native fleet resolver. Its paused rebase and
 live settings were reconciled, including a separate Li Herdr session template.
 Native runners and completions are installed. Home, credential and system file
 deployments completed with rollback receipts, and all three final checks passed.
 
-After explicit user approval, the service-convergence workflow ran. Synctjik is
-enrolled as a laptop follower of Fi with eight restored shared collections;
-readiness passes and all three native backup/sync timers are enabled and active.
-Docker still fails, preventing a successful overall configuration result.
-Its nftables alternative requires IPv4 forwarding, which automatic approval
-review blocked; the original Docker configuration was restored. Package updates
-and a fresh backup verification also remain pending after separate approval
-review blocks. See [LI-CUTOVER-AUDIT.md](LI-CUTOVER-AUDIT.md) for the precise
-checkpoint, recovery evidence and the 82-second Plymouth boot stall.
+After explicit user approval, package upgrades and configuration convergence both
+finished with ALL SYSTEMS GO. Docker's native nftables backend and explicit
+forwarding are configured; Docker and Tailscale are active. Synctjik is enrolled
+as a laptop follower of Fi with eight restored shared collections; readiness
+passes and all three native backup/sync timers are enabled. The real repository
+directory is now Dotjik, with the old name retained as a compatibility symlink.
+
+A fresh manual backup verification is still blocked by automatic approval review,
+which requires user confirmation naming the four private folders and their
+existing encrypted Restic destination on Si. No fresh backup success is claimed.
+See [LI-CUTOVER-AUDIT.md](LI-CUTOVER-AUDIT.md) for the exact approval request,
+validation limits, recovery evidence and the unresolved 82-second Plymouth stall.
 
 ## 3. Si: system cut over; home queued behind backup
 

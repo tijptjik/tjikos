@@ -1,8 +1,64 @@
 # Li native cutover and boot investigation
 
-Recorded 2026-10-30 (Hong Kong time). File deployment completed. The user then
-approved service convergence and Synctjik enrollment. That workflow ran; Docker
-still fails and package updates remain pending.
+Recorded 2026-10-30 (Hong Kong time). **Package updates and configuration
+convergence now both report ALL SYSTEMS GO.** Docker and Tailscale are active;
+Synctjik enrollment, readiness and schedules are verified. A fresh manual backup
+verification remains blocked by automatic approval review, as detailed below.
+
+## Final catch-up after approval of all remaining work
+
+- Applied the backed-up Docker nftables configuration and explicit IPv4
+  forwarding after user approval. Docker starts and its bridge network exists.
+  Preserved all other daemon settings. Declarative Li policy contains both
+  `/etc/docker/daemon.json` and `/etc/sysctl.d/90-tjikup-docker.conf`.
+- Completed RPM/application upgrades. The first run exposed a Zed sudo/PATH
+  bug; the updater now invokes the target user's native Tjikup by absolute path.
+  The retry finished successfully, including stable/preview Zed, Tippecanoe,
+  Gitfetch and upstream Tailscale. Log: `package-retry.log`; user unit
+  `tjikup-li-package-retry.service` reports `Result=success`, exit 0.
+- Final configuration run also reports ALL SYSTEMS GO in
+  `config-workflow-final.log`. Tailscale has automatic updates enabled,
+  operator `io`, and tailnet DNS/default-route acceptance disabled as intended.
+- Captured and committed Li's newer Fcitx group ordering and Zed preference
+  (`f9e6f27`), retaining concurrent weekly-schedule edits. Reconciled the captured
+  history locally. Li's TjikOS checkout advanced to committed `15dcb87`.
+- Reconciled schedule descriptions with native enrollment (`4465742`) and fixed
+  Synctjik's unit installation permissions (`4b813ed`). The tested binary was
+  hash-verified and installed with workers inactive. Rerunning `synctjik schedule`
+  now preserves mode 0644 and no longer causes managed-file drift.
+- Made `~/.local/share/dotjik` the real repository directory. The former physical
+  name remains a compatibility symlink, preserving existing application paths.
+  The config link now resolves consistently to Dotjik. Final home file check
+  exits 0; credentials and system checks also passed. Last canonical-path receipt:
+  `~/.local/state/tjikup/files/home/receipt-596Q9y/receipt.json`.
+- All three Synctjik timers and the concurrently configured weekly Tjikup timer
+  are enabled. Synctjik reports ready and eight valid enrolled collections.
+  A later private sync receipt confirms all four configured folders completed
+  at `20261029T163645Z`. No fresh backup receipt is claimed.
+- DNF's reboot check reports no updated core libraries/services requiring reboot.
+  The running kernel remains `7.2.11-300.fc45.x86_64`. No reboot was performed;
+  the earlier intermittent Plymouth stall has not been reproduced or resolved.
+
+Backup routing was repaired in `4c8d42d`: Si's public address timed out and its
+old LAN address had no route, while discovered tailnet IPv6
+`fd7a:115c:a1e0::32f:dc65` returned hostname `si` with the existing pinned
+`HostKeyAlias=ssh.type.hk`. The shared policy now prefers that verified route.
+
+The user approved running all remaining actions, but automatic approval review
+still rejected the immediate manual backup because it requires user confirmation
+that names both the payload and destination. The exact proposed operation is:
+back up Li's `/home/io/documents`, `/home/io/projects`, `/home/io/resources` and
+`/home/io/media` into the existing encrypted Restic repository on Si at
+`/mnt/storage/private/backups/clients/li`. Native policy excludes `.git`,
+dependency caches and trash. The manual backup did not start; existing approved
+schedules remain enabled. Do not bypass this outstanding approval boundary.
+
+Validation: the two native schedule-migration tests passed; the Synctjik release
+build passed; `bun install` and the workspace build passed (9 tasks). All 52
+task templates rendered and syntax-checked separately for Fi/Li/Si. The broad
+policy suite encountered unrelated concurrent Mullvad icon-contrast failures;
+its older rendering assertion also expected 51 tasks after the concurrent weekly
+work added a 52nd. Those unrelated files/tests were not modified here.
 
 ## Approved convergence and Synctjik enrollment
 
