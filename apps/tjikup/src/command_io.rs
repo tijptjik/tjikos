@@ -12,10 +12,13 @@ pub struct Output {
     pub stderr: String,
 }
 pub fn capture(command: &mut Command, timeout: Duration) -> Result<Output> {
+    capture_input(command, timeout, Stdio::null())
+}
+pub fn capture_input(command: &mut Command, timeout: Duration, input: Stdio) -> Result<Output> {
     let mut out = tempfile::tempfile()?;
     let mut err = tempfile::tempfile()?;
     let mut child = command
-        .stdin(Stdio::null())
+        .stdin(input)
         .stdout(out.try_clone()?)
         .stderr(err.try_clone()?)
         .process_group(0)

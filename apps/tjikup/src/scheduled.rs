@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
     fs,
-    io::Write,
+    io::{Read, Write},
     os::unix::fs::{DirBuilderExt, MetadataExt},
     path::Path,
     time::Duration,
@@ -159,17 +159,7 @@ fn deliver(destination: &Destination, state: &Path, text: &str, base: &str) -> R
     Ok(())
 }
 
-pub fn run(args: Vec<String>) -> Result<i32> {
-    if args == ["--help"] {
-        println!("tjikup scheduled [workflow flags]\nRuns the normal workflow and updates a pinned Telegram status.\nCredentials: TJIKUP_TELEGRAM_CONFIG or ~/.config/tjikup/telegram.json\nUse --notify-only to retry delivery without rerunning maintenance.");
-        return Ok(0);
-    }
-    let root = crate::scheduler::state_root().join("scheduled");
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(&root)?;
-    let _lock = crate::process::Lock::acquire(&root.join("run.lock"))?;
+fn destination() -> Result<Destination> {
     let credentials = std::env::var_os("TJIKUP_TELEGRAM_CONFIG")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
@@ -190,6 +180,79 @@ pub fn run(args: Vec<String>) -> Result<i32> {
             && (destination.chat_id.is_string() || destination.chat_id.is_i64()),
         "Missing Telegram token or chat ID"
     );
+    Ok(destination)
+}
+
+fn relay_report(argv: &[String], text: &str) -> Result<()> {
+    use std::process::{Command, Stdio};
+    let host = fs::read_to_string("/proc/sys/kernel/hostname")?;
+    let mut payload = tempfile::tempfile()?;
+    serde_json::to_writer(&mut payload, &json!({"host":host.trim(), "text":text}))?;
+    use std::io::Seek;
+    payload.rewind()?;
+    let result = crate::command_io::capture_input(
+        Command::new(&argv[0]).args(&argv[1..]),
+        Duration::from_secs(90),
+        Stdio::from(payload),
+    )?;
+    if result.code != 0 {
+        eprintln!("Telegram relay: {}", result.stderr);
+    }
+    ensure!(
+        result.code == 0,
+        "Telegram relay failed; inspect the server journal"
+    );
+    Ok(())
+}
+
+pub fn run(args: Vec<String>) -> Result<i32> {
+    if args == ["--help"] {
+        println!("tjikup scheduled [workflow flags]\nRuns the normal workflow and updates a pinned Telegram status.\nCredentials: TJIKUP_TELEGRAM_CONFIG or ~/.config/tjikup/telegram.json\nUse --notify-only to retry delivery without rerunning maintenance.");
+        return Ok(0);
+    }
+    let root = crate::scheduler::state_root().join("scheduled");
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&root)?;
+    if args == ["--report-stdin"] {
+        let destination = destination()?;
+        let mut input = Vec::new();
+        std::io::stdin().take(16385).read_to_end(&mut input)?;
+        ensure!(input.len() <= 16384, "Status payload too large");
+        let report: Value = serde_json::from_slice(&input)?;
+        let host = report["host"].as_str().context("Missing report host")?;
+        ensure!(
+            !host.is_empty()
+                && host.len() <= 63
+                && host.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
+            "Invalid report host"
+        );
+        let _lock = crate::process::Lock::acquire(&root.join(format!("report-{host}.lock")))?;
+        let text = report["text"].as_str().context("Missing report text")?;
+        ensure!(text.chars().count() <= 3500, "Status text too large");
+        deliver(
+            &destination,
+            &root.join(format!("message-{host}.json")),
+            text,
+            "https://api.telegram.org",
+        )?;
+        return Ok(0);
+    }
+    let _lock = crate::process::Lock::acquire(&root.join("run.lock"))?;
+    let relay_path = std::env::var_os("TJIKUP_TELEGRAM_RELAY").map(std::path::PathBuf::from);
+    let relay: Option<Vec<String>> = relay_path
+        .map(|path| -> Result<_> {
+            let argv: Vec<String> = serde_json::from_slice(&fs::read(path)?)?;
+            ensure!(!argv.is_empty(), "Empty Telegram relay command");
+            Ok(argv)
+        })
+        .transpose()?;
+    let direct = if relay.is_none() {
+        Some(destination()?)
+    } else {
+        None
+    };
     let pending = root.join("latest.json");
     let (text, code) = if args == ["--notify-test"] {
         let host = fs::read_to_string("/proc/sys/kernel/hostname")?;
@@ -234,12 +297,17 @@ pub fn run(args: Vec<String>) -> Result<i32> {
         &pending,
         &json!({"text":text,"exit_code":code,"delivered":false}),
     )?;
-    if let Err(error) = deliver(
-        &destination,
-        &root.join("message.json"),
-        &text,
-        "https://api.telegram.org",
-    ) {
+    let delivery = if let Some(argv) = relay {
+        relay_report(&argv, &text)
+    } else {
+        deliver(
+            direct.as_ref().context("Missing destination")?,
+            &root.join("message.json"),
+            &text,
+            "https://api.telegram.org",
+        )
+    };
+    if let Err(error) = delivery {
         eprintln!("Status saved locally; retry with tjikup scheduled --notify-only");
         bail!("{error}");
     }
@@ -371,5 +439,18 @@ mod tests {
             ]
         );
         assert!(!fs::read_to_string(state).unwrap().contains("synthetic"));
+    }
+    #[test]
+    fn relay_receives_structured_status_on_stdin() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("report.json");
+        relay_report(
+            &["tee".into(), path.to_string_lossy().into_owned()],
+            "synthetic status",
+        )
+        .unwrap();
+        let value: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(value["text"], "synthetic status");
+        assert!(value["host"].is_string());
     }
 }

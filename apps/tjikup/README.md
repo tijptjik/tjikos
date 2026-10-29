@@ -429,3 +429,15 @@ inspect the user service journal if a scheduled completion is missing.
 The fleet's Dotjik policy owns `tjikup-weekly.timer` (Sunday 09:00
 `Asia/Hong_Kong`, persistent catch-up) and its user service. No standalone DNF
 updater is needed; package updates run through the ordinary Tjikup recipes.
+
+A relay avoids distributing the bot credential: set `TJIKUP_TELEGRAM_RELAY` to
+an argv-array JSON file. The command receives only `{host,text}` on stdin and
+must exit zero after delivery. On the notification server, `tjikup scheduled
+--report-stdin` reads that payload and uses the server's local credentials to
+update a separate pinned message for each host. The fleet runs this through
+pinned SSH to si; the bot credential remains at `/etc/si-notifications/telegram.json`.
+The root-owned `/usr/local/libexec/tjikup-weekly` is the tested scheduled runtime,
+so ordinary application installs cannot replace it with a release that predates
+scheduled reporting. Update that runtime when deploying new scheduling support.
+Install or refresh that runtime with `bash apps/tjikup/scripts/install-weekly.sh`
+after building. This replaces only the executable, never a running process.
