@@ -125,6 +125,11 @@ synctjik cloudflare backup
 ```
 
 Both `rclone` and `restic` are runtime dependencies; Python is not.
+Private-assets sync uses **rclone bisync** to keep the configured local folders
+and encrypted Drive remote in step. Private-assets backup separately creates
+**encrypted Restic snapshots on Si**, retaining recoverable history even when
+sync propagates a deletion. A successful bisync receipt is not proof that the
+Restic backup succeeded; check their separate receipts.
 The remote backup host needs POSIX shell, flock and coreutils. Managed
 installation provisions them. `cloudflare check` validates policy and dependency
 availability without reading credentials, accessing remote data or writing state.

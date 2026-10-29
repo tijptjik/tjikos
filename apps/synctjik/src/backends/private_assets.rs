@@ -423,11 +423,7 @@ impl<'a> App<'a> {
             self.runner,
         )?;
         let mut args = ssh.clone();
-        args.push(format!(
-            "mkdir -p -- {} && if test -f {}; then echo exists; else echo missing; fi",
-            quote(&root),
-            quote(&format!("{root}/config"))
-        ));
+        args.push(repository_probe(&root));
         let (_, probe) =
             self.runner
                 .guarded(&mut command(&args), Some(&mut coord.child.0), false)?;
@@ -685,6 +681,17 @@ fn retention(snapshots: &[Value], now: DateTime<Utc>) -> Result<HashSet<String>>
         .map(|(_, s)| s.to_string())
         .collect())
 }
+fn repository_probe(root: &str) -> String {
+    // SSH executes through the account's login shell, which may be Fish.
+    shell_join(&strings(&[
+        "sh",
+        "-c",
+        "mkdir -p -- \"$1\" && if test -f \"$1/config\"; then echo exists; else echo missing; fi",
+        "synctjik-repository-probe",
+        root,
+    ]))
+}
+
 // This transport only holds flock and saves an explicitly acknowledged receipt.
 // All scheduling, receipt validation and retention decisions stay in Rust.
 const COORDINATOR: &str = r#"
@@ -1008,6 +1015,28 @@ mod tests {
                 .arg("fi"),
         )
         .unwrap()
+    }
+    #[test]
+    fn repository_probe_supports_posix_and_fish_login_shells() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("client's backup $(false)");
+        for shell in ["sh", "fish"] {
+            let result = Command::new(shell)
+                .args(["-c", &repository_probe(root.to_str().unwrap())])
+                .output()
+                .unwrap();
+            assert!(result.status.success(), "{shell}: {:?}", result.stderr);
+            assert_eq!(result.stdout, b"missing\n");
+        }
+        fs::write(root.join("config"), b"fixture").unwrap();
+        for shell in ["sh", "fish"] {
+            let result = Command::new(shell)
+                .args(["-c", &repository_probe(root.to_str().unwrap())])
+                .output()
+                .unwrap();
+            assert!(result.status.success());
+            assert_eq!(result.stdout, b"exists\n");
+        }
     }
     #[test]
     fn coordinator_requires_explicit_success_and_excludes_other_clients() {
