@@ -99,6 +99,10 @@ bootstrap release manifest, and atomically replaces executables. No Rust or C co
 is installed on the target device. With `TJIKUP_MANAGED_CONFIG=1`, installation
 updates only the binary; Dotjik owns the compatibility command wrappers. Standalone
 installation creates wrappers relative to the selected prefix.
+For an explicit source-checkout repair, run `bun run build --filter=@tjikos/synctjik`
+from the repository root, then `bash apps/synctjik/scripts/install.sh --from-build`.
+This installs the local release build after checking its protection capabilities;
+normal installation continues to use the pinned download.
 Never validate a release by applying live private
 folders or replacing a pinned running archive worker.
 

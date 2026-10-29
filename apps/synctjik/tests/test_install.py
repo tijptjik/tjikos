@@ -10,6 +10,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class InstallTests(unittest.TestCase):
+    def test_local_build_install_bypasses_download(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app, prefix = self.fixture(Path(directory))
+            (app / 'target/release').mkdir(parents=True)
+            shutil.copy2(app / 'dist/synctjik', app / 'target/release/synctjik')
+            (app / 'scripts/fetch-release.sh').write_text('#!/bin/sh\nexit 99\n')
+            subprocess.run(['bash', str(app / 'scripts/install.sh'), '--from-build', str(prefix)],
+                           env={**os.environ, 'TJIKUP_MANAGED_CONFIG': '1'}, check=True)
+            self.assertEqual((prefix / 'bin/synctjik').read_bytes(),
+                             (app / 'target/release/synctjik').read_bytes())
+
+    def test_missing_local_build_preserves_installed_runner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app, prefix = self.fixture(Path(directory))
+            installed = prefix / 'bin/synctjik'
+            shutil.copy2(app / 'dist/synctjik', installed)
+            before = installed.read_bytes()
+            result = subprocess.run(['bash', str(app / 'scripts/install.sh'), '--from-build', str(prefix)],
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(installed.read_bytes(), before)
+
     def test_managed_install_preserves_wrappers_and_only_installs_binary(self):
         for existing in (True, False):
             with self.subTest(existing=existing), tempfile.TemporaryDirectory() as directory:
