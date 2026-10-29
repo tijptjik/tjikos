@@ -144,6 +144,35 @@ fn conflict(desired: &Desired, current: &Snapshot, state: &State) -> bool {
     }
 }
 
+// Record metadata-only baselines in memory; all other conflicts are checked
+// before anything is written, under the same deployment lock as apply.
+fn adopt_identical(root: &Path, entries: &[Desired], state: &mut State) -> Result<()> {
+    let mut adopted = Vec::new();
+    for entry in entries {
+        if state.files.contains_key(&entry.path) {
+            continue;
+        }
+        let current = disk::read(root, &entry.path)?;
+        if !conflict(entry, &current.snapshot, state) {
+            continue;
+        }
+        if let (Snapshot::File { uid, .. }, Snapshot::File { .. }) =
+            (&current.snapshot, &entry.snapshot)
+        {
+            if *uid == unsafe { libc::geteuid() } && current.bytes == entry.bytes {
+                adopted.push((entry.path.clone(), current.snapshot));
+                continue;
+            }
+        }
+        bail!(
+            "local changes require review before adopting {}",
+            entry.path.display()
+        );
+    }
+    state.files.extend(adopted);
+    Ok(())
+}
+
 #[derive(Serialize)]
 struct PlanEntry {
     path: PathBuf,
@@ -321,6 +350,7 @@ struct Options {
     json: bool,
     context: Option<PathBuf>,
     group: Option<String>,
+    adopt_identical: bool,
 }
 fn options(args: Vec<String>) -> Result<Options> {
     let mut args = args.into_iter();
@@ -332,6 +362,7 @@ fn options(args: Vec<String>) -> Result<Options> {
         (None, None, None, PathBuf::from("/"), false);
     let mut context = None;
     let mut group = None;
+    let mut adopt_identical = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--manifest" => {
@@ -351,6 +382,7 @@ fn options(args: Vec<String>) -> Result<Options> {
             }
             "--root" => root = PathBuf::from(args.next().context("--root needs a path")?),
             "--json" => json = true,
+            "--adopt-identical" => adopt_identical = true,
             "--refresh-secrets" => secrets::enable_refresh()?,
             "--group" => group = Some(args.next().context("--group needs a name")?),
             "--context-file" => {
@@ -360,6 +392,9 @@ fn options(args: Vec<String>) -> Result<Options> {
             }
             _ => bail!("unknown files argument: {arg}"),
         }
+    }
+    if adopt_identical && command != "apply" {
+        bail!("--adopt-identical requires apply");
     }
     if command == "restore" {
         if receipt.is_none() || manifest.is_some() || context.is_some() || group.is_some() {
@@ -386,6 +421,7 @@ fn options(args: Vec<String>) -> Result<Options> {
         json,
         context,
         group,
+        adopt_identical,
     })
 }
 
@@ -502,7 +538,10 @@ fn run(args: Vec<String>) -> Result<i32> {
         }
     }
     let state_path = opts.state.join(format!("{id}.json"));
-    let (state, recovered) = load_state(&state_path, &id, &opts.root)?;
+    let (mut state, recovered) = load_state(&state_path, &id, &opts.root)?;
+    if opts.adopt_identical {
+        adopt_identical(&opts.root, &entries, &mut state)?;
+    }
     let plans = plan(&opts.root, &entries, &state)?;
     let conflicts = plans.iter().any(|p| p.action == "conflict");
     let changed = plans.iter().filter(|p| p.action != "unchanged").count();

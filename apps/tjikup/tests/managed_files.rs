@@ -580,3 +580,39 @@ fn group_selection_excludes_other_templates_before_rendering_or_secret_resolutio
     assert!(!f.run("plan").status.success());
     assert!(!f.run_args("restore", &["--group", "a"]).status.success());
 }
+
+#[test]
+fn identical_adoption_changes_only_metadata_and_refuses_later_drift() {
+    let f = Fixture::new(json!([{"kind":"file","path":"/owned","source":"source","mode":"0600"}]));
+    fs::write(f.path("root/owned"), "hello\n").unwrap();
+    fs::set_permissions(f.path("root/owned"), fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(!f.run("apply").status.success());
+    success(&f.run_args("apply", &["--adopt-identical"]));
+    assert_eq!(
+        fs::metadata(f.path("root/owned")).unwrap().mode() & 0o777,
+        0o600
+    );
+    fs::write(f.path("root/owned"), "local edits\n").unwrap();
+    assert!(!f.run_args("apply", &["--adopt-identical"]).status.success());
+    assert_eq!(
+        fs::read_to_string(f.path("root/owned")).unwrap(),
+        "local edits\n"
+    );
+}
+
+#[test]
+fn adoption_refuses_symlinks_and_preflights_all_files() {
+    let f = Fixture::new(json!([
+        {"kind":"file","path":"/first","source":"source","mode":"0600"},
+        {"kind":"file","path":"/second","source":"source","mode":"0600"}
+    ]));
+    fs::write(f.path("root/first"), "hello\n").unwrap();
+    fs::set_permissions(f.path("root/first"), fs::Permissions::from_mode(0o644)).unwrap();
+    symlink(f.path("source"), f.path("root/second")).unwrap();
+    assert!(!f.run_args("apply", &["--adopt-identical"]).status.success());
+    assert_eq!(
+        fs::metadata(f.path("root/first")).unwrap().mode() & 0o777,
+        0o644
+    );
+    assert!(!f.path("state/fixture.json").exists());
+}
