@@ -27,7 +27,7 @@ reported as successfully completed.
 - Updated binary and source pins, removed obsolete Python enrollment guidance,
   and deployed `https://sh.type.hk`. The public `/init` and `/guide` were compared
   byte-for-byte with the reviewed artifacts. Worker version:
-  `0d52a790-96b6-49ea-aec6-b27becfe84ec`.
+  `42e63974-3974-4c81-b1db-8f21d91d8bdf`.
 - Fi now runs the published Synctjik binary; readiness passes and schedule
   migration reports current. Its next scheduled jobs use this binary.
 - Fi, Li and Si user, weekly and privileged Tjikup copies converge on published
@@ -40,6 +40,38 @@ reported as successfully completed.
   `chezup` launcher and obsolete Python Tjikup/Chezup modules discovered during
   this pass. Fi's copies were moved to private recovery storage.
 - Preserved all unrelated local icon edits and all running archive workers.
+
+## Further Fi-only cleanup
+
+Completed without contacting Si or Li:
+
+- Dotjik and Systjik now have canonical icon files, catalog keys and fleet
+  mappings. Old icon paths are removal tombstones. Artwork bytes are unchanged.
+  Fi received only the eight affected icon-path changes through native receipts,
+  and its icon cache was refreshed. All eight entries then checked unchanged.
+- Integrated the rename through an isolated worktree; verified all 68 existing
+  dirty files retained their prior edits, including overlapping catalog metadata.
+- Discovered and retired the older `chezupdate` Python launcher/package as well.
+  Removal rules are published in policy revision
+  `58b328a7c9ce13fce663d576d2a64a76664a8f4e`.
+- Moved Fi's duplicate legacy age identity, unused legacy configuration folders,
+  two inactive Fish snapshots and an old migration-recovery directory into
+  `~/.local/state/tjikup/native-cutover-20261030/`. Key bytes were compared before
+  moving the duplicate; the canonical private identity passed the system check.
+- Active Fish configuration, user units, text launchers and installed source
+  modules scan clean for the retired deployment names. Native Tjikup validation
+  and Synctjik readiness pass. Recovery copies and migration fallbacks remain.
+- Replaced the Python context-command example and obsolete adapter/system-runtime
+  guidance with native workflow commands. Updated icon documentation.
+- Published bootstrap source pins containing this cleanup and verified the public
+  installer and release manifest. No new runtime release was needed.
+- Revalidated the dirty policy checkout: 321 tests, nine skipped, passed; all
+  nine workspace build tasks and all ten bootstrap checks passed. Fi's final
+  native configuration, icon-file checks and archive readiness passed.
+
+The previously queued Si/Li work retains its reviewed pins. These newer cosmetic
+and cleanup changes can reach them through normal policy synchronization after
+that cutover; no remote job was changed during this follow-up.
 
 ## Si: queued behind real backup and restore evidence
 
@@ -106,13 +138,13 @@ This is not a claim that every historical string or Python file has vanished.
 - Keep removal tombstones until obsolete clients have converged. Old lock,
   baseline and receipt paths remain compatibility contracts.
 - Existing age identity recovery copies and the migration fallback are retained.
+  Fi now keeps its duplicate only in private recovery storage.
 - Si's old checkout paths remain until home acceptance. Li's old links/checkouts
   cannot be retired while it is offline. Fi's old Tooltjik checkout is clean
   and its commit is ancestral to TjikOS, but an open Fish shell still uses it
   as its working directory, so it was not moved.
-- Icon catalog aliases still use legacy names. Their files overlap unrelated
-  ongoing icon work, which was preserved; this cosmetic cleanup remains separate
-  from native runner acceptance.
+- Canonical icon naming is complete in policy and on Fi. Si/Li still need the
+  later policy revision after their already queued native cutover.
 - Frozen Python test oracles, build/test utilities and Python application or
   host extensions remain. They are not all responsibilities of Tjikup/Synctjik.
 
