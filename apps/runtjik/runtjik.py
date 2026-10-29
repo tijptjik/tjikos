@@ -20,6 +20,10 @@ import tempfile
 import time
 import tomllib
 from dataclasses import asdict, dataclass, field
+from words import Provider as Words, DEFAULT_OPTIONS, validate_options
+from desktop_plugins import Clipboard, Recorder, Screenshots, DEFAULT_OPTIONS as DESKTOP_OPTIONS, validate_options as validate_desktop_options
+
+BUNDLED_PROVIDERS = {provider.name: provider for provider in (Words, Clipboard, Recorder, Screenshots)}
 
 VERSION = "0.8.3"
 API_VERSION = 1
@@ -35,7 +39,8 @@ DEFAULTS = {
     "index": {"desktop_apps": True, "path_commands": True, "refresh_seconds": 5},
     "launch": {"terminal": ["kitty", "--"], "isolate": True},
     "history": {"enabled": True},
-    "plugins": {"enabled": []},
+    "plugins": {"enabled": list(BUNDLED_PROVIDERS)},
+    "plugin_settings": {"Words": DEFAULT_OPTIONS, **DESKTOP_OPTIONS},
     "overrides": {},
 }
 
@@ -56,9 +61,15 @@ def config(text=None):
     for section, values in raw.items():
         if section not in result or not isinstance(values, dict):
             raise ValueError(f"Unknown config section: {section}")
-        if section != "overrides" and set(values) - set(result[section]):
+        if section not in ("overrides", "plugin_settings") and set(values) - set(result[section]):
             raise ValueError(f"Unknown setting in [{section}]: {set(values) - set(result[section])}")
-        result[section].update(values)
+        if section == "plugin_settings":
+            for name, options in values.items():
+                if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name) or not isinstance(options, dict):
+                    raise ValueError("Plugin settings must be named tables")
+                result[section].setdefault(name, {}).update(options)
+        else:
+            result[section].update(values)
     for section in ("ui", "theme", "index", "launch", "history", "plugins"):
         for key, default in DEFAULTS[section].items():
             if type(result[section][key]) is not type(default):
@@ -81,10 +92,13 @@ def config(text=None):
                 raise ValueError(f"overrides.{key}.{name} must be a nonempty string array")
     if not all(isinstance(v, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", v) for v in result["plugins"]["enabled"]):
         raise ValueError("plugins.enabled must contain provider module names")
+    validate_options(result["plugin_settings"]["Words"])
+    validate_desktop_options(result["plugin_settings"])
     return result
 
 
 FEATURED_SETTINGS = {
+    "plugins.enabled": "Enabled bundled or installed provider module names",
     "ui.keep_alive": "Keep the launcher warm in memory while hidden",
     "ui.view": "Default view: grid or list",
     "ui.columns": "Columns in the icon grid (2–10)",
@@ -109,8 +123,27 @@ SHORTCUTS = [
 ]
 
 
+def featured_settings(settings):
+    rows = dict(FEATURED_SETTINGS)
+    for name, options in settings["plugin_settings"].items():
+        for key, value in options.items():
+            if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", key) and type(value) in (str, bool, int, float, list):
+                rows[f"plugin_settings.{name}.{key}"] = f"{name} plugin · {key.replace('_', ' ')}"
+    rows.update({
+        "plugin_settings.Words.define_sources": "Sources: free_dictionary, wiktionary, urban_dictionary (optional slang)",
+        "plugin_settings.Words.synonym_sources": "Sources: datamuse, free_dictionary",
+    })
+    return rows
+
+
+def get_setting(settings, key):
+    for part in key.split("."):
+        settings = settings[part]
+    return settings
+
+
 def setting_value(key, text):
-    if key not in FEATURED_SETTINGS:
+    if key not in featured_settings(config()):
         raise ValueError("This setting is not exposed by /config; edit runtjik.conf directly")
     try:
         value = tomllib.loads("value = " + text)["value"]
@@ -123,8 +156,8 @@ def setting_value(key, text):
 
 
 def setting_text(source, key, value):
-    """Update one featured scalar, preserving other text and comments."""
-    section, field = key.split(".", 1)
+    """Update a featured value, preserving surrounding text and comments."""
+    section, field = key.rsplit(".", 1)
     literal = json.dumps(value, ensure_ascii=False)
     lines = source.splitlines(keepends=True)
     begin = end = None
@@ -148,7 +181,16 @@ def setting_text(source, key, value):
                     if token[1]:
                         comment = "  " + token[1]
                         break
-                lines[i] = match[1] + literal + comment + (match[3] or "\n")
+                last = i + 1
+                while True:
+                    try:
+                        tomllib.loads("".join(lines[i:last]))
+                        break
+                    except tomllib.TOMLDecodeError:
+                        if last >= end:
+                            raise ValueError("Cannot safely edit this setting layout") from None
+                        last += 1
+                lines[i:last] = [match[1] + literal + comment + (match[3] or "\n")]
                 break
         else:
             if end and not lines[end - 1].endswith("\n"):
@@ -167,21 +209,57 @@ def save_setting(key, text):
         fcntl.flock(lock, fcntl.LOCK_EX)
         source = path.read_text() if path.exists() else ""
         updated = setting_text(source, key, value)
-        fd, name = tempfile.mkstemp(prefix=".runtjik-conf-", dir=path.parent)
-        try:
+        replace_config(path, source, updated)
+    return config(updated)
+
+
+def replace_config(path, source, updated):
+    fd, name = tempfile.mkstemp(prefix=".runtjik-conf-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            stream.write(updated)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if path.exists():
+            os.chmod(name, path.stat().st_mode & 0o777)
+        # Do not silently overwrite an external editor's intervening save.
+        if (path.read_text() if path.exists() else "") != source:
+            raise ValueError("Config changed while saving; retry the command")
+        os.replace(name, path)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+
+def migrate_config(enable_bundled=False):
+    """Explicit, backed-up migration; never run automatically during installation."""
+    path = config_path().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with path.with_name(path.name + ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        source = path.read_text() if path.exists() else ""
+        raw = tomllib.loads(source)
+        settings = config(source)
+        updated = source
+        if enable_bundled:
+            enabled = list(dict.fromkeys([*settings["plugins"]["enabled"], *BUNDLED_PROVIDERS]))
+            if raw.get("plugins", {}).get("enabled") != enabled:
+                updated = setting_text(updated, "plugins.enabled", enabled)
+        for name, defaults in DEFAULTS["plugin_settings"].items():
+            for key, value in defaults.items():
+                if key not in raw.get("plugin_settings", {}).get(name, {}):
+                    updated = setting_text(updated, f"plugin_settings.{name}.{key}", value)
+        if updated == source:
+            return {"changed": False, "path": str(path)}
+        backup = None
+        if path.exists():
+            backup = path.with_name(path.name + ".pre-plugins-" + str(time.time_ns()))
+            fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "w") as stream:
-                stream.write(updated)
+                stream.write(source)
                 stream.flush()
                 os.fsync(stream.fileno())
-            if path.exists():
-                os.chmod(name, path.stat().st_mode & 0o777)
-            # Do not silently overwrite an external editor's intervening save.
-            if (path.read_text() if path.exists() else "") != source:
-                raise ValueError("Config changed while saving; retry the command")
-            os.replace(name, path)
-        finally:
-            Path(name).unlink(missing_ok=True)
-    return config(updated)
+        replace_config(path, source, updated)
+        return {"changed": True, "path": str(path), "backup": str(backup) if backup else None}
 
 
 @dataclass
@@ -216,6 +294,8 @@ class Store:
                 action TEXT NOT NULL, success INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS counts (
                 key TEXT PRIMARY KEY, value INTEGER NOT NULL, last REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS command_queries (
+                seq INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL UNIQUE);
             CREATE TABLE IF NOT EXISTS close_requests (
                 entry_id TEXT NOT NULL, pid INTEGER NOT NULL, identity TEXT NOT NULL,
                 stage INTEGER NOT NULL, PRIMARY KEY(entry_id,pid));
@@ -228,6 +308,16 @@ class Store:
                 if not self.db.execute("SELECT 1 FROM sqlite_master WHERE name='frecency'").fetchone():
                     self.db.execute("CREATE TABLE frecency (entry_id TEXT PRIMARY KEY, score REAL NOT NULL, last REAL NOT NULL)")
                     self._rebuild_frecency()
+
+    def remember_command(self, query):
+        if not isinstance(query, str) or not query.strip() or not query.startswith(('!', '/', '?')):
+            return
+        with self.db:
+            self.db.execute('INSERT OR REPLACE INTO command_queries(query) VALUES(?)', (query,))
+            self.db.execute('DELETE FROM command_queries WHERE seq NOT IN (SELECT seq FROM command_queries ORDER BY seq DESC LIMIT 100)')
+
+    def command_history(self):
+        return [row[0] for row in self.db.execute('SELECT query FROM command_queries ORDER BY seq')]
 
     def _add_frecency(self, entry_id, timestamp):
         previous = self.db.execute("SELECT score,last FROM frecency WHERE entry_id=?", (entry_id,)).fetchone()
@@ -850,18 +940,38 @@ class Launcher:
         self.warnings = []
         for name in self.settings["plugins"]["enabled"]:
             try:
-                path = xdg("config") / "plugins" / (name + ".py")
-                spec = importlib.util.spec_from_file_location("runtjik_ext_" + name, path)
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                if module.API_VERSION != API_VERSION:
-                    raise ValueError("Unsupported API version")
-                provider = module.Provider()
+                if name in BUNDLED_PROVIDERS:
+                    provider = BUNDLED_PROVIDERS[name](demo=self.demo)
+                else:
+                    path = xdg("config") / "plugins" / (name + ".py")
+                    spec = importlib.util.spec_from_file_location("runtjik_ext_" + name, path)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    if module.API_VERSION != API_VERSION:
+                        raise ValueError("Unsupported API version")
+                    provider = module.Provider()
                 if provider.name in self.providers or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", provider.name):
                     raise ValueError("Duplicate or invalid provider name")
                 self.providers[provider.name] = provider
             except Exception as exc:
                 self.warnings.append(f"{name}: {exc}")
+        self.plugin_commands = {}
+        reserved = {"/run", "/processes", "/refresh", "/pin", "/grid", "/list", "/stats", "/config", "/bindings", "/shortcuts", "/running"}
+        for name, provider in self.providers.items():
+            for command, description in getattr(provider, "commands", {}).items():
+                if not re.fullmatch(r"/[a-z][a-z0-9_-]*", command) or command in reserved or command in self.plugin_commands:
+                    self.warnings.append(f"{name}: duplicate or invalid command {command}")
+                    continue
+                self.plugin_commands[command] = (name, description)
+        self.plugin_aliases = {}
+        for name, provider in self.providers.items():
+            for alias, canonical in getattr(provider, "aliases", {}).items():
+                if (not re.fullmatch(r"/[a-z][a-z0-9_-]*", alias) or alias in reserved or alias in self.plugin_commands
+                        or canonical not in self.plugin_commands or self.plugin_commands[canonical][0] != name):
+                    self.warnings.append(f"{name}: invalid command alias {alias}")
+                    continue
+                self.plugin_commands[alias] = self.plugin_commands[canonical]
+                self.plugin_aliases[alias] = canonical
         self.entries = []
         self.last_signature = None
         self.checked = 0.0
@@ -932,16 +1042,34 @@ class Launcher:
         self.last_query = query
         if time.monotonic() - self.checked >= self.settings["index"]["refresh_seconds"]:
             self.refresh()
-        run_mode = query == "/run" or query.startswith("/run ") or query.startswith('!')
-        running_mode = any(query == prefix or query.startswith(prefix + " ") for prefix in ("/running", "/processes"))
-        search_query = query[1:].lstrip() if query.startswith('!') else query[4:].lstrip() if run_mode else query
+        display_query = query
+        if query.startswith('!') and not query.startswith('!!'):
+            query = '/' + query[1:].lstrip()
+        run_mode = query == "/run" or query.startswith("/run ") or query.startswith('!!')
+        running_mode = query.startswith("?") or query == "/processes" or query.startswith("/processes ")
+        search_query = query[2:].lstrip() if query.startswith('!!') else query[4:].lstrip() if run_mode else query
         if running_mode:
-            search_query = query.partition(" ")[2].lstrip()
+            search_query = query[1:].lstrip() if query.startswith("?") else query.partition(" ")[2].lstrip()
+        command = query.split(maxsplit=1)[0] if query.strip() else ""
+        if command in self.plugin_commands:
+            name, _ = self.plugin_commands[command]
+            try:
+                entries = [value if isinstance(value, Entry) else Entry(**value)
+                           for value in self.providers[name].query(query, self.settings)]
+                if any(e.provider != name or not e.id.startswith(name + ":") for e in entries):
+                    raise ValueError("Provider result ID must be namespaced")
+                self.current = {e.id: e for e in entries}
+                rows = [{**{k: v for k, v in asdict(e).items() if k not in ("data", "keywords")},
+                         "icon": self.control_icon(e.icon), "hide_launcher": bool(e.data.get("capture")), "keep_open": bool(e.data.get("keep_open")), "thumbnail": e.data.get("thumbnail", ""), "disabled": bool(e.data.get("disabled")), "count": 0, "windows": 0} for e in entries[offset:offset + limit]]
+                return self.payload(rows, query=display_query, pending=bool(getattr(self.providers[name], "pending", False)), total=len(entries), offset=offset,
+                                    next_offset=offset + len(rows), has_more=offset + len(rows) < len(entries))
+            except Exception as exc:
+                return self.payload([], query=display_query, message=f"{name}: {exc}")
         if query.startswith("/") and not run_mode and not running_mode:
             if query.strip() in ("/shortcuts", "/bindings"):
                 return self.payload([{"id": "/shortcuts/" + str(i), "name": keys, "subtitle": description,
                                       "provider": "internal", "icon": self.control_icon("runtjik-shortcuts"), "count": 0,
-                                      "windows": 0, "disabled": True} for i, (keys, description) in enumerate(SHORTCUTS)], query=query)
+                                      "windows": 0, "disabled": True} for i, (keys, description) in enumerate(SHORTCUTS)], query=display_query)
             if query == "/config" or query.startswith("/config "):
                 parts = query.split(maxsplit=2)
                 if len(parts) == 3:
@@ -954,14 +1082,13 @@ class Launcher:
                         rows = [{"id": "/config/error", "name": "Cannot save this value", "subtitle": str(exc), "disabled": True}]
                 else:
                     rows = []
-                    for key, description in FEATURED_SETTINGS.items():
+                    for key, description in featured_settings(self.settings).items():
                         if len(parts) == 2 and not key.startswith(parts[1]):
                             continue
-                        section, field = key.split(".")
-                        rows.append({"id": "/config " + key, "name": key + " = " + json.dumps(self.settings[section][field]),
+                        rows.append({"id": "/config " + key, "name": key + " = " + json.dumps(get_setting(self.settings, key)),
                                      "subtitle": description, "disabled": False})
-                return self.payload([{**row, "provider": "internal", "icon": self.control_icon("runtjik-config"), "count": 0, "windows": 0} for row in rows], query=query)
-            commands = [("/running", "Search applications with running windows", "runtjik-stats"),
+                return self.payload([{**row, "provider": "internal", "icon": self.control_icon("runtjik-config"), "count": 0, "windows": 0} for row in rows], query=display_query)
+            commands = [("/processes", "Search applications with running windows", "runtjik-stats"),
                         ("/run", "Search previously used terminal commands", COMMAND_ICON),
                         ("/refresh", "Rebuild the application and command index", "runtjik-refresh"),
                         ("/pin", "Toggle keeping the launcher open on outside clicks", "runtjik-pin"),
@@ -970,10 +1097,12 @@ class Launcher:
                         ("/stats", "Show cumulative launches and window switches", "runtjik-stats"),
                         ("/config", "View and change featured settings", "runtjik-config"),
                         ("/bindings", "Show keyboard shortcuts and dragging", "runtjik-shortcuts")]
-            results = [{"id": name, "name": name + ({'/running':'  ·  /processes', '/run':'  ·  !', '/bindings':'  ·  /shortcuts'}.get(name,'')), "subtitle": text, "icon": self.control_icon(icon), "provider": "internal", "count": 0, "windows": 0}
+            commands.extend((command, description, getattr(self.providers[name], "icon", "accessories-dictionary"))
+                            for command, (name, description) in self.plugin_commands.items() if command not in self.plugin_aliases)
+            results = [{"id": name, "name": name + ("  ·  " + ", ".join(alias for alias, canonical in self.plugin_aliases.items() if canonical == name) if name in self.plugin_aliases.values() else "") + ({'/processes':'  ·  ?', '/run':'  ·  !!', '/bindings':'  ·  /shortcuts'}.get(name,'')), "subtitle": text, "icon": self.control_icon(icon), "provider": "internal", "count": 0, "windows": 0}
                        for name, text, icon in sorted(commands, key=lambda row: row[0].casefold())
-                       if name.startswith(query) or (name == '/running' and '/processes'.startswith(query)) or (name == '/bindings' and '/shortcuts'.startswith(query))]
-            return self.payload(results, query=query)
+                       if name.startswith(query) or any(alias.startswith(query) and canonical == name for alias, canonical in self.plugin_aliases.items()) or (name == '/bindings' and '/shortcuts'.startswith(query))]
+            return self.payload(results, query=display_query)
         counts = self.store.counts() if self.store else {}
         if self.ranking_snapshot is None:
             self.ranking_snapshot = self.store.frecency() if self.store else {}
@@ -1040,7 +1169,7 @@ class Launcher:
             except OSError:
                 pass  # A read-only cache must not prevent launching.
         next_offset = offset + len(results)
-        return self.payload(results, total=len(ranked), query=query, offset=offset,
+        return self.payload(results, total=len(ranked), query=display_query, offset=offset,
                             next_offset=next_offset, has_more=next_offset < len(ranked), closing=list(self.closing_windows))
 
     def payload(self, results, **extra):
@@ -1106,7 +1235,7 @@ class Launcher:
     def activate(self, entry_id, mode="launch", address="", prepare=False):
         if mode == 'close' and entry_id.startswith('/'):
             return {'kind': 'message', 'message': 'Ctrl+Enter closes applications, not launcher commands'}
-        if entry_id in ("/run", "/running", "/processes"):
+        if entry_id in ("/run", "/processes", "?") or entry_id in self.plugin_commands:
             return {"kind": "edit", "text": entry_id + " "}
         if entry_id == "/pin":
             return {"kind": "pin"}
@@ -1114,15 +1243,17 @@ class Launcher:
             return {"kind": "edit", "text": entry_id}
         if entry_id.startswith("/config "):
             parts = entry_id.split(maxsplit=2)
-            if len(parts) == 2 and parts[1] in FEATURED_SETTINGS:
-                section, field = parts[1].split(".")
-                return {"kind": "edit", "text": entry_id + " " + json.dumps(self.settings[section][field]), "select_value": True}
+            if len(parts) == 2 and parts[1] in featured_settings(self.settings):
+                return {"kind": "edit", "text": entry_id + " " + json.dumps(get_setting(self.settings, parts[1])), "select_value": True}
             if len(parts) != 3:
                 raise ValueError("Use /config section.key value")
             if self.demo:
                 return {"kind": "message", "message": "Demo mode does not change your config"}
             self.settings = save_setting(parts[1], parts[2])
-            self.refresh(True)
+            replacement = Launcher(self.demo)
+            if self.store:
+                self.store.db.close()
+            self.__dict__.update(replacement.__dict__)
             return {**self.query("/config"), "edit_query": "/config", "apply_config": True,
                     "message": "Saved " + parts[1] + " in runtjik.conf"}
         if entry_id.startswith("/shortcuts/") or entry_id == "/config/error":
@@ -1145,6 +1276,9 @@ class Launcher:
         if mode not in ("launch", "switch", "close"):
             raise ValueError("Unknown action")
         if mode == 'close':
+            if entry.provider in ('Screenshots', 'Recorder') and entry.data.get('file'):
+                action = self.providers[entry.provider].activate(entry, self.settings, mode)
+                return {**self.query(self.last_query or action.get('refresh_query', '')), 'message': action.get('message', '')}
             if entry.provider not in ('apps', 'commands'):
                 return {'kind': 'message', 'message': 'Ctrl+Enter is available for applications and commands with matching windows'}
             return self.close_app(entry, address)
@@ -1153,8 +1287,12 @@ class Launcher:
             if pending:
                 return self.close_app(entry, pending=pending)
         if entry.provider not in ("apps", "commands"):
-            if not self.demo:
-                self.providers[entry.provider].activate(entry, self.settings, mode)
+            if not self.demo or entry.provider in BUNDLED_PROVIDERS:
+                action = self.providers[entry.provider].activate(entry, self.settings, mode)
+                if isinstance(action, dict) and "refresh_query" in action:
+                    return self.query(action["refresh_query"])
+                if isinstance(action, dict):
+                    return action
         elif mode == "switch":
             clients = matched_windows(entry, demo_windows() if self.demo else windows(), self.settings)
             if not clients:
@@ -1207,9 +1345,13 @@ def main():
         print(json.dumps(signal_process(int(sys.argv[2]), sys.argv[3], int(sys.argv[4]))))
         return
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["serve", "refresh", "stats", "rebuild-counts", "check", "version"])
+    parser.add_argument("command", choices=["serve", "refresh", "stats", "rebuild-counts", "check", "version", "migrate-config"])
     parser.add_argument("--demo", action="store_true")
+    parser.add_argument("--enable-bundled-plugins", action="store_true")
     args = parser.parse_args()
+    if args.command == "migrate-config":
+        print(json.dumps(migrate_config(args.enable_bundled_plugins)))
+        return
     if args.command == "version":
         print(VERSION)
         return
@@ -1230,11 +1372,15 @@ def main():
         return
     def emit(value):
         print(json.dumps(value), flush=True)
-    emit(launcher.query())
+    emit({**launcher.query(), 'command_history': launcher.store.command_history() if launcher.store and launcher.settings['history']['enabled'] else []})
     for line in sys.stdin:
         request = {}
         try:
             request = json.loads(line)
+            if request["op"] == "remember-command":
+                if launcher.store and launcher.settings['history']['enabled']:
+                    launcher.store.remember_command(request.get('query', ''))
+                continue
             if request["op"] == "query":
                 value = launcher.query(request.get("query", ""), request.get('offset',0), request.get('limit'))
             elif request["op"] == "resume":
@@ -1246,7 +1392,11 @@ def main():
                     launcher = replacement
                 launcher.reset_ranking()
                 launcher.refresh()
-                value = {**launcher.query(), "apply_config": True}
+                value = {**launcher.query(), "apply_config": True, "command_history": launcher.store.command_history() if launcher.store and launcher.settings["history"]["enabled"] else []}
+            elif request["op"] == "undo-trash":
+                from desktop_plugins import trash_action
+                action = {"message": "Demo mode leaves Trash unchanged"} if launcher.demo else trash_action('undo')
+                value = {**launcher.query(request.get('query', '')), 'message': action['message']}
             elif request["op"] == "activate":
                 value = launcher.activate(request["id"], request.get("mode", "launch"), request.get("address", ""), request.get("prepare", False))
             else:

@@ -64,9 +64,36 @@ ShellRoot {
     property bool applyingResults: false
     property int nextOffset: 0
     property int pendingSelection: -1
-    readonly property bool runMode: query === '/run' || query.startsWith('/run ') || query.startsWith('!')
-    readonly property bool runningMode: ['/running','/processes'].some(prefix=>query===prefix || query.startsWith(prefix+' '))
-    readonly property bool listMode: view === 'list' || windowEntry !== '' || (query.startsWith('/') && !runMode && !runningMode)
+    readonly property string commandQuery: query.startsWith('!') && !query.startsWith('!!') ? '/' + query.slice(1).trimStart() : query
+    readonly property bool runMode: commandQuery === '/run' || commandQuery.startsWith('/run ') || query.startsWith('!!')
+    readonly property bool runningMode: query.startsWith('?') || query==='/processes' || query.startsWith('/processes ')
+    readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(commandQuery)
+    readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(commandQuery)
+    readonly property string galleryProvider: /^\/(rec|screenrecord) /.test(commandQuery) ? 'Recorder' : 'Screenshots'
+    readonly property int gridColumns: galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
+    readonly property int galleryRows: settings.plugin_settings?.[galleryProvider]?.gallery_rows || 3
+    property bool providerPending: false
+    property var commandHistory: []
+    property int historyCursor: -1
+    property string historyDraft: ''
+    property bool navigatingHistory: false
+    function rememberCommand(text) {
+        if(!settings.history?.enabled || !text.trim() || !/^[!/?]/.test(text))return;
+        if(commandHistory[commandHistory.length-1]===text)return;
+        commandHistory=commandHistory.filter(value=>value!==text).concat([text]).slice(-100);
+        if(!demo && backend.running)backend.write(JSON.stringify({op:'remember-command',query:text})+'\n');
+        historyCursor=-1;
+    }
+    function browseHistory(delta) {
+        if(!commandHistory.length)return;
+        if(historyCursor<0){historyDraft=searchBox.text;historyCursor=commandHistory.length;}
+        historyCursor=Math.max(0,Math.min(commandHistory.length,historyCursor+delta));
+        navigatingHistory=true;
+        searchBox.text=historyCursor===commandHistory.length?historyDraft:commandHistory[historyCursor];
+        searchBox.cursorPosition=searchBox.text.length;
+        navigatingHistory=false;
+    }
+    readonly property bool listMode: !galleryMode && (view === 'list' || windowEntry !== '' || (commandQuery.startsWith('/') && !runMode && !runningMode))
     // Capture the focused screen once; keyboard navigation must not move the panel.
     property string movedMonitor: ''
     property string initialMonitor: ''
@@ -118,13 +145,14 @@ ShellRoot {
         if (!windowEntry && (debounce.running || resultQuery !== query)) {
             debounce.stop();pendingAction={switchWindow:switchWindow,closeWindow:closeWindow};search();return;
         }
+        rememberCommand(query);
         busy = true;
         const request=windowEntry?{op:'activate',id:windowEntry,mode:closeWindow?'close':'switch',address:results[selected].id}
             :{op:'activate',id:results[selected].id,mode:closeWindow?'close':switchWindow?'switch':'launch'};
         request.prepare=switchWindow && !closeWindow && !windowEntry && ['apps','commands'].includes(results[selected].provider);
-        if (!demo && !closeWindow && !closingIds.includes(request.id) && !request.prepare && (windowEntry || !results[selected].id.startsWith('/'))) {
+        if (!demo && !results[selected].keep_open && !closeWindow && !closingIds.includes(request.id) && !request.prepare && (windowEntry || !results[selected].id.startsWith('/'))) {
             queuedRequest=request;
-            if(panel.pinned){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
+            if(panel.pinned && !results[selected].hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
             else panel.visible=false;
             actionDelay.restart();
         } else send(request);
@@ -137,6 +165,7 @@ ShellRoot {
         Qt.quit();
     }
     function close() {
+        rememberCommand(query);
         if(demo || !settings.ui.keep_alive){quit();return;}
         opened=false;
         panel.visible=false;
@@ -169,6 +198,9 @@ ShellRoot {
         if(msg.kind==='results' && ready && (msg.query || '')!==query && !msg.reset_query && msg.edit_query===undefined)return;
         if (msg.kind !== 'results' || msg.serial === serial) busy = false;
         if (msg.kind === 'results') {
+            if(msg.command_history!==undefined){commandHistory=msg.command_history;historyCursor=-1;}
+            providerPending=!!msg.pending;
+            if(root.wordMode && !providerPending && root.historyCursor<0)root.rememberCommand(root.query);
             closingIds=msg.closing || [];
             applyingResults=true;
             const appending=(msg.offset || 0)>0 && resultQuery===(msg.query || '');
@@ -214,6 +246,7 @@ ShellRoot {
         } else if (msg.kind === 'view') {
             view=msg.view;query='';searchBox.text='';search();
         } else if (msg.kind === 'activated') {
+            if(msg.close_launcher && !demo){root.close();return;}
             if(msg.action==='close' && !demo){
                 closingIds=[...new Set(closingIds.concat(msg.entry || []))];
                 windowEntry='';busy=false;panel.visible=true;
@@ -241,15 +274,16 @@ ShellRoot {
     }
     Timer {id:actionDelay;interval:80;onTriggered:{const request=root.queuedRequest;root.queuedRequest=null;root.send(request);}}
     Timer {id:closePoll;interval:180;repeat:true;running:root.opened && root.closingIds.length>0;onTriggered:root.search()}
-    Timer {id:debounce;interval:60;onTriggered:root.search()}
+    Timer {interval:150;repeat:true;running:root.opened && root.providerPending && !debounce.running && !root.busy;onTriggered:root.search()}
+    Timer {id:debounce;interval:root.wordMode?350:60;onTriggered:root.search()}
     Timer {interval:root.settings.index.refresh_seconds*1000;running:root.ready && root.opened;repeat:true;onTriggered:root.search()}
     IpcHandler {
         target: 'runtjik'
         function close(): void {root.close();}
-        function releaseKeyboard(): void {if(panel.pinned){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}}
+        function releaseKeyboard(): void {if(panel.pinned && !results[selected].hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}}
         function outsideClick(): void {
             // Consult current UI state even if the passive observer is still rearming.
-            if(panel.pinned){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
+            if(panel.pinned && !results[selected].hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
             else root.close();
         }
         function focusSearch(): void {root.focusSearch();}
@@ -407,7 +441,7 @@ ShellRoot {
                             font.family:root.settings.ui.font;font.pixelSize:root.settings.ui.font_size+1
                             focus:true;clip:true;selectByMouse:true
                             readOnly:root.windowEntry!==''
-                            onTextChanged:{root.pointerSelection=false;root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;root.query=text;root.selected=0;if(!root.windowEntry)debounce.restart();}
+                            onTextChanged:{if(!root.navigatingHistory)root.historyCursor=-1;root.pointerSelection=false;root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;root.query=text;root.selected=0;if(!root.windowEntry)debounce.restart();}
                             Text {
                                 anchors.fill:parent;verticalAlignment:Text.AlignVCenter
                                 text:root.windowEntry?'Choose a running window…':'A beginning is the time for taking the most delicate care…'
@@ -417,9 +451,11 @@ ShellRoot {
                             }
                             Keys.onPressed:event=>{
                                 root.pointerSelection=false;
-                                if(event.key===Qt.Key_Tab || event.key===Qt.Key_Backtab){root.move((event.modifiers & Qt.ShiftModifier || event.key===Qt.Key_Backtab)?-1:1);event.accepted=true;}
-                                else if(event.key===Qt.Key_Down){root.move(root.listMode?1:root.settings.ui.columns);event.accepted=true;}
-                                else if(event.key===Qt.Key_Up){root.move(root.listMode?-1:-root.settings.ui.columns);event.accepted=true;}
+                                if((event.modifiers & Qt.ControlModifier) && (event.key===Qt.Key_Up || event.key===Qt.Key_Down)){root.browseHistory(event.key===Qt.Key_Up?-1:1);event.accepted=true;}
+                                else if(event.key===Qt.Key_Z && (event.modifiers & Qt.ControlModifier) && root.galleryMode){root.send({op:'undo-trash',query:root.query});event.accepted=true;}
+                                else if(event.key===Qt.Key_Tab || event.key===Qt.Key_Backtab){root.move((event.modifiers & Qt.ShiftModifier || event.key===Qt.Key_Backtab)?-1:1);event.accepted=true;}
+                                else if(event.key===Qt.Key_Down){root.move(root.listMode?1:root.gridColumns);event.accepted=true;}
+                                else if(event.key===Qt.Key_Up){root.move(root.listMode?-1:-root.gridColumns);event.accepted=true;}
                                 else if((event.key===Qt.Key_Left || event.key===Qt.Key_Right) && (!root.listMode || (event.modifiers & Qt.ControlModifier))){root.move(event.key===Qt.Key_Left?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Return || event.key===Qt.Key_Enter){root.activate(!!(event.modifiers & Qt.ShiftModifier),!!(event.modifiers & Qt.ControlModifier));event.accepted=true;}
                                 else if(event.key===Qt.Key_Escape){if(!event.isAutoRepeat && !(event.modifiers & Qt.MetaModifier))root.back();event.accepted=true;}
@@ -432,7 +468,7 @@ ShellRoot {
                     width:parent.width;height:24;spacing:8
                     Text {
                         width:parent.width-(pinStatus.visible?pinStatus.width+parent.spacing:0);height:parent.height
-                        text:root.windowEntry?'RUNNING WINDOWS':(root.query.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.query.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.query?'SEARCH RESULTS':'APPLICATIONS'))))
+                        text:root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.commandQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.commandQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.query.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.query?'SEARCH RESULTS':'APPLICATIONS'))))
                         font.family:root.settings.ui.font;font.pixelSize:11;font.letterSpacing:1.8
                         verticalAlignment:Text.AlignVCenter;color:root.theme.muted
                     }
@@ -465,8 +501,8 @@ ShellRoot {
                                 enabled:root.animateClosedRemoval
                                 NumberAnimation {properties:'x,y';duration:220;easing.type:Easing.OutCubic}
                             }
-                            cellWidth:root.listMode?width:width/root.settings.ui.columns
-                            cellHeight:root.listMode?70:122
+                            cellWidth:root.listMode?width:width/root.gridColumns
+                            cellHeight:root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
                             currentIndex:root.selected
                             boundsBehavior:Flickable.StopAtBounds
                             onContentYChanged: {
@@ -518,6 +554,7 @@ ShellRoot {
                                 border.width:index===root.selected?1:0
                                 border.color:root.theme.accent
                                 property string iconSource: {
+                                    if(root.galleryMode && modelData.thumbnail)return 'file://'+modelData.thumbnail;
                                     const icon=modelData.icon || 'application-x-executable';
                                     if(icon.startsWith('/'))return 'file://'+icon;
                                     const found=Quickshell.iconPath(icon,true);
@@ -532,8 +569,9 @@ ShellRoot {
                                         NumberAnimation {to:1;duration:450;easing.type:Easing.InOutSine}
                                         onRunningChanged: if(!running)art.opacity=1
                                     }
-                                    x:root.listMode?24:(parent.width-width)/2;y:root.listMode?(parent.height-height)/2:13
-                                    width:root.listMode?40:root.settings.ui.icon_size;height:width
+                                    x:root.galleryMode?6:root.listMode?16:(parent.width-width)/2;y:root.galleryMode?6:root.wordMode?14:root.listMode?(parent.height-height)/2:13
+                                    width:root.galleryMode?parent.width-12:root.wordMode?28:root.listMode?40:root.settings.ui.icon_size
+                                    height:root.galleryMode?parent.height-38:width
                                     source:parent.iconSource;sourceSize.width:width*2;sourceSize.height:height*2
                                     fillMode:Image.PreserveAspectFit;asynchronous:true
                                 }
@@ -550,7 +588,7 @@ ShellRoot {
                                 }
                                 Item {
                                     id:titleArea
-                                    x:root.listMode?78:7;y:root.listMode?12:76
+                                    x:root.wordMode?56:root.listMode?70:7;y:root.galleryMode?parent.height-26:root.listMode?12:76
                                     width:parent.width-x-(root.listMode?14:7)
                                     height:label.height
                                     Row {
@@ -570,7 +608,8 @@ ShellRoot {
                                             text:modelData.name;color:root.theme.text;font.family:root.settings.ui.font
                                             font.pixelSize:root.settings.ui.font_size-1
                                             horizontalAlignment:root.listMode?Text.AlignLeft:Text.AlignHCenter
-                                            wrapMode:Text.Wrap;elide:Text.ElideRight;maximumLineCount:2
+                                            textFormat:Text.PlainText
+                                            wrapMode:Text.Wrap;elide:Text.ElideRight;maximumLineCount:root.galleryMode?1:2
                                         }
                                         FontMetrics {id:titleMetrics;font:label.font}
                                     }
@@ -579,8 +618,24 @@ ShellRoot {
                                     visible:root.listMode
                                     x:titleArea.x;y:titleArea.y+titleArea.height+4;width:titleArea.width
                                     text:modelData.subtitle
+                                    textFormat:Text.PlainText
+                                    wrapMode:root.wordMode?Text.Wrap:Text.NoWrap
+                                    maximumLineCount:root.wordMode?2:1
                                     color:root.theme.muted;font.family:root.settings.ui.font;font.pixelSize:10
                                     elide:Text.ElideRight
+                                }
+                                ToolTip {
+                                    id: wordTip
+                                    visible: root.wordMode && hover.containsMouse
+                                    text: modelData.name + "\n\n" + modelData.subtitle
+                                    delay: 500
+                                    width: Math.min(600, root.settings.ui.width - 60)
+                                    contentItem: Text {
+                                        text: wordTip.text; textFormat: Text.PlainText
+                                        wrapMode: Text.Wrap; color: root.theme.text
+                                        font.family: root.settings.ui.font
+                                    }
+                                    background: Rectangle {color:root.theme.surface;radius:8;border.color:root.theme.border}
                                 }
                                 MouseArea {
                                     id:hover;anchors.fill:parent;hoverEnabled:true;cursorShape:modelData.disabled?Qt.ArrowCursor:Qt.PointingHandCursor
@@ -589,7 +644,7 @@ ShellRoot {
                             }
                             Text {
                                 anchors.centerIn:parent;visible:root.results.length===0
-                                text:root.ready?'No matches. Try another name or /refresh.':'Building your application index…'
+                                text:root.ready?(root.galleryMode?'No captures yet.':'No matches. Try another name or /refresh.'):'Building your application index…'
                                 color:root.theme.muted;font.pixelSize:13
                             }
                         }

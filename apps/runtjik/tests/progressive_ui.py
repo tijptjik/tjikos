@@ -53,6 +53,8 @@ def demo_windows():
 
 
 '''
+    shutil.copy2(app/'words.py', home/'words.py')
+    shutil.copy2(app/'desktop_plugins.py', home/'desktop_plugins.py')
     (home/'runtjik.py').write_text(source[:start]+fixtures+source[end:])
     config=temp/'config.conf';config.write_text('[theme]\nicon_theme="rose-punk"\n')
     os.environ.update(RUNTJIK_HOME=str(home),RUNTJIK_DEMO='1',RUNTJIK_CONFIG=str(config))
@@ -164,15 +166,28 @@ def demo_windows():
             assert image.getpixel((40,158))==accent,'Running dot is not in its left gutter'
             assert image.getpixel((28,158))==image.getpixel((691,158)),'Selected row margins are asymmetric'
             print('PASS: list dot is before the icon; selected row has equal outer margins',flush=True)
-            ipc('test','/');wait(lambda:status()['results']==9)
+            ipc('test','/');wait(lambda:status()['results']==14)
             ipc('capture',str(temp/'aliases.png'));time.sleep(.2)
-            ipc('test','! fish');wait(lambda:status()['results']==1)
+            ipc('test','!! fish');wait(lambda:status()['results']==1)
             subprocess.run(['wtype','-M','ctrl','-k','l','-m','ctrl'],check=True);time.sleep(.3)
             ipc('capture',str(temp/'fish.png'));time.sleep(.2)
             assert status()['view']=='grid'
-            ipc('test','!dnf');wait(lambda:json.loads(ipc('testState'))['resultQuery']=='!dnf')
+            ipc('test','!!dnf');wait(lambda:json.loads(ipc('testState'))['resultQuery']=='!!dnf')
             assert json.loads(ipc('testState'))['rows'][0]['id']=='commands:dnf'
             ipc('capture',str(temp/'dnf.png'));time.sleep(.2)
+            ipc('test','?ChatGPT');wait(lambda:json.loads(ipc('testState'))['resultQuery']=='?ChatGPT')
+            assert status()['results']==1
+            ipc('test','/config plugin_settings.Words');wait(lambda:status()['results']==4)
+            ipc('capture',str(temp/'word-settings.png'));time.sleep(.2)
+            ipc('test','/define serendipity');wait(lambda:json.loads(ipc('testState'))['resultQuery']=='/define serendipity')
+            subprocess.run(['wtype','-k','Return'],check=True)
+            wait(lambda:any('Synthetic demo' in row['subtitle'] for row in json.loads(ipc('testState'))['rows']))
+            ipc('capture',str(temp/'define.png'));time.sleep(.2)
+            ipc('test','/synonym happy');wait(lambda:json.loads(ipc('testState'))['resultQuery']=='/synonym happy')
+            subprocess.run(['wtype','-k','Return'],check=True)
+            wait(lambda:any('Synthetic demo' in row['subtitle'] for row in json.loads(ipc('testState'))['rows']))
+            ipc('capture',str(temp/'synonym.png'));time.sleep(.2)
+            print('PASS: ? processes, plugin settings, dictionary and synonym submission render',flush=True)
             print('PASS: ! and /run aliases, deduplicated command menu, Fish and DNF render',flush=True)
         finally:
             if ptr:

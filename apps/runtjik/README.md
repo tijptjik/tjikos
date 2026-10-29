@@ -170,11 +170,15 @@ highlighted; keyboard scrolling preserves the keyboard selection.
 | Ctrl+L | Toggle the current session between grid and list |
 | Esc | Return from the window picker, otherwise close |
 | `/pin` | Keep the launcher visible on outside clicks and app actions; dragging still works |
-| `/running`, `/processes` | Browse running applications; add a name to filter. Uses matching desktop windows, not background processes. Existing launch/switch/close bindings still apply. |
+| `/processes`, `?` | Browse running applications; add a name to filter. Uses matching desktop windows, not background processes. Existing launch/switch/close bindings still apply. |
 | `/run`, `/run name` | Browse/search previously used executable commands; clear the prefix to return to apps |
 | `/refresh` | Rebuild the application/command index |
 | `/grid`, `/list` | Select the current session view |
 | `/stats` | Show cumulative launches and window switches |
+| `/cliphist [text]` | Search existing clipboard history; Enter copies text or image data. |
+| `/rec`, `/screenrecord` | Recording targets, Stop recording, and previous recordings. |
+| `/grab`, `/shot`, `/screenshot` | Screenshot targets and previous screenshots. |
+| `/define word`, `/synonym word` | Look up definitions/examples or synonyms; Results appear inline after a typing pause; Enter opens a source while retaining results. |
 | `/config` | Browse and edit featured settings |
 | `/shortcuts`, `/bindings` | Show this shortcut guide inside the launcher |
 
@@ -429,8 +433,118 @@ Place a module at `~/.config/runtjik/plugins/ZenTabs.py` and set:
 
 ```toml
 [plugins]
-enabled = ["ZenTabs"]
+enabled = ["Words", "ZenTabs"]
 ```
+
+The bundled `Words` provider registers `/define` and `/synonym`. An explicit
+`plugins.enabled = []` disables it; add `"Words"` to an existing enabled list.
+Configure sources in TOML or the same `/config` settings panel:
+
+```toml
+[plugin_settings.Words]
+define_sources = ["free_dictionary", "wiktionary"]
+synonym_sources = ["datamuse", "free_dictionary"]
+max_results_per_source = 12
+timeout_seconds = 5
+```
+
+For example, `/config plugin_settings.Words.define_sources ["wiktionary", "urban_dictionary"]`
+enables slang alongside Wiktionary. `/config plugins.enabled ["Words"]` changes
+enabled providers immediately. External file edits apply on reopening. Other
+plugins can read their own `[plugin_settings.ProviderName]` table; scalar and
+array settings in that table appear in `/config`. Keep secrets out of these
+UI-visible settings; use an external credential store or environment variables.
+
+Sources (English lookups):
+
+- [Free Dictionary API](https://dictionaryapi.dev/): senses grouped by part of
+  speech, examples where available, and sense/meaning synonyms. No API key.
+- [Wiktionary](https://en.wiktionary.org/): broad vocabulary, multiple senses and
+  usage examples where supplied. Uses its public REST definition endpoint.
+- [Datamuse](https://www.datamuse.com/api/): ranked synonym suggestions via
+  `rel_syn`; no usage examples. No API key currently required by this endpoint.
+- [Urban Dictionary](https://www.urbandictionary.com/): optional, user-submitted
+  slang and examples, including explicit content. Its public `v0/define` endpoint
+  currently works without a key; availability is not guaranteed.
+
+Commercial dictionaries such as Merriam-Webster, Oxford and Collins are candidates
+for future licensed adapters when credentials and usage rights are available.
+Examples and coverage vary; none of these sources guarantees an example for every
+sense. Results retain source attribution and open the source page on Enter.
+Hover a long result to read its full text.
+
+After a 350 ms typing pause, the term is sent to the selected sources concurrently.
+Results appear inline as each source responds, with a per-request timeout and 2 MB
+response limit. Changing the term cancels queued old requests; responses for old
+terms cannot replace the current results. Source errors remain visible alongside
+successful results. The launcher stays visible during lookup and source actions.
+Only the current query results are held in memory; no lookup history is written to
+disk. Demo mode always returns synthetic fixtures without network access.
+
+Optional provider attributes: `commands = {"/command": "Description"}` registers
+slash commands without application fuzzy matching. Core command names are reserved.
+`query()` receives the complete command string. `activate()` may return
+`{"refresh_query": query}` to refresh in place, or a launcher message response;
+returning `None` keeps the usual close-after-activation behavior.
+
+Bundled desktop plugins:
+
+- **Clipboard** registers `/cliphist`. It reads the existing `cliphist list`, filters
+  previews locally, then decodes only the selected item into `wl-copy`. It supports
+  text and images without auto-pasting. Requires `cliphist` and `wl-copy`, plus your
+  existing `wl-paste --watch cliphist store` service to populate history. Runtjik
+  does not start a second watcher, delete entries, or log clipboard selections.
+- **Recorder** registers `/rec`, with `/screenrecord` as an alias. Screen selects a
+  monitor; region uses `slurp`; window uses the desktop portal picker through
+  `gpu-screen-recorder`, following the selected window. Screen/region/workspace
+  use `wf-recorder`. Workspace lists currently visible workspaces and records that
+  monitor until the workspace changes. Switching is detected by polling, so a
+  transition can appear before recording stops; this is not background capture of
+  a hidden workspace. A Stop row controls only Runtjik's recorder, never another
+  recording tool or the existing `screen-record.service`.
+- **Screenshots** registers `/grab`, with `/shot` and `/screenshot` as aliases.
+  Screen/workspace select a monitor/visible workspace; window focuses the selected
+  window and captures its visible rectangle; region uses `slurp` (Escape cancels).
+  Uses `grim`, and optionally copies the saved PNG with `wl-copy`. Window screenshots
+  capture the composited area, so overlapping overlays can be included.
+
+Capture actions hide the launcher, including when pinned. Previous captures are
+listed newest first from the configured directory; Enter opens the selected file.
+`/rec history text` and `/grab history text` filter filenames. Active recordings
+are excluded until finalized. Aliases share one command-menu row.
+
+```toml
+[plugins]
+enabled = ["Words", "Clipboard", "Recorder", "Screenshots"]
+
+[plugin_settings.Clipboard]
+max_results = 50
+
+[plugin_settings.Recorder]
+directory = "xdg:VIDEOS"
+audio = false
+fps = 30
+max_results = 40
+
+[plugin_settings.Screenshots]
+directory = "xdg:PICTURES/screenshots"
+copy_to_clipboard = true
+max_results = 40
+```
+
+All these fields are editable under `/config plugin_settings.ProviderName`.
+`xdg:` paths resolve your configured user folders; absolute paths and `~/...`
+are also accepted. Capture directories inside the repository are rejected.
+Recording audio is opt-in (system output, not microphone). Capture workers survive
+launcher hiding/reloading and expose a private runtime socket; the Stop action
+sends SIGINT to their own child to finalize the video. A stuck recorder is killed
+only after a 20-second finalization timeout; that output may be incomplete.
+Recorder failures are logged to `$XDG_STATE_HOME/runtjik/capture.log` and announced
+with a desktop notification. All desktop-plugin demo actions use synthetic data
+and leave the real clipboard, files and recorder unchanged.
+
+Providers may declare `aliases = {"/alias": "/command"}` in addition to `commands`.
+Aliases route to the same provider and appear beside the canonical menu command.
 
 Contract (the example is a shape, not a working browser bridge):
 
@@ -495,8 +609,9 @@ fetches another page. Existing rows, selection and scroll position remain in
 place; ordinary index refreshes retain the loaded extent. A new query starts at
 the first page. Icons are resolved only for fetched pages.
 
-Type `/run` or `!` to search saved terminal commands; both `!fish` and `! fish`
-work. The slash menu shows aliases on one row: `/run · !` and
+Type `!` to browse launcher slash commands (`!define word` also works).
+Type `/run` or `!!` to search saved Fish commands; both `!!fish` and `!! fish`
+work. The slash menu shows aliases on one row: `/run · !!` and
 `/bindings · /shortcuts`. Both keyboard-help commands continue to work.
 
 Command icons reuse a GUI application's identity only when a direct executable
@@ -510,7 +625,30 @@ List rows use equal outer margins, aligned icon/title columns, and a separate
 running-dot gutter on the left. Grid indicators remain beside the title.
 
 Closing an app keeps Runtjik open. Its icon pulses while the requested windows
-remain open, including save prompts. In `/running`, closed apps shrink/fade out
+remain open, including save prompts. In `/processes`, closed apps shrink/fade out
 and the remaining tiles animate into place; in normal search the app stays
 available for launching. Search changes, paging, sorting and view changes do not
 animate result positions. Close tracking polls every 180 ms only while needed.
+
+### Migrating an existing configuration
+
+`runtjik migrate-config` adds missing bundled-plugin settings while preserving
+existing values, comments, file mode and plugin enablement. To explicitly enable
+all four bundled providers as well, use
+`runtjik migrate-config --enable-bundled-plugins`. Existing third-party providers
+remain enabled. A changed config receives a private `runtjik.conf.pre-plugins-*`
+backup beside the original and is replaced atomically under the settings lock.
+Repeating the migration is a no-op. Installation never runs this migration
+implicitly, so intentionally disabled plugins stay disabled.
+
+Capture history uses a thumbnail gallery, defaulting to three columns and three
+visible rows. Configure `gallery_columns` and `gallery_rows` (2–6) under
+`plugin_settings.Screenshots` or `plugin_settings.Recorder`, in TOML or `/config`.
+Screenshots load directly at thumbnail size; video previews are generated with
+FFmpeg in the private Runtjik thumbnail cache outside the repository.
+
+`plugin_settings.Recorder.countdown_seconds` defaults to 3 (0–10 supported).
+After selecting a region/screen/workspace, a visible countdown appears on that
+monitor. Escape cancels before any recorder is started; the overlay disappears
+before capture begins. Window recording counts down before opening the portal
+picker. The countdown requires system Python with GTK 3 and GtkLayerShell.

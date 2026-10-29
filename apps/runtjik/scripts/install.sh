@@ -22,7 +22,7 @@ for directory in qml examples docs; do
     mv -- "$staging" "$target/$directory"
     rm -rf -- "$previous"
 done
-install -m 644 "$root_dir/dist/runtjik.py" "$root_dir/dist/control.py" "$root_dir/dist/README.md" "$target/"
+install -m 644 "$root_dir/dist/runtjik.py" "$root_dir/dist/words.py" "$root_dir/dist/desktop_plugins.py" "$root_dir/dist/capture_worker.py" "$root_dir/dist/capture_countdown.py" "$root_dir/dist/capture_trash.py" "$root_dir/dist/control.py" "$root_dir/dist/README.md" "$target/"
 install -m 755 "$root_dir/dist/bin/runtjik" "$install_home/.local/bin/runtjik"
 bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" runtjik
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 && ! -e "$config_root/runtjik/runtjik.conf" ]]; then

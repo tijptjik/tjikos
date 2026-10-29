@@ -8,11 +8,11 @@ else
 fi
 case "${1:-toggle}" in
     --version|version) exec python3 -B "$RUNTJIK_HOME/runtjik.py" version ;;
-    refresh|stats|rebuild-counts|check) exec python3 -B "$RUNTJIK_HOME/runtjik.py" "$@" ;;
+    refresh|stats|rebuild-counts|check|migrate-config) exec python3 -B "$RUNTJIK_HOME/runtjik.py" "$@" ;;
     status) exec quickshell ipc --path "$RUNTJIK_HOME/qml" call runtjik status ;;
     close|quit|toggle|show) ;;
     --demo) export RUNTJIK_DEMO=1 ;;
-    *) printf 'Usage: runtjik [toggle|show|close|quit|refresh|stats|rebuild-counts|check|status|--demo|--version]\n' >&2; exit 2 ;;
+    *) printf 'Usage: runtjik [toggle|show|close|quit|refresh|stats|rebuild-counts|check|migrate-config|status|--demo|--version]\n' >&2; exit 2 ;;
 esac
 command -v quickshell >/dev/null || { echo 'Runtjik needs Quickshell on a Wayland desktop.' >&2; exit 1; }
 # Match the personal icon theme without forcing Qt platform/style integration.

@@ -75,14 +75,14 @@ class NavigationTests(unittest.TestCase):
         self.launcher.entries=[r.Entry('apps:git','GUI Git'),
                                r.Entry('commands:git','git',provider='commands'),
                                r.Entry('commands:fish','fish',provider='commands')]
-        for query in ('/run git','!git','! git'):
+        for query in ('/run git','!!git','!! git'):
             with self.subTest(query=query):
                 self.assertEqual([row['id'] for row in self.launcher.query(query)['results']],['commands:git'])
-        self.assertEqual({row['id'] for row in self.launcher.query('!')['results']}, {'commands:git','commands:fish'})
+        self.assertEqual({row['id'] for row in self.launcher.query('!!')['results']}, {'commands:git','commands:fish'})
 
     def test_menu_aliases_share_single_rows_and_both_shortcut_queries_work(self):
         rows=self.launcher.query('/')['results']
-        self.assertEqual(len(rows),9)
+        self.assertEqual(len(rows),14)
         self.assertNotIn('/shortcuts',{row['id'] for row in rows})
         by_id={row['id']:row for row in rows}
         self.assertIn('!',by_id['/run']['name'])

@@ -94,7 +94,7 @@ class LauncherTests(unittest.TestCase):
                             r.Entry("apps:c", "Closed"),
                             r.Entry("commands:a", "Alpha", provider="commands")]
         with patch.object(r, "windows", return_value=[]), patch.object(r, "matched_windows", side_effect=lambda e, *_: [] if e.id == "apps:c" else [{}]):
-            for prefix in ("/running", "/processes"):
+            for prefix in ("/processes", "?"):
                 result = launcher.query(prefix, limit=1)
                 self.assertEqual(result["total"], 2)
                 self.assertEqual(result["results"][0]["id"], "apps:a")
@@ -102,8 +102,8 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual([row["id"] for row in launcher.query(prefix + " bet")["results"]], ["apps:b"])
                 self.assertEqual(launcher.activate(prefix), {"kind": "edit", "text": prefix + " "})
         with patch.object(r, "windows", return_value=[]):
-            self.assertEqual(launcher.query("/running")["results"], [])
-        self.assertEqual(launcher.query("/proc")["results"][0]["id"], "/running")
+            self.assertEqual(launcher.query("/processes")["results"], [])
+        self.assertEqual(launcher.query("/proc")["results"][0]["id"], "/processes")
 
     def test_run_mode_separates_commands_and_preserves_frecency(self):
         launcher = self.launcher()
@@ -509,7 +509,7 @@ class LauncherTests(unittest.TestCase):
         path=self.root / 'runtjik.conf'
         original='[ui]\ncolumns=5\n'
         path.write_text(original)
-        for key,value in [('ui.columns','0'),('ui.view','tiles'),('plugins.enabled','[]'),('history.enabled','"yes"')]:
+        for key,value in [('ui.columns','0'),('ui.view','tiles'),('plugins.enabled','[3]'),('history.enabled','"yes"')]:
             with self.subTest(key=key,value=value),self.assertRaises(ValueError):
                 r.save_setting(key,value)
             self.assertEqual(path.read_text(),original)
@@ -525,14 +525,14 @@ class LauncherTests(unittest.TestCase):
     def test_launcher_commands_use_companion_artwork_in_all_views(self):
         launcher = self.launcher()
         rows = {row["id"]: row["icon"] for row in launcher.query("/")["results"]}
-        self.assertEqual(rows, {"/running":"runtjik-stats", "/run":"org.gnome.Terminal", "/refresh":"runtjik-refresh", "/pin":"runtjik-pin",
+        self.assertEqual(rows, {"/processes":"runtjik-stats", "/run":"org.gnome.Terminal", "/refresh":"runtjik-refresh", "/pin":"runtjik-pin",
                                "/grid":"runtjik-grid", "/list":"runtjik-list",
                                "/stats":"runtjik-stats", "/config":"runtjik-config",
-                               "/bindings":"runtjik-shortcuts"})
+                               "/bindings":"runtjik-shortcuts", "/define":"accessories-dictionary", "/synonym":"accessories-dictionary", "/cliphist":"edit-paste", "/rec":"media-record", "/grab":"camera-photo"})
         self.assertEqual({row["icon"] for row in launcher.query("/config")["results"]}, {"runtjik-config"})
         self.assertEqual({row["icon"] for row in launcher.query("/shortcuts")["results"]}, {"runtjik-shortcuts"})
         launcher._icons.resolve.side_effect = OSError("Artwork unavailable")
-        self.assertEqual(len(launcher.query("/")["results"]), 9)
+        self.assertEqual(len(launcher.query("/")["results"]), 14)
 
     def test_shortcuts_alias_has_identical_read_only_rows(self):
         (self.root / 'runtjik.conf').write_text('[index]\ndesktop_apps=false\n')
@@ -561,6 +561,7 @@ class LauncherTests(unittest.TestCase):
         path.write_text('''API_VERSION = 1
 class Provider:
     name = "ExampleTabs"
+    commands = {"/tabs": "Browser tabs"}
     def query(self, query, settings):
         return [{"id":"ExampleTabs:123", "provider":self.name, "name":"Example tab"}]
     def activate(self, entry, settings, mode):
@@ -572,6 +573,9 @@ class Provider:
         self.assertEqual(result["results"][0]["provider"], "ExampleTabs")
         launcher.activate("ExampleTabs:123", "switch")
         self.assertEqual(launcher.providers["ExampleTabs"].last_action, ("ExampleTabs:123", "switch"))
+        self.assertEqual(launcher.activate("/tabs"), {"kind": "edit", "text": "/tabs "})
+        self.assertEqual(launcher.query("/tabs irrelevant-to-title")["results"][0]["id"], "ExampleTabs:123")
+        self.assertIn("/tabs", {row["id"] for row in launcher.query("/")["results"]})
 
     def test_launch_uses_argv_without_shell_and_separate_service(self):
         with patch.dict(os.environ, {"DBUS_SESSION_BUS_ADDRESS": "test"}), patch.object(r.shutil, "which", return_value="/bin/tool"), patch.object(r.subprocess, "run") as run:

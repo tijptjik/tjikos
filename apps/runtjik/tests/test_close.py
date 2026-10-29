@@ -44,14 +44,14 @@ class CloseTests(unittest.TestCase):
         self.launcher._icons = Mock()
         self.launcher._icons.resolve.side_effect = lambda icon: icon
         self.action(address='0xabc')
-        self.assertEqual(self.launcher.query('/running')['closing'], [self.entry.id])
+        self.assertEqual(self.launcher.query('/processes')['closing'], [self.entry.id])
         self.clients[:] = [self.clients[1]]
-        result = self.launcher.query('/running')
+        result = self.launcher.query('/processes')
         self.assertEqual(result['closing'], [])
         self.assertEqual(result['results'][0]['windows'], 1)
         self.action()
         self.clients.clear()
-        result = self.launcher.query('/running')
+        result = self.launcher.query('/processes')
         self.assertEqual(result['closing'], [])
         self.assertEqual(result['results'], [])
 
