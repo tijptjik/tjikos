@@ -256,3 +256,51 @@ fn rpm_checks_use_fresh_providers_replacements_and_owned_commands() {
         }
     }
 }
+
+#[test]
+fn fedora_gate_does_not_fetch_availability_before_175_days() {
+    let dir = fixture();
+    let bin = dir.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    for (name, body) in [
+        ("rpm", "echo 45"),
+        ("curl", "echo unexpected-network >&2; exit 99"),
+    ] {
+        let path = bin.join(name);
+        fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let cache = dir.path().join("tjikup");
+    let today = String::from_utf8(
+        Command::new("date")
+            .args(["-u", "+%F"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    fs::write(
+        cache.join("fedora-release-45.json"),
+        serde_json::to_vec(&json!({"version":45,"checked":now,"released_on":today.trim()}))
+            .unwrap(),
+    )
+    .unwrap();
+    let output = binary()
+        .args(["workflow", "fedora-release"])
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("XDG_CACHE_HOME", dir.path())
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).starts_with("checks from "));
+    assert!(output.stderr.is_empty());
+}

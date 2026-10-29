@@ -398,3 +398,11 @@ RPM presence checks read the installed RPM names, provides, and obsoletes on eve
 run. Command-named entries also accept an executable in `/usr/bin` if RPM owns it.
 There is no persistent presence cache: installing or removing packages takes
 effect on the next check without explicit invalidation.
+
+`workflow fedora-release` checks upgrade availability only from 175 days after the
+installed Fedora version's official `released_on` date in Bodhi. It caches that
+date in `$XDG_CACHE_HOME/tjikup/fedora-release-VERSION.json` (default
+`~/.cache/tjikup`). An unpublished date is retried after one day; missing or invalid
+metadata never triggers an early availability check. Exit 2 means not due yet,
+with a short status on stdout; exit 0 prints the latest stable version. The
+Dotjik recipe retains its end-of-run upgrade prompt and seven-day deferral.

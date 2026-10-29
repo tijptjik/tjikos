@@ -3,6 +3,7 @@ mod bitwarden_install;
 mod config;
 mod demo;
 mod device;
+mod fedora_release;
 mod graphics;
 mod icons;
 mod managed_files;

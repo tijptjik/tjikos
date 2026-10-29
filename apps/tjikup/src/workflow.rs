@@ -404,6 +404,9 @@ fn verify(repo: &Path, args: &[String]) -> Result<i32> {
     Ok(command.code().unwrap_or(1))
 }
 pub fn cli(args: Vec<String>) -> Result<i32> {
+    if args == ["fedora-release"] {
+        return crate::fedora_release::run();
+    }
     let mut args = args;
     let repo = if args.first().is_some_and(|v| v == "--repo") {
         if args.len() < 3 {
@@ -436,6 +439,7 @@ pub fn cli(args: Vec<String>) -> Result<i32> {
         Some("repositories") => repositories(&repo, &args[1..]),
         Some("verify") => verify(&repo, &args[1..]),
         Some("package") => package(&repo, &args[1..]),
+        Some("fedora-release") => crate::fedora_release::run(),
         Some("assets") => assets(&args[1..]),
         _ => bail!("usage: tjikup workflow [--repo PATH] <context|role|configure|package|assets>"),
     }
