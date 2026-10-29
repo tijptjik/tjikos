@@ -3,6 +3,11 @@ set -euo pipefail
 app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 prefix="${1:-$HOME/.local}"
 bash "$app_dir/scripts/fetch-release.sh"
+# External native manifests may require features not visible to --check.
+"$app_dir/dist/tjikup" capabilities | python3 -c 'import json,sys; assert json.load(sys.stdin).get("encrypted_credentials", 0) >= 1' || {
+    echo 'Pinned Tjikup release lacks encrypted credential cache support; existing runner preserved.' >&2
+    exit 1
+}
 # Refuse to replace a working legacy runner underneath an incompatible workflow.
 config="${TJIKUP_INSTALL_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/tjikup/config.json}"
 if [[ -f "$config" ]]; then

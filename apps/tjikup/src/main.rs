@@ -72,6 +72,14 @@ fn cli() -> Result<i32> {
             },
         );
     }
+    if args.peek().is_some_and(|s| s == "capabilities") {
+        args.next();
+        if args.next().is_some() {
+            bail!("usage: tjikup capabilities");
+        }
+        println!(r#"{{"encrypted_credentials":1,"credential_recovery":1}}"#);
+        return Ok(0);
+    }
     let mut path = default_config();
     let (mut check, mut plan) = (false, false);
     let mut jobs = None;
