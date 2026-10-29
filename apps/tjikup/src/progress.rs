@@ -86,6 +86,7 @@ pub struct Progress {
     repo_recipes: BTreeMap<usize, (usize, usize)>,
     repo_open: bool,
     repo_lines: usize,
+    activity_gap: bool,
     repo_width: usize,
     repo_last: Vec<String>,
     transient: bool,
@@ -117,6 +118,7 @@ impl Progress {
             repo_recipes: BTreeMap::new(),
             repo_open: false,
             repo_lines: 0,
+            activity_gap: false,
             repo_width: 0,
             repo_last: Vec::new(),
             transient: false,
@@ -385,6 +387,7 @@ impl Progress {
         // Reserve a blank line above the activity spinner. Include it in the
         // cursor offsets so patches still land on each repository's first row.
         eprintln!();
+        self.activity_gap = true;
         self.repo_lines = self.repos.len() * self.graphics.as_ref().map_or(1, Graphics::rows) + 1;
     }
     fn patch_repos(&mut self) {
@@ -447,15 +450,26 @@ impl Progress {
         }
         let _ = std::io::stderr().flush();
     }
+    fn remove_activity_gap(&mut self) {
+        if self.activity_gap {
+            // The spinner occupies the line below this temporary spacer.
+            // Reclaim only the blank line, never either row of the last icon.
+            eprint!("\x1b[1A\r");
+            self.repo_lines = self.repo_lines.saturating_sub(1);
+            self.activity_gap = false;
+        }
+    }
     pub fn diagnostic(&mut self, message: &str) {
         self.clear();
         self.close_repos();
+        self.remove_activity_gap();
         self.restore_cursor();
         eprintln!("{message}");
     }
     pub fn start(&mut self, index: usize, recipe: &Recipe) {
         self.clear();
         if recipe.interactive {
+            self.remove_activity_gap();
             self.restore_cursor();
         } else {
             self.hide_cursor();
@@ -677,6 +691,7 @@ impl Progress {
             },
         );
         self.clear();
+        self.remove_activity_gap();
         if self.section != event.section {
             self.heading(&event.section);
         }
@@ -724,6 +739,11 @@ impl Progress {
         }
         self.visible += 1;
     }
+    pub fn status(&mut self, index: usize, recipe: &Recipe, message: &str) {
+        if let Some((label, _)) = self.active.get_mut(&index) {
+            *label = format!("{}: {}", plain(&recipe.label), plain(message));
+        }
+    }
     pub fn tick(&mut self) {
         // Paint the repository cells and activity line as one terminal frame.
         // Kitty (and other supporting terminals) must not display intermediate
@@ -748,6 +768,13 @@ impl Progress {
         // One transient activity line keeps the terminal quiet. Settled results
         // have their own icons and never get repainted for animation.
         if let Some((label, started)) = self.active.values().next() {
+            if !self.activity_gap {
+                eprint!("\r\n");
+                self.activity_gap = true;
+                if self.repo_open {
+                    self.repo_lines += 1;
+                }
+            }
             let note = format!("{:.1}s", started.elapsed().as_secs_f64());
             let available = columns().saturating_sub(1);
             let label = fit(label, available.saturating_sub(width(&note) + 3));
@@ -769,6 +796,7 @@ impl Progress {
         self.active.clear();
         self.close_repos();
         self.flush_grouped();
+        self.remove_activity_gap();
         if self.visible == 0 && !attention {
             self.event(&Event {
                 icon_key: String::new(),

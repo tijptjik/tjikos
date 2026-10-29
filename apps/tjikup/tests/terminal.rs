@@ -545,3 +545,21 @@ fn execution_groups_stream_settled_rows_before_slow_peers_finish() {
     assert_eq!(text.matches("Configuration").count(), 1);
     assert!(text.find("Finished fast").unwrap() < text.find("Finished slow").unwrap());
 }
+
+#[test]
+fn credential_refresh_is_visible_while_the_refresh_command_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    fs::write(&path,serde_json::to_vec(&json!({"version":2,"recipes":[{
+        "id":"auth","label":"Service","apply":["sh","-c","[ -e refreshed ] || exit 77"],
+        "credential_recovery":{"secret_ids":["11111111-2222-3333-4444-555555555555"],"failure_codes":[77],"retry_safe":true,
+        "refresh":["sh","-c","n=0; while [ ! -e release ]; do n=$$((n+1)); [ $$n -lt 100 ] || exit 8; sleep 0.05; done; touch refreshed"]}
+    }]})).unwrap()).unwrap();
+    let mut terminal = Terminal::spawn(&["--config", path.to_str().unwrap()], dir.path(), false);
+    terminal.until("Credentials failed; refreshing from Bitwarden");
+    assert!(!dir.path().join("refreshed").exists());
+    fs::write(dir.path().join("release"), "").unwrap();
+    let text = terminal.finish();
+    assert!(!text.contains("FAIL    "));
+    assert!(dir.path().join("refreshed").exists());
+}

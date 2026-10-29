@@ -89,6 +89,15 @@ pub struct Render {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct CredentialRecovery {
+    pub secret_ids: Vec<String>,
+    pub failure_codes: Vec<i32>,
+    pub refresh: Vec<String>,
+    pub retry_safe: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Recipe {
     pub operation: Option<crate::selection::Operation>,
     pub scope: Option<crate::selection::Scope>,
@@ -120,6 +129,7 @@ pub struct Recipe {
     pub when: Option<Condition>,
     pub apply: Option<Vec<String>>,
     pub preview: Option<Vec<String>>,
+    pub credential_recovery: Option<CredentialRecovery>,
     pub autocommit: Option<Autocommit>,
     pub git: Option<Git>,
     pub files: Option<String>,
@@ -603,6 +613,37 @@ impl Config {
             for code in r.skip_codes.iter().chain(&r.stop_codes) {
                 if !(1..=255).contains(code) || !codes.insert(code) {
                     bail!("{}: invalid or overlapping exit codes", r.id);
+                }
+            }
+            if let Some(recovery) = &r.credential_recovery {
+                if !recovery.retry_safe
+                    || recovery.secret_ids.is_empty()
+                    || recovery.failure_codes.is_empty()
+                    || r.files.is_some()
+                    || r.render.is_some()
+                    || r.git.is_some()
+                    || r.autocommit.is_some()
+                {
+                    bail!("{}: credential recovery requires declared secrets and retry-safe check/apply commands", r.id);
+                }
+                argv(&recovery.refresh)?;
+                for id in &recovery.secret_ids {
+                    if id.len() != 36
+                        || !id.bytes().enumerate().all(|(i, c)| {
+                            if [8, 13, 18, 23].contains(&i) {
+                                c == b'-'
+                            } else {
+                                c.is_ascii_hexdigit()
+                            }
+                        })
+                    {
+                        bail!("{}: invalid credential secret ID", r.id);
+                    }
+                }
+                for code in &recovery.failure_codes {
+                    if !(2..=125).contains(code) || !codes.insert(code) {
+                        bail!("{}: credential failures need dedicated, non-overlapping exit codes (not generic exit 1)", r.id);
+                    }
                 }
             }
             if let Some(name) = &r.files {

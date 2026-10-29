@@ -72,6 +72,16 @@ fn dirty_file_count(status: &[u8]) -> u64 {
     count
 }
 
+pub const RETRY_BOUNDARY: &str = "__tjikup_credential_retry__";
+#[derive(Debug)]
+pub struct CredentialFailure(pub &'static str);
+impl std::fmt::Display for CredentialFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+impl std::error::Error for CredentialFailure {}
+
 pub struct Completion {
     pub state: State,
     pub git_commits: Option<u64>,
@@ -103,6 +113,7 @@ pub struct Contextual<'a> {
     pub cancelled: &'a AtomicBool,
     pub run_dir: &'a Path,
     pub log: &'a File,
+    pub status: Option<(usize, std::sync::mpsc::Sender<(usize, String)>)>,
 }
 impl Contextual<'_> {
     fn run(&self, argv: &[String]) -> Result<i32> {
@@ -115,6 +126,70 @@ impl Contextual<'_> {
             None,
             None,
         )
+    }
+    fn run_with_recovery(&self, argv: &[String], refreshed: &mut bool) -> Result<i32> {
+        let code = self.run(argv)?;
+        let Some(recovery) = &self.recipe.credential_recovery else {
+            return Ok(code);
+        };
+        if !recovery.failure_codes.contains(&code) {
+            return Ok(code);
+        }
+        if *refreshed {
+            return Err(CredentialFailure("auth failed after refresh").into());
+        }
+        *refreshed = true;
+        use std::io::Write;
+        writeln!(
+            &*self.log,
+            "Credentials failed; attempting refresh from Bitwarden"
+        )?;
+        if let Some((index, sender)) = &self.status {
+            let _ = sender.send((
+                *index,
+                "Credentials failed; refreshing from Bitwarden".into(),
+            ));
+        }
+        let mut refresh_recipe = self.recipe.clone();
+        refresh_recipe.env.insert(
+            "TJIKUP_REFRESH_SECRETS".into(),
+            recovery.secret_ids.join(","),
+        );
+        refresh_recipe.env.insert(
+            "TJIKUP_SECRET_REFRESH_RUN".into(),
+            crate::managed_files::secrets::refresh_nonce()?,
+        );
+        if process::run(
+            &recovery.refresh,
+            &refresh_recipe,
+            self.cancelled,
+            self.run_dir,
+            self.log,
+            None,
+            None,
+        )? != 0
+        {
+            return Err(
+                CredentialFailure("credential refresh failed; operation was not retried").into(),
+            );
+        }
+        // Preserve private diagnostics, but only the final attempt contributes
+        // status rows. A recovered first-attempt FAIL must not poison success.
+        writeln!(&*self.log, "{RETRY_BOUNDARY}")?;
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(self.run_dir.join(format!("{}.report", self.recipe.id)))?;
+        if let Some((index, sender)) = &self.status {
+            let _ = sender.send((*index, "Credentials refreshed; retrying once".into()));
+        }
+        let code = self.run(argv)?;
+        if recovery.failure_codes.contains(&code) {
+            return Err(CredentialFailure("auth failed after refresh").into());
+        }
+        Ok(code)
     }
     fn capture(&self, argv: &[String]) -> Result<Vec<u8>> {
         let temp = tempfile::Builder::new()
@@ -354,8 +429,9 @@ impl Contextual<'_> {
                 return Ok(State::Unchanged.into());
             }
         }
+        let mut refreshed = false;
         if let Some(check) = &self.recipe.check {
-            match self.run(check)? {
+            match self.run_with_recovery(check, &mut refreshed)? {
                 0 => return Ok(State::Unchanged.into()),
                 1 if self.recipe.installed_gate => {
                     use std::io::Write;
@@ -522,11 +598,12 @@ impl Contextual<'_> {
             }
             return Ok(State::Done.into());
         }
-        let code = self.run(
+        let code = self.run_with_recovery(
             self.recipe
                 .apply
                 .as_ref()
                 .context("missing apply command")?,
+            &mut refreshed,
         )?;
         if code == 0 {
             Ok(State::Done.into())

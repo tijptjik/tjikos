@@ -173,6 +173,7 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
     let mut waits = vec![[0.0; 3]; config.recipes.len()];
     let mut reasons = vec![0; config.recipes.len()];
     let (send, receive) = mpsc::channel();
+    let (status_send, status_receive) = mpsc::channel::<(usize, String)>();
     let mut stop = false;
     let mut exclusive_running = false;
     let mut progress = crate::progress::Progress::new(&config);
@@ -274,6 +275,7 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                     run_dir.clone(),
                     send.clone(),
                 );
+                let status_sender = status_send.clone();
                 let offset = started.elapsed().as_secs_f64();
                 let handle = std::thread::spawn(move || {
                     let begin = Instant::now();
@@ -284,6 +286,7 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                             cancelled: &cancelled,
                             run_dir: &run_dir,
                             log: &log,
+                            status: Some((i, status_sender.clone())),
                         }
                         .execute()
                     });
@@ -295,7 +298,12 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                             // and configured paths remain in the private receipt/log.
                             failure_note = error
                                 .downcast_ref::<UntrackedCaptureFiles>()
-                                .map(UntrackedCaptureFiles::status);
+                                .map(UntrackedCaptureFiles::status)
+                                .or_else(|| {
+                                    error
+                                        .downcast_ref::<crate::actions::CredentialFailure>()
+                                        .map(|e| e.0.to_string())
+                                });
                             let dirty_files =
                                 error.downcast_ref::<DirtyRepository>().map(|e| e.files);
                             let _ = writeln!(&log, "{error:#}");
@@ -313,7 +321,11 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                     )
                     .unwrap_or_default();
                     let log_text = std::fs::read_to_string(&log_path).unwrap_or_default();
-                    let mut events = crate::report::parse(&report, &log_text, config.show_skips);
+                    let final_log = log_text
+                        .rsplit_once(crate::actions::RETRY_BOUNDARY)
+                        .map(|(_, last)| last)
+                        .unwrap_or(&log_text);
+                    let mut events = crate::report::parse(&report, final_log, config.show_skips);
                     if let Some(note) = failure_note {
                         events.push(crate::report::Event {
                             icon_key: String::new(),
@@ -406,6 +418,9 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                 );
                 results.insert(r.id.clone(), outcome);
             }
+        }
+        for (index, message) in status_receive.try_iter() {
+            progress.status(index, &config.recipes[index], &message);
         }
         progress.tick();
     }

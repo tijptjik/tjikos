@@ -229,6 +229,9 @@ pub fn enable_refresh() -> Result<()> {
     );
     Ok(())
 }
+pub(crate) fn refresh_nonce() -> Result<String> {
+    super::credential_cache::random_hex()
+}
 
 pub fn fish_quote(value: &str) -> String {
     format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'"))

@@ -675,3 +675,76 @@ fn blocked_results_keep_groups_without_alphabetic_reordering() {
     assert!(text.find("Zulu").unwrap() < text.find("Alpha").unwrap());
     assert!(text.find("Zulu").unwrap() < text.find("\nServices\n").unwrap());
 }
+
+fn credential_policy(refresh: Value) -> Value {
+    json!({"secret_ids":["11111111-2222-3333-4444-555555555555"],"failure_codes":[77],"refresh":refresh,"retry_safe":true})
+}
+#[test]
+fn credential_recovery_retries_once_and_discards_old_failure_status() {
+    let (dir, mut config) = fixture(
+        json!([{"id":"auth","label":"Authenticated operation","apply":["sh","-c","echo attempt >> calls; if [ ! -e refreshed ]; then echo 'FAIL   ✗ Old attempt'; printf 'FAIL\t✗\tOld attempt\tfailed\n' > \"$$TJIKUP_REPORT_FILE\"; exit 77; fi; echo 'APPLY   ✓ Recovered'"],"credential_recovery":credential_policy(json!(["sh","-c","test \"$$TJIKUP_REFRESH_SECRETS\" = 11111111-2222-3333-4444-555555555555 && test -n \"$$TJIKUP_SECRET_REFRESH_RUN\" && touch refreshed"]))}]),
+    );
+    ok(&invoke(dir.path(), &config, &[]));
+    assert_eq!(
+        fs::read_to_string(dir.path().join("calls"))
+            .unwrap()
+            .lines()
+            .count(),
+        2
+    );
+    assert_eq!(receipt(dir.path())["recipes"]["auth"]["state"], "done");
+    // Generic failure does not trigger refresh.
+    config["recipes"][0]["apply"] = json!(["sh", "-c", "exit 1"]);
+    config["recipes"][0]["credential_recovery"]["refresh"] = json!(["touch", "must-not-refresh"]);
+    assert!(!invoke(dir.path(), &config, &[]).status.success());
+    assert!(!dir.path().join("must-not-refresh").exists());
+}
+#[test]
+fn failed_refresh_and_repeated_auth_failure_never_loop() {
+    for fail_refresh in [false, true] {
+        let refresh = if fail_refresh {
+            json!(["sh", "-c", "echo refresh >> refreshes; exit 1"])
+        } else {
+            json!(["sh", "-c", "echo refresh >> refreshes"])
+        };
+        let (dir, config) = fixture(
+            json!([{"id":"auth","apply":["sh","-c","echo attempt >> calls; exit 77"],"credential_recovery":credential_policy(refresh)}]),
+        );
+        let out = invoke(dir.path(), &config, &[]);
+        assert!(!out.status.success());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("calls"))
+                .unwrap()
+                .lines()
+                .count(),
+            if fail_refresh { 1 } else { 2 }
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("refreshes"))
+                .unwrap()
+                .lines()
+                .count(),
+            1
+        );
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains(if fail_refresh {
+                "credential refresh failed"
+            } else {
+                "auth failed after refresh"
+            })
+        );
+    }
+}
+#[test]
+fn credential_recovery_requires_dedicated_codes_and_explicit_retry_safety() {
+    for policy in [
+        json!({"secret_ids":["11111111-2222-3333-4444-555555555555"],"failure_codes":[1],"refresh":["true"],"retry_safe":true}),
+        json!({"secret_ids":["11111111-2222-3333-4444-555555555555"],"failure_codes":[77],"refresh":["true"],"retry_safe":false}),
+    ] {
+        let (dir, config) = fixture(
+            json!([{"id":"auth","apply":["touch","must-not-run"],"credential_recovery":policy}]),
+        );
+        assert!(!invoke(dir.path(), &config, &[]).status.success());
+        assert!(!dir.path().join("must-not-run").exists());
+    }
+}

@@ -350,3 +350,37 @@ with `TJIKUP_SECRET_TIMING=1` reports provider requests and cache hits without
 values or identifiers. `cache.directory` can select an absolute cache location;
 `cache.keyring_command` selects a Secret Service CLI compatible with
 `secret-tool lookup/store` (primarily for integration tests).
+
+### Authentication recovery for recipes
+
+Recipes can explicitly declare dedicated authentication exit codes and one safe
+retry. Generic exit 1, cancellation codes, and overlapping skip/stop codes cannot
+trigger recovery. For example:
+
+```json
+{
+  "id": "authenticated-check",
+  "check": ["service-check", "--auth-error-code", "77"],
+  "credential_recovery": {
+    "secret_ids": ["11111111-2222-3333-4444-555555555555"],
+    "failure_codes": [77],
+    "retry_safe": true,
+    "refresh": ["tjikup", "files", "apply", "--manifest", "{config_dir}/credentials.json", "--state-dir", "/absolute/state"]
+  }
+}
+```
+
+The refresh command receives `TJIKUP_REFRESH_SECRETS` containing only those IDs,
+plus a refresh-generation token that coalesces dependent renders. It must update
+whatever the original command actually consumes, including regenerating a script
+if credentials were embedded in that script. Do not add `--refresh-secrets` to
+this command: that flag deliberately broadens an explicit manual refresh to all
+referenced IDs. After a successful refresh, the original check/apply command is
+retried once. The live spinner reports credential failure and refresh progress;
+a second authentication failure or failed refresh ends the recipe. Resources
+remain leased across the entire sequence. Diagnostic logs retain both attempts,
+but stale first-attempt status rows cannot turn a recovered retry into failure.
+
+Existing recipes without this declaration are never automatically retried. A
+service runner owns its own authentication checks and refresh policy; Tjikup does
+not schedule service refreshes or infer authentication failures from log text.
