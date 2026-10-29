@@ -58,7 +58,7 @@ Other tone values use the theme accent. Urgency controls the notification's
 priority and default lifetime independently of its status text.
 
 Set `"rainbow-text": true` to render a status state character-by-character in
-the built-in accent palette. This is intended for celebratory, compact states
+Tjikup's six-colour rainbow palette. This is intended for celebratory, compact states
 such as `ALL SYSTEMS GO`; the status tone still controls the leading indicator.
 
 ## Update one card in place
@@ -151,7 +151,9 @@ Each row in `results` has a `label`, `value`, optional `tone`, and optional
 `ingredients`: secondary rows with `label` and `value`. The footer accepts
 `state` (defaults to `Running`), `tone`, and `duration`. Critical row values use
 the error accent; other values use the theme accent. Footer tone supports
-`critical`, `success`, or the theme accent. Text is rendered literally.
+`critical`, `success`, or the theme accent. Set `"rainbow-text": true` to colour
+the footer state character-by-character, matching Tjikup's completion banner.
+Text is rendered literally, including when rainbow colouring is enabled.
 
 ```sh
 notjikctl send 'Surface survey complete' --app survey --id sector-report \

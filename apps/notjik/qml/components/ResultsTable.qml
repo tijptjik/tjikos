@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "Rainbow.js" as Rainbow
 
 ColumnLayout {
     id: results
@@ -80,8 +81,10 @@ ColumnLayout {
         Layout.fillWidth: true
         Text {
             Layout.fillWidth: true
-            text: results.notice.data.state || "Running"
-            textFormat: Text.PlainText
+            readonly property string state: results.notice.data.state || "Running"
+            readonly property bool rainbow: results.notice.data["rainbow-text"] === true
+            text: rainbow ? Rainbow.text(state) : state
+            textFormat: rainbow ? Text.StyledText : Text.PlainText
             color: results.notice.data.tone === "critical" ? results.theme.critical : results.notice.data.tone === "success" ? results.theme.success : results.theme.accent
             font { family: results.theme.font; pixelSize: results.theme.fontSize - 1; bold: true }
         }

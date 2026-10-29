@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "Rainbow.js" as Rainbow
 
 Rectangle {
     id: component
@@ -9,16 +10,6 @@ Rectangle {
     implicitHeight: row.implicitHeight + 20
     radius: Math.max(4, component.theme.radius - 6)
     color: Qt.darker(component.theme.background, 1.22)
-    function escaped(value) {
-        return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
-    }
-    function rainbowText(value) {
-        const colors = ["#f6c177", "#eb6f92", "#c4a7e7", "#9ccfd8", "#ebbcba"];
-        return Array.from(String(value)).map((character, index) =>
-            character === " " ? " " : "<font color=\"" + colors[index % colors.length]
-                + "\">" + escaped(character) + "</font>").join("");
-    }
     RowLayout {
         id: row
         anchors { fill: parent; leftMargin: 12; rightMargin: 12; topMargin: 10; bottomMargin: 10 }
@@ -33,7 +24,7 @@ Rectangle {
             Layout.maximumWidth: row.width * 0.55
             readonly property string state: component.notice.data.state || "Status"
             readonly property bool rainbow: component.notice.data["rainbow-text"] === true
-            text: rainbow ? component.rainbowText(state) : state
+            text: rainbow ? Rainbow.text(state) : state
             // StyledText keeps the same compact line box as a plain status label.
             textFormat: rainbow ? Text.StyledText : Text.PlainText
             elide: Text.ElideRight

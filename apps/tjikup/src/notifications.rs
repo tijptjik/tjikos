@@ -21,6 +21,8 @@ pub struct Data {
     state: String,
     duration: String,
     tone: String,
+    #[serde(default, rename = "rainbow-text")]
+    rainbow_text: bool,
     results: Vec<Row>,
 }
 #[derive(Deserialize, Serialize)]
@@ -247,6 +249,7 @@ pub fn completion(receipt: &Receipt, focus: Option<&Vec<String>>) {
             .join("\n"),
         data: Data {
             state: state.into(),
+            rainbow_text: state == "ALL SYSTEMS GO",
             duration: format!("{:.0}s", receipt.seconds),
             tone: if receipt.exit_code() != 0 {
                 "critical"
