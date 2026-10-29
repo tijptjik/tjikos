@@ -408,3 +408,24 @@ date in `$XDG_CACHE_HOME/tjikup/fedora-release-VERSION.json` (default
 metadata never triggers an early availability check. Exit 2 means not due yet,
 with a short status on stdout; exit 0 prints the latest stable version. The
 Dotjik recipe retains its end-of-run upgrade prompt and seven-day deferral.
+
+## Weekly unattended runs
+
+`tjikup scheduled` runs the normal workflow and sends its result to a pinned
+Telegram message per device. It preserves normal workflow/resource locks and
+reports stopped or blocked work as ATTENTION, even when the workflow exits zero.
+Initialization failures are reported as FAILED; private error and log content
+never enters the Telegram message. Normal workflow flags can follow `scheduled`.
+
+Store `bot_token`, `chat_id`, and optional `topic_id` in a mode-0600 JSON file at
+`~/.config/tjikup/telegram.json` (or `TJIKUP_TELEGRAM_CONFIG`). The bot needs send,
+edit, and pin permission in that destination. Missing credentials fail before
+maintenance starts. `tjikup scheduled --notify-test` verifies delivery without
+running maintenance. `--notify-only` retries the saved report without rerunning
+updates. Delivery failure fails the service and retains the report under
+`~/.local/state/tjikup/scheduled/`. A killed process leaves an INCOMPLETE record;
+inspect the user service journal if a scheduled completion is missing.
+
+The fleet's Dotjik policy owns `tjikup-weekly.timer` (Sunday 09:00
+`Asia/Hong_Kong`, persistent catch-up) and its user service. No standalone DNF
+updater is needed; package updates run through the ordinary Tjikup recipes.

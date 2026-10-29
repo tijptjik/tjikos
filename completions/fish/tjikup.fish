@@ -167,3 +167,7 @@ complete -c tjikup -n '__tjikos_context prefix workflow cache-install' -l input 
 complete -c tjikup -n '__tjikos_context prefix workflow cache-install' -l output -d Output -r -F
 complete -c tjikup -n '__tjikos_context prefix workflow capture' -l dry-run -d 'Dry run'
 complete -c tjikup -n '__tjikos_context prefix sync' -a '(complete -C (string join " " -- synctjik (string escape -- (commandline -opc)[3..-1]) (string escape -- (commandline -ct))))'
+
+complete -c tjikup -n '__tjikos_context exact' -a scheduled -d 'Weekly workflow with pinned Telegram status'
+complete -c tjikup -n '__tjikos_context exact scheduled' -l notify-only -d 'Retry the saved Telegram status'
+complete -c tjikup -n '__tjikos_context exact scheduled' -l notify-test -d 'Verify Telegram delivery without maintenance'

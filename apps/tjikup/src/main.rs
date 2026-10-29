@@ -17,6 +17,7 @@ mod process;
 mod progress;
 mod remote;
 mod report;
+mod scheduled;
 mod scheduler;
 mod selection;
 mod stage_progress;
@@ -48,8 +49,8 @@ fn default_config() -> PathBuf {
         })
 }
 
-fn cli() -> Result<i32> {
-    let mut args = std::env::args().skip(1).peekable();
+fn cli(arguments: Vec<String>, completed: &mut Option<scheduler::Receipt>) -> Result<i32> {
+    let mut args = arguments.into_iter().peekable();
     if args.peek().is_some_and(|s| s == "system") {
         args.next();
         return system_maintenance::cli(args.collect());
@@ -129,7 +130,7 @@ fn cli() -> Result<i32> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
-                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --refresh-secrets   Refresh referenced Bitwarden secrets, bypassing the local cache\n  --alphabetical   Buffer each section and sort its results by application name\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --show-skips-and-other-devices   Also list excluded recipes; never execute them\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  config <home|system>   Plan, apply, locate or edit configuration\n  git <push|sync>   Synchronize declared repositories with shared locks\n  ssh HOST   Connect once using pinned fleet identity\n  system <command>   Native host maintenance (system --help)\n  workflow <command>   Native policy helpers (workflow --help)\n  sync <command>   Delegate archival and restoration to synctjik\n  notify --stdin   Deliver validated display metadata to local notjikctl");
+                println!("tjikup [--config PATH] [--check | --plan | --dry-run] [--jobs N] [workflow flags]\n\nRun a version 2 declarative recipe graph.\n  --check    Validate configuration without executing commands\n  --plan     Print dependency/resource plan without executing commands\n  --dry-run  Alias for --plan; checks and previews are not executed\n  --jobs N   Override the worker limit\n  --refresh-secrets   Refresh referenced Bitwarden secrets, bypassing the local cache\n  --alphabetical   Buffer each section and sort its results by application name\n  --show-skips   Show unchanged checks and skipped tasks with their reasons\n  --show-skips-and-other-devices   Also list excluded recipes; never execute them\n  --demo [changed|unchanged|attention]   Synthetic terminal preview\n  new device   Enroll this host and choose its role and recipe subscriptions\n  files <check|plan|apply|restore>   Native file deployment (see docs/native-files.md)\n  config <home|system>   Plan, apply, locate or edit configuration\n  git <push|sync>   Synchronize declared repositories with shared locks\n  ssh HOST   Connect once using pinned fleet identity\n  system <command>   Native host maintenance (system --help)\n  workflow <command>   Native policy helpers (workflow --help)\n  sync <command>   Delegate archival and restoration to synctjik\n  scheduled   Run unattended with pinned Telegram status (scheduled --help)\n  notify --stdin   Deliver validated display metadata to local notjikctl");
                 println!("\nRecipe selection (combinable):\n  --apply-dotfiles          Home configuration and its reloads only\n  --apply-sysfiles          System configuration and its reloads only\n  --apply-package-updates   Updates of installed applications only\n  --skip-package-updates    Install missing applications and configure; no updates\nSelected modes use local checks for installation dependencies; they never run installers or repository synchronization.");
                 return Ok(0);
             }
@@ -243,10 +244,23 @@ fn cli() -> Result<i32> {
     let focus = notifications::focus();
     let (receipt, _path) = scheduler::run(config, cancelled)?;
     notifications::completion(&receipt, focus.as_ref());
-    Ok(receipt.exit_code())
+    let code = receipt.exit_code();
+    *completed = Some(receipt);
+    Ok(code)
 }
 fn main() {
-    std::process::exit(match cli() {
+    let mut arguments: Vec<String> = std::env::args().skip(1).collect();
+    let scheduled = arguments.first().is_some_and(|arg| arg == "scheduled");
+    if scheduled {
+        arguments.remove(0);
+    }
+    let mut receipt = None;
+    let result = if scheduled {
+        scheduled::run(arguments)
+    } else {
+        cli(arguments, &mut receipt)
+    };
+    std::process::exit(match result {
         Ok(code) => code,
         Err(error) => {
             eprintln!("tjikup: {error:#}");
