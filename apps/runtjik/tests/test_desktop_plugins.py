@@ -75,12 +75,14 @@ class DesktopPluginTests(unittest.TestCase):
     def test_window_and_workspace_targets_revalidate(self):
         provider = d.Screenshots()
         monitor = {'name': 'DP-1', 'activeWorkspace': {'id': 2, 'name': '2'}}
-        with patch.object(d, 'hypr', return_value=[monitor]), patch.object(d.shutil, 'which', return_value='/tool'):
-            rows = provider.query('/grab workspace', self.settings)
+        with patch.object(d, 'hypr', return_value=[monitor]), patch.object(d.shutil, 'which', return_value='/tool'), patch.object(d, 'recorder_request', return_value=None):
+            self.assertEqual(provider.query('/grab workspace', self.settings), provider.query('/grab screen', self.settings))
+            recorder = d.Recorder()
+            rows = recorder.query('/rec workspace', self.settings)
             self.assertEqual(rows[0]['data']['workspace'], 2)
             monitor['activeWorkspace']['id'] = 3
             with self.assertRaisesRegex(ValueError, 'Workspace changed'):
-                provider.activate(r.Entry(**rows[0]), self.settings, 'launch')
+                recorder.activate(r.Entry(**rows[0]), self.settings, 'launch')
         with patch.object(d, 'hypr', return_value=[]), patch.object(d.shutil, 'which', return_value='/tool'):
             with self.assertRaisesRegex(ValueError, 'closed'):
                 provider.capture({'capture': 'window', 'target': '0x123'}, self.settings['plugin_settings']['Screenshots'])

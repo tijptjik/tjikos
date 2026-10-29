@@ -498,12 +498,15 @@ Bundled desktop plugins:
   monitor; region uses `slurp`; window uses the desktop portal picker through
   `gpu-screen-recorder`, following the selected window. Screen/region/workspace
   use `wf-recorder`. Workspace lists currently visible workspaces and records that
-  monitor until the workspace changes. Switching is detected by polling, so a
+  monitor until that monitor changes workspace. Moving the mouse or focusing
+  another monitor does not stop it; changing another monitor’s workspace does
+  not stop it either. Switching is detected by polling, so a
   transition can appear before recording stops; this is not background capture of
   a hidden workspace. A Stop row controls only Runtjik's recorder, never another
   recording tool or the existing `screen-record.service`.
 - **Screenshots** registers `/grab`, with `/shot` and `/screenshot` as aliases.
-  Screen/workspace select a monitor/visible workspace; window focuses the selected
+  Screen selects a monitor; the legacy screenshot `workspace` command aliases
+  Screen. Window focuses the selected
   window and captures its visible rectangle; region uses `slurp` (Escape cancels).
   Uses `grim`, and optionally copies the saved PNG with `wl-copy`. Window screenshots
   capture the composited area, so overlapping overlays can be included.

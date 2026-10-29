@@ -70,9 +70,11 @@ ShellRoot {
     readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(commandQuery)
     readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(commandQuery)
     readonly property bool captureMenu: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord)$/.test(commandQuery.trim())
+    readonly property bool captureRecording: /^\/(rec|screenrecord)( |$)/.test(commandQuery)
+    readonly property int captureChoices: captureRecording ? 4 : 3
     readonly property bool galleryEmpty: galleryMode && results.length === 1 && !!results[0].empty_state
     readonly property string galleryProvider: /^\/(rec|screenrecord) /.test(commandQuery) ? 'Recorder' : 'Screenshots'
-    readonly property int gridColumns: captureMenu ? 2 : galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
+    readonly property int gridColumns: captureMenu ? (captureRecording ? 2 : 3) : galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
     readonly property int galleryRows: settings.plugin_settings?.[galleryProvider]?.gallery_rows || 3
     property bool providerPending: false
     property var commandHistory: []
@@ -505,7 +507,7 @@ ShellRoot {
                                 NumberAnimation {properties:'x,y';duration:220;easing.type:Easing.OutCubic}
                             }
                             cellWidth:root.listMode?width:width/root.gridColumns
-                            cellHeight:root.captureMenu?height/4:root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
+                            cellHeight:root.captureMenu?height/(root.captureRecording?4:2):root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
                             currentIndex:root.selected
                             boundsBehavior:Flickable.StopAtBounds
                             onContentYChanged: {
@@ -553,7 +555,7 @@ ShellRoot {
                                 readonly property var modelData: row
                                 readonly property bool closing: root.closingIds.includes(modelData.id)
                                 required property int index
-                                width:root.captureMenu && index===4 && root.results.length===5?items.width-6:root.listMode?items.cellWidth:items.cellWidth-6;height:root.captureMenu && index>=4?items.height/2-6:items.cellHeight-6;radius:12
+                                width:root.captureMenu && index===root.captureChoices && root.results.length===root.captureChoices+1?items.width-6:root.listMode?items.cellWidth:items.cellWidth-6;height:root.captureMenu && index>=root.captureChoices?items.height/2-6:items.cellHeight-6;radius:12
                                 color:index===root.selected?root.theme.surface:'transparent'
                                 border.width:index===root.selected?1:0
                                 border.color:root.theme.accent
@@ -573,7 +575,7 @@ ShellRoot {
                                         NumberAnimation {to:1;duration:450;easing.type:Easing.InOutSine}
                                         onRunningChanged: if(!running)art.opacity=1
                                     }
-                                    x:root.galleryMode?6:root.listMode?16:(parent.width-width)/2;y:root.captureMenu?(index>=4?parent.height/2-48:10):root.galleryMode?6:root.wordMode?14:root.listMode?(parent.height-height)/2:13
+                                    x:root.galleryMode?6:root.listMode?16:(parent.width-width)/2;y:root.captureMenu?(index>=root.captureChoices || !root.captureRecording?parent.height/2-48:10):root.galleryMode?6:root.wordMode?14:root.listMode?(parent.height-height)/2:13
                                     width:root.captureMenu?40:root.galleryMode?parent.width-12:modelData.thumbnail?100:root.wordMode?28:root.listMode?40:root.settings.ui.icon_size
                                     height:root.galleryMode?parent.height-38:modelData.thumbnail?54:width
                                     source:parent.iconSource;sourceSize.width:width*2;sourceSize.height:height*2
@@ -624,8 +626,8 @@ ShellRoot {
                                     x:titleArea.x;y:titleArea.y+titleArea.height+4;width:titleArea.width
                                     text:modelData.subtitle
                                     textFormat:Text.PlainText
-                                    wrapMode:root.wordMode?Text.Wrap:Text.NoWrap
-                                    maximumLineCount:root.wordMode?2:1
+                                    wrapMode:root.wordMode || root.captureMenu?Text.Wrap:Text.NoWrap
+                                    maximumLineCount:root.wordMode || root.captureMenu?2:1
                                     color:root.theme.muted;font.family:root.settings.ui.font;font.pixelSize:10
                                     elide:Text.ElideRight
                                 }

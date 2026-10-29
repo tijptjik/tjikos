@@ -293,6 +293,8 @@ class CaptureProvider(DesktopProvider):
             return []
         base = self.base
         term = term.strip()
+        if self.name == 'Screenshots' and term == 'workspace':
+            term = 'screen'  # Compatibility for saved launcher commands.
         if term == 'history' or term.startswith('history '):
             return self.history(term[7:].strip(), settings)
         if term in ('screen', 'workspace', 'window'):
@@ -306,16 +308,18 @@ class CaptureProvider(DesktopProvider):
                                  f"Workspace {c['workspace']['name']} · visible window area", capture=term, target=c['address']) for c in clients]
             monitors = sorted(hypr('monitors'), key=lambda m: (m['name'] if term == 'screen' else str(visible_workspace(m)['name'])).casefold())
             return [self.row(m['name'], m['name'] if term == 'screen' else 'Workspace ' + str(visible_workspace(m)['name']),
-                             m.get('description', '') if term == 'screen' else m['name'] + (' · visible area; recording stops when switched' if self.name == 'Recorder' else ' · visible area only, excluding offscreen content'),
+                             m.get('description', '') if term == 'screen' else m['name'] + (' · stops when this monitor changes workspace' if self.name == 'Recorder' else ' · visible area only, excluding offscreen content'),
                              capture=term, target=m['name'], workspace=visible_workspace(m)['id']) for m in monitors]
         rows = [
             self.row('region', 'Region', 'Drag to select an area · Escape cancels', capture='region'),
             self.row('window', 'Window', 'Choose a window', edit=base + ' window'),
-            self.row('workspace', 'Workspace', 'Visible workspace area only', edit=base + ' workspace'),
-            self.row('screen', 'Screen', 'Choose a monitor', edit=base + ' screen'),
+            self.row('workspace', 'Workspace', 'Stops when this monitor changes workspace', edit=base + ' workspace'),
+            self.row('screen', 'Screen', 'Keeps recording across workspace changes' if self.name == 'Recorder' else 'Capture a monitor', edit=base + ' screen'),
             self.row('history', 'Previous recordings' if self.name == 'Recorder' else 'Previous screenshots',
                      'Browse your gallery · Enter opens it', edit=base + ' history'),
         ]
+        if self.name == 'Screenshots':
+            rows = [row for row in rows if row['id'] != 'Screenshots:workspace']
         if self.name == 'Recorder':
             status = {'file': 'Synthetic recording.mp4'} if self.demo else recorder_request()
             if status:

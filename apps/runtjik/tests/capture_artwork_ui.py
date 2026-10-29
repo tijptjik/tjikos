@@ -40,10 +40,11 @@ with tempfile.TemporaryDirectory(prefix="runtjik-empty-", dir="/dev/shm") as emp
                 if 'history' in query:
                     assert rows[0]['empty_state'] and rows[0]['disabled']
                 else:
-                    assert [row['name'] for row in rows[:4]] == ['Region', 'Window', 'Workspace', 'Screen']
+                    expected = ['Region', 'Window', 'Workspace', 'Screen'] if query == '/rec' else ['Region', 'Window', 'Screen']
+                    assert [row['name'] for row in rows[:len(expected)]] == expected
                     assert len({r['icon'] for r in rows}) == len(rows)
                     assert all(Path(r['icon']).is_file() for r in rows)
-                time.sleep(.4)
+                time.sleep(1.2)
                 ipc('capture', str(temp / (name + '.png')))
                 wait_for(lambda: (temp / (name + '.png')).exists())
                 if 'history' in query:
