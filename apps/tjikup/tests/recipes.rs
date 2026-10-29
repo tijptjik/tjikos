@@ -599,7 +599,7 @@ fn show_skips_explains_checks_conditions_and_reports_without_changing_execution(
     let text = String::from_utf8_lossy(&verbose.stderr);
     for expected in [
         "SKIP",
-        "Assets (Fonts)",
+        "Assets (fonts)",
         "no changes",
         "Server services",
         "not applicable",

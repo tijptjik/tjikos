@@ -193,12 +193,9 @@ fn companions_follow_subscriptions_and_survive_operation_selection() {
 }
 
 #[test]
-fn legacy_roles_filter_execution_even_when_showing_other_devices() {
+fn enrolled_devices_filter_execution_even_when_showing_other_devices() {
     let dir = setup();
-    let path = dir.path().join("config.json");
-    let mut config: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    config["legacy_roles"] = json!({hostname(): "desktop"});
-    fs::write(path, serde_json::to_vec(&config).unwrap()).unwrap();
+    assert!(enroll(&dir, "desktop", "all").status.success());
     let output = run(&dir, &["--show-skips"]);
     assert!(
         output.status.success(),
