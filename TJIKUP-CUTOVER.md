@@ -76,13 +76,19 @@ Validation: workspace `bun run build` passed with a writable temporary Go cache;
 including Fi/Li/Si template rendering. The first validation encountered icon
 files changing concurrently; the completed second run passed.
 
-## 2. Li: pending connectivity
+## 2. Li: files cut over; service convergence blocked
 
-The native fleet resolver found no reachable, verified SSH address. Resume when
-Li is awake and connected. Use the pinned host identity, inspect its dirty state
-and running workers, then install capable native runners and review the home
-and system plans separately. Repeat the desktop acceptance check before retiring
-the old installation. Do not substitute an unverified remembered IP address.
+Li is reachable through the pinned native fleet resolver. Its paused rebase and
+live settings were reconciled, including a separate Li Herdr session template.
+Native runners and completions are installed. Home, credential and system file
+deployments completed with rollback receipts, and all three final checks passed.
+
+Automatic approval review blocked the remaining service-convergence workflow
+because it can disable legacy rclone services, enable storage timers and start
+Docker. Package updates remain pending. Legacy backup timers are retired and
+replacement Synctjik timers are still inactive: scheduling is not yet converged.
+See [LI-CUTOVER-AUDIT.md](LI-CUTOVER-AUDIT.md) for the precise checkpoint,
+approval boundary, recovery evidence and the 82-second Plymouth boot stall.
 
 ## 3. Si: system cut over; home queued behind backup
 
