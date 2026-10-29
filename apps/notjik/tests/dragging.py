@@ -35,7 +35,7 @@ def run():
                 stack:visibleNotices.map(n=>n.id)};
             case "pointer": {
                 const panel = request.floating ? floatingPanels.instances.find(p=>p.noticeId===request.id) : popupPanels.instances[0];
-                panel.pointer(request.phase, request.x, request.y); return {ok:true};
+                panel.pointer(request.phase, request.x, request.y, request.control); return {ok:true};
             }
             case "dragCapture": floatingPanels.instances.find(p=>p.noticeId===request.id).capture(request.id, request.path); return {ok:true};
             case "testLock": lockState = request.locked ? "locked" : "unlocked"; return {ok:true};
@@ -64,11 +64,12 @@ def run():
             code = panel.read_text().replace("import QtQuick\n", "import QtQuick\nimport QtTest\n", 1)
             code = code.replace("    id: panel", '''    id: panel
     TestEvent { id: testEvents }
-    function pointer(phase, x, y) {
-        if (phase === "hover") testEvents.mouseMove(panel.contentItem, x, y, 0, Qt.NoButton, Qt.NoModifier);
-        if (phase === "press") testEvents.mousePress(panel.contentItem, x, y, Qt.LeftButton, Qt.NoModifier, 0);
-        if (phase === "move") testEvents.mouseMove(panel.contentItem, x, y, 0, Qt.LeftButton, Qt.NoModifier);
-        if (phase === "release") testEvents.mouseRelease(panel.contentItem, x, y, Qt.LeftButton, Qt.NoModifier, 0);
+    function pointer(phase, x, y, control) {
+        const modifiers = control ? Qt.ControlModifier : Qt.NoModifier;
+        if (phase === "hover") testEvents.mouseMove(panel.contentItem, x, y, 0, Qt.NoButton, modifiers);
+        if (phase === "press") testEvents.mousePress(panel.contentItem, x, y, Qt.LeftButton, modifiers, 0);
+        if (phase === "move") testEvents.mouseMove(panel.contentItem, x, y, 0, Qt.LeftButton, modifiers);
+        if (phase === "release") testEvents.mouseRelease(panel.contentItem, x, y, Qt.LeftButton, modifiers, 0);
     }
     function testCards() { return ''' + expression + '''.filter(c=>c).map(c=>c.testGeometry()); }
     function capture(id, path) {
@@ -98,8 +99,8 @@ def run():
                 def card(ident, floating=False, monitor=0):
                     values = state()["floats"] if floating else state()["popups"]
                     return next((c for c in values if c["id"]==ident), None)
-                def pointer(phase, x, y, floating=False, monitor=0, ident=None):
-                    call("pointer", phase=phase, x=x, y=y, floating=floating, monitor=monitor, id=ident)
+                def pointer(phase, x, y, floating=False, monitor=0, ident=None, control=False):
+                    call("pointer", phase=phase, x=x, y=y, floating=floating, monitor=monitor, id=ident, control=control)
                 def gesture(ident, dx=90, dy=-90, floating=False, point=None, monitor=0):
                     c = card(ident, floating, monitor)
                     x, y = point or (c["width"]/2, 35)
@@ -118,12 +119,12 @@ def run():
                         pointer("hover",c["x"]+c["width"]/2,c["y"]+35,floating,monitor,ident)
                         time.sleep(.08)
                     return card(ident,floating,monitor)
-                def click(ident, floating=False, button=None, monitor=0):
+                def click(ident, floating=False, button=None, monitor=0, control=False):
                     c = reveal(ident, floating, monitor) if button else card(ident, floating, monitor)
                     point = next(b for b in c["buttons"] if b["text"]==button) if button else {"x":c["width"]/2,"y":35}
                     x, y = c["x"]+point["x"], c["y"]+point["y"]
-                    pointer("press", x,y,floating,monitor,ident)
-                    pointer("release",x,y,floating,monitor,ident)
+                    pointer("press", x,y,floating,monitor,ident,control)
+                    pointer("release",x,y,floating,monitor,ident,control)
                 def clients():
                     return json.loads(subprocess.check_output(["hyprctl","-j","clients"],text=True))
                 def client(ident):
@@ -136,6 +137,14 @@ def run():
                 wait_for(lambda: card(ident))
                 click(ident)
                 wait_for(lambda: not live(ident))
+                # Ctrl+click clears other groups and notices hidden behind the visible cap.
+                ident = send("Grouped older", app="synthetic-group")
+                grouped = send("Grouped newer", app="synthetic-group")
+                queued = [send(f"Queued {index}", app=f"synthetic-{index}") for index in range(7)]
+                wait_for(lambda: card(ident))
+                assert grouped not in state()["stack"] and len(state()["stack"]) < len(queued) + 2
+                click(ident, control=True)
+                wait_for(lambda: not call("list")["notices"] and not state()["popups"])
                 ident = send(timeout=1200)
                 wait_for(lambda: card(ident))
                 during = gesture(ident)
@@ -238,8 +247,18 @@ def run():
                 click(final_id,True,"Finish")
                 wait_for(lambda:final_marker.exists() and not live(final_id))
                 wait_for(lambda:not state()["ids"] and not state()["popups"])
+                ident = send("Ctrl+click floating notice")
+                wait_for(lambda: card(ident))
+                gesture(ident)
+                wait_for(lambda: card(ident, True) and card(ident, True)["placed"])
+                other = send("Outstanding popup")
+                wait_for(lambda: card(other))
+                click(ident, True)
+                assert live(ident) and live(other), "Plain floating click dismissed notices"
+                click(ident, True, control=True)
+                wait_for(lambda: not call("list")["notices"] and not state()["ids"] and not state()["popups"])
                 time.sleep(.1)
-                print("PASS: click, detach, repeat drag, timeout pinning, updates, close, action exclusions and activation, grouping, multiple panels, native window identity, workspace transfer, compositor movement and close, cleanup")
+                print("PASS: click, Ctrl+click clears grouped/queued/floating notices, detach, repeat drag, timeout pinning, updates, close, action exclusions and activation, grouping, multiple panels, native window identity, workspace transfer, compositor movement and close, cleanup")
             finally:
                 process.terminate()
                 process.wait(timeout=5)

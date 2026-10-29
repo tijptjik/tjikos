@@ -85,6 +85,11 @@ PanelWindow {
         for (let i = 0; i < cards.count; ++i)
             if (cards.get(i).noticeKey === key && cards.get(i).retiring) { cards.remove(i); break; }
     }
+    function deferRemove(key) {
+        // Keep the callback outside the retiring delegate's lifetime, and give
+        // each key its own callback so callLater cannot coalesce bulk removals.
+        Qt.callLater(() => panel.finishRemove(key));
+    }
     function advanceFlow(seconds) {
         const slots = [];
         for (let i = 0; i < cardItems.count; ++i) {
@@ -275,7 +280,7 @@ PanelWindow {
                                 exitY = slot.mapToItem(exitLayer, 0, slot.height - card.height).y;
                                 if (extent <= 0 || reveal <= 0) {
                                     extent = 0;
-                                    Qt.callLater(() => panel.finishRemove(noticeKey));
+                                    panel.deferRemove(noticeKey);
                                 } else departure.start();
                             } else {
                                 exitDrop = 0;
@@ -309,7 +314,7 @@ PanelWindow {
                                 NumberAnimation { target: slot; property: "exitDrop"; to: Math.min(28, panel.outroPadding + card.height * 0.05); duration: panel.animationMs * 0.65; easing.type: Easing.InQuad }
                             }
                             NumberAnimation { target: slot; property: "extent"; to: 0; duration: panel.animationMs * 0.35; easing.type: Easing.InOutCubic }
-                            ScriptAction { script: Qt.callLater(() => panel.finishRemove(slot.noticeKey)) }
+                            ScriptAction { script: panel.deferRemove(slot.noticeKey) }
                         }
                         // An opaque backing prevents old text bleeding through the new face.
                         Rectangle {

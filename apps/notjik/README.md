@@ -159,7 +159,9 @@ use a shell. If a shell is needed, request it explicitly with `['sh','-c',...]`.
 Buttons invoke their command or the application's standard D-Bus action. Actions
 dismiss the notification unless it is resident (`--resident` or the standard
 `resident` hint). A standard `default` action appears as an explicit button.
-Clicking any non-interactive part of a popup dismisses it. Drag that area instead
+Clicking any non-interactive part of a popup dismisses it. **Ctrl+click** that area
+on a popup or floating notice to dismiss all outstanding notifications, including
+grouped and queued notices. Drag that area instead
 to detach the notice as a regular floating window on the current Hyprland
 workspace. It stays on that workspace when you switch away; focus it to use the
 usual move-to-workspace, move-to-monitor and close shortcuts. Floating notices stay open past their
@@ -169,7 +171,7 @@ onto another monitor. New notices and sender updates preserve the detached windo
 and its workspace. The managed Hyprland `notjik-detached` window rule supplies the
 initial floating style; only the initial drag preview uses a layer surface.
 Action buttons, media controls and text editors retain their own
-mouse gestures; clicking a floating panel's background leaves it open. Detaching
+mouse gestures; clicking a floating panel's background without Ctrl leaves it open. Detaching
 a grouped popup pins the displayed notice; its other messages remain in the stack.
 The surrounding desktop remains interactive. Use the wheel, touchpad or scrollbar
 to scroll a stack that exceeds the monitor height. `action`/`dismiss` provide keyboard-driven control through the CLI.

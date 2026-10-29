@@ -194,11 +194,14 @@ Rectangle {
             }
         }
         TapHandler {
+            id: cardTap
             gesturePolicy: TapHandler.DragThreshold
             onTapped: {
                 if (card.historyMode) {
                     if (card.controller.historySelectedKey === card.notice.historyKey) card.controller.historySelectedKey = "";
                     else card.controller.selectHistory(card.notice.historyKey);
+                } else if (cardTap.point.modifiers & Qt.ControlModifier) {
+                    card.controller.handle({op: "dismiss", id: "all"});
                 } else if (!card.floating) card.controller.close(card.notice.id, false);
             }
         }
