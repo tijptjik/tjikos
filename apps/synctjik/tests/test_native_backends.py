@@ -31,6 +31,15 @@ elif name == 'restic':
     if 'snapshots' in args:
         from datetime import datetime, timezone
         print(json.dumps([{'id':'a'*64, 'time':datetime.now(timezone.utc).isoformat(), 'hostname':os.environ.get('HOST_FIXTURE','fi'), 'tags':['private-storage']}]))
+elif name == 'bws':
+    assert os.environ['BWS_ACCESS_TOKEN'] == 'synthetic-token'
+    if os.environ.get('FAIL_BWS'):
+        print('synthetic-private-diagnostic', file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps({'id':'wrong' if os.environ.get('WRONG_SECRET') else args[2], 'value':'synthetic-crypt-config'}))
+elif name == 'age':
+    assert Path(args[-1]).read_text() == 'synthetic-crypt-config'
+    Path(args[args.index('-o') + 1]).write_text('synthetic-encrypted-config')
 '''
 
 
@@ -45,12 +54,13 @@ class NativeTests(unittest.TestCase):
         self.state = self.root / '.local/state/private-storage'
         self.bin = self.root / 'bin'
         self.bin.mkdir()
-        for name in ('hostname', 'ssh', 'rclone', 'restic', 'notify-send'):
+        for name in ('hostname', 'ssh', 'rclone', 'restic', 'notify-send', 'bws', 'age'):
             f = self.bin / name
             f.write_text(FAKE)
             f.chmod(0o700)
         self.calls = self.root / 'calls'
         self.env = {**os.environ, 'HOME':str(self.root), 'PATH':str(self.bin)+':/usr/bin:/bin', 'CALLS':str(self.calls)}
+        self.env.pop('BWS_ACCESS_TOKEN', None)
         self.policy = dict(sharing_approved=True, folders=['documents'], remote='fixture:private', backup_root=str(self.root/'server'), crypt_secret_id='fixture', ssh_command=['ssh'], ssh_hosts=['si'], ssh_hostname='si', drive_remote='fixture:', server_mount_root='/fixture')
         self.save_policy()
         (self.root/'documents').mkdir()
@@ -70,6 +80,33 @@ class NativeTests(unittest.TestCase):
         p = self.state/'bisync/documents/initialized.json'
         p.parent.mkdir(parents=True)
         p.write_text(json.dumps({'host':host,'remote':'fixture:private/documents'}))
+
+    def test_crypt_password_native_secret_provider_and_atomic_failure(self):
+        self.policy['crypt_secret_id'] = '00000000-0000-0000-0000-000000000001'
+        self.save_policy()
+        token = self.root / '.config/bws/environment'
+        token.parent.mkdir()
+        token.write_text('BWS_ACCESS_TOKEN=synthetic-token\n')
+        token.chmod(0o600)
+        encrypted = self.config / 'crypt.conf.age'
+        encrypted.write_text('previous')
+        for flag in ('FAIL_BWS', 'WRONG_SECRET'):
+            self.env[flag] = '1'
+            result = self.run_native('crypt-password', ok=False)
+            self.assertNotIn('synthetic-private-diagnostic', result.stderr)
+            self.assertEqual(encrypted.read_text(), 'previous')
+            del self.env[flag]
+        token.chmod(0o644)
+        self.run_native('crypt-password', ok=False)
+        self.assertEqual(encrypted.read_text(), 'previous')
+        token.chmod(0o600)
+        self.run_native('crypt-password')
+        self.assertEqual(encrypted.read_text(), 'synthetic-encrypted-config')
+        self.assertEqual(encrypted.stat().st_mode & 0o777, 0o600)
+        self.assertFalse(list(self.state.glob('crypt-password-*')))
+        token.unlink()
+        self.env['BWS_ACCESS_TOKEN'] = 'synthetic-token'
+        self.run_native('crypt-password')
 
     def test_sync_guards_and_success_receipts(self):
         self.run_native('sync',ok=False)

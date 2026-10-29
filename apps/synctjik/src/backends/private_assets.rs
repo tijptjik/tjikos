@@ -506,13 +506,47 @@ impl<'a> App<'a> {
         let temp = tempfile::Builder::new()
             .prefix("crypt-password-")
             .tempdir_in(&self.state)?;
-        let bytes = self.run(&[
-            path(&self.home.join(".local/share/dotjik/home/.bws-wrapper.fish")),
-            "secret".into(),
-            "get".into(),
-            self.p.crypt_secret_id.clone(),
-        ])?;
-        let secret: Value = serde_json::from_slice(&bytes)?;
+        // Use Secrets Manager directly; credentials stay outside policy and
+        // subprocess diagnostics are withheld by Runner.
+        let token = match std::env::var("BWS_ACCESS_TOKEN") {
+            Ok(value) if !value.trim().is_empty() => value,
+            _ => {
+                let credentials = secret(&self.home.join(".config/bws/environment"))?;
+                let tokens: Vec<_> = credentials
+                    .lines()
+                    .filter_map(|line| line.strip_prefix("BWS_ACCESS_TOKEN="))
+                    .collect();
+                ensure!(
+                    tokens.len() == 1 && !tokens[0].trim().is_empty(),
+                    "Bitwarden credential file requires one BWS_ACCESS_TOKEN entry"
+                );
+                tokens[0].trim().to_owned()
+            }
+        };
+        let id = &self.p.crypt_secret_id;
+        ensure!(
+            id.len() == 36
+                && id.bytes().enumerate().all(|(i, c)| {
+                    if [8, 13, 18, 23].contains(&i) {
+                        c == b'-'
+                    } else {
+                        c.is_ascii_hexdigit()
+                    }
+                }),
+            "Bitwarden secret identifier must be a UUID"
+        );
+        let bytes = self.runner.run(
+            Command::new("bws")
+                .args(["secret", "get", id, "--output", "json", "--color", "no"])
+                .env("BWS_ACCESS_TOKEN", token)
+                .stdin(Stdio::null()),
+        )?;
+        let secret: Value = serde_json::from_slice(&bytes)
+            .map_err(|_| anyhow::anyhow!("Bitwarden returned invalid JSON"))?;
+        ensure!(
+            secret["id"].as_str() == Some(id),
+            "Bitwarden returned a different secret identifier"
+        );
         let plain = temp.path().join("config");
         fs::write(
             &plain,

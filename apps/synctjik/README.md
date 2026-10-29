@@ -125,6 +125,9 @@ synctjik cloudflare backup
 ```
 
 Both `rclone` and `restic` are runtime dependencies; Python is not.
+`private-assets crypt-password` uses the `bws` CLI directly, authenticating with
+`BWS_ACCESS_TOKEN` or the owner-only `~/.config/bws/environment` file. It invokes
+`age` interactively and replaces `crypt.conf.age` only after encryption succeeds.
 Private-assets sync uses **rclone bisync** to keep the configured local folders
 and encrypted Drive remote in step. Private-assets backup separately creates
 **encrypted Restic snapshots on Si**, retaining recoverable history even when
