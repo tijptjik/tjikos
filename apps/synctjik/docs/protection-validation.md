@@ -1,11 +1,13 @@
 # Protection migration evidence — 2026-10-29
 
 Native implementation and synthetic recovery are complete. Live acceptance is
-**not complete**: deployment remains outstanding, and the inspected local routing
-still uses the previous Python helper. Release publication and pin changes remain
-deferred. No backup-engine deployment, private backup/restore, real parity
-operation, notification delivery, or backup schedule activation was performed by
-this work. The separate Tailscale trial below did not exercise a backup engine.
+**not complete**: Si's Drive service now uses native Synctjik and its first native
+backup is running; completed backup and isolated restore evidence are still
+pending. The other Si protection families still need their guarded cutovers.
+Fi has the capable binary and native copy/health unit routing. Release publication
+and pin changes remain deferred. No real parity operation, notification delivery,
+or backup schedule activation was performed by this work. The separate Tailscale
+trial below did not exercise a backup engine.
 
 ## Implementation
 
@@ -73,7 +75,7 @@ restored-directory ownership operation (`lchown ... invalid argument`). The
 affected synthetic tests passed when rerun with the required access, using the
 same temporary fixtures. No live source or credential was substituted.
 
-Read-only local inspection found:
+Initial local inspection, before the subsequent installer repair, found:
 
 - Installed Synctjik reports `native_backends: 1`, without `protection_backends`.
 - `si-app-backup-pull.service` is loaded/inactive and still invokes
@@ -86,7 +88,13 @@ The initial SSH probes failed: the configured LAN endpoint returned “No route
 to host” and the Mullvad-excluded public route timed out. Later inspection found
 that ordinary pinned-key SSH through Mullvad reaches Si. The current declared
 backup SSH policy still uses the excluded route and must be reconciled before
-live transfer acceptance. Remote backup `ExecStart` routing remains unverified.
+live transfer acceptance.
+
+At 22:32 HKT, Si still had neither the user nor root-owned Synctjik binary;
+its loaded/failed Drive service still invoked the old helper. Fi's installed
+binary reported `protection_backends: 1`, and its copy/health units invoked
+`synctjik app-pull copy|health`. The copy unit was inactive and the health unit
+remained failed; these observations are not proof of a successful backup.
 
 The authorized Si Tailscale trial reached interactive login but did not complete
 enrollment. Its ten-minute systemd rollback ran at 19:54:29 HKT on 2026-10-29;
@@ -94,18 +102,73 @@ enrollment. Its ten-minute systemd rollback ran at 19:54:29 HKT on 2026-10-29;
 unchanged, configuration checks passed, and 72 public HTTP observations retained
 their expected responses. This verifies the observed trial and rollback, not
 tailnet SSH or backup recovery. Fi's temporary process-specific VPN routing
-change was restored. Full evidence and the retry procedure are in Dotjik's
-`docs/tailscale-setup.md`.
+change was restored. Later browser approval completed Si's enrollment, but also
+brought it online after the second login timer had expired. It was disconnected
+before a fresh guarded connection test. Two fresh pinned-key IPv6 SSH sessions
+passed, with public SSH and nginx still available. The new timer disconnected
+Si at 22:35:22; `Stopped`, `WantRunning=false`, peer offline state, and failure of
+a fresh tailnet SSH connection were verified. Public SSH and the four checked
+HTTP routes still worked, with unchanged nginx master/worker PIDs. Si remains
+enrolled but disconnected, and Fi's temporary routing adjustment was restored.
+Full evidence and the late-approval limitation are in Dotjik's
+`docs/tailscale-setup.md`. No backup/restore was run during either network test.
+
+## Live Drive cutover and backup — 23:02 HKT
+
+Ordinary pinned-key public SSH reached Si with Tailscale still disconnected.
+Both configured Google source trees were accessible. The existing Restic
+repository contained one archive snapshot, but the old worker had failed with
+incomplete reads and had no success receipt. That snapshot is not accepted as a
+complete backup; no GSuite snapshot was present at preflight.
+
+The reviewed release build ran on Si and reported `protection_backends: 1`.
+Identical binaries were installed at `~/.local/bin/synctjik` and the root-owned
+`/usr/local/bin/synctjik`. The legacy Drive operation lock and worker guard covered
+the file cutover and user-manager reload. A staged native Tjikup adopted the four
+verified existing Drive files under the canonical `home-files-si` manifest ID,
+then applied the selected current Dotjik entries: new policy, native service
+command and shell delegation. The timer and failure handler were identical.
+Tjikup retained the replaced files and metadata in a private recovery receipt;
+its subsequent file check reported all five selected files unchanged.
+
+Effective `ExecStart` is `~/.local/bin/synctjik drive backup`; the compatibility
+command also passed native policy validation. The Drive timer remained disabled
+and inactive. nginx remained active with the same master PID and start time.
+Neither Si configuration checkout, other protection services, nor pinned archive
+workers were changed. The native Tjikup helper was staged solely for this file
+deployment; Si's general Tjikup installation was not replaced.
+
+The manual Drive service invocation started at 23:02:06 HKT. It is independent of
+the SSH session. A separate one-off systemd validation job waits for that exact
+invocation to finish successfully and publish a new receipt. Only then does it
+select the new snapshots, check free space, and invoke native `drive restore`
+with full Restic verification into new owner-only storage-pool directories. It
+also compares representative restored hashes against independent `restic dump`
+reads and checks representative exported Office containers. This job does not
+enable a timer, overwrite live data, or proceed after backup failure.
+The verifier has reduced CPU/I/O priority. While the backup was running, the
+native cutover guard returned 75 without changing files, confirming that the
+active worker's legacy lock blocks another migration.
+
+At 23:11 HKT the archive backup was progressing, reusing its previous snapshot,
+with no captured rclone or Restic errors. GSuite's read-only inventory counted
+5,023 files and about 5.2 GB of known sizes, including 205 files with unknown
+export sizes. The validation job was still waiting: backup completion, repository
+integrity and retention, both new snapshots, and restored-content evidence remain
+pending. Detailed diagnostics and runtime evidence are private on Si, outside
+both repos. Public home/read/listen routes returned HTTP 200 and music returned
+HTTP 302; nginx's master remained unchanged and Tailscale reported `Stopped`.
 
 ## Remaining acceptance gates
 
-1. Reconcile the declared SSH transport with the verified working route. Tailscale
-   still requires interactive authorization and a fresh ten-minute guarded test;
-   it is not required to use the already verified public SSH route.
-2. Install reviewed capable user and root-owned Synctjik binaries, then perform
-   the guarded Dotjik unit/file cutover with the shared Tjikup interface. A
-   reviewed source build can be used on existing hosts while release publication
-   and pin changes remain deferred. Existing active workers must finish first.
+1. Reconcile the declared SSH transport with the verified working route. Si's
+   tailnet enrollment and guarded connection test passed, but it is intentionally
+   disconnected. Persistent tailnet use also needs Fi's coordination-route policy
+   reconciled. The verified public SSH route can be used independently.
+2. Si's capable user/root binaries and Drive-only cutover are installed. Perform
+   the remaining application and SnapRAID Dotjik unit/file cutovers with the
+   shared Tjikup interface. Release publication and pin changes remain deferred.
+   Existing active workers must finish first.
 3. Inspect actual local/remote `ExecStart` and `ExecStopPost` routing, capability
    reports and removal of retired Python callers. Preserve timer enablement.
 4. Validate one family at a time: Drive export/backup and isolated restore/hash;
