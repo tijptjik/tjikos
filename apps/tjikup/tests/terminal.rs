@@ -187,8 +187,8 @@ fn kitty_protocol_uses_scrollable_sprites_without_retransmission_on_ticks() {
     let text = terminal.finish();
     assert_eq!(
         text.matches("a=T,f=32").count(),
-        5,
-        "one upload for each of three repo and two task images"
+        6,
+        "three repo images, two result images and the activity fallback, uploaded once"
     );
     assert!(text.contains("\u{10eeee}"));
     assert!(text.contains(",r=1,"));
@@ -244,7 +244,7 @@ fn resize_during_repository_activity_keeps_graphics_and_completes() {
         0
     );
     let text = terminal.finish();
-    assert_eq!(text.matches("a=T,f=32").count(), 5);
+    assert_eq!(text.matches("a=T,f=32").count(), 6);
     assert!(text.contains("\x1b[J"));
     assert!(text.contains("\x1b[31;1mN"));
 }
@@ -352,7 +352,7 @@ fn dirty_repository_counts_stay_in_terminal_rows_without_inline_errors() {
             assert!(!visible.contains(hidden), "unexpected {hidden}: {visible}");
         }
         if graphics {
-            assert_eq!(text.matches("a=T,f=32").count(), 2);
+            assert_eq!(text.matches("a=T,f=32").count(), 3);
         }
     }
 }
@@ -406,8 +406,8 @@ fn subtask_rows_resolve_recipe_and_alias_icons_in_graphics_and_glyph_modes() {
         if graphics {
             assert_eq!(
                 text.matches("a=T,f=32").count(),
-                12,
-                "each known subject has its own icon, including captured applications"
+                13,
+                "known subjects and the activity fallback each upload once"
             );
         } else {
             for (glyph, label) in [
@@ -562,4 +562,87 @@ fn credential_refresh_is_visible_while_the_refresh_command_runs() {
     let text = terminal.finish();
     assert!(!text.contains("FAIL    "));
     assert!(dir.path().join("refreshed").exists());
+}
+
+#[test]
+fn active_row_uses_application_art_and_dimmed_subtitle() {
+    for (graphics, compact) in [(false, true), (true, true), (true, false)] {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("icons32.json"),
+            include_bytes!("fixtures/icons32.json"),
+        )
+        .unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            serde_json::to_vec(&json!({
+                "version":2,
+                "presentation":{"icons":"{config_dir}/icons32.json","glyphs":{"Fedora":"F"}},
+                "recipes":[{"id":"rpm","label":"Fedora (RPM packages)",
+                    "display":{"icon":"Fedora"},
+                    "apply":["sh","-c","while [ ! -e release ]; do sleep 0.05; done"]}
+                ]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let mut terminal = Terminal::spawn_spacing(
+            &["--config", path.to_str().unwrap()],
+            dir.path(),
+            graphics,
+            compact,
+        );
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while String::from_utf8_lossy(&terminal.text)
+            .matches("\x1b[?2026l")
+            .count()
+            < 3
+        {
+            terminal.poll();
+            assert!(
+                Instant::now() < deadline,
+                "expected three live activity frames"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let active = String::from_utf8_lossy(&terminal.text);
+        assert!(!active.contains("APPLY"), "inspect before completion");
+        if graphics {
+            assert!(active.contains("\u{10eeee}"), "active row has artwork");
+            assert_eq!(
+                active.matches("a=T,f=32").count(),
+                1,
+                "ticks reuse uploaded image"
+            );
+            if !compact {
+                assert!(
+                    active.contains("\u{10eeee}\u{30d}"),
+                    "second icon row is present"
+                );
+            }
+        } else {
+            assert!(active.contains("F \x1b[97mFedora"));
+        }
+        if compact {
+            assert!(
+                active.contains("\x1b[90m (RPM packages)"),
+                "same dim subtitle as completed rows"
+            );
+        } else {
+            assert!(
+                active.contains("\x1b[90m\x1b]66;"),
+                "dim styling reaches two-row text"
+            );
+        }
+        fs::write(dir.path().join("release"), "").unwrap();
+        let text = terminal.finish();
+        if graphics {
+            assert_eq!(
+                text.matches("a=T,f=32").count(),
+                1,
+                "completion reuses activity artwork"
+            );
+        }
+    }
 }

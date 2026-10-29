@@ -81,7 +81,7 @@ pub struct Progress {
     show_skips: bool,
     presentation: Presentation,
     graphics: Option<Graphics>,
-    active: BTreeMap<usize, (String, Instant)>,
+    active: BTreeMap<usize, (String, String, Instant)>,
     repos: Vec<Repo>,
     repo_recipes: BTreeMap<usize, (usize, usize)>,
     repo_open: bool,
@@ -90,6 +90,7 @@ pub struct Progress {
     repo_width: usize,
     repo_last: Vec<String>,
     transient: bool,
+    transient_rows: usize,
     cursor_hidden: bool,
     frame: usize,
     section: String,
@@ -122,6 +123,7 @@ impl Progress {
             repo_width: 0,
             repo_last: Vec::new(),
             transient: false,
+            transient_rows: 1,
             cursor_hidden: false,
             frame: 0,
             section: String::new(),
@@ -446,6 +448,9 @@ impl Progress {
     pub fn clear(&mut self) {
         if self.transient {
             eprint!("\r\x1b[2K");
+            if self.transient_rows > 1 {
+                eprint!("\x1b[1B\r\x1b[2K\x1b[1A\r");
+            }
             self.transient = false;
         }
         let _ = std::io::stderr().flush();
@@ -479,8 +484,9 @@ impl Progress {
             self.patch_repos();
         }
         if self.live && !recipe.interactive {
+            let icon = self.icon_key(&recipe.label, &recipe.display.icon);
             self.active
-                .insert(index, (plain(&recipe.label), Instant::now()));
+                .insert(index, (plain(&recipe.label), icon, Instant::now()));
         }
         self.tick();
     }
@@ -678,18 +684,27 @@ impl Progress {
             base.into()
         }
     }
+    fn icon_key(&self, subject: &str, icon: &str) -> String {
+        crate::icons::resolve(subject, icon, &self.presentation.icon_aliases, |key| {
+            self.graphics
+                .as_ref()
+                .map(|graphics| graphics.has_icon(key))
+                .unwrap_or_else(|| self.presentation.glyphs.contains_key(key))
+        })
+    }
+    fn styled_title(&self, title: &str) -> String {
+        if let Some((base, subtype)) = title.split_once(" (") {
+            format!(
+                "{}{}",
+                self.paint("97", base),
+                self.paint("90", &format!(" ({subtype}"))
+            )
+        } else {
+            self.paint("97", title)
+        }
+    }
     fn event(&mut self, event: &Event) {
-        let icon_key = crate::icons::resolve(
-            &event.subject,
-            &event.icon_key,
-            &self.presentation.icon_aliases,
-            |key| {
-                self.graphics
-                    .as_ref()
-                    .map(|graphics| graphics.has_icon(key))
-                    .unwrap_or_else(|| self.presentation.glyphs.contains_key(key))
-            },
-        );
+        let icon_key = self.icon_key(&event.subject, &event.icon_key);
         self.clear();
         self.remove_activity_gap();
         if self.section != event.section {
@@ -717,15 +732,7 @@ impl Progress {
             &self.title(&event.subject),
             available.saturating_sub(width(&note) + if note.is_empty() { 0 } else { 2 }),
         );
-        let subject = if let Some((base, subtype)) = title.split_once(" (") {
-            format!(
-                "{}{}",
-                self.paint("97", base),
-                self.paint("90", &format!(" ({subtype}"))
-            )
-        } else {
-            self.paint("97", &title)
-        };
+        let subject = self.styled_title(&title);
         let gap = if note.is_empty() {
             String::new()
         } else {
@@ -740,7 +747,7 @@ impl Progress {
         self.visible += 1;
     }
     pub fn status(&mut self, index: usize, recipe: &Recipe, message: &str) {
-        if let Some((label, _)) = self.active.get_mut(&index) {
+        if let Some((label, _, _)) = self.active.get_mut(&index) {
             *label = format!("{}: {}", plain(&recipe.label), plain(message));
         }
     }
@@ -767,7 +774,7 @@ impl Progress {
         // the whole line before writing makes the activity text blink.
         // One transient activity line keeps the terminal quiet. Settled results
         // have their own icons and never get repainted for animation.
-        if let Some((label, started)) = self.active.values().next() {
+        if let Some((label, icon, started)) = self.active.values().next() {
             if !self.activity_gap {
                 eprint!("\r\n");
                 self.activity_gap = true;
@@ -776,16 +783,45 @@ impl Progress {
                 }
             }
             let note = format!("{:.1}s", started.elapsed().as_secs_f64());
-            let available = columns().saturating_sub(1);
-            let label = fit(label, available.saturating_sub(width(&note) + 3));
-            let gap = available.saturating_sub(2 + width(&label) + width(&note));
-            eprint!(
-                "\r{} {}{}{}\x1b[K",
-                self.paint("36", &SPINNER[self.frame % 10].to_string()),
-                label,
+            let icon_width = self
+                .graphics
+                .as_ref()
+                .map_or_else(|| width(&self.glyph(icon)), |g| g.columns() + 1);
+            let available = columns().saturating_sub(1 + 2 + icon_width);
+            let label = fit(
+                &self.title(label),
+                available.saturating_sub(width(&note) + 2),
+            );
+            let gap = available.saturating_sub(width(&label) + width(&note));
+            let prefix = format!(
+                "{} ",
+                self.paint("36", &SPINNER[self.frame % 10].to_string())
+            );
+            let rest = format!(
+                "{}{}{}",
+                self.styled_title(&label),
                 " ".repeat(gap),
                 self.paint("90", &note)
             );
+            if let Some(graphics) = &mut self.graphics {
+                if !self.transient {
+                    self.transient_rows = graphics.rows();
+                    graphics.row(icon, &prefix, &format!(" {rest}"));
+                    eprint!("\x1b[{}A\r", self.transient_rows);
+                } else {
+                    // Keep the sprite's cells untouched while updating the spinner,
+                    // title and timer. The cursor stays on the first activity row.
+                    eprint!(
+                        "\r{}\x1b[{}G{}\x1b[K",
+                        graphics.text(&prefix),
+                        3 + graphics.columns(),
+                        graphics.text(&format!(" {rest}"))
+                    );
+                }
+            } else {
+                self.transient_rows = 1;
+                eprint!("\r{prefix}{}{rest}\x1b[K", self.glyph(icon));
+            }
             self.transient = true;
         }
         eprint!("\x1b[?2026l");
