@@ -2,8 +2,8 @@
   "version": 1,
   "dotjik_branch": "main",
   "tjikos_branch": "main",
-  "dotjik_revision": "97dce3bb991f86ec7d60fbdd58f4e9085859795f",
-  "tjikos_revision": "4e89e97efaa0d835d0c47262e0c4bd5fdd1c426b",
+  "dotjik_revision": "a28c5f8046b16bcdd6594818671bb63192fc9f72",
+  "tjikos_revision": "2c0963bfc806f100dc292b2036e9cb83823eeba8",
   "tjikup_binary": {
     "url": "https://github.com/tijptjik/tjikos/releases/download/tjikup-v0.2.0-bootstrap.6/tjikup-x86_64-unknown-linux-musl",
     "sha256": "2419a610a0cc47f6d96b7d590b022cf870638ebd0afc0b4ba9af39599e0f55af",
@@ -11,9 +11,9 @@
     "target": "x86_64-unknown-linux-musl"
   },
   "synctjik_binary": {
-    "url": "https://github.com/tijptjik/tjikos/releases/download/synctjik-v0.1.0-bootstrap.2/synctjik-x86_64-unknown-linux-musl",
-    "sha256": "6e965a0dfc9ff7751da462e01e8d6914d199fa396a378e9b0455ec94023e388b",
-    "source_revision": "28ce751414cba59c96db37e444b2a7847057c373",
+    "url": "https://github.com/tijptjik/tjikos/releases/download/synctjik-v0.1.0-bootstrap.4/synctjik-x86_64-unknown-linux-musl",
+    "sha256": "eaf2e98fcd4bc0ad41d324170ceca763ad5161d224982146914c89e520e0a426",
+    "source_revision": "2c0963bfc806f100dc292b2036e9cb83823eeba8",
     "target": "x86_64-unknown-linux-musl"
   }
 }
