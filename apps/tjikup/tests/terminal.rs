@@ -504,3 +504,44 @@ fn herdr_keeps_ordinary_text_beside_single_row_icons() {
     assert!(text.contains("\u{10eeee}"));
     assert!(!text.contains("\x1b]66;"));
 }
+
+#[test]
+fn execution_groups_stream_settled_rows_before_slow_peers_finish() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    fs::write(&path, serde_json::to_vec(&json!({"version":2,"jobs":2,
+        "presentation":{"grouped_results":true},"recipes":[
+        {"id":"slow","label":"Slow worker","display":{"section":"Configuration"},
+         "apply":["sh","-c","touch slow-started; n=0; while [ ! -e release ]; do n=$((n+1)); [ $n -lt 100 ] || exit 8; sleep 0.05; done; touch slow-done; echo 'APPLY   ✓ Finished slow'"]},
+        {"id":"fast","label":"Fast worker","display":{"section":"Configuration"},
+         "apply":["sh","-c","sleep 0.1; echo 'APPLY   ✓ Finished fast'"]},
+        {"id":"update","label":"Update worker","display":{"section":"Package updates"},
+         "apply":["sh","-c","test -e slow-done && touch update-started"]}
+    ]})).unwrap()).unwrap();
+    let mut terminal = Terminal::spawn(&["--config", path.to_str().unwrap()], dir.path(), false);
+    terminal.until("Finished fast");
+    assert!(dir.path().join("slow-started").exists());
+    assert!(
+        !dir.path().join("slow-done").exists(),
+        "fast result must not wait for its group"
+    );
+    assert!(
+        !dir.path().join("update-started").exists(),
+        "next group must wait"
+    );
+    let text = visible_text(&String::from_utf8_lossy(&terminal.text));
+    let spinner = text
+        .split('\r')
+        .find(|s| s.contains("Slow worker") && s.trim_end().ends_with('s'))
+        .expect("activity line");
+    let spinner = spinner.lines().next().unwrap();
+    assert!(
+        spinner.contains("Slow worker                    "),
+        "timing belongs on the right"
+    );
+    fs::write(dir.path().join("release"), "").unwrap();
+    let text = terminal.finish();
+    assert!(dir.path().join("update-started").exists());
+    assert_eq!(text.matches("Configuration").count(), 1);
+    assert!(text.find("Finished fast").unwrap() < text.find("Finished slow").unwrap());
+}

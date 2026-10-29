@@ -660,7 +660,7 @@ fn grouped_results_keep_sections_together_across_async_completion() {
 }
 
 #[test]
-fn blocked_results_keep_groups_and_sort_by_display_title() {
+fn blocked_results_keep_groups_without_alphabetic_reordering() {
     let (dir, mut config) = fixture(json!([
         {"id":"fail","label":"Failure","apply":["false"],"display":{"section":"Preparation"}},
         {"id":"z","label":"Zulu","needs":["fail"],"apply":["true"],"display":{"section":"Configuration"}},
@@ -672,6 +672,6 @@ fn blocked_results_keep_groups_and_sort_by_display_title() {
     assert!(!output.status.success());
     let text = String::from_utf8_lossy(&output.stderr);
     assert_eq!(text.matches("\nConfiguration\n").count(), 1);
-    assert!(text.find("Alpha").unwrap() < text.find("Zulu").unwrap());
+    assert!(text.find("Zulu").unwrap() < text.find("Alpha").unwrap());
     assert!(text.find("Zulu").unwrap() < text.find("\nServices\n").unwrap());
 }
