@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<g id="frameless-artwork" transform="translate(0.932039 0.932039) scale(0.970874)"><defs>
+ <linearGradient id="enamel" x1="0" y1="0" x2=".6" y2="1"><stop stop-color="#f5c3ca" /><stop offset=".4" stop-color="#e88bb6" /><stop offset="1" stop-color="#a4688f" /></linearGradient>
+ <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f3b6c0" /><stop offset=".6" stop-color="#e56ea1" /><stop offset="1" stop-color="#a25682" /></linearGradient>
+ <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ceb7cc" /><stop offset=".5" stop-color="#9272ba" /><stop offset="1" stop-color="#6e5991" /></linearGradient>
+</defs>
+<g stroke-linecap="round" stroke-linejoin="round" /><title>Synctjik</title><g data-material="authored">
+<rect x="8" y="8" width="48" height="48" rx="11" fill="#211c2c" stroke="#dd795f" stroke-width="3.5" />
+<path d="M38 22H28a6 6 0 0 0-6 6v5M26 42h10a6 6 0 0 0 6-6v-5" fill="none" stroke="#fff0da" stroke-width="4.5" stroke-linecap="round" />
+</g></g></svg>

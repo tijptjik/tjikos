@@ -1,0 +1,12 @@
+flowchart LR
+    S["synctjik"] --> D["Device state"]
+    S --> P["Private assets"]
+    S --> C["Cloudflare"]
+    S --> R["Recovery & storage"]
+    D --> D1["enroll → setup → ready → schedule"]
+    D --> D2["backup · status · restore · prune"]
+    D --> D3["plan → review"]
+    P --> P1["private-assets status / sync / backup"]
+    C --> C1["cloudflare check / backup"]
+    R --> R1["drive · app-backup · app-pull"]
+    R --> R2["app-restore · snapraid · snapraid-notify"]

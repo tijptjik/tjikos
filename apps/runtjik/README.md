@@ -1,6 +1,6 @@
 # Runtjik
 
-![Runtjik icon grid with synthetic applications](docs/showcase.png)
+![Runtjik with real installed apps, screenshot targets and recording targets](../../docs/showcase/runtjik.png)
 
 A Quickshell top-layer launcher with an icon grid, fuzzy search, launch history,
 and Hyprland window switching. The layout takes inspiration from
