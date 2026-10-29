@@ -1,4 +1,5 @@
 //! Repository file-policy selection; deployments remain in the native engine.
+mod protection;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -311,7 +312,14 @@ pub fn run(repo: &Path, args: &[String]) -> Result<i32> {
     if adopt && action == "apply" {
         native.push("--adopt-identical".into());
     }
-    let result = if scope == "system" {
+    let guarded = if action == "apply" {
+        protection::apply(repo, &host, scope, group, &native)?
+    } else {
+        None
+    };
+    let result = if let Some(status) = guarded {
+        status
+    } else if scope == "system" {
         Command::new("sudo")
             .args(["-n", "--"])
             .arg(std::env::current_exe()?)
