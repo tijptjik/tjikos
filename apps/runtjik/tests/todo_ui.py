@@ -13,11 +13,11 @@ with private_compositor():
     home = temp / 'app'
     home.mkdir()
     shutil.copytree(app / 'qml', home / 'qml')
-    for path in app.glob('*.py'):
-        shutil.copy2(path, home / path.name)
+    shutil.copy2(app / 'runtjik-core', home / 'runtjik-core')
     shell = home / 'qml/shell.qml'
     shell.write_text(shell.read_text().replace('function testState(): string {', '''function todoTest(action: string): void {
-        if(action==='new'){todoApp.selectedId='';todoApp.openEditor();}
+        if(action==='activate'){root.activate(false);}
+        else if(action==='new'){todoApp.selectedId='';todoApp.openEditor();}
         else if(action==='snooze')todoApp.editor='snooze';
         else root.send({op:'app-action',provider:'Todo',action:'create',fields:{title:'Synthetic task',group:'Work',due:'2026-10-30'}});
     }
@@ -37,7 +37,9 @@ with private_compositor():
         process = subprocess.Popen(['quickshell','--path',str(home/'qml'),'--no-duplicate'],stdout=log,stderr=log)
         try:
             wait_for(lambda: state('testState').get('rows'), timeout=20)
-            ipc('test','/todo')
+            ipc('test','todo')
+            wait_for(lambda: any(row.get('id') == '/todo' for row in state('testState').get('rows', [])))
+            ipc('todoTest','activate')
             wait_for(lambda: state().get('mode') == 'Todo')
             ipc('todoTest','create')
             wait_for(lambda: len(state().get('state',{}).get('tasks',[]))==1)

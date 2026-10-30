@@ -5,6 +5,6 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "check": "bash scripts/check.sh",
-    "test": "python3 -B -m unittest discover -s tests -v && cargo test --release --locked && python3 -B tests/native_cli.py"
+    "test": "cargo test --release --locked && python3 -B tests/native_cli.py"
   }
 }

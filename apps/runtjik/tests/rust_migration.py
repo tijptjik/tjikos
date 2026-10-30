@@ -9,7 +9,7 @@ import tempfile
 import time
 import unittest
 
-from rust_parity import APP, Backend, comparable, fixture
+from rust_parity import APP, BINARY, Backend, comparable, fixture
 
 
 def children(backend):
@@ -47,12 +47,12 @@ class NativeMigrationTests(unittest.TestCase):
             self.assertTrue(state['tasks'][0]['done'])
             self.assertEqual(native.request(op='app-action', provider='Todo', action='edit', id=task['id'], revision=0, fields={'title':'stale'})['kind'], 'error')
             self.assertEqual(children(native), [])
-        reference = self.backend('python')
+        reference = self.backend()
         rows = reference.request(op='query', query='/reading')['app_state']['tasks']
         self.assertEqual(rows[0]['title'], 'Synthetic reading')
         self.assertTrue(rows[0]['done'])
 
-    def test_tasktjik_legacy_recurrence_and_vault(self):
+    def test_tasktjik_persisted_recurrence_and_vault(self):
         vault = self.root / 'vault'
         vault.mkdir()
         (vault / 'Synthetic.md').write_text('Synthetic plan')
@@ -60,7 +60,7 @@ class NativeMigrationTests(unittest.TestCase):
         outside.write_text('Not a vault plan')
         (vault / 'escape.md').symlink_to(outside)
         Path(self.env['RUNTJIK_CONFIG']).write_text('[plugins]\nenabled=["Todo"]\n[plugin_settings.Todo]\nauthority=""\ndirectory=' + json.dumps(str(self.root / 'tasks')) + '\nvault=' + json.dumps(str(vault)) + '\n')
-        reference = self.backend('python')
+        reference = self.backend()
         for unit, value in [('months', 1), ('years', 1), ('days-of-the-week', '1,5'), ('days-of-the-month', '1,31')]:
             result = reference.request(op='app-action', provider='Todo', action='create', fields={'title':unit,'due':'2024-01-31','repeat':{'unit':unit,'value':value}})
             self.assertEqual(result['kind'], 'app-state')
@@ -142,41 +142,13 @@ class NativeMigrationTests(unittest.TestCase):
         self.assertIn('HTTP status 302', reply['message'])
         self.assertEqual(children(native), [])
 
-    def test_native_clipboard_and_capture_demo_parity(self):
-        native, reference = self.backend(demo=True), self.backend('python', demo=True)
-        def stable(backend, query):
-            for _ in range(100):
-                result = backend.request(op='query', query=query)
-                if not result.get('pending'):
-                    return result
-                time.sleep(.02)
-            self.fail('Preview did not settle')
-        def normalize(value):
-            value = comparable(value)
-            for row in value.get('results', []):
-                if row.get('thumbnail'):
-                    self.assertTrue(Path(row['thumbnail']).is_file())
-                    row['thumbnail'] = '<preview>'
-            return value
-        for query in ['/cliphist', '/cliphist example', '/cliphist no-match', '/grab', '/shot window', '/grab screen', '/grab history', '/rec', '/rec workspace', '/rec history', '/todo', '/reading']:
-            with self.subTest(query=query):
-                self.assertEqual(normalize(stable(native, query)), normalize(stable(reference, query)))
-        for query in ['/cliphist', '/grab', '/rec']:
-            for app in [native, reference]:
-                stable(app, query)
-            ident = stable(native, query)['results'][0]['id']
-            for mode in ['launch', 'close']:
-                self.assertEqual(comparable(native.request(op='activate', id=ident, mode=mode)), comparable(reference.request(op='activate', id=ident, mode=mode)))
-        self.assertEqual(comparable(native.request(op='activate', id='/todo')), comparable(reference.request(op='activate', id='/todo')))
-        self.assertEqual(comparable(native.request(op='undo-trash', query='/grab history')), comparable(reference.request(op='undo-trash', query='/grab history')))
-        self.assertEqual(children(native), [])
 
     def test_browser_host_native_framing_and_cleanup(self):
         import struct
         runtime = self.root / 'runtime'
         runtime.mkdir(mode=0o700)
         env = {**self.env, 'XDG_RUNTIME_DIR': str(runtime)}
-        host = subprocess.Popen([str(APP / 'runtjik-core'), 'browser-host'], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        host = subprocess.Popen([str(BINARY), 'browser-host'], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         self.addCleanup(lambda: host.poll() is None and host.kill())
         directory = runtime / 'runtjik-browser'
         deadline = time.monotonic() + 5
@@ -217,7 +189,7 @@ class NativeMigrationTests(unittest.TestCase):
         encoder.chmod(0o700)
         env = {**self.env, 'XDG_RUNTIME_DIR': str(runtime), 'PATH': str(bindir) + ':' + os.environ['PATH']}
         spec = dict(mode='region', area='0,0 100x100', output=None, workspace=None, fps=30, audio=False, file=str(self.root / 'synthetic.mp4'))
-        worker = subprocess.Popen([str(APP / 'runtjik-core'), 'capture-worker', json.dumps(spec)], env=env, stdout=subprocess.PIPE, text=True)
+        worker = subprocess.Popen([str(BINARY), 'capture-worker', json.dumps(spec)], env=env, stdout=subprocess.PIPE, text=True)
         def stop_worker():
             if worker.poll() is None:
                 worker.terminate()
@@ -238,20 +210,6 @@ class NativeMigrationTests(unittest.TestCase):
         worker.stdout.close()
         self.assertEqual(Path(spec['file']).stat().st_mode & 0o777, 0o600)
 
-    def test_menus_general_commands_config_and_close_without_host(self):
-        native = self.backend(demo=True)
-        reference = self.backend('python', demo=True)
-        for query in ['todo', 'reading', 'clipboard', 'bindings', '/', '!config', '/config', '/bindings', '/define', '/synonym test']:
-            with self.subTest(query=query):
-                a = native.request(op='query', query=query)
-                b = reference.request(op='query', query=query)
-                self.assertEqual(comparable(a), comparable(b))
-        for request in [dict(op='activate', id='/config ui.columns'),
-                        dict(op='activate', id='/config ui.columns 6'),
-                        dict(op='activate', id='/stats'),
-                        dict(op='activate', id='apps:firefox.desktop', mode='close')]:
-            self.assertEqual(comparable(native.request(**request)), comparable(reference.request(**request)))
-        self.assertEqual(children(native), [])
 
     def test_native_config_save_backup_migration_and_permissions(self):
         path = Path(self.env['RUNTJIK_CONFIG'])
@@ -268,7 +226,7 @@ class NativeMigrationTests(unittest.TestCase):
         self.assertEqual(result['kind'], 'error')
         self.assertEqual(path.read_text(), saved)
         self.assertEqual(children(backend), [])
-        migrate = lambda: json.loads(subprocess.check_output([str(APP / 'runtjik-core'), 'migrate-config'], env=self.env))
+        migrate = lambda: json.loads(subprocess.check_output([str(BINARY), 'migrate-config'], env=self.env))
         result = migrate()
         self.assertTrue(result['changed'])
         backup = Path(result['backup'])
@@ -277,23 +235,6 @@ class NativeMigrationTests(unittest.TestCase):
         self.assertFalse(migrate()['changed'])
         self.assertEqual(len(list(path.parent.glob('*.pre-plugins-*'))), 1)
 
-    def test_browser_scope_general_results_and_actions_without_host(self):
-        Path(self.env['RUNTJIK_CONFIG']).write_text('[plugins]\nenabled=["Browser"]\n')
-        native = self.backend(demo=True)
-        reference = self.backend('python', demo=True)
-        self.assertEqual(comparable(native.initial), comparable(reference.initial))
-        for query in ['/browser', '/zen', '/tabs Firefox', 'Firefox']:
-            self.assertEqual(comparable(native.request(op='query', query=query)), comparable(reference.request(op='query', query=query)))
-        for app in [native, reference]:
-            rows = app.request(op='query', query='/browser')['results']
-            self.assertEqual(app.request(op='activate', id=rows[0]['id'], mode='switch')['text'], '/tabs ')
-        self.assertEqual(comparable(native.request(op='query', query='/tabs')), comparable(reference.request(op='query', query='/tabs')))
-        for app in [native, reference]:
-            tab = app.request(op='query', query='/tabs')['results'][0]
-            self.assertEqual(app.request(op='activate', id=tab['id'])['kind'], 'activated')
-            self.assertEqual(app.request(op='activate', id=tab['id'], mode='close')['message'], 'Tab closed')
-        self.assertEqual(comparable(native.request(op='query', query='')), comparable(reference.request(op='query', query='')))
-        self.assertEqual(children(native), [])
 
     def test_browser_native_socket_framing_and_targeted_actions(self):
         runtime = self.root / 'runtime'

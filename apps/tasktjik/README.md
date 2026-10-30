@@ -71,7 +71,8 @@ and Tjikup. Task data, credentials and local device IDs stay outside Git.
 
 The CLI, enrollment, device transport, reminder leases and notification IPC are
 Rust, shared with the Runtjik adapter. Build and installation do not require
-Python; source Python implementations are development test oracles only.
+Python. The old source implementations have been removed; Python remains only
+for executable and UI test drivers.
 
 Build requires Cargo; `bun run test` in this app runs Python and Rust tests.
 

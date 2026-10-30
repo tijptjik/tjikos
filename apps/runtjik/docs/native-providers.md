@@ -10,7 +10,7 @@ recurrence; it preserves dedicated-config precedence, device identity, request
 UUIDs, HTTPS Tailscale validation and DNS fallback, socket and legacy SSH modes.
 Nothing was installed into the live desktop or pushed remotely.
 
-## Current boundary
+## Boundary at this historical migration stage
 
 | Path | Implementation |
 | --- | --- |
@@ -25,11 +25,11 @@ Nothing was installed into the live desktop or pushed remotely.
 | Firefox native-messaging bridge, recorder worker, Trash/undo, image viewer | Rust |
 | Recording countdown | Quickshell/QML |
 
-Python remains for the explicit reference backend, third-party API-v1 extensions,
-and build/test/registration scripts. Legacy SSH Tasktjik authorities retain their
+At that stage, Python remained for the explicit reference backend, third-party API-v1 extensions,
+and build/test/registration scripts. Legacy SSH Tasktjik authorities retained their
 remote Python command until those authorities are upgraded; HTTPS/socket/local
 modes require no Python adapter. The Tasktjik application notification CLI itself
-is outside this Runtjik migration. Existing browser host registrations need to be
+was outside that migration stage. These compatibility implementations have since been removed. Existing browser host registrations need to be
 registered again after installation to point at `runtjik-core browser-host`.
 
 The following timings and validation describe the earlier migration stage;

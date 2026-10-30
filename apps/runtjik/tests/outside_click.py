@@ -3,9 +3,8 @@ from pathlib import Path
 from private_compositor import private_compositor
 app=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(app))
-import runtjik as backend
 sys.path.insert(0,str(app))
-from runtjik import SHORTCUTS
+SHORTCUTS = json.loads((Path(__file__).resolve().parents[1]/'src/contract.json').read_text())['shortcuts']
 def call(args):return subprocess.check_output(args,text=True,stderr=subprocess.DEVNULL)
 def wait(fn):
     for _ in range(120):

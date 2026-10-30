@@ -17,7 +17,7 @@ with private_compositor():
     for name, geometry, expected in [('portrait', '600x1200', [306, 612]), ('wide', '4000x1000', [932, 612])]:
         path = temp / (name + '.png')
         subprocess.run(['magick', '-size', geometry, 'xc:pink', str(path)], check=True)
-        process = subprocess.Popen([sys.executable, str(app / 'image_viewer.py'), str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        process = subprocess.Popen([str(app / 'runtjik-core'), 'image', str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         try:
             def client():
                 return next((c for c in json.loads(subprocess.check_output(['hyprctl', '-j', 'clients'])) if c['class'] == 'imv'), None)

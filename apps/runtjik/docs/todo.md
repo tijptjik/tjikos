@@ -30,79 +30,23 @@ days and weeks supported by the storage API. Each edit checks a revision number.
 
 ## Authority and setup
 
-Todo data lives outside Dotjik and this repository. Each task is a private JSON
-file containing fields, completion history and notification claims. Writes use an
-exclusive authority lock, atomic replacement and fsync. There is one writable
-store: **Si**. Clients use bounded, noninteractive SSH calls to its installed
-`~/.local/lib/tasktjik/tasktjik.py serve`. No credentials are stored in Todo settings.
-When Si cannot be reached, changes fail visibly; there is no offline writable copy.
+Tasktjik owns persistence and reminders. Production clients use its Rust HTTPS
+or Unix-socket API and transactional SQLite authority. Configure the endpoint in
+`$XDG_CONFIG_HOME/tasktjik/tasktjik.conf`; Tasktjik settings take precedence over
+Runtjik's embedded Todo settings. See [Tasktjik setup and backup instructions](../../tasktjik/README.md).
 
-Install the built Runtjik helper on Si and updated Runtjik and Notjik on clients.
 Add `Todo` to an existing `plugins.enabled` list (fresh defaults include it).
-Configure each client's existing runtjik.conf:
+An optional local Markdown vault remains a Runtjik view setting:
 
 ```toml
 [plugin_settings.Todo]
-authority = "si" # configured SSH host, with an already trusted host key
-ssh_command = ["ssh"] # argv prefix; e.g. ["mullvad-exclude", "ssh"] when required
-# This path is on Si, not the client:
-directory = "~/.local/share/runtjik-todo"
-# This path is local to each client:
 vault = "~/path/to/Obsidian"
 ```
 
-An empty authority enables an explicitly local store for standalone use. Demo
-mode always uses temporary synthetic state and never calls Si or scans a vault.
-Plan lookup uses fuzzy subsequence matching over Markdown filenames. The editor
-stores a vault-relative filename, not the file contents.
-
-Install supplies `runtjik-todo.service` and `runtjik-todo.timer`, without enabling
-them. On each graphical client, enable the timer after configuring the authority:
-
-```sh
-systemctl --user daemon-reload
-systemctl --user enable --now runtjik-todo.timer
-```
-
-Every five minutes a client checks due tasks and atomically claims one reminder
-per task occurrence per authority day. Only the winning device shows a dedicated
-Notjik card. Done, Dismiss and Snooze wait for successful persistence before
-closing. Snooze presets include afternoon, evening, night, tomorrow, weekend,
-next week and a Monday-first calendar with distinct weekend colors; chosen dates
-use 09:00 local time. Snoozing permits a reminder after the snooze expires.
-
-Claims favor avoiding duplicate delivery: if a client crashes after claiming but
-before displaying, that day's reminder can be missed. Notification transport and
-remote storage cannot provide exactly-once delivery together. Dismiss suppresses
-the current day's reminder; Done completes its captured occurrence. Claims use
-Si's calendar day; clients should use the same timezone. There is no live removal
-of a card already displayed on another device. Its Done action remains idempotent.
-
-## Encrypted backups through Synctjik
-
-Use Synctjik for recovery, not for merging live writable copies. Enroll this
-collection on Si in the existing v2 archive policy's `folders` object:
-
-```json
-{
-  ".local/share/runtjik-todo": {
-    "mode": "device",
-    "devices": ["si"],
-    "encrypted": true,
-    "retention": "daily-weekly-monthly",
-    "include_files": ["*.json"]
-  }
-}
-```
-
-`device` keeps recoveries separate from a running authority. Existing daily
-Dotfiles LFS scheduling then archives the enrolled collection via tar/zstd + age.
-The source JSON files must never be added to Dotjik. The policy entry itself is
-non-secret configuration. Before declaring enrollment complete, run the policy
-check, publish a verified archive on Si, and restore JSON files into a new private
-directory. Restore the authority only during an explicit maintenance window with
-clients stopped. This change supplies the policy fragment; it does not change
-fleet policy, deploy Si, enable timers, or claim a verified backup receipt.
+Demo mode uses synthetic state. Plan lookup searches Markdown filenames and
+stores a vault-relative filename, never the file contents. Use `tasktjik.timer`
+for reminders on enrolled graphical clients. Installation does not activate timers.
+Task records, credentials, device identities and backup snapshots stay outside Git.
 
 ## App provider interface
 

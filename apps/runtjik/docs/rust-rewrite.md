@@ -29,7 +29,7 @@ providers that contribute general-search results require the host immediately.
 The host remains resident once used, retaining provider state and asynchronous
 jobs. `runtjik quit` terminates both the native helper and its host.
 
-The unchanged Python backend remains selectable with `RUNTJIK_BACKEND=python`.
+The former Python backend and backend selector have since been removed.
 Quit before changing backend; a resident instance otherwise continues running
 its original backend. SQLite history retains its schema and private location.
 Rust index/icon manifests use separate filenames so comparisons do not overwrite
@@ -135,4 +135,4 @@ written, no captures are taken by the benchmark, and no desktop applications are
 activated. The visual check writes only a synthetic `--demo` screenshot under `/tmp`.
 
 The checked-in defaults/presentation/Unicode contract is regenerated with
-`python3 -B apps/runtjik/scripts/export_contract.py`; the static check detects drift.
+the checked-in Rust contract data; frozen native protocol tests detect drift.

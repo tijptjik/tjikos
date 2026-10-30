@@ -14,8 +14,7 @@ with private_compositor():
     home = temp / 'app'
     home.mkdir()
     shutil.copytree(app / 'qml', home / 'qml')
-    for name in ('todo.py', 'browser.py', 'runtjik.py', 'words.py', 'desktop_plugins.py', 'capture_worker.py', 'capture_countdown.py'):
-        shutil.copy2(app / name, home / name)
+    shutil.copy2(app / 'runtjik-core', home / 'runtjik-core')
     shell = home / 'qml/shell.qml'
     shell.write_text(shell.read_text().replace('function testState(): string {',
         'function submitWord(): void {root.selected=0;root.activate(false);}\n        function testState(): string {'))

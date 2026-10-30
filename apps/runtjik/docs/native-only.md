@@ -2,10 +2,9 @@
 
 Runtjik no longer has a Python backend selector or a Python provider host. Only
 bundled native providers are accepted. The old runtime files are removed during
-installation; Python source in the repository is retained solely for development
-reference/parity tests and is neither built nor installed. The Rust contract JSON
-is a checked-in input; generating historical reference fixtures is a development
-operation, not a build dependency.
+installation. The obsolete source implementations have also been deleted.
+Only test drivers remain in Python; protocol parity uses frozen synthetic JSON
+fixtures. The Rust contract JSON is a checked-in build input.
 
 Tasktjik owns the shared Rust client library used by both applications. Its CLI,
 QML state requests, HTTPS/socket transport, enrollment, device management, local
@@ -30,7 +29,7 @@ registrations are updated to the native host.
 ## Validation
 
 Run the workspace build and static checks, then the Rust and executable client
-suites. Python is required only to run development/reference tests:
+suites. Python is required only to run development tests:
 
 ```sh
 bun run build
@@ -66,3 +65,19 @@ Validation passed: 129 Runtjik reference tests, 48 protocol parity comparisons,
 4 native client integration tests, 3 shared-library tests, 10 authority tests,
 and the atomic installation fixture. Real QML validation passed in the private
 compositor. These checks do not claim a rewrite of Notjik's separate server.
+
+## Source cleanup
+
+The obsolete Python runtime and tests of its removed in-process APIs have been
+removed. Protocol behavior is checked against 54 frozen synthetic outputs,
+independently captured before removal. Native unit, executable, installer, and
+private-compositor tests remain. Benchmarks now run only the native backend;
+historical measurements remain in the migration reports.
+
+Cleanup verification: 54 frozen protocol cases, nine native migration cases,
+the installed-payload removal check, the countdown UI check and four Tasktjik
+native CLI tests passed. The migration cases were run against a binary built from
+committed main (`5a22023`), using `RUNTJIK_TEST_BINARY`, because concurrent,
+uncommitted Tasktjik cache work changes local-authority and asynchronous request
+semantics. Those cache changes are outside this cleanup; these results do not
+claim validation of that work.

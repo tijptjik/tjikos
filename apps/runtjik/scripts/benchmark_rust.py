@@ -1,4 +1,4 @@
-"""Paired Python/Rust measurements. All fixtures, state and captures stay in /tmp.
+"""Native Rust measurements. All fixtures, state and captures stay in /tmp.
 
 Fresh means process-cold, filesystem/icon caches retained. No personal applications
 are activated. UI runs use a private nested Hyprland compositor and synthetic apps.
@@ -62,7 +62,7 @@ def summarize(rows):
 
 def backends(root, trials):
     environments = {}
-    result = {name: {'cold': [], 'resume': [], 'lookup': [], 'provider_first': []} for name in ('python', 'rust')}
+    result = {name: {'cold': [], 'resume': [], 'lookup': [], 'provider_first': []} for name in ('rust',)}
     for name in result:
         directory = root / name
         directory.mkdir()
@@ -70,7 +70,7 @@ def backends(root, trials):
         # Use a real stock theme so icon lookup/rasterization are included fairly.
         with (directory / 'runtjik.conf').open('a') as out:
             out.write('[theme]\nicon_theme="Adwaita"\n')
-        # Give both implementations the same available themes without importing applications.
+        # Provide the available themes without importing applications.
         themes = directory / 'system/icons'
         themes.parent.mkdir(parents=True)
         themes.symlink_to('/usr/share/icons', target_is_directory=True)
@@ -78,9 +78,8 @@ def backends(root, trials):
         app = Backend(name, env)
         result[name]['indexed'] = app.initial['indexed']
         app.close()  # Populate each implementation's own index/icon caches.
-    assert result['python']['indexed'] == result['rust']['indexed']
     for trial in range(trials):
-        for name in (('python', 'rust') if trial % 2 == 0 else ('rust', 'python')):
+        for name in ('rust',):
             elapsed, app = timed(lambda: Backend(name, environments[name]))
             result[name]['cold'].append(elapsed)
             try:
@@ -188,9 +187,8 @@ def main():
     root = Path(tempfile.mkdtemp(prefix='runtjik-rust-bench-'))
     print('Private fixtures: ' + str(root), flush=True)
     result = {'date': time.strftime('%Y-%m-%d'), 'kernel': platform.release(), 'trials': args.trials,
-              'method': 'Alternating Python/Rust order; 1000 synthetic desktop entries plus Unicode fixture and any system Flatpak exports; process-cold, retained OS and icon caches. Backend timings include pipe JSON serialization. UI endpoint is layer/input readiness, not first painted pixels. PSS/RSS sum root and descendants; compositor excluded. No user data or config changed.'}
+              'method': 'Rust-only trials; 1000 synthetic desktop entries plus Unicode fixture and any system Flatpak exports; process-cold, retained OS and icon caches. Backend timings include pipe JSON serialization. UI endpoint is layer/input readiness, not first painted pixels. PSS/RSS sum root and descendants; compositor excluded. No user data or config changed.'}
     result['binary_sha256'] = hashlib.sha256((APP / 'runtjik-core').read_bytes()).hexdigest()
-    result['python_sha256'] = hashlib.sha256((APP / 'runtjik.py').read_bytes()).hexdigest()
     result['baseline_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=APP, text=True).strip()
     result['backend'] = backends(root, args.trials)
     args.output.write_text(json.dumps(result, indent=2) + '\n')

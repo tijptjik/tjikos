@@ -13,8 +13,7 @@ with private_compositor():
     home = temp / 'app'
     home.mkdir()
     shutil.copytree(app / 'qml', home / 'qml')
-    for path in app.glob('*.py'):
-        shutil.copy2(path, home / path.name)
+    shutil.copy2(app / 'runtjik-core', home / 'runtjik-core')
     shell = home / 'qml/shell.qml'
     shell.write_text(shell.read_text().replace('property string appMode:', 'property string testActionMode: ""\n    property string appMode:').replace('function send(data) {', "function send(data) {if(data.op==='activate')root.testActionMode=data.mode;").replace('function testState(): string {', '''function readingAction(action: string): void {
         if(action==='file'){root.selected=0;root.activate(true);}

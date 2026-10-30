@@ -42,7 +42,7 @@ if '--package' in sys.argv:
 checks=[
  ('notjik','Notjik (notification handlers)',['python3','-B','-m','unittest','discover','-s','tests','-p','test_handlers.py','-v'],root/'apps/notjik',{}),
  ('bartjik','Bartjik (panel core)',['python3','-B','-m','unittest','discover','-s','tests','-p','test_core.py','-v'],root/'apps/bartjik',{'PYTHONPATH':str(root/'apps/bartjik')}),
- ('runtjik','Runtjik (launcher checks)',['python3','-B','-m','unittest','discover','-s','tests','-v'],root/'apps/runtjik',{}),
+ ('runtjik','Runtjik (launcher checks)',['python3','-B','tests/rust_parity.py'],root/'apps/runtjik',{}),
  ('tjikup','Tjikup (workflow checks)',['python3','-B','-m','unittest','discover','-s','tests','-v'],root/'apps/tjikup',{'PYTHONPATH':str(root/'apps/tjikup/src')}),
  ('mailtjik','Mailtjik (archive checks)',['python3','-B','-m','unittest','discover','-s','tests','-v'],root/'apps/mailtjik',{'PYTHONPATH':str(root/'apps/mailtjik/backend')}),
  ('greetjik','Greetjik (render checks)',['cargo','test','--manifest-path',str(root/'apps/greetjik/Cargo.toml'),'--target-dir',str(work/'cargo-target')],root,{})]

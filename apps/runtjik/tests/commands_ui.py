@@ -13,8 +13,7 @@ with private_compositor():
     temp = Path(os.environ['XDG_RUNTIME_DIR']).parent
     home = temp / 'app'
     shutil.copytree(app / 'qml', home / 'qml')
-    for path in app.glob('*.py'):
-        shutil.copy2(path, home / path.name)
+    shutil.copy2(app / 'runtjik-core', home / 'runtjik-core')
     shell = home / 'qml/shell.qml'
     shell.write_text(shell.read_text().replace('    function receive(msg) {', '''    property bool intermediateEdit: false
     function receive(msg) {

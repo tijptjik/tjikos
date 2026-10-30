@@ -16,10 +16,10 @@ with private_compositor():
     (config / 'tasktjik.conf').write_text('[tasktjik]\nauthority=""\ndirectory="'+str(temp/'tasks')+'"\n')
     home = temp / 'app'
     shutil.copytree(app / 'qml', home / 'qml')
-    shutil.copy2(app / 'tasktjik.py', home / 'tasktjik.py')
+    shutil.copy2(app / 'tasktjik-api', home / 'tasktjik-api')
     os.environ['TASKTJIK_HOME'] = str(home)
     def request(value):
-        return json.loads(subprocess.check_output(['python3', '-B', str(home/'tasktjik.py'), 'request'], input=json.dumps(value), text=True))
+        return json.loads(subprocess.check_output([str(home/'tasktjik-api'), 'request'], input=json.dumps(value), text=True))
     task = request({'action':'create','fields':{'title':'Synthetic agent task','assignee':'agent:demo','acceptance':['Render task details']}})
     request({'action':'status','id':task['id'],'revision':task['revision'],'actor':'agent:demo','status':'blocked','blockers':[{'reason':'Awaiting synthetic review'}]})
     component = home/'qml/TodoApp.qml'

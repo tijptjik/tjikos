@@ -574,7 +574,9 @@ and leave the real clipboard, files and recorder unchanged.
 ## Development and validation
 
 ```sh
-python3 -B -m unittest discover -s tests -v
+cargo test --release --locked
+python3 -B tests/rust_parity.py
+python3 -B tests/rust_migration.py
 bash scripts/check.sh
 bin/runtjik --demo
 # Optional live regression, with synthetic Kitty windows in a private Hyprland:
@@ -690,3 +692,22 @@ Window cards currently use icons and titles, not live screenshot previews.
 `/todo` opens the first keyboard-action app mode, with a collapsed search bar,
 grouped task lists, recurring completion history and shared Si authority.
 See [Todo controls, notification cards and encrypted backup setup](docs/todo.md).
+
+### Tasktjik cache
+
+The Todo plugin uses the configured Tasktjik HTTPS API (`[tasktjik].url` in
+`~/.config/tasktjik/tasktjik.conf`). `/todo` and `/reading` share a complete,
+private snapshot under `$XDG_CACHE_HOME/tasktjik` (normally `~/.cache/tasktjik`).
+Snapshots are isolated by endpoint and device identity and include both tasks
+and reading items. The first visit fetches asynchronously; subsequent visits
+render the saved snapshot immediately, including after a launcher restart.
+While the panel is open, it checks for updates every second and refreshes the
+server snapshot at most every 15 seconds. Background refresh preserves open
+editors. A failed request retains the previous snapshot and displays sync status.
+Full refreshes reconcile changes and deletions from other devices.
+
+Edits require acknowledgement from the live authority; the cache is not an
+offline write queue. Acknowledged tasks update the cache immediately, followed
+by full reconciliation. Reminder ownership/claims continue to use the live
+Tasktjik client. Existing HTTPS/Tailscale authentication and certificate checks
+are unchanged; configure the canonical HTTPS URL when using a redirect alias.
