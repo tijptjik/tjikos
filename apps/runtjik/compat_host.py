@@ -43,7 +43,7 @@ def main():
             elif operation == 'general':
                 entries = []
                 for name, provider in launcher.providers.items():
-                    if name not in ('apps', 'commands'):
+                    if name not in ('apps', 'commands') and name not in request.get('native_providers', []):
                         for row in provider.query(request.get('query', ''), launcher.settings):
                             entry = row if isinstance(row, r.Entry) else r.Entry(**row)
                             if entry.provider != name or not entry.id.startswith(name + ':'):

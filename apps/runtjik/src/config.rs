@@ -22,13 +22,16 @@ fn same_type(a: &Value, b: &Value) -> bool {
         || (a.is_f64() && b.is_number())
 }
 pub fn load() -> Result<Value> {
-    let mut settings = contract()["DEFAULTS"].clone();
     let source = match fs::read_to_string(path()) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(e) => return Err(e.into()),
     };
-    let raw: Value = serde_json::to_value(toml::from_str::<toml::Table>(&source)?)?;
+    parse(&source)
+}
+pub fn parse(source: &str) -> Result<Value> {
+    let mut settings = contract()["DEFAULTS"].clone();
+    let raw: Value = serde_json::to_value(toml::from_str::<toml::Table>(source)?)?;
     for (section, values) in raw.as_object().unwrap() {
         let defaults = settings
             .get_mut(section)

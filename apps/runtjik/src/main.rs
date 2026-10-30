@@ -1,12 +1,17 @@
+mod browser;
+mod close;
 mod compat;
 mod config;
 mod controller;
 mod discovery;
 mod icons;
 mod launcher;
+mod menus;
+mod settings;
 mod store;
 mod util;
 mod windows;
+mod words;
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
@@ -42,7 +47,9 @@ fn execute() -> Result<()> {
             emit(&store.counts()?)?;
         }
         "control" => controller::control(args.get(1).map(String::as_str).unwrap_or("toggle"))?,
-        "migrate-config" => compat::cli(&args)?,
+        "migrate-config" => emit(&settings::migrate(
+            args.iter().any(|v| v == "--enable-bundled-plugins"),
+        )?)?,
         "serve" | "refresh" => {
             let mut app = launcher::Launcher::new(args.iter().any(|v| v == "--demo"))?;
             if cmd == "refresh" {

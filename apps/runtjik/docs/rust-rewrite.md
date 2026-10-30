@@ -1,13 +1,15 @@
 # Rust core migration and paired measurements
 
-The native core cuts process-cold launcher startup by 30% in this workload,
+These historical first-stage measurements show that the native core cuts process-cold launcher startup by 30% in this workload,
 reduces normal-search helper PSS by 72%, and reduces median lookup round-trip
 latency by 46%. Warm hotkey reopening is effectively unchanged. Quickshell/QML
 continues to account for most full-application memory and warm opening time.
 
 This is an experimental native core migration, **not a Python-free replacement**.
-It is isolated on branch `runtjik-rust`; it has not been installed into the live
-desktop or merged into main.
+The first-stage implementation was merged into main as `3ca928e`. It has not been
+installed into the live desktop. [The next migration step](native-providers.md)
+moves config, close actions, Words and Browser into Rust; the compatibility-host
+boundary and measurements below describe the earlier first-stage implementation.
 
 ## Implementation boundary
 

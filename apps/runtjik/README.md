@@ -7,24 +7,33 @@ and Hyprland window switching. The layout takes inspiration from
 [Hamr](https://github.com/Stewart86/hamr); this implementation is independent.
 Rose Pine surfaces and Rose Punk accents match Bartjik and Notjik.
 
-## Native backend worktree
+## Native backend
 
-This branch runs a Rust launcher core behind the existing QML interface. Native
-code handles the controller, configuration reads and validation, Gio discovery,
-Fish-history filtering, index and icon caches, fuzzy ranking, pagination,
-SQLite history, application launches and Hyprland window selection/focusing.
-GTK/GdkPixbuf still resolve themes and rasterize SVGs using the same libraries.
+Runtjik runs a Rust launcher core behind the existing QML interface. Native code
+handles the controller, configuration validation/editing/migration, command menus
+and general command search, Gio discovery, Fish-history filtering, index/icon
+caches, fuzzy ranking, pagination, SQLite history, application launches, Hyprland
+window selection/focusing, and graceful-close escalation using process identities
+and pidfds. GTK/GdkPixbuf still resolve themes and rasterize SVGs.
 
-This is a **native core migration, not a Python-free rewrite**. Python remains as
-a reference backend and an on-demand compatibility host for API-v1 providers,
-configuration editing/migration, command menus, and close/escalation actions.
-The host stays alive after first use to preserve provider state. Consequently,
-normal search/open/switch runs without Python, but using a provider or one of
-those compatibility paths adds startup cost and can use more total helper RAM
-than the original implementation. The UI remains Quickshell/QML.
+The Words and Browser providers now also run in Rust. Dictionary requests use
+`curl` with bounded response size, HTTPS-only redirects, timeouts and three worker
+threads; results appear independently and stale jobs cannot replace a newer query.
+Browser queries/actions retain the existing private Unix-socket protocol and
+window-scoped tab navigation. Its separate Firefox native-messaging bridge is
+still Python.
 
-[Paired timings, memory measurements and validation](docs/rust-rewrite.md)
-include the compatibility-host cost, raw samples and reproduction commands.
+Python remains as the reference backend and an on-demand compatibility host for
+Clipboard, Screenshots, Recorder, the Tasktjik adapter and third-party API-v1
+providers. Capture workers/countdown, the image-viewer helper and the browser
+extension bridge also remain Python. The compatibility host stays alive after use
+to preserve provider state, so those paths still carry its startup/memory cost.
+Third-party extensions retain reference query routing through that host.
+Normal search/open/switch/close, command menus, config, Words and Browser no longer
+need to start the launcher compatibility host.
+
+[Current migration status and measurements](docs/native-providers.md) ·
+[Historical first-stage comparison](docs/rust-rewrite.md)
 
 For comparison, fully quit the current instance before selecting the reference:
 

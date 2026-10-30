@@ -41,7 +41,7 @@ def main():
             initial = status()
             assert initial['indexed'] == 15 and initial['total'] == 15, initial
             pid = initial['pid']
-            for query, expected in [('fire', 1), ('zzzzzz', 0), ('', 15), ('/define test', 2), ('/cliphist', 3)]:
+            for query, expected in [('fire', 1), ('todo', 1), ('zzzzzz', 0), ('', 15), ('/define test', 2), ('/cliphist', 3)]:
                 ipc('test', query)
                 wait(lambda: json.loads(ipc('testState'))['resultQuery'] == query)
                 rows = json.loads(ipc('testState'))['rows']

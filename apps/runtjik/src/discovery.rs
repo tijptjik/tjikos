@@ -470,7 +470,10 @@ pub fn score(query: &str, e: &Entry) -> Option<i64> {
     if query.is_empty() {
         return Some(0);
     }
-    let name = folded(&e.name);
+    let mut name = folded(&e.name);
+    if e.provider == "internal" && e.id.starts_with('/') {
+        name = name.trim_start_matches('/').into();
+    }
     let hay = format!("{} {} {}", name, folded(&e.keywords), folded(&e.subtitle));
     let mut score = 0;
     for w in folded(query).split_whitespace() {

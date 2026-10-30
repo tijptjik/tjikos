@@ -8,7 +8,13 @@ use std::{
 pub fn root() -> PathBuf {
     std::env::var_os("RUNTJIK_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+        .unwrap_or_else(|| {
+            let exe = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(PathBuf::from));
+            exe.filter(|p| p.join("qml").is_dir())
+                .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+        })
 }
 pub struct Host {
     child: Child,
@@ -45,15 +51,4 @@ impl Drop for Host {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
-}
-pub fn cli(args: &[String]) -> Result<()> {
-    let status = Command::new("python3")
-        .arg("-B")
-        .arg(root().join("runtjik.py"))
-        .args(args)
-        .status()?;
-    if !status.success() {
-        bail!("Compatibility command failed");
-    }
-    Ok(())
 }

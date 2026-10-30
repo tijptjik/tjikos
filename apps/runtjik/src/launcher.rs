@@ -24,9 +24,11 @@ pub struct Launcher {
     last_query: String,
     page_query: String,
     page: Vec<(Entry, i64)>,
-    closing: bool,
+    closing: crate::close::Tracking,
     custom: bool,
     reset_scope: bool,
+    words: crate::words::Words,
+    browser: crate::browser::Browser,
 }
 impl Launcher {
     pub fn new(demo: bool) -> Result<Self> {
@@ -59,9 +61,11 @@ impl Launcher {
             last_query: String::new(),
             page_query: String::new(),
             page: vec![],
-            closing: false,
+            closing: crate::close::Tracking::new(),
             custom,
             reset_scope: true,
+            words: crate::words::Words::default(),
+            browser: crate::browser::Browser::default(),
         };
         app.refresh(false)?;
         Ok(app)
@@ -104,6 +108,7 @@ impl Launcher {
     fn bridge(&mut self, mut req: Value) -> Result<Value> {
         req["reset_scope"] = json!(self.reset_scope);
         self.reset_scope = false;
+        req["native_providers"] = json!(["Words", "Browser"]);
         req["settings"] = self.settings.clone();
         req["entries"] = serde_json::to_value(&self.entries)?;
         req["demo"] = json!(self.demo);
@@ -117,6 +122,29 @@ impl Launcher {
                 Err(e)
             }
         }
+    }
+    fn provider_payload(
+        &mut self,
+        entries: Vec<Entry>,
+        display: &str,
+        offset: usize,
+        limit: usize,
+        pending: bool,
+        browser: bool,
+    ) -> Value {
+        let total = entries.len();
+        self.current = entries.iter().map(|e| (e.id.clone(), e.clone())).collect();
+        let rows:Vec<_>=entries.into_iter().skip(offset).take(limit).map(|e|json!({"id":e.id,"name":e.name,"subtitle":e.subtitle,"provider":e.provider,"icon":self.icons.resolve(&e.icon),"favicon":s(&e.data["favicon"]),"hide_launcher":e.data["capture"].as_str().is_some_and(|s|!s.is_empty()),"keep_open":e.data["keep_open"]==true,"thumbnail":s(&e.data["thumbnail"]),"empty_state":e.data["empty_state"]==true,"disabled":e.data["disabled"]==true,"count":0,"windows":0})).collect();
+        let next = offset + rows.len();
+        let mut v = self.payload(rows);
+        let scope = if browser {
+            self.browser.scope.as_ref()
+        } else {
+            None
+        };
+        for(k,val)in json!({"query":display,"browser_tab_scope":scope.is_some(),"message":scope.map(|(_,_,title)|format!("Tabs in {title} · Esc returns to search")).unwrap_or_default(),"pending":pending,"total":total,"offset":offset,"next_offset":next,"has_more":next<total}).as_object().unwrap(){v[k]=val.clone();}
+        let _ = self.icons.flush();
+        v
     }
     fn payload(&self, rows: Vec<Value>) -> Value {
         json!({"kind":"results","version":"0.8.3","results":rows,"config":self.settings,"indexed":self.entries.len(),"warnings":self.warnings,"demo":self.demo})
@@ -202,32 +230,82 @@ impl Launcher {
         } else {
             q
         };
-        if (q.starts_with('/') && !run && !running) || self.closing {
-            let v =
-                self.bridge(json!({"op":"query","query":display,"offset":offset,"limit":limit}))?;
-            if self.closing {
-                self.closing = v["closing"].as_array().is_some_and(|v| !v.is_empty());
+        let command = q.split_whitespace().next().unwrap_or("");
+        if command != "/tabs" {
+            self.browser.scope = None;
+        }
+        let enabled = strings(&self.settings["plugins"]["enabled"]);
+        if enabled.iter().any(|s| s == "Words") && ["/define", "/synonym"].contains(&command) {
+            let rows = self.words.query(q, &self.settings, self.demo);
+            return Ok(self.provider_payload(
+                rows,
+                display,
+                offset,
+                limit,
+                self.words.pending,
+                false,
+            ));
+        }
+        if enabled.iter().any(|s| s == "Browser")
+            && ["/browser", "/zen", "/tabs"].contains(&command)
+        {
+            return match self.browser.query(q, self.demo) {
+                Ok(rows) => Ok(self.provider_payload(rows, display, offset, limit, false, true)),
+                Err(e) => {
+                    let mut v = self.payload(vec![]);
+                    v["query"] = json!(display);
+                    v["message"] = json!(format!("Browser: {e}"));
+                    v["app_mode"] = json!("");
+                    Ok(v)
+                }
+            };
+        }
+        if q.starts_with('/') && !run && !running && !self.custom {
+            if let Some(mut rows) = crate::menus::query(q, &self.settings)? {
+                for row in &mut rows {
+                    row["icon"] = json!(self.icons.resolve(s(&row["icon"])));
+                }
+                let _ = self.icons.flush();
+                let mut v = self.payload(rows);
+                v["query"] = json!(display);
+                return Ok(v);
             }
-            return Ok(v);
+        }
+        if q.starts_with('/') && !run && !running {
+            return self
+                .bridge(json!({"op":"query","query":display,"offset":offset,"limit":limit}));
         }
         self.reset_scope = true;
-        // All bundled providers return no general-search candidates. API-v1 extensions may contribute.
+        // Rank discovery, commands and optional Browser tabs; extensions use the reference path.
         let mut candidates: Vec<Entry> = self
             .entries
             .iter()
             .filter(|e| e.provider == if run { "commands" } else { "apps" })
             .cloned()
             .collect();
-        if self.custom && !run && !running {
-            let result = self.bridge(json!({"op":"general","query":q}))?;
-            if result["kind"] == "error" {
-                bail!("{}", s(&result["message"]));
+        if !search.trim().is_empty() && !run && !running {
+            candidates.extend(crate::menus::entries(&self.settings));
+        }
+        if enabled.iter().any(|s| s == "Browser") && !run && !running {
+            match self.browser.query(q, self.demo) {
+                Ok(rows) => candidates.extend(rows),
+                Err(e) => {
+                    let warning = format!("Browser: {e}");
+                    if !self.warnings.contains(&warning) {
+                        self.warnings.push(warning);
+                    }
+                }
             }
-            candidates.extend(serde_json::from_value::<Vec<Entry>>(
-                result["entries"].clone(),
-            )?);
         }
         let clients = self.clients();
+        let live: std::collections::HashSet<_> = clients
+            .iter()
+            .map(|c| s(&c["address"]).to_owned())
+            .collect();
+        self.closing.retain(|_, addresses| {
+            addresses.retain(|a| live.contains(a));
+            !addresses.is_empty()
+        });
         let counts = self
             .store
             .as_ref()
@@ -304,7 +382,7 @@ impl Launcher {
         let _ = self.icons.flush();
         let next = offset + rows.len();
         let mut v = self.payload(rows);
-        for(k,value)in json!({"total":total,"query":display,"offset":offset,"next_offset":next,"has_more":next<total,"closing":[]}).as_object().unwrap(){v[k]=value.clone();}
+        for(k,value)in json!({"total":total,"query":display,"offset":offset,"next_offset":next,"has_more":next<total,"closing":self.closing.keys().collect::<Vec<_>>()}).as_object().unwrap(){v[k]=value.clone();}
         Ok(v)
     }
     fn activate(&mut self, req: Value) -> Result<Value> {
@@ -325,11 +403,101 @@ impl Launcher {
             v["message"] = json!(format!("Index rebuilt · {} entries", self.entries.len()));
             return Ok(v);
         }
+        if id.starts_with('/') {
+            if mode == "close" {
+                return Ok(
+                    json!({"kind":"message","message":"Ctrl+Enter closes applications, not launcher commands"}),
+                );
+            }
+            if ["/config", "/bindings", "/shortcuts"].contains(&id) {
+                return Ok(json!({"kind":"edit","text":id}));
+            }
+            if id == "/config/error" || id.starts_with("/shortcuts/") {
+                return Ok(
+                    json!({"kind":"message","message":"Type a command or press Escape to close"}),
+                );
+            }
+            if let Some(text) = id.strip_prefix("/config ") {
+                let (key, value) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
+                if value.is_empty()
+                    && crate::settings::featured(&self.settings)
+                        .iter()
+                        .any(|(k, _)| k == key)
+                {
+                    return Ok(
+                        json!({"kind":"edit","text":format!("{id} {}",crate::settings::display(crate::settings::get(&self.settings,key))),"select_value":true}),
+                    );
+                }
+                if self.demo {
+                    return Ok(
+                        json!({"kind":"message","message":"Demo mode does not change your config"}),
+                    );
+                }
+                crate::settings::save(key, value)?;
+                *self = Self::new(self.demo)?;
+                let mut v = self.query("/config", 0, None)?;
+                v["edit_query"] = json!("/config");
+                v["apply_config"] = json!(true);
+                v["message"] = json!(format!("Saved {key} in runtjik.conf"));
+                return Ok(v);
+            }
+            if id == "/stats" {
+                let counts = self
+                    .store
+                    .as_ref()
+                    .map(|s| s.counts())
+                    .transpose()?
+                    .unwrap_or(json!({}));
+                let total = |prefix: &str| {
+                    counts
+                        .as_object()
+                        .unwrap()
+                        .iter()
+                        .filter(|(k, _)| k.starts_with(prefix))
+                        .map(|(_, v)| v["count"].as_i64().unwrap_or(0))
+                        .sum::<i64>()
+                };
+                return Ok(
+                    json!({"kind":"message","message":format!("{} launches · {} window switches · {} indexed entries",total("launch:"),total("switch:"),self.entries.len())}),
+                );
+            }
+            if let Some(c) = crate::menus::commands(&self.settings).iter().find(|c| {
+                !c.provider.is_empty() && (c.id == id || c.aliases.iter().any(|a| a == id))
+            }) {
+                if !c.app {
+                    return Ok(json!({"kind":"edit","text":format!("{id} ")}));
+                }
+            }
+        }
         let entry = self
             .current
             .get(id)
             .or_else(|| self.entries.iter().find(|e| e.id == id))
             .cloned();
+        if let Some(e) = &entry {
+            if e.provider == "Words" {
+                if mode == "close" {
+                    return Ok(
+                        json!({"kind":"message","message":"Ctrl+Enter is available for applications and commands with matching windows"}),
+                    );
+                }
+                return crate::words::Words::activate(e, self.demo);
+            }
+            if e.provider == "Browser" {
+                let action = self.browser.activate(e, mode, self.demo)?;
+                if mode == "close" {
+                    let q = if self.last_query.is_empty() {
+                        "/tabs".into()
+                    } else {
+                        self.last_query.clone()
+                    };
+                    let mut value = self.query(&q, 0, None)?;
+                    value["message"] = action["message"].clone();
+                    return Ok(value);
+                }
+                return Ok(action);
+            }
+        }
         if mode != "close" {
             match id {
                 "/pin" => return Ok(json!({"kind":"pin"})),
@@ -390,17 +558,39 @@ impl Launcher {
             }
             return Ok(json!({"kind":"activated","demo":self.demo}));
         }
-        let pending = if let Some(store) = &self.store {
-            store.0.query_row(
-                "SELECT EXISTS(SELECT 1 FROM close_requests WHERE entry_id=?)",
-                [id],
-                |r| r.get::<_, bool>(0),
-            )?
+        let pending = if let (Some(store), Some(e)) = (&self.store, &entry) {
+            crate::close::pending(store, e, &self.settings)?
         } else {
-            false
+            crate::close::Pending::new()
         };
         if let Some(e) = entry.as_ref().filter(|e| {
-            ["apps", "commands"].contains(&e.provider.as_str()) && mode == "launch" && !pending
+            ["apps", "commands"].contains(&e.provider.as_str())
+                && (mode == "close" || (mode == "launch" && !pending.is_empty()))
+        }) {
+            if self.demo {
+                return Ok(
+                    json!({"kind":"activated","action":"close","demo":true,"message":format!("Demo: graceful close request for {}",e.name)}),
+                );
+            }
+            let clients = if mode == "launch" {
+                vec![]
+            } else {
+                self.matched(e, &crate::windows::clients()?)
+            };
+            return crate::close::close(
+                e,
+                self.store.as_ref().unwrap(),
+                &self.settings,
+                clients,
+                s(&req["address"]),
+                pending,
+                &mut self.closing,
+            );
+        }
+        if let Some(e) = entry.as_ref().filter(|e| {
+            ["apps", "commands"].contains(&e.provider.as_str())
+                && mode == "launch"
+                && pending.is_empty()
         }) {
             if !self.demo {
                 let override_args = self.settings["overrides"][id].get("argv").map(strings);
@@ -432,9 +622,6 @@ impl Launcher {
             req["entry"] = serde_json::to_value(e)?;
         }
         let result = self.bridge(req)?;
-        if result["action"] == "close" {
-            self.closing = true;
-        }
         if result["apply_config"] == true {
             self.settings = config::load()?;
             self.icons = Icons::new(&self.settings);
