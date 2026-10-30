@@ -293,7 +293,11 @@ pub fn refresh(repo: &Path, args: &[String]) -> Result<i32> {
 }
 pub fn cache(args: &[String]) -> Result<i32> {
     let name = args.first().context("cache-install needs name")?;
-    if !["tjikup", "notjik", "bartjik", "greetjik", "runtjik"].contains(&name.as_str()) {
+    if ![
+        "tjikup", "notjik", "bartjik", "greetjik", "runtjik", "tasktjik",
+    ]
+    .contains(&name.as_str())
+    {
         bail!("unknown install cache");
     }
     let separator = args
