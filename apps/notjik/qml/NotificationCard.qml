@@ -379,13 +379,17 @@ Rectangle {
             visible: source.toString().length > 0 && status === Loader.Ready && !!item
                 && (item.hasContent !== undefined ? item.hasContent : item.implicitHeight > 0)
             Layout.preferredHeight: item ? item.implicitHeight : 0
-            readonly property var builtins: ({progress: "components/Progress.qml", status: "components/Status.qml", timer: "components/Countdown.qml", telegram: "components/Telegram.qml", "results-table": "components/ResultsTable.qml"})
+            readonly property var builtins: ({todo: "components/Todo.qml", progress: "components/Progress.qml", status: "components/Status.qml", timer: "components/Countdown.qml", telegram: "components/Telegram.qml", "results-table": "components/ResultsTable.qml"})
             function loadComponent() {
                 const custom = card.controller.config.components[card.notice.type];
                 const builtin = builtins[card.notice.type];
                 const url = custom || (builtin ? Qt.resolvedUrl(builtin) : "");
                 if (url) {
                     const properties = {notice: card.notice, theme: card.theme, now: card.controller.now};
+                    if (card.notice.type === "todo" && !custom) {
+                        properties.controller = card.controller;
+                        properties.historyMode = card.historyMode || Logic.callerBlocked(card.notice, card.controller.config);
+                    }
                     if (card.notice.type === "telegram" && !custom) {
                         properties.showBody = Qt.binding(() => !card.structuredReady);
                         properties.controlsRevealed = Qt.binding(() => card.controlsRevealed);
