@@ -48,7 +48,21 @@ PanelWindow {
             x:16;y:16;width:parent.width-32;height:32
             Image {width:22;height:22;anchors.verticalCenter:parent.verticalCenter;source:"history-bell.svg"}
             Text {x:32;anchors.verticalCenter:parent.verticalCenter;text:"Notifications";color:drawer.theme.text;font.family:drawer.theme.font;font.pixelSize:16;font.weight:Font.DemiBold}
-            Button {anchors.right:parent.right;width:32;height:32;text:"×";Accessible.name:"Close notification history";onClicked:drawer.controller.setDrawer(false)}
+            Button {
+                id:closeButton
+                anchors.right:parent.right;width:32;height:32;padding:6;hoverEnabled:true
+                Accessible.name:"Close notification history"
+                background:Rectangle {
+                    radius:8;color:drawer.theme.surface
+                    border.width:closeButton.visualFocus?1:0;border.color:drawer.theme.accent
+                }
+                contentItem:Text {
+                    text:"close";font.family:"Material Symbols Rounded";font.pixelSize:20
+                    horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter
+                    color:closeButton.hovered || closeButton.down?drawer.theme.accent:drawer.theme.text
+                }
+                onClicked:drawer.controller.setDrawer(false)
+            }
         }
         Rectangle {x:16;y:58;width:parent.width-32;height:1;color:drawer.theme.surface}
         HistoryView {
