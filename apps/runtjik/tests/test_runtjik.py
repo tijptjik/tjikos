@@ -525,12 +525,14 @@ class LauncherTests(unittest.TestCase):
     def test_launcher_commands_use_companion_artwork_in_all_views(self):
         launcher = self.launcher()
         rows = {row["id"]: row["icon"] for row in launcher.query("/")["results"]}
-        self.assertEqual(rows, {"/processes":"runtjik-stats", "/run":"org.gnome.Terminal", "/refresh":"runtjik-refresh", "/pin":"runtjik-pin",
-                               "/grid":"runtjik-grid", "/list":"runtjik-list",
-                               "/stats":"runtjik-stats", "/config":"runtjik-config",
-                               "/bindings":"runtjik-shortcuts", "/define":"accessories-dictionary", "/synonym":"accessories-dictionary", "/cliphist":"edit-paste", "/rec":r.Recorder.icon, "/grab":r.Screenshots.icon, "/todo":r.Todo.icon, "/reading":r.Todo.icon})
-        self.assertEqual({row["icon"] for row in launcher.query("/config")["results"]}, {"runtjik-config"})
-        self.assertEqual({row["icon"] for row in launcher.query("/shortcuts")["results"]}, {"runtjik-shortcuts"})
+        expected = {command: str(Path(r.__file__).resolve().parent / 'qml/icons/commands' /
+                    ('runtjik-' + ('shortcuts' if command == '/bindings' else command[1:]) + '.svg'))
+                    for command in ('/processes', '/run', '/refresh', '/pin', '/grid', '/list', '/stats',
+                                    '/config', '/bindings', '/define', '/synonym', '/cliphist', '/rec', '/grab', '/todo', '/reading')}
+        self.assertEqual(rows, expected)
+        self.assertTrue(all(Path(path).is_file() for path in rows.values()))
+        self.assertEqual({row["icon"] for row in launcher.query("/config")["results"]}, {expected['/config']})
+        self.assertEqual({row["icon"] for row in launcher.query("/shortcuts")["results"]}, {expected['/bindings']})
         launcher._icons.resolve.side_effect = OSError("Artwork unavailable")
         self.assertEqual(len(launcher.query("/")["results"]), 16)
 

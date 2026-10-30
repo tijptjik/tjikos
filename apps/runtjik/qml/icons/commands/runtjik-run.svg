@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<g id="frameless-artwork" transform="translate(-0.653061 -0.142857) scale(1.020408)"><defs>
+ <linearGradient id="enamel" x1="0" y1="0" x2=".6" y2="1"><stop stop-color="#f5c3ca" /><stop offset=".4" stop-color="#e88bb6" /><stop offset="1" stop-color="#a4688f" /></linearGradient>
+ <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f3b6c0" /><stop offset=".6" stop-color="#e56ea1" /><stop offset="1" stop-color="#a25682" /></linearGradient>
+ <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ceb7cc" /><stop offset=".5" stop-color="#9272ba" /><stop offset="1" stop-color="#6e5991" /></linearGradient>
+</defs>
+<g stroke-linecap="round" stroke-linejoin="round" /><title>terminal</title><desc>Near-frontal construction study. Shallow right and lower depth; upper-left illumination; material-specific surfaces.</desc><defs>
+<linearGradient id="terminal-enclosure" x1="0" y1="0" x2=".45" y2="1"><stop stop-color="#ffafcf" /><stop offset=".45" stop-color="#f16aa8" /><stop offset="1" stop-color="#d45b98" /></linearGradient>
+<linearGradient id="screen" x1="0" y1="0" x2=".4" y2="1"><stop stop-color="#3c6675" /><stop offset=".35" stop-color="#294c60" /><stop offset="1" stop-color="#28354d" /></linearGradient>
+</defs><g data-material="authored" stroke-linecap="round" stroke-linejoin="round">
+
+<path d="M12 10h39q4 0 5 4v36q0 4-4 4H13q-4 0-4-4V14Z" fill="#9c4b80" stroke="#684568" stroke-width=".85" />
+<rect x="8" y="9" width="46" height="42" rx="3" fill="url(#terminal-enclosure)" stroke="#815071" stroke-width=".85" />
+<path d="M11 10h39" stroke="#ffd6df" stroke-width="1" />
+
+<rect x="12" y="14" width="38" height="29" rx="1.6" fill="#803e67" />
+<rect x="14" y="16" width="35" height="26" rx="1" fill="url(#screen)" />
+<path d="M14 43h35" stroke="#f9b0d0" stroke-width=".9" />
+<path d="m21 24 7 6-7 6m14 0h7" fill="none" stroke="#b7f1d3" stroke-width="2.6" />
+
+<path d="M15 47h2m2 0h2m2 0h2" stroke="#943f73" stroke-width="1.1" />
+<circle cx="46" cy="47" r="1.5" fill="#a64d7d" /><circle cx="46" cy="47" r=".85" fill="#ffe3a6" />
+</g></g></svg>

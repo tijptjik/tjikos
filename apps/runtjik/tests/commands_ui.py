@@ -41,6 +41,13 @@ with private_compositor():
                                    stdout=log, stderr=log)
         try:
             wait_for(lambda: state().get('rows'), timeout=20)
+            ipc('test', '/')
+            wait_for(lambda: state().get('resultQuery') == '/')
+            assert all(Path(row['icon']).is_file() for row in state()['rows']), state()
+            ipc('capture', str(temp / 'commands.png'))
+            wait_for(lambda: (temp / 'commands.png').is_file())
+            ipc('test', '')
+            wait_for(lambda: state().get('resultQuery') == '')
             subprocess.run(['wtype', 'todo'], check=True)
             wait_for(lambda: state().get('resultQuery') == 'todo')
             assert state()['rows'][0]['id'] == '/todo', state()

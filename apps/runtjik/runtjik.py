@@ -1040,7 +1040,8 @@ class Launcher:
     def control_icon(self, name):
         # Use the app artwork loader, including full SVG rendering and theme selection.
         try:
-            return self.icons.resolve(name)
+            artwork = Path(__file__).resolve().parent / 'qml/icons/commands' / (name + '.svg')
+            return self.icons.resolve(str(artwork) if artwork.is_file() else name)
         except Exception:
             return name  # Artwork must not hide usable launcher commands.
 
@@ -1056,7 +1057,13 @@ class Launcher:
                     ("/bindings", "Show keyboard shortcuts and dragging", "runtjik-shortcuts")]
         commands.extend((command, description, getattr(self.providers[name], "icon", "accessories-dictionary"))
                         for command, (name, description) in self.plugin_commands.items() if command not in self.plugin_aliases)
-        return commands
+        artwork = Path(__file__).resolve().parent / 'qml/icons/commands'
+        results = []
+        for command, description, fallback in commands:
+            icon = 'runtjik-' + ('shortcuts' if command == '/bindings' else command[1:])
+            results.append((command, description, icon if (artwork / (icon + '.svg')).is_file() else fallback))
+        return results
+
 
     def query(self, query="", offset=0, limit=None):
         if type(offset) is not int or offset < 0:
