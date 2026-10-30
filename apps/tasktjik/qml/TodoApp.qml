@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 Pane {
     padding: 0
-    background: Item {}
+    background: Rectangle {color:theme.background}
     palette.windowText: theme.text
     palette.window: theme.background
     palette.base: theme.background
@@ -28,6 +28,55 @@ Pane {
     property var selected: (stateData.tasks || []).find(t=>t.id===selectedId) || null
     property string errorMessage: ""
     property var plans: []
+    property var sections: ({})
+    function reveal(section) {
+        sections = Object.assign({}, sections, {[section]: true});
+        Qt.callLater(() => {
+            const inputs = {group:groupInput,tags:tagsInput,due:dueInput,repeat:repeatUnit,reference:planInput,reminder:notifyInput};
+            inputs[section].forceActiveFocus();
+        });
+    }
+    component QuietButton: Button {
+        id: control
+        padding: 10
+        horizontalPadding: 16
+        contentItem: Text {text:control.text;color:control.enabled?theme.text:theme.muted;font.pixelSize:13;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
+        background: Rectangle {radius:8;color:control.down?theme.border:control.hovered?theme.surface:'transparent';border.color:control.activeFocus?theme.accent:theme.border}
+    }
+    component Entry: TextField {
+        color:theme.text;placeholderTextColor:theme.muted
+        padding:12;font.pixelSize:14;selectByMouse:true
+        background: Rectangle {radius:8;color:theme.background;border.color:parent.activeFocus?theme.accent:theme.border}
+    }
+    component Choice: ComboBox {
+        id:control
+        implicitWidth:Math.max(120,implicitContentWidth+48);implicitHeight:40
+        padding:10;leftPadding:12;rightPadding:30
+        background: Rectangle {radius:8;color:theme.surface;border.color:control.activeFocus?theme.accent:theme.border}
+    }
+    Shortcut {sequence:'?';onActivated:help.open()}
+    Shortcut {sequence:'Alt+G';enabled:editor==='edit';onActivated:reveal('group')}
+    Shortcut {sequence:'Alt+T';enabled:editor==='edit';onActivated:reveal('tags')}
+    Shortcut {sequence:'Alt+D';enabled:editor==='edit';onActivated:reveal('due')}
+    Shortcut {sequence:'Alt+R';enabled:editor==='edit';onActivated:reveal('repeat')}
+    Shortcut {sequence:'Alt+L';enabled:editor==='edit';onActivated:reveal('reference')}
+    Shortcut {sequence:'Alt+M';enabled:editor==='edit';onActivated:reveal('reminder')}
+    Shortcut {sequence:'Ctrl+Return';enabled:editor==='edit' && titleInput.text.trim()!=='';onActivated:saveEditor()}
+    Popup {
+        id:help
+        anchors.centerIn:parent
+        width:Math.min(app.width-24,480);padding:24;modal:true;focus:true
+        closePolicy:Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        background:Rectangle {color:theme.background;radius:14;border.color:theme.border}
+        contentItem:ColumnLayout {
+            spacing:16
+            Label {text:'Keyboard shortcuts';font.pixelSize:20;color:theme.text}
+            Label {Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted;lineHeight:1.6;text:editor==='edit'?
+                'Alt+G   Group\nAlt+T   Tags\nAlt+D   Due date\nAlt+R   Repeat\nAlt+L   Reference / note\nAlt+M   Reminder\nCtrl+Enter   Save\nEsc   Cancel':
+                'N   New item\nShift+N   Today\nW   This week\nL   Later\nD   Mark done\nT   Edit title\nG   Edit group\nS   Snooze\n/   Search\n↑ / ↓ or J / K   Select item\nEnter   Open reading reference\nEsc   Close window'}
+            QuietButton {text:'Done';onClicked:help.close()}
+        }
+    }
     signal request(var request)
     signal exitApp()
     function action(name, extra) {if(selected)request(Object.assign({action:name,id:selected.id,period:selected.period,revision:selected.revision},extra || {}));}
@@ -40,6 +89,10 @@ Pane {
         notifyInput.checked=editing.notifyBeforeDue!==false;
         leadValue.text=String(editing.notifyBeforeDueLeadValue ?? 1);
         leadUnit.currentIndex=Math.max(0,leadUnit.model.indexOf(editing.notifyBeforeDueLeadUnit || 'days'));
+        sections = {group:!!editing.id && editing.group!=='All',tags:editing.tags.length>0,
+            due:!!editing.due,repeat:!!editing.repeat.unit,reference:!!planInput.text,
+            reminder:!!editing.id && (editing.notifyBeforeDue===false || Number(leadValue.text)!==1 || leadUnit.currentText!=='days')};
+        planPicker.visible=false;
         editor='edit';titleInput.forceActiveFocus();
     }
     function cancelEditor() {
@@ -69,7 +122,7 @@ Pane {
         else if(event.key===Qt.Key_W)view='week';
         else if(event.key===Qt.Key_D)action('toggle');
         else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && collection==='reading')action('open-reference');
-        else if(event.key===Qt.Key_T || event.key===Qt.Key_G){if(selected){openEditor();if(event.key===Qt.Key_G)groupInput.forceActiveFocus();}}
+        else if(event.key===Qt.Key_T || event.key===Qt.Key_G){if(selected){openEditor();if(event.key===Qt.Key_G)reveal('group');}}
         else if(event.key===Qt.Key_S){if(selected)editor='snooze';}
         else if(event.key===Qt.Key_Slash){searching=true;filterInput.forceActiveFocus();}
         else if(event.key===Qt.Key_Escape)exitApp();
@@ -89,17 +142,15 @@ Pane {
         if(!selected && stateData.tasks){const rows=(stateData.groups || []).reduce((rows,g)=>rows.concat(tasks(g)),[]);selectedId=rows.length?rows[0].id:'';}
     }
     ColumnLayout {
-        anchors.fill:parent;spacing:10
+        anchors.fill:parent;spacing:20
         RowLayout {
             Label {text:(collection==='reading'?'READING · ':'TODO · ')+(app.view==='week'?'This week':app.view==='today'?'Today':'Later');font.pixelSize:22;color:theme.text;Layout.fillWidth:true}
-            ComboBox {model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectedId='';}}
-            Button {text:'New';enabled:!draftId;onClicked:{selectedId='';openEditor();}}
-            Button {text:'×';onClicked:{if(draftId)cancelEditor();else app.exitApp();}}
+            Choice {model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectedId='';}}
+            QuietButton {text:'New';enabled:!draftId;onClicked:{selectedId='';openEditor();}}
         }
-        TextField {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:searching;Layout.fillWidth:true;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.forceActiveFocus();}}
-        Label {visible:!editor;text:(collection==='reading'?'Enter open · ':'')+'n new · Shift+N now · w week · l later · d done · t title · g group · s snooze · / search';color:theme.muted;font.pixelSize:11;wrapMode:Text.Wrap;Layout.fillWidth:true}
+        Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:searching;Layout.fillWidth:true;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.forceActiveFocus();}}
         Label {
-            visible:!!selected
+            visible:!editor && !!selected && text!==''
             Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted
             text:selected ? (selected.blockers || []).map(b=>'Blocked: '+b.reason+(b.task_id?' ['+b.task_id+']':'')).concat(
                 (selected.acceptance || []).map(c=>'Accept: '+c),
@@ -138,43 +189,48 @@ Pane {
         ScrollView {
             visible:editor==='edit';Layout.fillWidth:true;Layout.fillHeight:true;clip:true
             ColumnLayout {
-                width:app.width-20
+                width:app.width-16;spacing:12
                 Label {text:draftId?'Read later · save before closing tab':editing && editing.id?'Edit item':'New item';color:theme.text}
-                TextField {color:theme.text;placeholderTextColor:theme.muted;id:titleInput;Layout.fillWidth:true;placeholderText:'Title (required)'}
-                Label {text:'Group';color:theme.muted}
-                ComboBox {id:groupInput;Layout.fillWidth:true;editable:true;model:stateData.groups || [];inputMethodHints:Qt.ImhNoPredictiveText}
-                TextField {color:theme.text;placeholderTextColor:theme.muted;id:tagsInput;Layout.fillWidth:true;placeholderText:'Tags, comma separated'}
-                TextField {color:theme.text;placeholderTextColor:theme.muted;id:dueInput;Layout.fillWidth:true;placeholderText:'Due YYYY-MM-DD (Quick is today)'}
+                Entry {color:theme.text;placeholderTextColor:theme.muted;id:titleInput;Layout.fillWidth:true;placeholderText:'What needs to be done?';font.pixelSize:20;onAccepted:if(text.trim())saveEditor()}
+                Label {visible:!!sections.group;text:'Group';color:theme.muted}
+                Choice {id:groupInput;visible:!!sections.group;Layout.fillWidth:true;editable:true;model:stateData.groups || [];inputMethodHints:Qt.ImhNoPredictiveText}
+                Entry {color:theme.text;placeholderTextColor:theme.muted;id:tagsInput;visible:!!sections.tags;Layout.fillWidth:true;placeholderText:'Tags, comma separated'}
+                Entry {color:theme.text;placeholderTextColor:theme.muted;id:dueInput;visible:!!sections.due;Layout.fillWidth:true;placeholderText:'Due date · YYYY-MM-DD'}
+                Label {visible:!!sections.repeat;text:'Repeat';color:theme.muted}
                 RowLayout {
-                    ComboBox {id:repeatUnit;model:['none','days','weeks','months','years','days-of-the-week','days-of-the-month']}
-                    TextField {color:theme.text;placeholderTextColor:theme.muted;id:repeatValue;Layout.fillWidth:true;placeholderText:'Interval or comma-separated day numbers'}
+                    visible:!!sections.repeat
+                    Choice {id:repeatUnit;model:['none','days','weeks','months','years','days-of-the-week','days-of-the-month']}
+                    Entry {color:theme.text;placeholderTextColor:theme.muted;id:repeatValue;Layout.fillWidth:true;placeholderText:'Interval or comma-separated day numbers'}
                 }
-                Label {text:'Reference';color:theme.muted}
+                Label {visible:!!sections.reference;text:'Reference';color:theme.muted}
                 RowLayout {
-                    TextField {color:theme.text;placeholderTextColor:theme.muted;id:planInput;Layout.fillWidth:true;placeholderText:editing && editing.kind==='reading'?'Reference · https://…':'Reference · Obsidian vault path'}
-                    Button {text:'Find note';visible:!editing || editing.kind!=='reading';onClicked:{request({action:'plans'});planPicker.visible=true;}}
+                    visible:!!sections.reference
+                    Entry {color:theme.text;placeholderTextColor:theme.muted;id:planInput;Layout.fillWidth:true;placeholderText:editing && editing.kind==='reading'?'Reference · https://…':'Reference · Obsidian vault path'}
+                    QuietButton {text:'Find note';visible:!editing || editing.kind!=='reading';onClicked:{request({action:'plans'});planPicker.visible=true;}}
                 }
                 ColumnLayout {
                     id:planPicker;visible:false;Layout.fillWidth:true
-                    TextField {color:theme.text;placeholderTextColor:theme.muted;id:planFilter;placeholderText:'Fuzzy file search';Layout.fillWidth:true}
+                    Entry {color:theme.text;placeholderTextColor:theme.muted;id:planFilter;placeholderText:'Fuzzy file search';Layout.fillWidth:true}
                     Repeater {
                         model:plans.filter(p=>{let i=0;for(const c of p.toLowerCase())if(c===planFilter.text.toLowerCase()[i])i++;return i===planFilter.text.length;}).slice(0,15)
-                        Button {required property string modelData;text:modelData;Layout.fillWidth:true;onClicked:{planInput.text=modelData;planPicker.visible=false;}}
+                        QuietButton {required property string modelData;text:modelData;Layout.fillWidth:true;onClicked:{planInput.text=modelData;planPicker.visible=false;}}
                     }
                 }
                 RowLayout {
+                    visible:!!sections.reminder
                     CheckBox {id:notifyInput;text:'Remind before due';checked:true}
-                    TextField {id:leadValue;Layout.preferredWidth:60;text:'1';validator:IntValidator {bottom:0;top:10000}}
-                    ComboBox {id:leadUnit;model:['hours','days','weeks'];currentIndex:1}
+                    Entry {id:leadValue;Layout.preferredWidth:60;text:'1';validator:IntValidator {bottom:0;top:10000}}
+                    Choice {id:leadUnit;model:['hours','days','weeks'];currentIndex:1}
                 }
                 RowLayout {
-                    Button {text:draftId?'Save and close tab':'Save';enabled:titleInput.text.trim()!=='';onClicked:saveEditor()}
-                    Button {text:'Cancel';onClicked:cancelEditor()}
+                    Layout.topMargin:8;spacing:8
+                    QuietButton {text:draftId?'Save and close tab':'Save';enabled:titleInput.text.trim()!=='';onClicked:saveEditor()}
+                    QuietButton {text:'Cancel';onClicked:cancelEditor()}
                 }
             }
         }
         SnoozePicker {visible:editor==='snooze';Layout.fillWidth:true;ink:theme.text;accent:theme.accent;onChosen:until=>{action('snooze',{until:until});}}
-        Button {visible:editor==='snooze';text:'Cancel';onClicked:{editor='';app.forceActiveFocus();}}
+        QuietButton {visible:editor==='snooze';text:'Cancel';onClicked:{editor='';app.forceActiveFocus();}}
         Label {visible:!!errorMessage || !!stateData.message;text:errorMessage || stateData.message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
     }
     function accepted() {draftId='';editor='';app.forceActiveFocus();}
