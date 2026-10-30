@@ -51,7 +51,7 @@ its original user binary; the successful application backup used `bootstrap.4`.
 
 ## Cutover: requeued against the new validation run
 
-`tjikup-si-native-cutover-repair-20261030.service` is queued after the current
+`tjikup-si-native-cutover-bootstrap7-20261030.service` is queued after the current
 Drive backup and the new restore-validation service. It requires:
 
 1. The new validator's durable `passed` / `complete` status, exit 0.
@@ -62,7 +62,7 @@ Drive backup and the new restore-validation service. It requires:
 
 Only then does it install the staged release and perform native home cutover.
 The reviewed tool/policy revisions are respectively
-`abbd2e8d9391d691aa491c2685efdff440063df5` and
+`8a54f8ca7cb0d067cbbdf2948dc613db2acb0ed0` and
 `971db4a6e5505ee6ef5533255d341b6fbe193032`.
 
 Private logs and exit markers are `repair-run.log`, `repair-run.exit` and
@@ -87,9 +87,10 @@ serializing `OsStr` produced an object where the shared-file safety check expect
 a filename string. Commit `2140d07` fixes this and adds a regression test; all
 three targeted media tests passed. The checksum-verified release-mode build was
 installed in Si's system runtime with the previous binary preserved. The fix
-has since been published in signed Tjikup `bootstrap.7`; Si still uses the local
-repair build pending normal convergence. The pinned user runtime and running
-backups were untouched.
+has since been published in signed Tjikup `bootstrap.7`, now installed and
+checksum-verified in Si's user, system and weekly runtime locations. The queued
+cutover's reviewed runtime pin was updated and its waiting job replaced without
+changing its backup/restore gates or interrupting running backup workers.
 
 At **14:54 HKT**, cleanup succeeded and verified removal of the exact 12 approved
 torrents and their downloaded files, representing 55,654,194,885 logical bytes

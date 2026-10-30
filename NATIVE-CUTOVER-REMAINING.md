@@ -3,6 +3,29 @@
 **Li's native release catch-up and convergence are complete.** The fleet is not
 yet fully cut over: Si still awaits its backup and restore-validation gates.
 
+## Fleet release adoption completed
+
+On 30 October, all nine Tjikup runtime copies (user, privileged system and
+weekly on Fi/Li/Si) were upgraded to published `bootstrap.7` and verified against
+SHA-256 `1f981f941e508f873521ae191bb081afc1552e3de3a532f6544cf68dcdeeac2e`.
+Native configuration checks passed for Fi (103 recipes), Li (96), and Si (46).
+Previous runtimes are preserved privately under
+`~/.local/state/tjikup/bootstrap7-adoption-20261030/` on each machine.
+
+Si's queued cutover is now
+`tjikup-si-native-cutover-bootstrap7-20261030.service`. Its reviewed tools pin
+is `8a54f8ca7cb0d067cbbdf2948dc613db2acb0ed0`, and its Tjikup checksum gate uses
+the release above. All backup, restore, clean-checkout and home-baseline gates
+remain in place. The prior waiting job was replaced; the Drive process and
+invocation remained unchanged (PID 2968161, invocation
+`e49234b147e04a2dad79550ba87362c1`). The published runtime's Transmission dry-run
+passed with no removal candidates; the cleanup timer remains active.
+
+Remaining operational work: finish Si's Drive backup, pass restore validation,
+complete and verify the queued native cutover, then review retirement of the
+remaining legacy compatibility/recovery paths. No Tjikup release rollout is
+pending. Concurrent application development is outside this migration work.
+
 ## Completed
 
 - Published signed `synctjik-v0.1.0-bootstrap.4` from
@@ -83,16 +106,16 @@ current repair evidence and exact follow-up commands/paths.
   Both remain active; no current Drive success is claimed.
 - `bootstrap.5` adds private dependency logs and is staged for installation only
   after the running validator finishes.
-- `tjikup-si-native-cutover-repair-20261030.service` is queued against the new
+- `tjikup-si-native-cutover-bootstrap7-20261030.service` is queued against the new
   validator and also requires a fresh successful application backup.
 - Transmission's sandbox and native shared-file filename check are repaired.
   After explicit approval, all 12 approved torrents and downloaded files were
   removed and verified at 14:54 HKT. The cleanup timer is restored. The system
-  runtime uses the tested local repair build from `2140d07`. The fix is now
+  runtime now uses published `bootstrap.7`. The fix is
   published in signed `tjikup-v0.2.0-bootstrap.7` from `c303b00`; release CI
   passed and downloaded checksums, provenance, capabilities and static linking
-  were verified. Existing fleet runtimes still need their normal release
-  convergence; Si's queued user-runtime checksum gate remains untouched.
+  were verified. Fleet adoption and Si's reviewed checksum-gate update are
+  complete as recorded above.
 
 The original cutover evidence is preserved; the new attempt writes `repair-run.*`
 markers in the same private cutover directory. Neither a queued unit nor an
