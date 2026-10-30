@@ -16,8 +16,11 @@ with private_compositor():
     for path in app.glob('*.py'):
         shutil.copy2(path, home / path.name)
     shell = home / 'qml/shell.qml'
-    shell.write_text(shell.read_text().replace('resultQuery:root.resultQuery,scrollY:',
-        'appMode:root.appMode,editor:todoApp.editor,resultQuery:root.resultQuery,scrollY:'))
+    shell.write_text(shell.read_text().replace('    function receive(msg) {', '''    property bool intermediateEdit: false
+    function receive(msg) {
+        if(msg.kind==='edit' && msg.text.trim()==='/todo')intermediateEdit=true;
+''').replace('resultQuery:root.resultQuery,scrollY:',
+        'intermediateEdit:root.intermediateEdit,appMode:root.appMode,editor:todoApp.editor,resultQuery:root.resultQuery,scrollY:'))
     config = temp / 'runtjik.conf'
     config.write_text('[theme]\nicon_theme="rose-punk"\n')
     os.environ.update(RUNTJIK_HOME=str(home), RUNTJIK_DEMO='1', RUNTJIK_CONFIG=str(config),
@@ -45,6 +48,7 @@ with private_compositor():
             wait_for(lambda: (temp / 'search.png').is_file())
             subprocess.run(['wtype', '-k', 'Return'], check=True)
             wait_for(lambda: state().get('appMode') == 'Todo')
+            assert not state()['intermediateEdit'], state()
             subprocess.run(['wtype', 'n'], check=True)
             wait_for(lambda: state().get('editor') == 'edit')
             ipc('capture', str(temp / 'editor.png'))

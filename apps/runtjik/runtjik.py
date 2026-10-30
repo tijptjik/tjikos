@@ -1295,6 +1295,10 @@ class Launcher:
     def activate(self, entry_id, mode="launch", address="", prepare=False):
         if mode == 'close' and entry_id.startswith('/'):
             return {'kind': 'message', 'message': 'Ctrl+Enter closes applications, not launcher commands'}
+        if entry_id in self.plugin_commands:
+            name, _ = self.plugin_commands[entry_id]
+            if getattr(self.providers[name], 'mode', '') == 'app':
+                return {**self.query(entry_id), 'edit_query': entry_id}
         if entry_id in ("/run", "/processes", "?") or entry_id in self.plugin_commands:
             return {"kind": "edit", "text": entry_id + " "}
         if entry_id == "/pin":

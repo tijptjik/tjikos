@@ -93,9 +93,12 @@ class NavigationTests(unittest.TestCase):
         rows = self.launcher.query('todo')['results']
         self.assertEqual(rows[0]['id'], '/todo')
         self.assertEqual(rows[0]['provider'], 'internal')
-        edit = self.launcher.activate(rows[0]['id'])
-        self.assertEqual(edit, {'kind': 'edit', 'text': '/todo '})
-        self.assertEqual(self.launcher.query(edit['text'])['app_mode'], 'Todo')
+        opened = self.launcher.activate(rows[0]['id'])
+        self.assertEqual(opened['kind'], 'results')
+        self.assertEqual(opened['app_mode'], 'Todo')
+        self.assertEqual(opened['edit_query'], '/todo')
+        self.assertEqual(opened['results'], [])
+        self.assertEqual(self.launcher.activate('/reading')['app_state']['collection'], 'reading')
         for query, command in [('reading', '/reading'), ('config', '/config'),
                                ('shortcuts', '/bindings'), ('rebuild', '/refresh')]:
             with self.subTest(query=query):
