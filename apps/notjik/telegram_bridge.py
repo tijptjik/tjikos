@@ -392,6 +392,8 @@ class Bridge:
         self.ui_ready = True
         self.voice_uploads = {}
         self.voice_sends = {}
+        from telegram_clipboard import SavedClipboard
+        self.clipboard = SavedClipboard(td, publish, state_dir() / "clipboard-outbox")
 
     def show(self, key):
         entry = self.entries.get(key)
@@ -686,6 +688,7 @@ class Bridge:
                 self.show(key)
 
     def handle(self, event):
+        self.clipboard.handle(event)
         kind = event.get("@type")
         if kind == "updateNewChat":
             self.chat_result(event["chat"]["id"], event["chat"])
@@ -939,6 +942,10 @@ class Bridge:
 
     def action(self, request, done):
         try:
+            if request.get("action") == "saveClipboard":
+                self.clipboard.start(request.get("token"))
+                done({"ok": True, "queued": True})
+                return
             if request.get("action") == "demoVoiceReply":
                 self.demo_voice_reply(request, done)
                 return
@@ -1032,7 +1039,7 @@ def socket_request(request):
                 raise ValueError("Invalid Telegram response")
             return response
         except (OSError, ValueError):
-            if request.get("action") == "voiceReply":
+            if request.get("action") in ("voiceReply", "saveClipboard"):
                 # Once bytes may have reached the bridge, an absent response is
                 # not evidence that the send failed. Do not offer a blind retry.
                 return {"ok":False, "uncertain":True, "error":"No confirmation from Telegram; check the chat before retrying"}
@@ -1066,7 +1073,7 @@ class ControlHandler(socketserver.StreamRequestHandler):
             self.server.requests.put_nowait((request, answer))
             response = answer.get(timeout=32)
         except queue.Empty:
-            uncertain = request.get("action") == "voiceReply"
+            uncertain = request.get("action") in ("voiceReply", "saveClipboard")
             response = {"ok":False, "uncertain":uncertain, "error":"No confirmation from Telegram; check the chat before retrying"
                         if uncertain else "Telegram bridge did not accept the request"}
         except (ValueError, OSError, queue.Full):
@@ -1148,6 +1155,7 @@ def run(root, login=False):
             while not stopped and not auth.closed:
                 event = td.receive()
                 bridge.poll_media()
+                bridge.clipboard.poll()
                 if auth.error:
                     if not login:
                         raise ValueError(auth.error)
@@ -1232,8 +1240,11 @@ def run(root, login=False):
 
 def main(root, arguments=None):
     parser = argparse.ArgumentParser(prog="notjikctl telegram")
-    parser.add_argument("operation", choices=("login", "run", "status", "action", "doctor"))
+    parser.add_argument("operation", choices=("login", "run", "status", "action", "doctor", "save-clipboard"))
     args = parser.parse_args(arguments)
+    if args.operation == "save-clipboard":
+        from telegram_clipboard import save
+        return save(root, state_dir(), socket_request)
     try:
         if args.operation in ("login", "run"):
             return run(root, args.operation == "login") or 0

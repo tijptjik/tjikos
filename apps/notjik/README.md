@@ -1010,3 +1010,23 @@ artwork; Notjik's standalone drawer does not require Bartjik.
 for an independent view. It returns no history or avatars while locked, strips
 executable actions, and omits process-local image handles. `notjikctl history-action KEY invoke --index N` and `history-action KEY dismiss` resolve the entry inside
 Notjik and reject archived entries, old sessions and actions while locked.
+
+### Save the clipboard to Telegram
+
+`notjikctl telegram save-clipboard` sends the Wayland clipboard to the signed-in
+account's **Saved Messages** without opening Telegram or changing focus. Dotjik
+binds this command globally to **Ctrl+Shift+V**, replacing terminal paste on that
+chord. Telegram setup/login and `notjik-telegram.service` are required (see above).
+
+Text is sent literally, with no Markdown parsing. Images and copied local files
+are sent as documents to preserve their original bytes; text beyond Telegram's
+4096 UTF-16-unit message limit becomes `clipboard.txt`. The limit is 10 files and
+20 MiB total per invocation; folders and unsupported clipboard formats produce
+an error notification. No clipboard contents appear in notifications or logs.
+
+A transient **Saved to Telegram** toast expires after **1500 ms**, only after
+Telegram confirms every item. Failure/pending notices last five seconds. Sends
+are never automatically retried. Snapshots live privately under
+`~/.local/state/notjik/telegram/clipboard-outbox` and are removed after success.
+Unconfirmed snapshots are retained, including across bridge restarts; inspect
+Saved Messages before retrying and remove abandoned snapshots manually.
