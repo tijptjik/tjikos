@@ -96,13 +96,23 @@ impl Policy {
         }
         empty(&target)?;
         private_dir(&target)?;
+        let (rclone_log, _) = tempfile::Builder::new()
+            .prefix(&format!("{}-rclone-", s.name))
+            .suffix(".log")
+            .tempfile_in(&self.state)?
+            .keep()?;
+        let (restic_log, _) = tempfile::Builder::new()
+            .prefix(&format!("{}-restic-", s.name))
+            .suffix(".log")
+            .tempfile_in(&self.state)?
+            .keep()?;
         let mut child = ManagedChild(
             self.rclone()
                 .args(["mount", "--read-only", "--vfs-cache-mode", "off", &s.source])
                 .arg(&target)
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
-                .stderr(tempfile::tempfile()?)
+                .stderr(rclone_log)
                 .process_group(0)
                 .spawn()?,
             true,
@@ -129,7 +139,7 @@ impl Policy {
                 "Mounted Drive source is empty"
             );
             self.mounts.check(r)?;
-            r.guarded(
+            let (code, _) = r.guarded_logged(
                 self.restic
                     .command()
                     .args([
@@ -143,8 +153,9 @@ impl Policy {
                     ])
                     .arg(&target),
                 Some(&mut child.0),
-                false,
+                &restic_log,
             )?;
+            ensure!(code == 0, "Drive backup failed (exit {code}); private dependency logs retained in the configured state directory");
             Ok(())
         })();
         // Cancellation must not prevent releasing the FUSE mount.

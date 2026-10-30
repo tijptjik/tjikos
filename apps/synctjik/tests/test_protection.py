@@ -79,6 +79,8 @@ elif name=='snapraid':
         fail('FAIL_PARITY')
     if 'status' in a: fail('FAIL_STATUS'); print('content readable')
 elif name=='restic':
+    if 'backup' in a and os.environ.get('FAIL_BACKUP'):
+        print('synthetic-private-backup-diagnostic',file=sys.stderr)
     for action,key in [('backup','FAIL_BACKUP'),('forget','FAIL_RETENTION'),('check','FAIL_CHECK'),('restore','FAIL_RESTORE')]:
         if action in a: fail(key)
     if 'backup' in a and os.environ.get('WAIT_BACKUP'):
@@ -139,6 +141,15 @@ class Fixtures(unittest.TestCase):
         return [c for c in calls if name is None or c[0]==name]
 
 class Protection(Fixtures):
+    def test_failed_drive_backup_retains_private_diagnostics(self):
+        result=self.run_native('drive','backup',ok=False,env={'FAIL_BACKUP':'1'})
+        self.assertNotIn('synthetic-private-backup-diagnostic',result.stdout+result.stderr)
+        logs=list((self.root/'drive-state').glob('documents-*.log'))
+        self.assertEqual(len(logs),2)
+        self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in logs))
+        self.assertTrue(any('synthetic-private-backup-diagnostic' in p.read_text() for p in logs))
+        self.assertFalse((self.root/'drive-state/last-success.json').exists())
+
     def test_help_and_check_do_not_execute_dependencies(self):
         for engine in self.policies:
             if engine!='app-restore': self.run_native(engine,'check')

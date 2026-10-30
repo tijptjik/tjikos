@@ -59,6 +59,15 @@ impl Runner {
     pub fn logged(&self, command: &mut Command, log: &File) -> Result<(i32, Vec<u8>)> {
         self.execute(command, None, true, None, Some(log))
     }
+    /// Retain private diagnostics while keeping the mount/coordination guard.
+    pub fn guarded_logged(
+        &self,
+        command: &mut Command,
+        guard: Option<&mut Child>,
+        log: &File,
+    ) -> Result<(i32, Vec<u8>)> {
+        self.execute(command, guard, true, None, Some(log))
+    }
     fn execute(
         &self,
         command: &mut Command,

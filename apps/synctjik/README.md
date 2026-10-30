@@ -176,6 +176,12 @@ new destination, checks its databases, and leaves live services alone. Explicit
 `install` requires empty allowlisted destinations and stopped writers;
 `import-mariadb` records a durable started marker before any database import.
 
+Drive backups retain owner-only `<source>-rclone-*.log` and
+`<source>-restic-*.log` files in the configured state directory. These contain
+private provider diagnostics and filenames; terminal errors never print their
+contents. Failed or incomplete snapshots do not produce a success receipt or
+trigger retention.
+
 SnapRAID checks disk identities and layout, enforces deletion limits, and retains
 pause ownership for interrupted-writer recovery. `status` returns 75 when busy.
 Sync/scrub are real maintenance operations: never use them against live storage
