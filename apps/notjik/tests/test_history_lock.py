@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 import notjik
 from lock_watch import LockObserver
 

@@ -1,0 +1,102 @@
+[
+  {
+    "file": "qml/shell.qml",
+    "old": "        model: root.screens\n",
+    "new": "        id: cyclePanels\n        model: root.screens\n"
+  },
+  {
+    "file": "qml/shell.qml",
+    "old": "        case \"status\": break;\n",
+    "new": "        case \"cycle\": {\n            if (request.introCards !== undefined) root.cycleIntroCards = request.introCards;\n            if (request.intro !== undefined) root.cycleIntro = request.intro;\n            if (request.outro !== undefined) root.cycleOutro = request.outro;\n            if (request.title !== undefined) root.cycleTitle = request.title;\n            if (request.caption !== undefined) root.cycleCaption = request.caption;\n            if (request.counter !== undefined) root.cycleCounter = request.counter;\n            const panel = cyclePanels.instances.find(p => p.screen.name === root.config.placement.primaryMonitor);\n            if (!panel) throw Error(\"Demo output not ready\");\n            if (request.hidePointer) panel.cyclePointerVisible = false;\n            if (request.closeDrawer) root.setDrawer(false);\n            if (!request.id) return {ok:true};\n            const card = panel.cycleCard(request.id);\n            if (!card) throw Error(\"Demo card not ready: \" + request.id);\n            if (request.target) card.cyclePoint(request.target, !!request.click);\n            if (request.text !== undefined) card.cycleDetail.cycleText(request.text);\n            const detail = card.cycleDetail;\n            return {ok:true, revealed:card.controlsRevealed, hovered:card.hovered, loaded:!!detail, interactive:!!detail?.interactive, replying:!!detail?.replying,\n                draft:detail?.cycleDraft || \"\", feedback:detail?.feedback || \"\",\n                playing:telegramPlayback.playing, recording:telegramRecording.phase,\n                duration:telegramRecording.duration};\n        }\n        case \"status\": break;\n"
+  },
+  {
+    "file": "qml/shell.qml",
+    "old": "    property var config: ({ placement: {monitors: \"primary\", primaryMonitor: \"\", edge: \"b\", position: \"c\", offsetX: 0, offsetY: -24, margin: 16, perMonitor: {}},\n",
+    "new": "    property string cycleTitle: \"Dunst vs Notjik\"\n    property string cycleCaption: \"Synthetic notification showcase\"\n    property string cycleCounter: \"\"\n    property bool cycleOutro: false\n    property bool cycleIntro: false\n    property var cycleIntroCards: []\n    DemoStage { controller: root }\n\n    property var config: ({ placement: {monitors: \"primary\", primaryMonitor: \"\", edge: \"b\", position: \"c\", offsetX: 0, offsetY: -24, margin: 16, perMonitor: {}},\n"
+  },
+  {
+    "file": "qml/HistoryDrawer.qml",
+    "old": "    implicitWidth: Math.min((theme.width || 420) + 80, (screen?.width || 800) - 32)\n    implicitHeight: Math.min(760, (screen?.height || 1000) * 0.72)\n    margins { bottom: targetScreen ? targetScreen.height - height - coordinates.y : 16; left: Math.max(0, ((screen?.width || 800) - width) / 2) }\n",
+    "new": "    implicitWidth: 420\n    implicitHeight: 360\n    margins { bottom: ((screen?.height || 680) - height)/2; left: (screen?.width || 1000)/2 + 20 }\n"
+  },
+  {
+    "file": "qml/NotificationCard.qml",
+    "old": "                                        required property var modelData\n",
+    "new": "                                        objectName: \"cycle-action-\" + modelData.actionIndex\n                                        required property var modelData\n"
+  },
+  {
+    "file": "qml/NotificationCard.qml",
+    "old": "    required property var notice\n",
+    "new": "    TestEvent { id: cycleInput }\n    property var cycleHost: null\n    property alias cycleDetail: detail.item\n    function cyclePoint(name, click) {\n        function find(item) {\n            if (item.objectName === name && item.visible && item.enabled) return item;\n            for (const child of (item.children || [])) { const match=find(child); if(match) return match; }\n            return null;\n        }\n        const item = name === \"card\" ? card : name === \"group\" ? groupIndicator : find(card);\n        if (!item) throw Error(\"Demo control unavailable: \" + name);\n        const x = item.width/2, y = name === \"card\" ? 20 : item.height/2;\n        cycleHost.cyclePointer = item.mapToItem(cycleHost.contentItem, x, y);\n        cycleHost.cyclePointerVisible = true;\n        cycleInput.mouseMove(item, x, y, 0, Qt.NoButton, Qt.NoModifier);\n        if (click) cycleInput.mouseClick(item, x, y, Qt.LeftButton, Qt.NoModifier, 0);\n    }\n\n    required property var notice\n"
+  },
+  {
+    "file": "qml/NotificationCard.qml",
+    "old": "import QtQuick.Window\n",
+    "new": "import QtTest\nimport QtQuick.Window\n"
+  },
+  {
+    "file": "qml/TelegramRecorder.qml",
+    "old": "        const notice = controller.find(noticeId);\n",
+    "new": "        phase = \"sending\"; cycleSend.restart(); return;\n\n        const notice = controller.find(noticeId);\n"
+  },
+  {
+    "file": "qml/TelegramRecorder.qml",
+    "old": "        if (locked || capture.running || send.running || (holdsNotice && noticeId !== notice.id)) return;\n",
+    "new": "        if (!notice.data.demo) throw Error(\"Only synthetic demo recordings are allowed\");\n        controller.telegramPlayer.stop(); noticeId = notice.id;\n        phase = \"recording\"; duration = 0; source = \"\"; error = \"\"; uncertain = false;\n        return;\n\n        if (locked || capture.running || send.running || (holdsNotice && noticeId !== notice.id)) return;\n"
+  },
+  {
+    "file": "qml/TelegramRecorder.qml",
+    "old": "    required property var controller\n",
+    "new": "    Timer { interval: 100; repeat: true; running: recorder.phase === \"recording\"; onTriggered: recorder.duration += 100 }\n    Timer { id: cycleSend; interval: 450; onTriggered: {\n        const id = recorder.noticeId; recorder.reset(); controller.close(id, false);\n    } }\n\n    required property var controller\n"
+  },
+  {
+    "file": "qml/TelegramPlayback.qml",
+    "old": "        audioOutput: AudioOutput {}\n",
+    "new": "        audioOutput: AudioOutput { muted: true }\n"
+  },
+  {
+    "file": "qml/NotificationPanel.qml",
+    "old": "                            monitorName: panel.screen.name\n",
+    "new": "                            cycleHost: panel\n                            monitorName: panel.screen.name\n"
+  },
+  {
+    "file": "qml/NotificationPanel.qml",
+    "old": "                        readonly property var liveNotice: panel.controller.visibleNotices.find(n => panel.keyFor(n) === noticeKey)\n",
+    "new": "                    property alias cycleCard: card\n                        readonly property var liveNotice: panel.controller.visibleNotices.find(n => panel.keyFor(n) === noticeKey)\n"
+  },
+  {
+    "file": "qml/NotificationPanel.qml",
+    "old": "    readonly property real stackTop: placement.edge === \"t\" || ((placement.edge === \"l\" || placement.edge === \"r\") && placement.position === \"l\") ? 0\n",
+    "new": "    readonly property real stackTop: true ? Math.max(0, (layoutHeight - stack.implicitHeight)/2) : placement.edge === \"t\" || ((placement.edge === \"l\" || placement.edge === \"r\") && placement.position === \"l\") ? 0\n"
+  },
+  {
+    "file": "qml/NotificationPanel.qml",
+    "old": "    readonly property var coordinates: Logic.geometry(placement, screen.width, screen.height, width, layoutHeight, screen.devicePixelRatio)\n    readonly property real layoutHeight: Math.max(1, (screen.height - 2 * placement.margin) * (controller.config.stack?.heightPercent || 75) / 100)\n",
+    "new": "    readonly property var coordinates: ({x: screen.width/2 + 20, y: (screen.height-layoutHeight)/2})\n    readonly property real layoutHeight: 460\n"
+  },
+  {
+    "file": "qml/NotificationPanel.qml",
+    "old": "    required property var controller\n",
+    "new": "    property bool cyclePointerVisible: false\n    property point cyclePointer: Qt.point(0,0)\n    function cycleCard(id) {\n        for (let i=0; i<cardItems.count; ++i) {\n            const card = cardItems.itemAt(i).cycleCard;\n            if (card.notice.id === id) return card;\n        }\n        return null;\n    }\n    Rectangle {\n        z: 9999; width: 12; height: 12; radius: 6\n        visible: panel.cyclePointerVisible\n        x: panel.cyclePointer.x - 6; y: panel.cyclePointer.y - 6\n        color: \"#ffffff\"; border.color: \"#ff53a6\"; border.width: 2\n        Behavior on x { NumberAnimation { duration: 160 } }\n        Behavior on y { NumberAnimation { duration: 160 } }\n    }\n\n    required property var controller\n"
+  },
+  {
+    "file": "qml/components/Telegram.qml",
+    "old": "                text: detail.mediaData.demo ? \"Send voice to Saved Messages (@tijptjik)\" : \"Send voice\"\n",
+    "new": "                text: detail.mediaData.demo ? \"Send voice to demo chat (simulated)\" : \"Send voice\"\n"
+  },
+  {
+    "file": "qml/components/Telegram.qml",
+    "old": "                Accessible.name: detail.mediaData.demo ? \"Record a voice note for Saved Messages (@tijptjik)\" : \"Record a voice reply\"\n",
+    "new": "                Accessible.name: detail.mediaData.demo ? \"Record a voice note for demo chat (simulated)\" : \"Record a voice reply\"\n"
+  },
+  {
+    "file": "qml/components/Telegram.qml",
+    "old": "        Layout.preferredHeight: visible ? (detail.mediaData.kind === \"emoji\" ? 96 : Math.min(240, width * (detail.mediaData.height || 200) / Math.max(1, detail.mediaData.width || 320))) : 0\n",
+    "new": "        Layout.preferredHeight: visible ? (detail.mediaData.kind === \"emoji\" ? 96 : Math.min(150, width * (detail.mediaData.height || 200) / Math.max(1, detail.mediaData.width || 320))) : 0\n"
+  },
+  {
+    "file": "qml/components/Telegram.qml",
+    "old": "    property bool showBody: true\n",
+    "new": "    readonly property alias cycleDraft: reply.text\n    function cycleText(text) { reply.text = text; }\n\n    property bool showBody: true\n"
+  }
+]

@@ -12,9 +12,10 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 from notjik import ipc
 from integration import wait_for
+from native_fixture import copy_runtime, copy_file
 
 
 def run():
@@ -22,10 +23,7 @@ def run():
         raise RuntimeError("A private dbus-run-session is required")
     with tempfile.TemporaryDirectory(prefix="notjik-search-") as temp:
         root = Path(temp)
-        for name in ("qml", "themes"):
-            shutil.copytree(ROOT / name, root / name)
-        for name in ("notjik.py", "lock_watch.py"):
-            shutil.copy(ROOT / name, root / name)
+        copy_runtime(root)
         shell = root / "qml/shell.qml"
         shell.write_text(shell.read_text().replace("HistoryDrawer { controller: root }", "HistoryDrawer { id: historyDrawer; controller: root }").replace('case "status": break;', '''case "searchState": return {ok:true, query:historyQuery, editing:historyDrawer.searchEditing(),
             open:drawerOpen, rows:historyRows, matches:filteredHistoryItems.map(n=>n.historyKey),

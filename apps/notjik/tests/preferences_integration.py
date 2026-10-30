@@ -9,8 +9,9 @@ import tempfile
 import time
 
 ROOT = Path(os.environ.get('NOTJIK_TEST_ROOT', str(Path(__file__).resolve().parents[1])))
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 import notjik
+from native_fixture import copy_file
 
 
 def wait_for(check):
@@ -32,7 +33,7 @@ def run():
     with tempfile.TemporaryDirectory(prefix='notjik-mode-test-') as tmp:
         root = Path(tmp)
         fixture = root/'app'
-        shutil.copytree(ROOT/'qml', fixture/'qml')
+        shutil.copytree(ROOT/'qml', fixture/'qml',copy_function=copy_file)
         for path in ROOT.iterdir():
             if path.name != 'qml':
                 (fixture/path.name).symlink_to(path)

@@ -1,0 +1,91 @@
+{
+  "basic": [
+    "Hello",
+    "A normal desktop notification"
+  ],
+  "low": [
+    "-u",
+    "low",
+    "Low urgency",
+    "Background work completed"
+  ],
+  "normal": [
+    "-u",
+    "normal",
+    "Normal urgency",
+    "A message arrived"
+  ],
+  "critical": [
+    "-u",
+    "critical",
+    "-t",
+    "0",
+    "Critical urgency",
+    "Requires attention; remains until dismissed"
+  ],
+  "timeout": [
+    "-t",
+    "2500",
+    "Short timeout",
+    "Expires after 2.5 seconds"
+  ],
+  "sticky": [
+    "-t",
+    "0",
+    "Until dismissed",
+    "Click outside the actions to dismiss"
+  ],
+  "icon": [
+    "-i",
+    "network-wireless",
+    "Connected",
+    "Wi-Fi connection established"
+  ],
+  "progress": [
+    "-h",
+    "int:value:67",
+    "Uploading",
+    "67 percent complete"
+  ],
+  "multiline": [
+    "Multiple lines",
+    "First line\nSecond line\nThird line"
+  ],
+  "long": [
+    "A longer notification title that needs to wrap cleanly",
+    "This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. This is a long notification body. "
+  ],
+  "unicode": [
+    "同步完成 · Sync complete",
+    "繁體中文 · café · 日本語 · ✓"
+  ],
+  "markup": [
+    "Markup comparison",
+    "<b>Bold</b>, <i>italic</i> and <a href='https://example.com'>a link</a>"
+  ],
+  "transient": [
+    "-e",
+    "Transient notice",
+    "Should not be retained in history"
+  ],
+  "actions": [
+    "-t",
+    "30000",
+    "-A",
+    "default=Open",
+    "-A",
+    "ignore=Ignore",
+    "Choose an action",
+    "Click an action in each server; the selected names print in the terminal"
+  ],
+  "resident": [
+    "-t",
+    "30000",
+    "-h",
+    "boolean:resident:true",
+    "-A",
+    "ack=Acknowledge",
+    "Resident action",
+    "Should remain visible after the action"
+  ]
+}

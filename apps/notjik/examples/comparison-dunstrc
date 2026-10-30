@@ -1,0 +1,42 @@
+[global]
+monitor = @MONITOR@
+follow = none
+origin = @ORIGIN@
+offset = @OFFSET@
+width = @WIDTH@
+height = (0, 350)
+notification_limit = 5
+font = tijpset 10
+format = "<b>%s</b>\n%b"
+markup = full
+padding = 16
+horizontal_padding = 16
+icon_position = left
+min_icon_size = 48
+max_icon_size = 48
+default_icon = @ICON@
+frame_width = 1
+frame_color = "#393546"
+separator_height = 0
+gap_size = 10
+corner_radius = 14
+transparency = 0
+stack_duplicates = false
+sort = false
+progress_bar = true
+mouse_left_click = close_current
+mouse_middle_click = do_action
+mouse_right_click = close_all
+[urgency_low]
+background = "#1f1d2e"
+foreground = "#a5a0ba"
+timeout = 5
+[urgency_normal]
+background = "#1f1d2e"
+foreground = "#e5e5e5"
+timeout = 8
+[urgency_critical]
+background = "#1f1d2e"
+foreground = "#eb6f92"
+frame_color = "#393546"
+timeout = 0

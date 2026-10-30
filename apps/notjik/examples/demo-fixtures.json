@@ -1,0 +1,847 @@
+{
+  "standard": {
+    "description": "Title and body with the default robot",
+    "notices": [
+      {
+        "title": "Flight recorder secured",
+        "body": "Black box synced. Even the bit with the asteroid."
+      }
+    ]
+  },
+  "title-only": {
+    "description": "Title without a description",
+    "notices": [
+      {
+        "title": "All decks reporting green"
+      }
+    ]
+  },
+  "icon": {
+    "description": "Sender-provided symbolic Wi-Fi icon",
+    "notices": [
+      {
+        "title": "Relay link established",
+        "body": "Deep-space relay · signal 79% · Earth, eventually",
+        "icon": "network-wireless-symbolic"
+      }
+    ]
+  },
+  "missing-icon": {
+    "description": "Unknown icon name falls back to the robot",
+    "notices": [
+      {
+        "title": "Relay link established",
+        "body": "Deep-space relay · signal 79% · Earth, eventually",
+        "icon": "notjik-demo-missing-icon"
+      }
+    ]
+  },
+  "image": {
+    "description": "Sender-provided artwork overrides its icon",
+    "notices": [
+      {
+        "title": "Oceans of Kepler-186f",
+        "body": "Surface survey · first light",
+        "image": "file:///NOTJIK_ROOT/examples/demo-artwork.png",
+        "icon": "network-wireless-symbolic"
+      }
+    ]
+  },
+  "progress": {
+    "description": "Progress bar at 67 percent",
+    "notices": [
+      {
+        "title": "Star chart transfer",
+        "body": "Unknown sector · 1.6 / 2.4 GiB mapped",
+        "type": "progress",
+        "data": {
+          "value": 67,
+          "label": "Receiving navigation data"
+        }
+      }
+    ]
+  },
+  "progress-empty": {
+    "description": "Progress bar at zero",
+    "notices": [
+      {
+        "title": "Star chart transfer",
+        "body": "Unknown sector · 1.6 / 2.4 GiB mapped",
+        "type": "progress",
+        "data": {
+          "value": 0,
+          "label": "Receiving navigation data"
+        }
+      }
+    ]
+  },
+  "progress-complete": {
+    "description": "Progress bar at 100 percent",
+    "notices": [
+      {
+        "title": "Star chart transfer",
+        "body": "Unknown sector · 1.6 / 2.4 GiB mapped",
+        "type": "progress",
+        "data": {
+          "value": 100,
+          "label": "Receiving navigation data"
+        }
+      }
+    ]
+  },
+  "status": {
+    "description": "Informational status and detail",
+    "notices": [
+      {
+        "title": "Relay link established",
+        "body": "Engineering · deck 4",
+        "type": "status",
+        "data": {
+          "state": "Connected",
+          "tone": "normal",
+          "detail": "Deep-space relay online"
+        }
+      }
+    ]
+  },
+  "success": {
+    "description": "Successful status",
+    "notices": [
+      {
+        "title": "Flight recorder secured",
+        "body": "Engineering · deck 4",
+        "type": "status",
+        "data": {
+          "state": "Complete",
+          "tone": "success",
+          "detail": "Flight recorder secured"
+        }
+      }
+    ]
+  },
+  "warning": {
+    "description": "Warning status",
+    "notices": [
+      {
+        "title": "Reactor running hot",
+        "body": "Engineering · deck 4",
+        "type": "status",
+        "data": {
+          "state": "Needs attention",
+          "tone": "warning",
+          "detail": "Auxiliary power required"
+        }
+      }
+    ]
+  },
+  "error": {
+    "description": "Critical status with an action",
+    "notices": [
+      {
+        "title": "Reactor fault",
+        "body": "Engineering · deck 4",
+        "type": "status",
+        "data": {
+          "state": "Failed",
+          "tone": "critical",
+          "detail": "Containment field unstable"
+        },
+        "urgency": "critical",
+        "actions": [
+          {
+            "label": "Open diagnostics ↗",
+            "command": [
+              "true"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "timer": {
+    "description": "Running countdown",
+    "notices": [
+      {
+        "title": "Jump window",
+        "type": "timer",
+        "data": {
+          "seconds": 90,
+          "label": "Spooling the jump drive",
+          "doneLabel": "Jump coordinates locked"
+        }
+      }
+    ]
+  },
+  "timer-done": {
+    "description": "Completed countdown",
+    "notices": [
+      {
+        "title": "Jump window",
+        "type": "timer",
+        "data": {
+          "seconds": 0,
+          "label": "Spooling the jump drive",
+          "doneLabel": "Jump coordinates locked"
+        }
+      }
+    ]
+  },
+  "actions": {
+    "description": "One centered action",
+    "notices": [
+      {
+        "title": "Unidentified cargo aboard",
+        "body": "It is warm. It is humming. It has no label.",
+        "actions": [
+          {
+            "label": "Open diagnostics ↗",
+            "command": [
+              "true"
+            ]
+          }
+        ],
+        "resident": false
+      }
+    ]
+  },
+  "actions-multiple": {
+    "description": "Two centered actions",
+    "notices": [
+      {
+        "title": "Unidentified cargo aboard",
+        "body": "It is warm. It is humming. It has no label.",
+        "actions": [
+          {
+            "label": "Scan cargo",
+            "command": [
+              "true"
+            ]
+          },
+          {
+            "label": "Jettison",
+            "command": [
+              "true"
+            ]
+          }
+        ],
+        "resident": false
+      }
+    ]
+  },
+  "actions-wrapped": {
+    "description": "Overflow actions slide between pages using chevrons",
+    "notices": [
+      {
+        "title": "Unidentified cargo aboard",
+        "body": "It is warm. It is humming. It has no label.",
+        "actions": [
+          {
+            "label": "Open this notification in the application",
+            "command": [
+              "true"
+            ]
+          },
+          {
+            "label": "View backup details",
+            "command": [
+              "true"
+            ]
+          },
+          {
+            "label": "Retry",
+            "command": [
+              "true"
+            ]
+          },
+          {
+            "label": "Dismiss",
+            "command": [
+              "true"
+            ]
+          }
+        ],
+        "resident": false
+      }
+    ]
+  },
+  "resident": {
+    "description": "Action leaves the card visible",
+    "notices": [
+      {
+        "title": "Unidentified cargo aboard",
+        "body": "It is warm. It is humming. It has no label.",
+        "actions": [
+          {
+            "label": "Acknowledge",
+            "command": [
+              "true"
+            ]
+          }
+        ],
+        "resident": true
+      }
+    ]
+  },
+  "urgency": {
+    "description": "Low, normal and critical side by side in the stack",
+    "notices": [
+      {
+        "title": "Hydroponics report",
+        "body": "The tomatoes survived hyperspace.",
+        "urgency": "low"
+      },
+      {
+        "title": "Incoming docking request",
+        "body": "The courier insists the package is not alive.",
+        "urgency": "normal"
+      },
+      {
+        "title": "Hull breach · deck 4",
+        "body": "Pressure falling. Seal the bulkhead.",
+        "urgency": "critical"
+      }
+    ]
+  },
+  "multiline": {
+    "description": "Explicit line breaks",
+    "notices": [
+      {
+        "title": "Shuttle ready",
+        "body": "✓ Fuel loaded\n✓ Airlock sealed\nTry to bring the shuttle back this time."
+      }
+    ]
+  },
+  "long": {
+    "description": "Long title and body with wrapping and truncation",
+    "notices": [
+      {
+        "title": "Survey notes from the far side of the nebula",
+        "body": "The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. The signal repeats every eleven seconds. There are no registered stations in this sector. "
+      }
+    ]
+  },
+  "unicode": {
+    "description": "Multilingual text and symbols",
+    "notices": [
+      {
+        "title": "同步完成 · Sync complete",
+        "body": "繁體中文 · 日本語 · café · ✓ · →"
+      }
+    ]
+  },
+  "markup": {
+    "description": "Literal markup: notjik currently uses plain text",
+    "notices": [
+      {
+        "title": "A note from the bridge",
+        "body": "<b>Bring your pressure suit</b> · Meet at airlock 3."
+      }
+    ]
+  },
+  "timeout": {
+    "description": "Expires after 2.5 seconds with the outro animation",
+    "notices": [
+      {
+        "title": "Saved",
+        "body": "Coordinates stored in the flight computer.",
+        "timeout": 2500
+      }
+    ]
+  },
+  "update": {
+    "description": "Progress updates in place with a stable sender ID",
+    "notices": [
+      {
+        "title": "Star chart transfer",
+        "body": "Unknown sector · 1.6 / 2.4 GiB mapped",
+        "type": "progress",
+        "data": {
+          "value": 10,
+          "label": "Receiving navigation data"
+        }
+      }
+    ]
+  },
+  "grouped": {
+    "description": "Three notices sharing one group",
+    "notices": [
+      {
+        "title": "Bridge channel",
+        "body": "Maya: That moon was not on the chart."
+      },
+      {
+        "title": "Bridge channel",
+        "body": "IO: Neither was the second one."
+      },
+      {
+        "title": "Bridge channel",
+        "body": "Maya: Tell me those are moons."
+      }
+    ]
+  },
+  "stack": {
+    "description": "Four separate cards, newest at the bottom",
+    "notices": [
+      {
+        "title": "Surface scan 1",
+        "body": "New surface scans received from the lander."
+      },
+      {
+        "title": "Surface scan 2",
+        "body": "New surface scans received from the lander."
+      },
+      {
+        "title": "Surface scan 3",
+        "body": "New surface scans received from the lander."
+      },
+      {
+        "title": "Surface scan 4",
+        "body": "New surface scans received from the lander."
+      }
+    ]
+  },
+  "telegram-text": {
+    "description": "Telegram text with reply controls (simulated)",
+    "notices": [
+      {
+        "title": "Maya",
+        "body": "Meet me on deck 7. The stars are doing it again.",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "text",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "1",
+          "source": "",
+          "status": ""
+        }
+      }
+    ]
+  },
+  "telegram-photo": {
+    "description": "Telegram photo with a caption (bundled artwork)",
+    "notices": [
+      {
+        "title": "Maya",
+        "body": "First light on Kepler-186f. No filter. Two suns.",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "photo",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "1",
+          "source": "file:///NOTJIK_ROOT/examples/demo-artwork.png",
+          "status": ""
+        }
+      }
+    ]
+  },
+  "telegram-voice": {
+    "description": "Telegram voice with waveform, playback, seeking and speed",
+    "notices": [
+      {
+        "title": "Maya",
+        "body": "",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "voice",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "1",
+          "source": "file:///NOTJIK_ROOT/examples/demo-voice.wav",
+          "status": "",
+          "duration": 8,
+          "waveform": [
+            7,
+            19,
+            29,
+            31,
+            30,
+            23,
+            12,
+            7,
+            16,
+            26,
+            31,
+            31,
+            27,
+            16,
+            7,
+            12,
+            23,
+            30,
+            31,
+            29,
+            20,
+            10,
+            9,
+            19,
+            28,
+            31,
+            31,
+            24,
+            13,
+            6,
+            15,
+            25,
+            31,
+            31,
+            27,
+            17,
+            7,
+            11,
+            22,
+            30,
+            31,
+            29,
+            21,
+            10,
+            8,
+            18,
+            28,
+            31,
+            31,
+            24,
+            14,
+            6,
+            14,
+            25,
+            31,
+            31,
+            28,
+            18,
+            8,
+            11,
+            21,
+            30,
+            31,
+            30,
+            21,
+            11,
+            8,
+            18,
+            28,
+            31,
+            31,
+            25,
+            14,
+            6,
+            14,
+            24,
+            31,
+            31,
+            28,
+            18,
+            8,
+            10,
+            21,
+            29,
+            31,
+            30,
+            22,
+            11,
+            7,
+            17,
+            27,
+            31,
+            31,
+            25,
+            15,
+            6,
+            13,
+            24,
+            30,
+            24
+          ]
+        }
+      }
+    ]
+  },
+  "telegram-sticker": {
+    "description": "Static WebP sticker",
+    "notices": [
+      {
+        "title": "Maya",
+        "body": "",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "sticker",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "1",
+          "source": "file:///NOTJIK_ROOT/examples/demo-sticker.png",
+          "status": "",
+          "format": "png",
+          "width": 128,
+          "height": 128
+        }
+      }
+    ]
+  },
+  "telegram-animated-sticker": {
+    "description": "Animated TGS sticker rendered locally",
+    "notices": [
+      {
+        "title": "Maya",
+        "body": "",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "sticker",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "1",
+          "source": "file:///NOTJIK_ROOT/examples/demo-animated-sticker.gif",
+          "status": "",
+          "format": "gif",
+          "width": 128,
+          "height": 128
+        }
+      }
+    ]
+  },
+  "telegram-gif": {
+    "description": "Silent looping Telegram animation",
+    "notices": [
+      {
+        "title": "Maya",
+        "body": "",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "animation",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "1",
+          "source": "file:///NOTJIK_ROOT/examples/demo-robot-dog.gif",
+          "status": "",
+          "format": "gif",
+          "width": 128,
+          "height": 128
+        }
+      }
+    ]
+  },
+  "telegram-animated-emoji": {
+    "description": "Large animated emoji",
+    "notices": [
+      {
+        "title": "Maya",
+        "body": "",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "emoji",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "1",
+          "source": "file:///NOTJIK_ROOT/examples/demo-animated-sticker.gif",
+          "status": "",
+          "format": "gif",
+          "width": 128,
+          "height": 128
+        }
+      }
+    ]
+  },
+  "telegram-custom-emoji": {
+    "description": "Inline animated custom emoji in text",
+    "notices": [
+      {
+        "title": "Maya",
+        "body": "Hello 🙂 from Telegram",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "text",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "1",
+          "source": "",
+          "status": "",
+          "parts": [
+            {
+              "kind": "text",
+              "text": "Hello "
+            },
+            {
+              "kind": "emoji",
+              "text": "🙂",
+              "source": "file:///NOTJIK_ROOT/examples/demo-animation.gif",
+              "format": "gif"
+            },
+            {
+              "kind": "text",
+              "text": " from Telegram"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "telegram-grouped": {
+    "description": "Text, photo and voice from the same Telegram chat",
+    "notices": [
+      {
+        "title": "Maya",
+        "body": "Meet me on deck 7. The stars are doing it again.",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "text",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "1",
+          "source": "",
+          "status": ""
+        }
+      },
+      {
+        "title": "Maya",
+        "body": "First light on Kepler-186f. No filter. Two suns.",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "photo",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "2",
+          "source": "file:///NOTJIK_ROOT/examples/demo-artwork.png",
+          "status": ""
+        }
+      },
+      {
+        "title": "Maya",
+        "body": "",
+        "type": "telegram",
+        "icon": "org.telegram.desktop",
+        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "data": {
+          "kind": "voice",
+          "demo": true,
+          "chatId": "1",
+          "messageId": "3",
+          "source": "file:///NOTJIK_ROOT/examples/demo-voice.wav",
+          "status": "",
+          "duration": 8,
+          "waveform": [
+            7,
+            19,
+            29,
+            31,
+            30,
+            23,
+            12,
+            7,
+            16,
+            26,
+            31,
+            31,
+            27,
+            16,
+            7,
+            12,
+            23,
+            30,
+            31,
+            29,
+            20,
+            10,
+            9,
+            19,
+            28,
+            31,
+            31,
+            24,
+            13,
+            6,
+            15,
+            25,
+            31,
+            31,
+            27,
+            17,
+            7,
+            11,
+            22,
+            30,
+            31,
+            29,
+            21,
+            10,
+            8,
+            18,
+            28,
+            31,
+            31,
+            24,
+            14,
+            6,
+            14,
+            25,
+            31,
+            31,
+            28,
+            18,
+            8,
+            11,
+            21,
+            30,
+            31,
+            30,
+            21,
+            11,
+            8,
+            18,
+            28,
+            31,
+            31,
+            25,
+            14,
+            6,
+            14,
+            24,
+            31,
+            31,
+            28,
+            18,
+            8,
+            10,
+            21,
+            29,
+            31,
+            30,
+            22,
+            11,
+            7,
+            17,
+            27,
+            31,
+            31,
+            25,
+            15,
+            6,
+            13,
+            24,
+            30,
+            24
+          ]
+        }
+      }
+    ]
+  }
+}

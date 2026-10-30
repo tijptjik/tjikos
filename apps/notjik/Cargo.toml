@@ -1,0 +1,23 @@
+[package]
+name = "notjik-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+serde_json = "1"
+rusqlite = "0.32"
+libc = "0.2"
+sha2 = "0.10"
+regex = "1"
+fancy-regex = "0.16"
+url = "2"
+tempfile = "3"
+chrono = "0.4"
+clap = { version = "4", features = ["derive"] }
+flate2 = "1"
+base64 = "0.22"
+
+[profile.release]
+lto = "thin"
+strip = true

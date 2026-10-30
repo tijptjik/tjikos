@@ -25,7 +25,7 @@ def main():
                 def call(op, **kw):
                     return ipc(ROOT, {"op":op, **kw})
                 def demo(*args):
-                    result = subprocess.run([sys.executable, str(ROOT / "bin/notjikctl"), "demo", "--solo", *args], capture_output=True, text=True)
+                    result = subprocess.run([str(ROOT / "bin/notjikctl"), "demo", "--solo", *args], capture_output=True, text=True)
                     assert result.returncode == 0, result.stderr
                     return result.stdout
                 wait_for(lambda: call("status")["lockState"] == "unlocked")

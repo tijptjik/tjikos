@@ -16,10 +16,11 @@ import time
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 from notjik import ipc
 from demo import fixtures
 from integration import wait_for
+from native_fixture import copy_runtime, copy_file
 
 
 def readable_image(path):
@@ -204,14 +205,11 @@ def main():
     destination.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="notjik-render-") as temp:
         root = Path(temp)
-        shutil.copytree(ROOT / "qml", root / "qml")
+        copy_runtime(root)
         if "--covers" in sys.argv[2:]:
             # Keep geometry screenshots deterministic while testing the shared cover layout.
             logic = root / "qml/Logic.js"
             logic.write_text(logic.read_text().replace("Math.floor(Math.random() * robotFiles.length)", "0"))
-        shutil.copytree(ROOT / "themes", root / "themes")
-        shutil.copy(ROOT / "notjik.py", root / "notjik.py")
-        shutil.copy(ROOT / "lock_watch.py", root / "lock_watch.py")
         shell = root / "qml/shell.qml"
         code = shell.read_text().replace('Variants {\n        model:', 'Variants {\n        id: panels\n        model:')
         if "--covers" in sys.argv[2:]:

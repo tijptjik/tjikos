@@ -13,7 +13,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 import telegram_bridge as telegram
 
 
@@ -31,7 +31,7 @@ class RenderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             for filename,format,signature in (('demo-sticker.webp','webp',b'\x89PNG'),('demo-sticker.tgs','tgs',b'GIF'),('demo-video-sticker.webm','webm',b'GIF')):
                 target=Path(temp)/format
-                subprocess.run([self.python,str(ROOT/'telegram_media_render.py'),str(ROOT/'examples'/filename),str(target),format],check=True,timeout=40)
+                subprocess.run([self.python,str(ROOT/'tests/reference/telegram_media_render.py'),str(ROOT/'examples'/filename),str(target),format],check=True,timeout=40)
                 self.assertTrue(target.read_bytes().startswith(signature))
                 self.assertGreater(target.stat().st_size,100)
 
@@ -41,7 +41,7 @@ class RenderTests(unittest.TestCase):
             with gzip.open(ROOT/'examples/demo-sticker.tgs','rb') as stream: data=json.load(stream)
             data['assets']=[{'id':'external','u':'/etc/','p':'passwd'}]
             with gzip.open(source,'wb') as stream: stream.write(json.dumps(data).encode())
-            result=subprocess.run([self.python,str(ROOT/'telegram_media_render.py'),str(source),str(target),'tgs'],capture_output=True,timeout=40)
+            result=subprocess.run([self.python,str(ROOT/'tests/reference/telegram_media_render.py'),str(source),str(target),'tgs'],capture_output=True,timeout=40)
             self.assertNotEqual(result.returncode,0)
             self.assertFalse(target.exists())
 

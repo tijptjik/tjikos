@@ -18,17 +18,19 @@ are synthetic; replies and voice recording are simulated.
 
 `notjik` owns `org.freedesktop.Notifications`. Quickshell handles D-Bus, image data,
 icon lookup and standard action signals. QML owns the queue, timing, routing,
-components and rendering. A small Python standard-library helper validates live
-configuration and writes SQLite history; `notjikctl` talks to Quickshell IPC.
+components and rendering. A Rust worker validates live
+configuration and writes SQLite history; the Rust `notjikctl` talks to Quickshell IPC.
+The launcher, Telegram bridge, media/voice helpers, and synthetic demo/comparison
+commands are native Rust. Python is used only by development test drivers.
 
 ## Install and start
 
-Requires **Quickshell 0.3.2+**, Qt 6 Quick/Controls and Qt5Compat GraphicalEffects, Python 3, `busctl`, and
+Requires **Quickshell 0.3.2+**, Qt 6 Quick/Controls and Qt5Compat GraphicalEffects, `busctl`, and
 Hyprland with layer-shell and `hyprland_lock_notifier_v1` support.
 On unsupported compositors the lock state stays unknown and the default privacy
 policy hides notices; an explicit `privacy.lockScreen: "show"` opts out of hiding. Bun is used
-by the monorepo tooling. `tijpset` is the rose-punk font; Qt substitutes a font
-when it is unavailable. No pip dependencies or separate notification daemon.
+by the monorepo tooling; Rust/Cargo and SQLite development libraries are needed to build. `tijpset` is the rose-punk font; Qt substitutes a font
+when it is unavailable. No Python runtime or separate notification daemon is required.
 
 Clone the repository, then build only Notjik:
 
@@ -726,7 +728,7 @@ StarProwlarr grab template; copy its `handlers` array into your configuration.
   All supplied selectors must match. These selectors control presentation only;
   display names are not authentication and matching never grants actions.
 - `pattern` uses JavaScript regular-expression syntax with numbered capture
-  groups (the portable Python/JavaScript subset is validated). It must match the
+  groups (validated by the Rust backend for use by the JavaScript renderer). It must match the
   entire body after outer whitespace and CRLF normalization. Use explicit line
   separators; unexpected message formats remain unchanged.
 - `captures` maps data names to capture numbers. Every capture must be nonempty.
@@ -767,11 +769,14 @@ systemctl --user enable --now notjik-telegram.service
 notjikctl telegram status
 ```
 
-`setup` uses `uv` and `/usr/bin/python3` to create a separate virtual environment
-at `~/.local/share/notjik/telegram-venv`. Qt Multimedia is also required by the
-notification UI. Voice replies also require `ffmpeg` and `ffprobe` with PulseAudio
-input and Opus support (PipeWire provides the PulseAudio input). The pinned `tdjson` wheel bundles TDLib; it is a third-party
-Python binding, not Telegram Desktop itself.
+`setup` installs native TDLib and rlottie libraries into
+`~/.local/share/notjik/native`. It can extract the libraries from a previous local
+installation; otherwise it downloads pinned wheel archives and verifies their
+published SHA-256 digests. Only the native shared libraries are installed, with
+no Python interpreter, extension, or virtual environment dependency. The Rust
+bridge loads TDLib's C API directly. Qt Multimedia is required by the notification
+UI. Voice replies require `ffmpeg` and `ffprobe` with PulseAudio input and Opus
+support (PipeWire provides the PulseAudio input).
 
 `login` runs interactively in a terminal. Create your own API ID/hash at
 <https://my.telegram.org/apps>, then enter them, your phone number, the login code,
@@ -905,7 +910,8 @@ Desktop settings need to be changed.
 Validation without an account:
 
 ```sh
-python3 -B -m unittest discover -s tests -v
+cargo test --release --locked
+python3 -B tests/native_contracts.py -v
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/telegram_media.py /tmp/notjik-media-preview
 ```
 
@@ -962,7 +968,7 @@ and captions. Ordinary Unicode emoji retain the system font rendering.
 Animations loop silently while visible, and stop when hidden, locked or paused;
 voice messages still require Play. Spoilers and hidden/protected previews stay hidden.
 
-The optional Telegram runtime includes `rlottie-python`; FFmpeg performs bounded
+The optional Telegram runtime loads native `rlottie`; FFmpeg performs bounded
 local conversion to PNG/GIF for Qt compatibility. Rendering runs outside the bridge
 receive loop, with two workers and a bounded queue. Rendered derivatives are private
 under the Telegram state directory, retained for seven days with a 256 MiB target;

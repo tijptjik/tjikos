@@ -50,7 +50,7 @@ class NativeShowcaseTests(unittest.TestCase):
         before = {p.relative_to(source):p.read_bytes() for p in source.glob("**/*.qml")}
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory)
-            shutil.copytree(source, app / "qml")
+            shutil.copytree(source, app / "qml", copy_function=lambda src,dst: shutil.copy2(src,dst) if Path(src).suffix in (".qml",".js",".json") else __import__("os").symlink(Path(src).resolve(),dst))
             showcase.prepare_notjik(app)
             instrumented = "\n".join(p.read_text() for p in (app / "qml").glob("**/*.qml"))
             for forbidden in ("import QtTest", "mouseClick(", "mouseMove(", "cycleText("):
@@ -59,14 +59,10 @@ class NativeShowcaseTests(unittest.TestCase):
             telegram = (app / "qml/components/Telegram.qml").read_text()
             self.assertIn('onClicked: detail.action("reply", reply.text)', telegram)
             self.assertIn('readonly property alias showcaseDraft: reply.text', telegram)
-            self.assertIn("raise SystemExit", (app / "telegram_bridge.py").read_text())
-            wrapper = (app / "telegram_recording.py").read_text()
-            self.assertIn("showcase-voice.wav", wrapper)
-            self.assertNotIn('"pulse"', wrapper)
-            self.assertEqual((app / "showcase_recording_backend.py").read_bytes(),
-                             (ROOT / "apps/notjik/telegram_recording.py").read_bytes())
-            self.assertEqual((app / "showcase-voice.wav").read_bytes(),
-                             (ROOT / "apps/notjik/examples/demo-voice.wav").read_bytes())
+            self.assertTrue((app / ".synthetic-only").is_file())
+            recorder = (app / "qml/TelegramRecorder.qml").read_text()
+            self.assertIn('"record", "--synthetic"]', recorder)
+            self.assertNotIn('"pulse"', recorder)
         after = {p.relative_to(source):p.read_bytes() for p in source.glob("**/*.qml")}
         self.assertEqual(before, after)
 

@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 import telegram_recording as recording
 
 
@@ -28,7 +28,7 @@ class RecordingTests(unittest.TestCase):
         source = ['-re','-f','lavfi','-i','anullsrc=r=48000:cl=mono'] if not bad_input else ['-f','lavfi','-i','not-a-real-filter']
         process = subprocess.Popen([sys.executable, '-B', '-c',
             'import telegram_recording as r; raise SystemExit(r.run('+repr(source)+'))'],
-            cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            cwd=ROOT/"tests/reference", stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         process.events = queue.Queue()
         threading.Thread(target=lambda: [process.events.put(json.loads(line)) for line in process.stdout], daemon=True).start()
         def cleanup():

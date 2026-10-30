@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 import comparison
 import demo
 import demo_cycle
@@ -30,7 +30,7 @@ class CycleTests(unittest.TestCase):
     def test_private_copy_disables_account_and_microphone_helpers(self):
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory)
-            shutil.copytree(ROOT / 'qml', app / 'qml')
+            shutil.copytree(ROOT / 'qml', app / 'qml',copy_function=lambda src,dst: shutil.copy2(src,dst) if Path(src).suffix in ('.qml','.js','.json') else os.symlink(Path(src).resolve(),dst))
             source = (ROOT / 'qml/TelegramRecorder.qml').read_bytes()
             demo_cycle.prepare(app)
             self.assertEqual((ROOT / 'qml/TelegramRecorder.qml').read_bytes(), source)

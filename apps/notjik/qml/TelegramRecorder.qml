@@ -61,7 +61,7 @@ Item {
     }
     Process {
         id: capture
-        command: ["python3", "-B", Quickshell.shellDir + "/../telegram_recording.py"]
+        command: [Quickshell.shellDir + "/../bin/notjikctl", "record"]
         stdinEnabled: true
         onStarted: {
             // The UI can stop/discard before QProcess has opened its stdin.
@@ -97,7 +97,7 @@ Item {
     }
     Process {
         id: send
-        command: ["python3", "-B", Quickshell.shellDir + "/../telegram_bridge.py", "action"]
+        command: [Quickshell.shellDir + "/../bin/notjikctl", "telegram", "action"]
         stdinEnabled: true
         property bool accepted: false
         onStarted: {

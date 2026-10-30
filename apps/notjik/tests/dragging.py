@@ -13,9 +13,10 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 from notjik import ipc
 from integration import wait_for
+from native_fixture import copy_runtime, copy_file
 
 
 def run():
@@ -23,10 +24,7 @@ def run():
         raise RuntimeError("A private dbus-run-session is required")
     with tempfile.TemporaryDirectory(prefix="notjik-drag-test-") as temp:
         root = Path(temp)
-        for name in ("qml", "themes"):
-            shutil.copytree(ROOT / name, root / name)
-        for name in ("notjik.py", "lock_watch.py"):
-            shutil.copy(ROOT / name, root / name)
+        copy_runtime(root)
         shell = root / "qml/shell.qml"
         shell.write_text(shell.read_text().replace("model: root.screens", "id: popupPanels\n        model: root.screens")
             .replace('case "status": break;', '''case "testScreens": return {ok:true, screens:Quickshell.screens.map(s=>({name:s.name,x:s.x,y:s.y,width:s.width,height:s.height}))};

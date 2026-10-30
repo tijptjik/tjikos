@@ -13,7 +13,7 @@ import tempfile
 import time
 
 ROOT = Path(os.environ.get("NOTJIK_TEST_ROOT", str(Path(__file__).resolve().parents[1])))
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 import notjik
 
 
@@ -40,7 +40,7 @@ def run():
         fixture.mkdir()
         for source in ROOT.iterdir():
             if source.name == "qml":
-                shutil.copytree(source, fixture / source.name)
+                shutil.copytree(source, fixture / source.name, copy_function=lambda src, dst: shutil.copy2(src, dst) if Path(src).suffix in (".qml", ".js", ".json") else os.symlink(Path(src).resolve(), dst))
             else:
                 (fixture / source.name).symlink_to(source)
         shell = fixture / "qml/shell.qml"
@@ -64,8 +64,7 @@ def run():
                 wait_for(lambda: call("status")["ok"])
                 assert call("status")["theme"] == "rose-punk"
                 wait_for(lambda: call("status")["lockState"] == "unlocked")
-                guard = subprocess.run([sys.executable, "-c", "from pathlib import Path; import notjik; raise SystemExit(notjik.launch(Path.cwd(), []))"],
-                                       cwd=ROOT, capture_output=True, text=True)
+                guard = subprocess.run([str(ROOT / "bin/notjik")], cwd=ROOT, capture_output=True, text=True)
                 assert guard.returncode == 1 and "already has an owner" in guard.stderr, guard.stderr
                 # Built-in tables work without any user component registration.
                 table = {"results": [{"label": "Sectors", "value": "12",

@@ -11,6 +11,7 @@ import tempfile
 import time
 
 from integration import ROOT, wait_for
+from native_fixture import copy_runtime, copy_file
 from notjik import ipc
 
 
@@ -19,10 +20,7 @@ def main():
         raise RuntimeError("A private dbus-run-session is required")
     with tempfile.TemporaryDirectory(prefix="notjik-privacy-") as temp:
         root = Path(temp)
-        for directory in ("qml", "themes"):
-            shutil.copytree(ROOT / directory, root / directory)
-        for filename in ("notjik.py", "lock_watch.py"):
-            shutil.copy(ROOT / filename, root / filename)
+        copy_runtime(root)
         shell = root / "qml/shell.qml"
         code = shell.read_text().replace('case "status": break;', '''case "testLock": lockState = request.state; break;
         case "testPrivacy": config = Object.assign({}, config, {privacy: {lockScreen: request.policy}}); break;

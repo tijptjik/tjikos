@@ -1,0 +1,1216 @@
+[
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "old price",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 3,
+            "type": {
+              "@type": "textEntityTypeStrikethrough"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<s>old</s> price"
+  },
+  {
+    "function": "emoji_parts",
+    "args": [
+      {
+        "text": "old price",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 3,
+            "type": {
+              "@type": "textEntityTypeStrikethrough"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": []
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageText",
+          "text": {
+            "text": "old price",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 3,
+                "type": {
+                  "@type": "textEntityTypeStrikethrough"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "old price",
+      {
+        "kind": "text",
+        "source": "",
+        "status": "",
+        "styledText": "<s>old</s> price",
+        "parts": []
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageText",
+          "text": {
+            "text": "old price",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 3,
+                "type": {
+                  "@type": "textEntityTypeStrikethrough"
+                }
+              }
+            ]
+          }
+        }
+      },
+      false
+    ],
+    "kwargs": {},
+    "expected": [
+      "New message",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageText",
+          "text": {
+            "text": "old price",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 3,
+                "type": {
+                  "@type": "textEntityTypeStrikethrough"
+                }
+              }
+            ]
+          }
+        },
+        "can_be_saved": false
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "Protected message · open in Telegram",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageText",
+          "text": {
+            "text": "hidden 🙂",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 6,
+                "type": {
+                  "@type": "textEntityTypeSpoiler"
+                }
+              },
+              {
+                "offset": 7,
+                "length": 2,
+                "type": {
+                  "@type": "textEntityTypeCustomEmoji",
+                  "custom_emoji_id": "12"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "Message with spoiler · open in Telegram",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "old price",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 3,
+            "type": {
+              "@type": "textEntityTypeStrikethrough"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<s>old</s> price"
+  },
+  {
+    "function": "emoji_parts",
+    "args": [
+      {
+        "text": "old price",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 3,
+            "type": {
+              "@type": "textEntityTypeStrikethrough"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": []
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messagePhoto",
+          "caption": {
+            "text": "old price",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 3,
+                "type": {
+                  "@type": "textEntityTypeStrikethrough"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "old price",
+      {
+        "kind": "photo",
+        "source": "",
+        "status": "Downloading photo…",
+        "styledText": "<s>old</s> price",
+        "parts": []
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messagePhoto",
+          "caption": {
+            "text": "old price",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 3,
+                "type": {
+                  "@type": "textEntityTypeStrikethrough"
+                }
+              }
+            ]
+          }
+        }
+      },
+      false
+    ],
+    "kwargs": {},
+    "expected": [
+      "New message",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messagePhoto",
+          "caption": {
+            "text": "old price",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 3,
+                "type": {
+                  "@type": "textEntityTypeStrikethrough"
+                }
+              }
+            ]
+          }
+        },
+        "can_be_saved": false
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "Protected message · open in Telegram",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messagePhoto",
+          "caption": {
+            "text": "hidden 🙂",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 6,
+                "type": {
+                  "@type": "textEntityTypeSpoiler"
+                }
+              },
+              {
+                "offset": 7,
+                "length": 2,
+                "type": {
+                  "@type": "textEntityTypeCustomEmoji",
+                  "custom_emoji_id": "12"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "Message with spoiler · open in Telegram",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "old price",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 3,
+            "type": {
+              "@type": "textEntityTypeStrikethrough"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<s>old</s> price"
+  },
+  {
+    "function": "emoji_parts",
+    "args": [
+      {
+        "text": "old price",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 3,
+            "type": {
+              "@type": "textEntityTypeStrikethrough"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": []
+  },
+  {
+    "function": "decode_waveform",
+    "args": [
+      ""
+    ],
+    "kwargs": {},
+    "expected": []
+  },
+  {
+    "function": "transcription_data",
+    "args": [
+      null
+    ],
+    "kwargs": {},
+    "expected": {
+      "transcriptionState": "idle",
+      "transcript": ""
+    }
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageVoiceNote",
+          "caption": {
+            "text": "old price",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 3,
+                "type": {
+                  "@type": "textEntityTypeStrikethrough"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "old price",
+      {
+        "kind": "voice",
+        "source": "",
+        "status": "Downloading voice message…",
+        "styledText": "<s>old</s> price",
+        "parts": [],
+        "duration": 0,
+        "waveform": [],
+        "transcriptionState": "idle",
+        "transcript": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageVoiceNote",
+          "caption": {
+            "text": "old price",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 3,
+                "type": {
+                  "@type": "textEntityTypeStrikethrough"
+                }
+              }
+            ]
+          }
+        }
+      },
+      false
+    ],
+    "kwargs": {},
+    "expected": [
+      "New message",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageVoiceNote",
+          "caption": {
+            "text": "old price",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 3,
+                "type": {
+                  "@type": "textEntityTypeStrikethrough"
+                }
+              }
+            ]
+          }
+        },
+        "can_be_saved": false
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "Protected message · open in Telegram",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageVoiceNote",
+          "caption": {
+            "text": "hidden 🙂",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 6,
+                "type": {
+                  "@type": "textEntityTypeSpoiler"
+                }
+              },
+              {
+                "offset": 7,
+                "length": 2,
+                "type": {
+                  "@type": "textEntityTypeCustomEmoji",
+                  "custom_emoji_id": "12"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "Message with spoiler · open in Telegram",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "a  b\n    c",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 10,
+            "type": {
+              "@type": "textEntityTypePreCode"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<font face=\"monospace\">a&nbsp; b<br>&nbsp;&nbsp;&nbsp; c</font>"
+  },
+  {
+    "function": "emoji_parts",
+    "args": [
+      {
+        "text": "old 🙂 price",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 12,
+            "type": {
+              "@type": "textEntityTypeStrikethrough"
+            }
+          },
+          {
+            "offset": 4,
+            "length": 2,
+            "type": {
+              "@type": "textEntityTypeCustomEmoji",
+              "custom_emoji_id": "12"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      {
+        "kind": "text",
+        "text": "old",
+        "styledText": "<s>old</s>"
+      },
+      {
+        "kind": "text",
+        "text": " "
+      },
+      {
+        "kind": "emoji",
+        "text": "🙂",
+        "styledText": "<s>🙂</s>",
+        "emojiId": "12",
+        "source": "",
+        "format": ""
+      },
+      {
+        "kind": "text",
+        "text": " "
+      },
+      {
+        "kind": "text",
+        "text": "price",
+        "styledText": "<s>price</s>"
+      }
+    ]
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "🙂 abcdef",
+        "entities": [
+          {
+            "offset": 3,
+            "length": 4,
+            "type": {
+              "@type": "textEntityTypeBold"
+            }
+          },
+          {
+            "offset": 5,
+            "length": 4,
+            "type": {
+              "@type": "textEntityTypeStrikethrough"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "🙂 <b>ab</b><b><s>cd</s></b><s>ef</s>"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "🙂 abcdef",
+        "entities": [
+          {
+            "offset": 1,
+            "length": 1,
+            "type": {
+              "@type": "textEntityTypeBold"
+            }
+          },
+          {
+            "offset": 3,
+            "length": 999,
+            "type": {
+              "@type": "textEntityTypeItalic"
+            }
+          },
+          {
+            "offset": -1,
+            "length": 1,
+            "type": {
+              "@type": "textEntityTypeCode"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "🙂 abcdef"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "styled <img> & **literal**",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 6,
+            "type": {
+              "@type": "textEntityTypeBold",
+              "url": "file:///private"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<b>styled</b> &lt;img&gt; &amp; **literal**"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "styled <img> & **literal**",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 6,
+            "type": {
+              "@type": "textEntityTypeItalic",
+              "url": "file:///private"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<i>styled</i> &lt;img&gt; &amp; **literal**"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "styled <img> & **literal**",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 6,
+            "type": {
+              "@type": "textEntityTypeUnderline",
+              "url": "file:///private"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<u>styled</u> &lt;img&gt; &amp; **literal**"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "styled <img> & **literal**",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 6,
+            "type": {
+              "@type": "textEntityTypeStrikethrough",
+              "url": "file:///private"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<s>styled</s> &lt;img&gt; &amp; **literal**"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "styled <img> & **literal**",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 6,
+            "type": {
+              "@type": "textEntityTypeCode",
+              "url": "file:///private"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<font face=\"monospace\">styled</font> &lt;img&gt; &amp; **literal**"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "styled <img> & **literal**",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 6,
+            "type": {
+              "@type": "textEntityTypePre",
+              "url": "file:///private"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<font face=\"monospace\">styled</font> &lt;img&gt; &amp; **literal**"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "styled <img> & **literal**",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 6,
+            "type": {
+              "@type": "textEntityTypePreCode",
+              "url": "file:///private"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<font face=\"monospace\">styled</font> &lt;img&gt; &amp; **literal**"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "styled <img> & **literal**",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 6,
+            "type": {
+              "@type": "textEntityTypeTextUrl",
+              "url": "file:///private"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<u>styled</u> &lt;img&gt; &amp; **literal**"
+  },
+  {
+    "function": "styled_text",
+    "args": [
+      {
+        "text": "styled <img> & **literal**",
+        "entities": [
+          {
+            "offset": 0,
+            "length": 6,
+            "type": {
+              "@type": "textEntityTypeUrl",
+              "url": "file:///private"
+            }
+          }
+        ]
+      }
+    ],
+    "kwargs": {},
+    "expected": "<u>styled</u> &lt;img&gt; &amp; **literal**"
+  },
+  {
+    "function": "emoji_parts",
+    "args": [
+      {
+        "text": "<b>**literal**</b>"
+      }
+    ],
+    "kwargs": {},
+    "expected": []
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageText",
+          "text": {
+            "text": "<b>**literal**</b>"
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "<b>**literal**</b>",
+      {
+        "kind": "text",
+        "source": "",
+        "status": "",
+        "parts": []
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messagePhoto",
+          "photo": {
+            "sizes": [
+              {
+                "width": 800,
+                "height": 600,
+                "photo": {
+                  "id": 3
+                }
+              },
+              {
+                "width": 4000,
+                "height": 3000,
+                "photo": {
+                  "id": 4
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "",
+      {
+        "kind": "photo",
+        "source": "",
+        "status": "Downloading photo…"
+      },
+      {
+        "id": 3
+      }
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messagePhoto",
+          "photo": {
+            "sizes": [
+              {
+                "width": 800,
+                "height": 600,
+                "photo": {
+                  "id": 3
+                }
+              },
+              {
+                "width": 4000,
+                "height": 3000,
+                "photo": {
+                  "id": 4
+                }
+              }
+            ]
+          }
+        }
+      },
+      false
+    ],
+    "kwargs": {},
+    "expected": [
+      "New message",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageSticker",
+          "sticker": {
+            "format": {
+              "@type": "stickerFormatTgs"
+            },
+            "sticker": {
+              "id": 9
+            },
+            "emoji": "🙂"
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "",
+      {
+        "kind": "sticker",
+        "source": "",
+        "status": "Downloading sticker…",
+        "format": "tgs",
+        "fallback": "🙂",
+        "width": 256,
+        "height": 256
+      },
+      {
+        "id": 9
+      }
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageSticker",
+          "sticker": {
+            "format": {
+              "@type": "stickerFormatTgs"
+            },
+            "sticker": {
+              "id": 9
+            },
+            "emoji": "🙂"
+          }
+        }
+      },
+      false
+    ],
+    "kwargs": {},
+    "expected": [
+      "New message",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "decode_waveform",
+    "args": [
+      "AAAA//8="
+    ],
+    "kwargs": {},
+    "expected": [
+      0,
+      0,
+      0,
+      0,
+      16,
+      31,
+      31,
+      31
+    ]
+  },
+  {
+    "function": "transcription_data",
+    "args": [
+      {
+        "@type": "speechRecognitionResultText",
+        "text": "hello"
+      }
+    ],
+    "kwargs": {},
+    "expected": {
+      "transcriptionState": "done",
+      "transcript": "hello"
+    }
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageVoiceNote",
+          "voice_note": {
+            "duration": 4,
+            "waveform": "AAAA//8=",
+            "voice": {
+              "id": 4
+            },
+            "speech_recognition_result": {
+              "@type": "speechRecognitionResultText",
+              "text": "hello"
+            }
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "",
+      {
+        "kind": "voice",
+        "source": "",
+        "status": "Downloading voice message…",
+        "duration": 4,
+        "waveform": [
+          0,
+          0,
+          0,
+          0,
+          16,
+          31,
+          31,
+          31
+        ],
+        "transcriptionState": "done",
+        "transcript": "hello"
+      },
+      {
+        "id": 4
+      }
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageVoiceNote",
+          "voice_note": {
+            "duration": 4,
+            "waveform": "AAAA//8=",
+            "voice": {
+              "id": 4
+            },
+            "speech_recognition_result": {
+              "@type": "speechRecognitionResultText",
+              "text": "hello"
+            }
+          }
+        }
+      },
+      false
+    ],
+    "kwargs": {},
+    "expected": [
+      "New message",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageAnimation",
+          "animation": {
+            "mime_type": "image/gif",
+            "animation": {
+              "id": 5
+            }
+          }
+        }
+      }
+    ],
+    "kwargs": {},
+    "expected": [
+      "",
+      {
+        "kind": "animation",
+        "source": "",
+        "status": "Downloading animation…",
+        "format": "gif",
+        "width": 320,
+        "height": 200
+      },
+      {
+        "id": 5
+      }
+    ]
+  },
+  {
+    "function": "describe",
+    "args": [
+      {
+        "content": {
+          "@type": "messageAnimation",
+          "animation": {
+            "mime_type": "image/gif",
+            "animation": {
+              "id": 5
+            }
+          }
+        }
+      },
+      false
+    ],
+    "kwargs": {},
+    "expected": [
+      "New message",
+      {
+        "kind": "text",
+        "source": "",
+        "status": ""
+      },
+      null
+    ]
+  }
+]

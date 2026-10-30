@@ -45,7 +45,13 @@ for app in "$@"; do
             target_dir="$HOME/.local/lib/notjik"
             install -d -m 755 "$HOME/.local/bin" "$target_dir" "$HOME/.config/systemd/user"
             cp -R "$source_dir"/qml "$source_dir"/themes "$source_dir"/examples "$target_dir/"
-            install -m 644 "$source_dir/telegram_media_render.py" "$source_dir/telegram_recording.py" "$source_dir/telegram_bridge.py" "$source_dir/requirements-telegram.txt" "$source_dir/install-telegram.sh" "$source_dir/notjik.py" "$source_dir/lock_watch.py" "$source_dir/comparison.py" "$source_dir/demo.py" "$source_dir/demo_cycle.py" "$source_dir/README.md" "$target_dir/"
+            install -d -m 755 "$target_dir/bin"
+            install -m 755 "$source_dir/bin/notjik-core" "$target_dir/bin/.notjik-core.pending"
+            mv -f "$target_dir/bin/.notjik-core.pending" "$target_dir/bin/notjik-core"
+            install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$target_dir/bin/"
+            install -m 644 "$source_dir/install-telegram.sh" "$source_dir/README.md" "$target_dir/"
+            rm -f "$target_dir"/{notjik,lock_watch,telegram_bridge,telegram_recording,telegram_media_render,comparison,demo,demo_cycle}.py "$target_dir/requirements-telegram.txt"
+            rm -rf "$target_dir/__pycache__"
             install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$HOME/.local/bin/"
             bash "$root_dir/scripts/install-completions.sh" "$HOME/.local" notjik
             if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then

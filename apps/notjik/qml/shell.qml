@@ -10,7 +10,7 @@ import "Logic.js" as Logic
 ShellRoot {
     id: root
     property var config: ({ placement: {monitors: "primary", primaryMonitor: "", edge: "b", position: "c", offsetX: 0, offsetY: -24, margin: 16, perMonitor: {}},
-        timeouts: {low: 5, normal: 8, critical: 0}, style: {}, components: {}, maxVisible: 5, maxQueued: 100, pauseOnHover: true })
+        timeouts: {low: 5, normal: 8, critical: 0}, style: {"background": "#191919", "surface": "#242424", "border": "#353535", "text": "#eeeeee", "muted": "#aaaaaa", "accent": "#ffffff", "critical": "#ffffff", "success": "#cccccc", "font": "monospace", "fontSize": 14, "radius": 14, "padding": 16, "gap": 10, "borderWidth": 1, "iconSize": 56, "width": 420, "maxBodyLines": 6}, components: {}, maxVisible: 5, maxQueued: 100, pauseOnHover: true })
     property string lockState: "unknown"
     readonly property bool locked: lockState !== "unlocked"
     readonly property bool conceal: locked && config.privacy?.lockScreen !== "show"
@@ -504,7 +504,7 @@ ShellRoot {
 
     Process {
         id: backend
-        command: ["python3", "-B", Quickshell.shellDir + "/../notjik.py"]
+        command: [Quickshell.shellDir + "/../bin/notjikctl", "worker"]
         running: true
         stdinEnabled: true
         stderr: SplitParser { onRead: line => console.warn("notjik helper:", line) }

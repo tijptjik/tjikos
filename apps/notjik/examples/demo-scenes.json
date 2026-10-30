@@ -1,0 +1,72 @@
+[
+  {
+    "name": "standard",
+    "label": "Notifications",
+    "caption": "The same title and message in both notification styles."
+  },
+  {
+    "name": "icon",
+    "label": "Sender icons",
+    "caption": "Identify the sender from its icon or artwork."
+  },
+  {
+    "name": "status",
+    "label": "Connection status",
+    "caption": "Read the connection state alongside the message."
+  },
+  {
+    "name": "error",
+    "label": "Errors and actions",
+    "caption": "Hover to reveal the action, then click to inspect the reactor."
+  },
+  {
+    "name": "timer",
+    "label": "Countdown",
+    "caption": "Watch the countdown on the card; Dunst shows the original text."
+  },
+  {
+    "name": "actions-multiple",
+    "label": "Multiple actions",
+    "caption": "Choose a button on the card; Dunst exposes actions through its menu."
+  },
+  {
+    "name": "urgency",
+    "label": "Urgency levels",
+    "caption": "Compare low, normal and critical notifications."
+  },
+  {
+    "name": "update",
+    "label": "Progress updates",
+    "caption": "Follow progress as the same notification updates."
+  },
+  {
+    "name": "grouped",
+    "label": "Grouped messages",
+    "caption": "Keep related messages in one card; open history to see the conversation."
+  },
+  {
+    "name": "telegram-text",
+    "label": "Text replies",
+    "caption": "Type and send a reply from the notification."
+  },
+  {
+    "name": "telegram-photo",
+    "label": "Photo messages",
+    "caption": "View the photo and mark the message as read."
+  },
+  {
+    "name": "telegram-voice",
+    "label": "Voice messages",
+    "caption": "Play the message, then record a short reply."
+  },
+  {
+    "name": "telegram-gif",
+    "label": "GIF replies",
+    "caption": "View the animation and quote it in a reply."
+  },
+  {
+    "name": "robots",
+    "label": "Robot artwork",
+    "caption": "A robot for every feeling"
+  }
+]

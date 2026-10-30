@@ -16,6 +16,7 @@ from notjik import ipc
 def main():
     if not os.environ.get("DBUS_SESSION_BUS_ADDRESS", "").startswith("unix:path=/tmp/"):
         raise RuntimeError("Run with dbus-run-session --config-file tests/bus.conf")
+    monitor=json.loads(subprocess.check_output(["hyprctl","-j","monitors"],text=True))[0]["name"]
     display = os.environ["WAYLAND_DISPLAY"]
     if not display.startswith("/"):
         os.environ["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / display)
@@ -23,9 +24,9 @@ def main():
         root = Path(temp)
         os.environ["XDG_RUNTIME_DIR"] = str(root)
         os.environ["NOTJIK_CONFIG"] = str(root / "base.json")
-        (root / "base.json").write_text(json.dumps({"placement":{"primaryMonitor":"DP-1"}}))
+        (root / "base.json").write_text(json.dumps({"placement":{"primaryMonitor":monitor}}))
         def demo(*args):
-            result = subprocess.run([sys.executable, str(ROOT / "bin/notjikctl"), "demo", *args], capture_output=True, text=True, timeout=30)
+            result = subprocess.run([str(ROOT / "bin/notjikctl"), "demo", *args], capture_output=True, text=True, timeout=30)
             assert result.returncode == 0, result.stderr + result.stdout
             return result.stdout
         try:

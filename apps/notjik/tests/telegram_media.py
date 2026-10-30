@@ -14,9 +14,10 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
 from notjik import ipc
 from integration import wait_for
+from native_fixture import copy_runtime, copy_file
 
 
 def main():
@@ -26,20 +27,17 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="notjik-media-") as temp:
         root = Path(temp)
-        for directory in ("qml", "themes"):
-            shutil.copytree(ROOT / directory, root / directory)
-        for name in ("notjik.py", "lock_watch.py", "telegram_bridge.py", "telegram_recording.py"):
-            shutil.copy2(ROOT / name, root / name)
+        copy_runtime(root)
         os.environ["NOTJIK_CONFIG"] = str(root / "config.json")
         os.environ["NOTJIK_STATE_DIR"] = str(root / "state")
         os.environ["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / os.environ["WAYLAND_DISPLAY"])
         os.environ["NOTJIK_TELEGRAM_SOCKET"] = str(root / "runtime/notjik-telegram/control.sock")
         (root / "runtime/notjik-telegram").mkdir(parents=True, mode=0o700)
         os.chmod(root / "runtime", 0o700)
-        # Override only this temporary helper: no real microphone is opened.
-        helper = root / "telegram_recording.py"
-        helper.write_text(helper.read_text().replace('runtime = os.environ.get("XDG_RUNTIME_DIR")', 'runtime = '+repr(str(root / "runtime")))
-            .replace('["-f", "pulse", "-i", "default"]', '["-re", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono"]'))
+        # Synthetic input is fixed by the native helper; never open a microphone.
+        recorder = root / "qml/TelegramRecorder.qml"
+        recorder.write_text(recorder.read_text().replace('"record"]', '"record", "--synthetic"]'))
+        os.environ["XDG_RUNTIME_DIR"] = str(root / "runtime")
         requests = []
         voice_result = {"ok":True}
         reply_result = {"ok":True}

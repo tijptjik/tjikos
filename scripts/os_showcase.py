@@ -131,16 +131,10 @@ def prepare_notjik(app):
             'implicitHeight: Math.min(440, (screen?.height || 1000) * 0.72)')
     replace(qml / "HistoryDrawer.qml", 'bottom: targetScreen ? targetScreen.height - height - coordinates.y : 16;',
             'bottom: 80;')
-    # Keep the production recorder and FFmpeg pipeline; use bundled audio input.
-    # No microphone or network path can be reached from the demo helper.
-    source = ROOT / "apps/notjik"
-    shutil.copy2(source / "telegram_recording.py", app / "showcase_recording_backend.py")
-    shutil.copy2(source / "examples/demo-voice.wav", app / "showcase-voice.wav")
-    (app / "telegram_recording.py").write_text(
-        'from pathlib import Path\nimport showcase_recording_backend as recording\n'
-        'raise SystemExit(recording.run(["-re", "-stream_loop", "-1", "-i", '
-        'str(Path(__file__).with_name("showcase-voice.wav"))]))\n')
-    (app / "telegram_bridge.py").write_text('raise SystemExit("Use only demo fixtures in the showcase")\n')
+    # Native recorder with a fixed synthetic source; direct native Telegram and
+    # microphone calls are also blocked by the isolated runtime marker.
+    (app / ".synthetic-only").write_text("Synthetic showcase only\n")
+    replace(qml / "TelegramRecorder.qml", '"record"]', '"record", "--synthetic"]')
     replace(qml / "TelegramPlayback.qml", 'audioOutput: AudioOutput {}',
             'audioOutput: AudioOutput { muted: true }')
 
@@ -327,7 +321,7 @@ class Director:
         self.frame("02-grouped")
         self.point(grouped, "card")
         self.point(grouped, "group")
-        checked([sys.executable, "-B", str(self.app / "bin/notjikctl"), "history", "show"], env=self.env)
+        checked([str(self.app / "bin/notjikctl"), "history", "show"], env=self.env)
         wait_for(lambda:self.observe().get("drawerOpen"))
         self.events.append({"time":round(time.monotonic()-self.started,3), "command":"notjikctl history show"})
         self.move(600,235)
@@ -418,7 +412,7 @@ class Director:
 
 def record(output):
     source = ROOT / "apps/notjik"
-    sys.path.insert(0, str(source))
+    sys.path.insert(0, str(source / "tests/reference"))
     review = output.with_suffix(".review")
     review.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix="oc-") as name:
@@ -426,15 +420,13 @@ def record(output):
         app = directory / "app"
         for subdir in ("qml", "themes"):
             shutil.copytree(source / subdir, app / subdir)
-        for module in source.glob("*.py"):
-            shutil.copy2(module, app / module.name)
-        shutil.copytree(source / "bin", app / "bin")
+        shutil.copytree(source / "dist/bin", app / "bin")
         prepare_notjik(app)
         pointer = build_pointer(directory)
         child = recorder = director = None
         try:
             with native_session(directory) as (env, monitor):
-                env.update(NOTJIK_CONFIG=str(directory / "notjik.json"), NOTJIK_STATE_DIR=str(directory / "history"),
+                env.update(NOTJIK_HOME=str(app), NOTJIK_CONFIG=str(directory / "notjik.json"), NOTJIK_STATE_DIR=str(directory / "history"),
                            SHOWCASE_ICONS=str(ROOT / "docs/icons"), SHOWCASE_MONITOR=monitor)
                 config = {"theme":"rose-punk", "style":{"width":640,"fontSize":20,"iconSize":80,"padding":20},
                           "placement":{"monitors":"primary","primaryMonitor":monitor,"edge":"b","position":"c","margin":80,"offsetY":-155},

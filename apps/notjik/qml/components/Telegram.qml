@@ -161,7 +161,7 @@ ColumnLayout {
     }
     Process {
         id: command
-        command: ["python3", "-B", Quickshell.shellDir + "/../telegram_bridge.py", "action"]
+        command: [Quickshell.shellDir + "/../bin/notjikctl", "telegram", "action"]
         stdinEnabled: true
         onStarted: write(JSON.stringify(detail.pendingRequest) + "\n")
         stdout: SplitParser {
