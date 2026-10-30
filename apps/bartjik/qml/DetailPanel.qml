@@ -148,7 +148,7 @@ DetachablePopup {
                 PanelHeader {
                     id:header;x:16;y:16;width:parent.width-32;visible:!popup.mediaPanel;theme:popup.theme
                     title:popup.panelTitle
-                    imageSource:({mullvad:'icons/tray/mullvad.svg',tailscale:'icons/tailscale.svg',codex:'icons/codex.svg',openrouter:'icons/openrouter.svg',audio:'icons/proicons/volume.svg',network:'icons/proicons/wi-fi.svg'})[popup.provider] || ''
+                    imageSource:({mullvad:'icons/tray/mullvad.svg',tailscale:'icons/tailscale.svg',codex:'icons/codex.svg',openrouter:'icons/openrouter.svg',audio:'icons/proicons/volume.svg',network:'icons/proicons/wi-fi.svg',battery:'icons/battery.svg'})[popup.provider] || ''
                     symbol:({datetime:'schedule',locale:'keyboard',audio:'volume_up',network:'wifi'})[popup.provider] || 'info'
                     popup:popup
                 }

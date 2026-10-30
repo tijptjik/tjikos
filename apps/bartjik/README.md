@@ -53,7 +53,20 @@ Configuration lives at `$XDG_CONFIG_HOME/bartjik/config.json`.
 Build and test independently before changing the desktop session. Review
 `bartjikctl config --validate`, confirm connector names with `bartjikctl monitors`,
 and edit the presets for your displays. Desktop defaults use DP-1/DP-2; laptop
-uses eDP-1. Both presets contain all 16 providers. More than one bar in a section
+uses eDP-1. The laptop preset ends the controls island with the battery indicator;
+the desktop preset also includes the desktop/game-mode toggle to its right. The
+battery indicator stays hidden without a system battery and ignores peripheral
+batteries. On AC it shows a rounded lightning outline; unplugged, a 3×3 grid lights
+`clamp(ceil((percent - 1) / 10), 0, 9)` pips. Below 5%, all nine pips turn red.
+All lit pips share one colour: 6–9 green, 3–5 yellow, 1–2 red. AC transitions
+morph over 220ms, respecting `animateIcons`. Hover opens the Battery panel; click
+pins it. The panel shows charge percentage, UPower’s estimated time to full on AC
+or remaining runtime on battery, and Performance, Balanced and Power Saver modes.
+Power modes use the system PowerProfiles D-Bus service (including tuned-ppd); only
+a supported, confirmed active mode is selected. Missing estimates and unsupported
+modes are shown explicitly.
+The provider polls every two seconds; `batteryGreen`, `batteryYellow`, and
+`batteryRed` style values override its colours. More than one bar in a section
 stacks inward. Services unavailable on a host report an unavailable state.
 
 Start `bartjik` in a terminal and keep it available during acceptance. Verify

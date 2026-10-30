@@ -25,6 +25,7 @@ Item {
     readonly property bool cryptoHoverEnabled: moduleConfig.provider==='crypto' && moduleConfig.panel?.hover===true
     function previewContext() {return Object.assign({},context,{item:row.id,part:kind,anchor:anchor()});}
     readonly property var value: row[kind] || {}
+    readonly property bool batteryIcon: kind==='icon' && moduleConfig.provider==='battery' && !!row.battery
     readonly property var style: Logic.partStyle(theme,moduleConfig,row,kind,hover.hovered)
     readonly property string proIcon: kind==='icon' && value.kind==='symbol' ? Icons.resolve(String(value.value || ''),style.iconSet) : ''
     readonly property bool trayUnread: kind==='icon' && moduleConfig.provider==='icontray' && row.state?.urgent===true
@@ -64,7 +65,7 @@ Item {
             x:part.centeredWorkspaceLabel ? (parent.width-measurement.tightBoundingRect.width)/2-measurement.tightBoundingRect.x : part.ticking?part.scrollOffset:(parent.width-width)/2
             width:part.kind==='icon'?part.style.iconSize:part.ticking?part.naturalTextWidth:Math.min(part.naturalTextWidth,parent.width)
             text:part.label;textFormat:Text.PlainText
-            visible:part.glyph && !morph.morphing
+            visible:part.glyph && !morph.morphing && !part.batteryIcon
             elide:part.kind==='icon' || part.style.marquee===true?Text.ElideNone:Text.ElideRight
             fontSizeMode:part.kind==='icon'?Text.HorizontalFit:Text.FixedSize
             minimumPixelSize:8
@@ -95,7 +96,7 @@ Item {
     Image {
         id: artwork
         anchors.centerIn: parent; width: part.style.iconSize; height: width
-        visible: !part.glyph && !morph.morphing
+        visible: !part.glyph && !morph.morphing && !part.batteryIcon
         source: {
             // Read kind and value together: live icon overrides change both at once.
             const icon=part.value, label=String(icon.value || '');
@@ -129,9 +130,17 @@ Item {
         animate:part.style.animateIcons!==false && part.style.iconSet!=='material'
         ink:part.style.color || part.style.text
     }
+    Loader {
+        anchors.centerIn:parent;width:part.style.iconSize;height:width
+        active:part.batteryIcon
+        sourceComponent:BatteryIcon {
+            battery:part.row.battery;theme:part.style
+            animate:part.style.animateIcons!==false
+        }
+    }
     Text {
         anchors.centerIn: parent
-        visible: !part.glyph && !morph.morphing && (artwork.status===Image.Error || artwork.status===Image.Null)
+        visible: !part.glyph && !morph.morphing && !part.batteryIcon && (artwork.status===Image.Error || artwork.status===Image.Null)
         text: '◇';textFormat: Text.PlainText
         color: part.style.color || part.style.text
         font.family: part.style.font;font.pixelSize: part.style.iconSize

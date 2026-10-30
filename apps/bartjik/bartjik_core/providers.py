@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from .io import command, json_command, http_json, Unavailable, RateLimit
 from .model import item, untrusted_items
-from . import quota, credits, details, connectivity
+from . import quota, credits, details, connectivity, battery
 from .icons import icon
 from .audio_output import is_headphones
 
@@ -61,6 +61,7 @@ COUNTRY_FLAGS = {
 }
 
 INTERVALS = dict(
+    battery=2,
     crypto=600,
     network=3,
     mullvad=10,
@@ -674,6 +675,7 @@ async def process(m):
 
 
 REGISTRY = {
+    "battery": battery.provider,
     "crypto": crypto,
     "network": network,
     "mullvad": mullvad,

@@ -328,6 +328,14 @@
       "actions": {
         "leftClick": "monitor.toggle"
       }
+    },
+    "battery": {
+      "provider": "battery",
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
+      }
     }
   },
   "perMonitor": {},
@@ -434,6 +442,7 @@
             "notifications",
             "idle",
             "filter",
+            "battery",
             "display"
           ]
         }

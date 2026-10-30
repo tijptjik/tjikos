@@ -326,12 +326,15 @@ class Engine:
             b = next(b for b in self.bars if b["key"] == context["barKey"])
             m = b["moduleConfigs"][context["module"]]
             provider = m["provider"]
-            if provider not in ("locale", "mullvad", "tailscale") or b["screen"] != context["monitor"]:
+            if provider not in ("locale", "mullvad", "tailscale", "battery") or b["screen"] != context["monitor"]:
                 raise ValueError("invalid panel action")
             feedback = dict(barKey=b["key"], module=context["module"], busy=True, message="", error=False)
             self.panel_feedback = feedback
             self.changed()
-            if provider == "locale":
+            if provider == "battery":
+                from .battery import select_profile
+                message = await select_profile(context.get("action"), context.get("selection"), self.executor)
+            elif provider == "locale":
                 from .io import command
                 from .details import input_methods
                 async with self.executor.lock("locale"):

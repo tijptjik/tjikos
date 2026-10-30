@@ -5,6 +5,10 @@
 - Bitcoin: restored circular Simple Icons logo, CC0, https://simpleicons.org/ . License: SIMPLE-ICONS-LICENSE.
 - ProIcons: MIT, https://github.com/ProCode-Software/proicons/tree/b8718fbc0a8654f6065cff8b3166ee3b99cd89ca . Bundled SVG subset recolored white; semantic mappings in `qml/IconRegistry.js`. License: PROICONS-LICENSE.
 - Circle indicators: original simple SVG geometry.
+- Battery: original 3×3 pip grid and lightning outline in `BatteryLogic.js`, on
+  the same 24px viewbox with rounded 1.5px strokes. The grid morphs into the
+  flash over 220ms; battery colours remain visible with greyscale icons enabled.
+  `battery.svg` is the matching original outline for the Battery panel header.
 
 ProIcons supplies matching UI icons, with Material Symbols Rounded as fallback.
 Set `style.iconSet:"material"` to use the font icons throughout. StatusNotifier supplies native
