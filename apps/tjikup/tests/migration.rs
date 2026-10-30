@@ -576,3 +576,27 @@ fn system_preflights_identity_and_mount_collisions_before_any_mutations() {
     assert!(!out.status.success());
     assert_eq!(fs::read_to_string(fstab).unwrap(), "installer-owned\n");
 }
+
+#[test]
+fn repository_defaults_to_code_and_preserves_explicit_overrides() {
+    let d = fixture();
+    let r = d.path();
+    let default_repo = r.join("home/code/dotjik");
+    fs::create_dir_all(&default_repo).unwrap();
+    fs::copy(r.join("tjikup.json"), default_repo.join("tjikup.json")).unwrap();
+    for data_home in [r.join("data"), r.join("other-data")] {
+        let output = command(r)
+            .env_remove("DOTJIK_REPO")
+            .env("XDG_DATA_HOME", data_home)
+            .args(["workflow", "context"])
+            .output()
+            .unwrap();
+        success(&output);
+        let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(value["repo_dir"], default_repo.to_str().unwrap());
+    }
+    let output = command(r).args(["workflow", "context"]).output().unwrap();
+    success(&output);
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["repo_dir"], r.to_str().unwrap());
+}

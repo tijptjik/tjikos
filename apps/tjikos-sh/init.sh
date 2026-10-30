@@ -52,7 +52,7 @@ main() {
     sudo -v </dev/tty
     sudo dnf install -y "${packages[@]}" </dev/tty
     umask 077
-    dotjik_dir="$HOME/.local/share/dotjik"
+    dotjik_dir="$HOME/code/dotjik"
     tjikos_dir="$HOME/code/tjikos"
     config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/tjikup"
     clone_release() {

@@ -61,12 +61,7 @@ pub fn repository() -> PathBuf {
     std::env::var_os("DOTJIK_REPO")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
-            std::env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| {
-                    PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/share")
-                })
-                .join("dotjik")
+            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join("code/dotjik")
         })
 }
 pub fn config(mut args: Vec<String>) -> Result<i32> {
