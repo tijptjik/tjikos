@@ -90,7 +90,9 @@
         "vault": "",
         "ssh_command": [
           "ssh"
-        ]
+        ],
+        "url": "",
+        "socket": ""
       }
     },
     "overrides": {}

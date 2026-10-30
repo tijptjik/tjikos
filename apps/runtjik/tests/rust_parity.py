@@ -1,4 +1,5 @@
 """Black-box protocol parity against the Python reference, with isolated synthetic data."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -48,6 +49,15 @@ class Backend:
         self.process.stdin.flush()
         return self.read()
 
+    def settled_query(self, query):
+        deadline = time.monotonic() + 20
+        while True:
+            result = self.request(op='query', query=query)
+            if not result.get('pending'):
+                return result
+            assert time.monotonic() < deadline, f'Provider did not settle: {query}'
+            time.sleep(0.01)
+
     def close(self):
         self.process.stdin.close()
         self.process.wait(timeout=10)
@@ -56,7 +66,11 @@ class Backend:
 
 def comparable(value):
     if isinstance(value, dict):
-        return {k: comparable(v) for k, v in value.items() if k not in ('icon',)}
+        # Providers create independent temporary preview paths. Compare the
+        # generated image bytes, while still requiring each preview to exist.
+        return {k: hashlib.sha256(Path(v).read_bytes()).hexdigest()
+                if k == 'thumbnail' and v else comparable(v)
+                for k, v in value.items() if k not in ('icon',)}
     if isinstance(value, list):
         return [comparable(v) for v in value]
     return value
@@ -151,8 +165,8 @@ def main():
             rust = Backend('rust', env, demo)
             try:
                 for query in ['/cliphist', '/grab', '/rec', '/todo', '/reading', '/define test', '!define test']:
-                    a = py.request(op='query', query=query)
-                    b = rust.request(op='query', query=query)
+                    a = py.settled_query(query)
+                    b = rust.settled_query(query)
                     # Todo demo timestamps and generated IDs are intentionally independent.
                     if query in ('/todo', '/reading'):
                         assert a['app_mode'] == b['app_mode'] == 'Todo'
