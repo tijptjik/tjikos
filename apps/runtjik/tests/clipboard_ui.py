@@ -50,7 +50,7 @@ with private_compositor():
         viewer.wait(timeout=5)
     home = temp / 'app'
     shutil.copytree(app / 'qml', home / 'qml')
-    for name in ('todo.py', 'runtjik.py', 'words.py', 'desktop_plugins.py', 'capture_worker.py', 'capture_countdown.py', 'capture_trash.py'):
+    for name in ('todo.py', 'browser.py', 'runtjik.py', 'words.py', 'desktop_plugins.py', 'capture_worker.py', 'capture_countdown.py', 'capture_trash.py'):
         shutil.copy2(app / name, home / name)
     conf = temp / 'runtjik.conf'
     conf.write_text('')

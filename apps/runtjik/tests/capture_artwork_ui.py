@@ -13,7 +13,7 @@ with tempfile.TemporaryDirectory(prefix="runtjik-empty-", dir="/dev/shm") as emp
     temp = Path(os.environ['XDG_RUNTIME_DIR']).parent
     home = temp / 'app'
     shutil.copytree(app / 'qml', home / 'qml')
-    for name in ('todo.py', 'runtjik.py', 'words.py', 'desktop_plugins.py', 'capture_worker.py', 'capture_countdown.py', 'capture_trash.py'):
+    for name in ('todo.py', 'browser.py', 'runtjik.py', 'words.py', 'desktop_plugins.py', 'capture_worker.py', 'capture_countdown.py', 'capture_trash.py'):
         shutil.copy2(app / name, home / name)
     # Empty fixture histories; never inspect the user's capture directories.
     backend = home / 'desktop_plugins.py'

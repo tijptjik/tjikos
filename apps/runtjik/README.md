@@ -164,9 +164,9 @@ highlighted; keyboard scrolling preserves the keyboard selection.
 | Tab / Shift+Tab | Next / previous result, wrapping at the ends |
 | Up / Down | Previous / next row (one result in list mode) |
 | Left / Right | Previous / next result in grid mode (Ctrl+Left / Ctrl+Right also works in lists) |
-| Enter / click | Request a new launch |
+| Enter / click | Switch to an existing application window, or launch if none are running |
 | Ctrl+Enter | Request that the app close gracefully; retry surviving processes with SIGTERM, then SIGKILL |
-| Shift+Enter / Shift+click | Switch to an existing window, or launch if none are running |
+| Shift+Enter / Shift+click | Launch another application instance; browser Read later integration is pending |
 | Ctrl+L | Toggle the current session between grid and list |
 | Esc | Return from the window picker, otherwise close |
 | `/pin` | Keep the launcher visible on outside clicks and app actions; dragging still works |
@@ -219,15 +219,15 @@ file is changed.
 
 ![Runtjik instance picker](docs/windows.png)
 
-With one matching window, Shift+Enter switches immediately. With several, it
+With one matching window, Enter switches immediately. With several, it
 opens a list of window titles and workspaces; Tab selects, and the next Enter
 focuses that window. Switching dismisses open special-workspace overlays on all
 monitors, keeping the target special workspace visible if the window is inside it.
-Windows stay on their existing workspaces. With none, Shift+Enter launches a new instance. Window matching
+Windows stay on their existing workspaces. With none, Enter launches a new instance. Window matching
 uses case-insensitive StartupWMClass and desktop ID (including namespaced instance suffixes), falling back to the executable only when no StartupWMClass is declared;
 `window_classes` overrides handle apps with unusual identifiers.
 
-Enter normally sends a launch request, rather than choosing a running window.
+Enter switches to an existing window; Shift+Enter sends a new launch request.
 After Ctrl+Enter, the next Enter/click or Ctrl+Enter retries closing any original
 process that is still alive: first SIGTERM, then SIGKILL. Once it has exited,
 Enter launches normally again. The initial request asks each matching window to
@@ -557,7 +557,7 @@ class Provider:
     name = "ZenTabs"
 
     def query(self, query, settings):
-        # Read the future local browser bridge; return promptly.
+        # Read a local browser bridge; return promptly.
         return [{
             "id": "ZenTabs:opaque-tab-id",
             "provider": "ZenTabs",
@@ -569,7 +569,7 @@ class Provider:
         }]
 
     def activate(self, entry, settings, mode):
-        # mode is 'launch' (Enter) or 'switch' (Shift+Enter).
+        # Provider actions receive 'launch', 'switch', or 'close'.
         # Request the bridge action and raise an exception on failure.
         raise NotImplementedError("Connect the Zen bridge first")
 ```
@@ -578,7 +578,7 @@ Provider names and result IDs must be namespaced and cannot replace built-ins.
 Initialization/query errors are surfaced in the footer without hiding built-in
 results. Activation failures leave the launcher open. Extensions are trusted code,
 not sandboxed, and must implement bounded I/O; a blocking extension blocks its
-helper. A future Zen bridge should expose a local authenticated interface, use
+helper. Browser bridges should expose a local authenticated interface, use
 stable tab/window IDs, and avoid logging browsing titles or URLs by default.
 
 ## Development and validation
@@ -684,6 +684,14 @@ imv keys: Left/Right previous/next, Up/Down zoom, `r` reset, `a` actual size,
 `f` fullscreen, `d` information overlay, `h/j/k/l` pan, Ctrl+R rotate,
 `gg` first image, Shift+G last image, and `q` quit. `x` removes the current
 image from the viewing list; it does not delete the file.
+
+## Firefox / Zen browser plugin (development preview)
+
+The opt-in `Browser` provider supplies `/browser` (alias `/zen`) window cards in
+three configurable columns and `/tabs` title-filtered tab lists. Enter focuses
+Hyprland and activates the selected browser tab through a Firefox extension and
+private native-messaging bridge. See [setup and current limitations](browser-extension/README.md).
+Window cards currently use icons and titles, not live screenshot previews.
 
 ## Todo app
 

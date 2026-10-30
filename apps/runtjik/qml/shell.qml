@@ -70,13 +70,14 @@ ShellRoot {
     readonly property bool runMode: commandQuery === '/run' || commandQuery.startsWith('/run ') || query.startsWith('!!')
     readonly property bool runningMode: query.startsWith('?') || query==='/processes' || query.startsWith('/processes ')
     readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(commandQuery)
+    readonly property bool browserWindows: /^\/(browser|zen)( |$)/.test(commandQuery)
     readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(commandQuery)
     readonly property bool captureMenu: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord)$/.test(commandQuery.trim())
     readonly property bool captureRecording: /^\/(rec|screenrecord)( |$)/.test(commandQuery)
     readonly property int captureChoices: captureRecording ? 4 : 3
     readonly property bool galleryEmpty: galleryMode && results.length === 1 && !!results[0].empty_state
     readonly property string galleryProvider: /^\/(rec|screenrecord) /.test(commandQuery) ? 'Recorder' : 'Screenshots'
-    readonly property int gridColumns: captureMenu ? (captureRecording ? 2 : 3) : galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
+    readonly property int gridColumns: browserWindows ? (settings.plugin_settings?.Browser?.columns || 3) : captureMenu ? (captureRecording ? 2 : 3) : galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
     readonly property int galleryRows: settings.plugin_settings?.[galleryProvider]?.gallery_rows || 3
     property bool providerPending: false
     property var commandHistory: []
@@ -99,7 +100,7 @@ ShellRoot {
         searchBox.cursorPosition=searchBox.text.length;
         navigatingHistory=false;
     }
-    readonly property bool listMode: !captureMenu && !galleryMode && (view === 'list' || windowEntry !== '' || (commandQuery.startsWith('/') && !runMode && !runningMode))
+    readonly property bool listMode: !browserWindows && !captureMenu && !galleryMode && (view === 'list' || windowEntry !== '' || (commandQuery.startsWith('/') && !runMode && !runningMode))
     // Capture the focused screen once; keyboard navigation must not move the panel.
     property string movedMonitor: ''
     property string initialMonitor: ''
@@ -158,9 +159,11 @@ ShellRoot {
         }
         rememberCommand(query);
         busy = true;
+        const appResult=['apps','commands'].includes(results[selected].provider);
+        const mode=closeWindow?'close':appResult?(switchWindow?'launch':'switch'):(switchWindow?'switch':'launch');
         const request=windowEntry?{op:'activate',id:windowEntry,mode:closeWindow?'close':'switch',address:results[selected].id}
-            :{op:'activate',id:results[selected].id,mode:closeWindow?'close':switchWindow?'switch':'launch'};
-        request.prepare=switchWindow && !closeWindow && !windowEntry && ['apps','commands'].includes(results[selected].provider);
+            :{op:'activate',id:results[selected].id,mode:mode};
+        request.prepare=mode==='switch' && !closeWindow && !windowEntry && appResult;
         if (!demo && !results[selected].keep_open && !closeWindow && !closingIds.includes(request.id) && !request.prepare && (windowEntry || !results[selected].id.startsWith('/'))) {
             queuedRequest=request;
             if(panel.pinned && !results[selected]?.hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
@@ -290,7 +293,7 @@ ShellRoot {
     Timer {id:closePoll;interval:180;repeat:true;running:root.opened && root.closingIds.length>0;onTriggered:root.search()}
     Timer {interval:150;repeat:true;running:root.opened && root.providerPending && !debounce.running && !root.busy;onTriggered:root.search()}
     Timer {id:debounce;interval:root.wordMode?350:60;onTriggered:root.search()}
-    Timer {interval:root.settings.index.refresh_seconds*1000;running:root.ready && root.opened;repeat:true;onTriggered:root.search()}
+    Timer {interval:root.settings.index.refresh_seconds*1000;running:root.ready && root.opened && !root.appMode;repeat:true;onTriggered:root.search()}
     IpcHandler {
         target: 'runtjik'
         function close(): void {root.close();}
@@ -435,7 +438,7 @@ ShellRoot {
                 anchors.fill: parent; anchors.margins: 20
                 visible: root.appMode === 'Todo'
                 stateData: root.appState; theme: root.theme; errorMessage: root.message
-                onRequest: request => root.send(Object.assign({op:'app-action',provider:root.appMode}, request))
+                onRequest: request => {if(root.busy)return;root.busy=true;root.send(Object.assign({op:'app-action',provider:root.appMode}, request));}
                 onExitApp: { root.appMode=''; searchBox.text=''; root.query=''; root.search(); root.focusInput(); }
                 onVisibleChanged: if(visible) forceActiveFocus()
             }
@@ -489,7 +492,9 @@ ShellRoot {
                     }
                 }
                 Row {
-                    width:parent.width;height:24;spacing:8
+                    id:resultsHeading
+                    visible:panel.pinned || root.galleryMode || root.wordMode || !!root.windowEntry || root.runningMode || root.runMode || root.commandQuery.startsWith('/config') || ['/shortcuts','/bindings'].includes(root.query.trim())
+                    width:parent.width;height:visible?24:0;spacing:8
                     Text {
                         width:parent.width-(pinStatus.visible?pinStatus.width+parent.spacing:0);height:parent.height
                         text:root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.commandQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.commandQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.query.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.query?'SEARCH RESULTS':'APPLICATIONS'))))
@@ -506,7 +511,7 @@ ShellRoot {
                     }
                 }
                 Column {
-                    width:parent.width;height:parent.height-98;spacing:4
+                    width:parent.width;height:parent.height-(resultsHeading.visible?98:60);spacing:4
                     Rectangle {
                         width:parent.width;height:parent.height-footer.height-4
                         radius:14;color:root.theme.background
@@ -526,7 +531,7 @@ ShellRoot {
                                 NumberAnimation {properties:'x,y';duration:220;easing.type:Easing.OutCubic}
                             }
                             cellWidth:root.listMode?width:width/root.gridColumns
-                            cellHeight:root.captureMenu?height/(root.captureRecording?4:2):root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
+                            cellHeight:root.browserWindows?142:root.captureMenu?height/(root.captureRecording?4:2):root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
                             currentIndex:root.selected
                             boundsBehavior:Flickable.StopAtBounds
                             onContentYChanged: {
@@ -579,6 +584,7 @@ ShellRoot {
                                 border.width:index===root.selected?1:0
                                 border.color:root.theme.accent
                                 property string iconSource: {
+                                    if(modelData.favicon)return modelData.favicon;
                                     if(modelData.thumbnail)return 'file://'+modelData.thumbnail;
                                     const icon=modelData.icon || 'application-x-executable';
                                     if(icon.startsWith('/'))return 'file://'+icon;
@@ -613,7 +619,7 @@ ShellRoot {
                                 }
                                 Item {
                                     id:titleArea
-                                    x:modelData.thumbnail && !root.galleryMode?130:root.wordMode?56:root.listMode?70:7;y:root.captureMenu?art.y+art.height+5:root.galleryMode?parent.height-26:root.listMode?12:76
+                                    x:modelData.thumbnail && !root.galleryMode?130:root.wordMode?56:root.listMode?70:7;y:root.captureMenu?art.y+art.height+5:root.galleryMode?parent.height-26:root.listMode?(parent.height-height-(subtitleLabel.visible?subtitleLabel.implicitHeight+4:0))/2:76
                                     width:parent.width-x-(root.listMode?14:7)
                                     height:label.height
                                     Row {
@@ -640,8 +646,9 @@ ShellRoot {
                                     }
                                 }
                                 Text {
-                                    visible:root.listMode || root.captureMenu
-                                    horizontalAlignment:root.captureMenu?Text.AlignHCenter:Text.AlignLeft
+                                    id:subtitleLabel
+                                    visible:!!modelData.subtitle && (root.listMode || root.captureMenu || root.browserWindows)
+                                    horizontalAlignment:root.captureMenu || root.browserWindows?Text.AlignHCenter:Text.AlignLeft
                                     x:titleArea.x;y:titleArea.y+titleArea.height+4;width:titleArea.width
                                     text:modelData.subtitle
                                     textFormat:Text.PlainText

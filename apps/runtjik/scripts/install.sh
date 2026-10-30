@@ -5,6 +5,7 @@ install_home="${RUNTJIK_INSTALL_HOME:-$HOME}"
 config_root="${RUNTJIK_INSTALL_CONFIG:-${XDG_CONFIG_HOME:-$install_home/.config}}"
 target="$install_home/.local/lib/runtjik"
 test -f "$root_dir/dist/runtjik.py"
+
 # Stop only this installed launcher before replacing a resident UI/backend pair.
 if [[ "$install_home" == "$HOME" && -n "${WAYLAND_DISPLAY:-}" && -n "${XDG_RUNTIME_DIR:-}" && -x "$install_home/.local/bin/runtjik" ]]; then
     if ! RUNTJIK_HOME="$target" "$install_home/.local/bin/runtjik" quit >/dev/null 2>&1; then
@@ -12,7 +13,7 @@ if [[ "$install_home" == "$HOME" && -n "${WAYLAND_DISPLAY:-}" && -n "${XDG_RUNTI
     fi
 fi
 install -d -m 755 "$install_home/.local/bin" "$target" "$config_root/runtjik"
-for directory in qml examples docs; do
+for directory in qml examples docs browser-extension; do
     staging="$(mktemp -d "$target/.install.XXXXXXXX")"
     cp -R "$root_dir/dist/$directory/." "$staging/"
     previous="$staging.previous"
@@ -22,7 +23,7 @@ for directory in qml examples docs; do
     mv -- "$staging" "$target/$directory"
     rm -rf -- "$previous"
 done
-install -m 644 "$root_dir/dist/todo.py" "$root_dir/dist/image_viewer.py" "$root_dir/dist/runtjik.py" "$root_dir/dist/words.py" "$root_dir/dist/desktop_plugins.py" "$root_dir/dist/capture_worker.py" "$root_dir/dist/capture_countdown.py" "$root_dir/dist/capture_trash.py" "$root_dir/dist/control.py" "$root_dir/dist/README.md" "$target/"
+install -m 644 "$root_dir/dist/todo.py" "$root_dir/dist/browser.py" "$root_dir/dist/browser_host.py" "$root_dir/dist/image_viewer.py" "$root_dir/dist/runtjik.py" "$root_dir/dist/words.py" "$root_dir/dist/desktop_plugins.py" "$root_dir/dist/capture_worker.py" "$root_dir/dist/capture_countdown.py" "$root_dir/dist/capture_trash.py" "$root_dir/dist/control.py" "$root_dir/dist/README.md" "$target/"
 install -m 755 "$root_dir/dist/bin/runtjik" "$install_home/.local/bin/runtjik"
 bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" runtjik
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 && ! -e "$config_root/runtjik/runtjik.conf" ]]; then

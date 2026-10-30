@@ -21,11 +21,13 @@ import time
 import tomllib
 from dataclasses import asdict, dataclass, field
 from todo import Todo, OPTIONS as TODO_OPTIONS
+from browser import Browser, DEFAULT_OPTIONS as BROWSER_OPTIONS
 from words import Provider as Words, DEFAULT_OPTIONS, validate_options
 from desktop_plugins import Clipboard, Recorder, Screenshots, DEFAULT_OPTIONS as DESKTOP_OPTIONS, validate_options as validate_desktop_options
 
 BUNDLED_PROVIDERS = {provider.name: provider for provider in (Words, Clipboard, Recorder, Screenshots, Todo)}
 
+OPTIONAL_PROVIDERS = {"Browser": Browser}
 
 VERSION = "0.8.3"
 API_VERSION = 1
@@ -42,7 +44,7 @@ DEFAULTS = {
     "launch": {"terminal": ["kitty", "--"], "isolate": True},
     "history": {"enabled": True},
     "plugins": {"enabled": list(BUNDLED_PROVIDERS)},
-    "plugin_settings": {"Words": DEFAULT_OPTIONS, **DESKTOP_OPTIONS, "Todo": TODO_OPTIONS},
+    "plugin_settings": {"Words": DEFAULT_OPTIONS, **DESKTOP_OPTIONS, "Browser": BROWSER_OPTIONS, "Todo": TODO_OPTIONS},
     "overrides": {},
 }
 
@@ -96,6 +98,11 @@ def config(text=None):
         raise ValueError("plugins.enabled must contain provider module names")
     validate_options(result["plugin_settings"]["Words"])
     validate_desktop_options(result["plugin_settings"])
+    if set(result["plugin_settings"]["Browser"]) - set(BROWSER_OPTIONS):
+        raise ValueError("Unknown Browser setting")
+    columns = result["plugin_settings"]["Browser"]["columns"]
+    if type(columns) is not int or not 1 <= columns <= 6:
+        raise ValueError("Browser.columns must be an integer from 1 to 6")
     return result
 
 
@@ -116,11 +123,11 @@ SHORTCUTS = [
     ("Tab / Shift+Tab", "Next / previous result"),
     ("Up / Down", "Previous / next row"),
     ("Left / Right", "Previous / next result in the grid; Ctrl+Left / Ctrl+Right also works in lists"),
-    ("Enter / click", "Launch the selected application or run the selected command"),
-    ("Ctrl+Enter", "Trash a selected capture; otherwise close app and retry surviving processes"),
+    ("Enter / click", "Switch to a running application, or launch if none are running"),
+    ("Ctrl+Enter", "Close a browser tab; trash a capture; otherwise close the selected app"),
     ("Ctrl+Z", "Undo the most recent capture trash action while browsing capture history"),
     ("Ctrl+Up / Ctrl+Down", "Previous / next launcher command; Down past newest restores the draft"),
-    ("Shift+Enter / Shift+click", "Switch to an existing instance, or launch if none are running"),
+    ("Shift+Enter / Shift+click", "Launch a new application instance; browser Read later integration is pending"),
     ("Ctrl+L", "Toggle grid / list for this session"),
     ("Esc", "Return from the instance picker, otherwise close"),
     ("Drag the header or frame", "Move within a monitor; release on another monitor to move there"),
@@ -944,8 +951,8 @@ class Launcher:
         self.warnings = []
         for name in self.settings["plugins"]["enabled"]:
             try:
-                if name in BUNDLED_PROVIDERS:
-                    provider = BUNDLED_PROVIDERS[name](demo=self.demo)
+                if name in BUNDLED_PROVIDERS or name in OPTIONAL_PROVIDERS:
+                    provider = (BUNDLED_PROVIDERS | OPTIONAL_PROVIDERS)[name](demo=self.demo)
                 else:
                     path = xdg("config") / "plugins" / (name + ".py")
                     spec = importlib.util.spec_from_file_location("runtjik_ext_" + name, path)
@@ -1067,7 +1074,7 @@ class Launcher:
                     raise ValueError("Provider result ID must be namespaced")
                 self.current = {e.id: e for e in entries}
                 rows = [{**{k: v for k, v in asdict(e).items() if k not in ("data", "keywords")},
-                         "icon": self.control_icon(e.icon), "hide_launcher": bool(e.data.get("capture")), "keep_open": bool(e.data.get("keep_open")), "thumbnail": e.data.get("thumbnail", ""), "empty_state": bool(e.data.get("empty_state")), "disabled": bool(e.data.get("disabled")), "count": 0, "windows": 0} for e in entries[offset:offset + limit]]
+                         "icon": self.control_icon(e.icon), "favicon": e.data.get("favicon", ""), "hide_launcher": bool(e.data.get("capture")), "keep_open": bool(e.data.get("keep_open")), "thumbnail": e.data.get("thumbnail", ""), "empty_state": bool(e.data.get("empty_state")), "disabled": bool(e.data.get("disabled")), "count": 0, "windows": 0} for e in entries[offset:offset + limit]]
                 return self.payload(rows, query=display_query, pending=bool(getattr(self.providers[name], "pending", False)), total=len(entries), offset=offset,
                                     next_offset=offset + len(rows), has_more=offset + len(rows) < len(entries))
             except Exception as exc:
@@ -1169,7 +1176,7 @@ class Launcher:
                 row["icon"] = self.icons.resolve(entry.icon)
             except Exception:
                 pass  # Broken optional artwork must not hide a runnable application.
-            row.update(count=stat["count"], windows=len(matched_windows(entry, clients, self.settings)))
+            row.update(favicon=entry.data.get("favicon", ""), keep_open=bool(entry.data.get("keep_open")), count=stat["count"], windows=len(matched_windows(entry, clients, self.settings)))
             results.append(row)
         if self._icons is not None:
             try:
@@ -1283,7 +1290,12 @@ class Launcher:
             raise ValueError("Entry is no longer available; refresh the index")
         if mode not in ("launch", "switch", "close"):
             raise ValueError("Unknown action")
+        if entry.provider == 'Browser' and mode == 'switch':
+            return {'kind': 'message', 'message': 'Read later is moving to Tasktjik; integration is not connected yet. Nothing was closed.'}
         if mode == 'close':
+            if entry.provider == 'Browser':
+                action = self.providers['Browser'].activate(entry, self.settings, mode)
+                return {**self.query(self.last_query or '/tabs'), 'message': action['message']}
             if entry.provider in ('Screenshots', 'Recorder') and entry.data.get('file'):
                 action = self.providers[entry.provider].activate(entry, self.settings, mode)
                 return {**self.query(self.last_query or action.get('refresh_query', '')), 'message': action.get('message', '')}
@@ -1295,7 +1307,7 @@ class Launcher:
             if pending:
                 return self.close_app(entry, pending=pending)
         if entry.provider not in ("apps", "commands"):
-            if not self.demo or entry.provider in BUNDLED_PROVIDERS:
+            if not self.demo or entry.provider in BUNDLED_PROVIDERS or entry.provider in OPTIONAL_PROVIDERS:
                 action = self.providers[entry.provider].activate(entry, self.settings, mode)
                 if isinstance(action, dict) and "refresh_query" in action:
                     return self.query(action["refresh_query"])
