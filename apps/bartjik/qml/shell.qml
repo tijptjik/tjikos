@@ -186,7 +186,7 @@ ShellRoot {
     }
     Process {
         id:backend
-        command:['python3','-B',Quickshell.env('BARTJIK_HOME')+'/bartjik.py','serve'].concat(root.demo?['--demo']:[])
+        command:[Quickshell.env('BARTJIK_HOME')+'/bin/bartjikctl','serve'].concat(root.demo?['--demo']:[])
         running:true
         stdinEnabled:true
         stdout:SplitParser {onRead:data=>{

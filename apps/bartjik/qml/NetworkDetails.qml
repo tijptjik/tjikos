@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -73,7 +74,7 @@ Item {
 
     Process {
         id: backend
-        command: ["python3", Qt.resolvedUrl("network_controls.py").toString().replace("file://", "")]
+        command: [Quickshell.env("BARTJIK_HOME")+"/bin/bartjikctl", "helper", "network"]
         onStarted: {
             write(root.pending + "\n");
             root.pending = "";
@@ -90,7 +91,7 @@ Item {
                     }
                     else root.message = result.error;
                 } catch (_) {
-                    root.message = "Could not read network status. Check that Python 3 and nmcli are installed.";
+                    root.message = "Could not read network status. Check that bartjik-core and nmcli are installed.";
                 }
             }
         }
@@ -110,7 +111,7 @@ Item {
 
     Process {
         id: trafficObserver
-        command: ["python3", Qt.resolvedUrl("network_controls.py").toString().replace("file://", ""), "traffic"]
+        command: [Quickshell.env("BARTJIK_HOME")+"/bin/bartjikctl", "helper", "network", "traffic"]
         running: root.active && !root.demo
         stdout: SplitParser {
             onRead: line => {

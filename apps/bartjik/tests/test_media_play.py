@@ -1,9 +1,15 @@
+
+# Test-only comparison oracle; production launches the Rust binary.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
 import importlib.util
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-SOURCE = Path(__file__).resolve().parents[1] / 'qml/media_play.py'
+SOURCE = Path(__file__).resolve().parents[1] / 'tests/reference/qml/media_play.py'
 spec = importlib.util.spec_from_file_location('media_play', SOURCE)
 media = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(media)

@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-import os
-from pathlib import Path
-import sys
-root=Path(__file__).resolve().parent.parent
-if not (root/'bartjik.py').exists():root=Path(os.environ.get('BARTJIK_HOME',str(Path.home()/'.local/lib/bartjik')))
-sys.path.insert(0,str(root))
-from bartjik import launch
-launch(sys.argv[1:])
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
+if [[ ! -f "$root/qml/shell.qml" ]]; then root="${BARTJIK_HOME:-$HOME/.local/lib/bartjik}"; fi
+export BARTJIK_HOME="$root"
+if [[ -x "$root/bin/bartjik-core" ]]; then exec "$root/bin/bartjik-core" launch "$@"; fi
+exec "$root/target/release/bartjik-core" launch "$@"

@@ -3,6 +3,12 @@
 Run on a private bus after installing the documented bartjik-panel no_anim rule.
 Only synthetic content is displayed; layer metadata is filtered to this test PID.
 """
+
+# Test-only comparison oracle; production launches the Rust binary.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
 import json,os,shutil,subprocess,sys,tempfile,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]

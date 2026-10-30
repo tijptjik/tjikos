@@ -18,7 +18,7 @@ Inspected in the Dotjik policy checkout before implementation:
 | powerbutton.fish | Effective hypridle/hyprsunset semantics; explicit suspend/optional poweroff bindings, mocked in tests. |
 | monitor-game-mode, monitor-desktop-mode, monitors.lua.tmpl and helpers.lua | Existing persisted mode + Lua reload, never legacy keyword monitor. Workspace dispatch uses supported hl.dsp.focus and workspace.toggle_special forms. |
 
-Runtime commands: Python, Quickshell, hyprctl, nmcli, pactl, date, fcitx5-remote,
+Runtime commands: bartjik-core (Rust), busctl, dbus-monitor, Quickshell, hyprctl, nmcli, pactl, date, fcitx5-remote,
 pgrep/pkill; optional mullvad, tailscale, notjikctl, existing monitor mode commands,
 GUI launchers, systemctl for explicitly configured power actions. No app runtime
 requires the old Waybar scripts. Only optional crypto `legacyConfig` and the

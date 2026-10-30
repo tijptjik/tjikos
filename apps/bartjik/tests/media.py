@@ -1,4 +1,10 @@
 """Synthetic Wayland media parts, ticker, album hover and secondary-output checks."""
+
+# Test-only comparison oracle; production launches the Rust binary.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
 import json, os, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
 from render import wait_for
@@ -81,7 +87,11 @@ def main():
         cfg=json.loads((ROOT/"examples/comparison.json").read_text())
         # Live monitors are used only as surfaces; all contents and actions are synthetic.
         cfg["modules"]["music"]["track"]["style"]["maxTextWidth"]=230
-        for bar in cfg["bars"]:bar["autoHide"]=False
+        cfg["layout"]["centre_width"]="100%"
+        cfg["bars"]=cfg["bars"][:1]
+        for bar in cfg["bars"]:
+            bar["autoHide"]=False
+            bar["monitors"]="all"
         path=temp/"config.json";path.write_text(json.dumps(cfg))
         os.environ.update(BARTJIK_CONFIG=str(path),BARTJIK_QML=str(temp/"qml"))
         with (destination/"media.log").open("w") as log:
@@ -109,10 +119,12 @@ def main():
                         assert part["ticking"]==(part["natural"]>limit+1),part
                         if part["ticking"]:assert abs(part["x"])<1,part
                 for part,action in [("icon","player.toggle"),("artist","player.artist"),("track","player.playlist")]:
+                    before=len(ipc({"op":"mediaTest"})["actions"])
                     ipc({"op":"mediaTest","click":part})
+                    wait_for(lambda:len(ipc({"op":"mediaTest"})["actions"])>before)
                     events=ipc({"op":"mediaTest"})["actions"]
                     assert events[-1]["action"]==action and events[-1]["context"]["part"]==part,events
-                    assert events[-1]["context"]["monitor"]=="DP-1",events
+                    assert events[-1]["context"]["monitor"]==ipc({"op":"monitors"})["monitors"][0]["name"],events
                 # Real middle-button delivery must reach every label and uncovered area once.
                 for area in ('icon','artist','track','left','right','top','bottom','gap','separator'):
                     before=len(ipc({'op':'mediaTest'})['actions'])

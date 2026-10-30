@@ -1,0 +1,129 @@
+{
+  "method": "First launch (OS caches not flushed), then 10 warm launches; 30 synchronous config reloads per worker. Synthetic minimal preset; backend RSS excludes Quickshell.",
+  "python": {
+    "first_launch_ms": 106.99781199218705,
+    "warm_launch_median_ms": 80.49820250016637,
+    "reload_median_ms": 31.496045034145936,
+    "rss_median_kib": 28548,
+    "samples": [
+      {
+        "startup_ms": 106.99781199218705,
+        "reload_median_ms": 31.55504449387081,
+        "rss_kib": 28620
+      },
+      {
+        "startup_ms": 78.82147701457143,
+        "reload_median_ms": 31.5019995032344,
+        "rss_kib": 28508
+      },
+      {
+        "startup_ms": 80.68111899774522,
+        "reload_median_ms": 31.47161949891597,
+        "rss_kib": 28636
+      },
+      {
+        "startup_ms": 78.51027499418706,
+        "reload_median_ms": 31.538124982034788,
+        "rss_kib": 28496
+      },
+      {
+        "startup_ms": 97.50159300165251,
+        "reload_median_ms": 31.707061018096283,
+        "rss_kib": 28588
+      },
+      {
+        "startup_ms": 83.5826969705522,
+        "reload_median_ms": 31.489560002228245,
+        "rss_kib": 28504
+      },
+      {
+        "startup_ms": 80.75344900134951,
+        "reload_median_ms": 31.48768999380991,
+        "rss_kib": 28568
+      },
+      {
+        "startup_ms": 80.31528600258753,
+        "reload_median_ms": 31.529260013485327,
+        "rss_kib": 28508
+      },
+      {
+        "startup_ms": 83.61418702406809,
+        "reload_median_ms": 31.496045034145936,
+        "rss_kib": 28564
+      },
+      {
+        "startup_ms": 79.44840198615566,
+        "reload_median_ms": 31.421464023878798,
+        "rss_kib": 28512
+      },
+      {
+        "startup_ms": 78.93678802065551,
+        "reload_median_ms": 31.39677899889648,
+        "rss_kib": 28548
+      }
+    ]
+  },
+  "rust": {
+    "first_launch_ms": 4.5119780115783215,
+    "warm_launch_median_ms": 3.141529014101252,
+    "reload_median_ms": 30.18916698056273,
+    "rss_median_kib": 10016,
+    "samples": [
+      {
+        "startup_ms": 4.5119780115783215,
+        "reload_median_ms": 30.19827196840197,
+        "rss_kib": 10088
+      },
+      {
+        "startup_ms": 3.239610989112407,
+        "reload_median_ms": 30.179502005921677,
+        "rss_kib": 10072
+      },
+      {
+        "startup_ms": 3.1635090126655996,
+        "reload_median_ms": 30.179356486769393,
+        "rss_kib": 9940
+      },
+      {
+        "startup_ms": 2.985438040923327,
+        "reload_median_ms": 30.20157152786851,
+        "rss_kib": 10136
+      },
+      {
+        "startup_ms": 2.9990679468028247,
+        "reload_median_ms": 30.185666517354548,
+        "rss_kib": 9932
+      },
+      {
+        "startup_ms": 2.958699013106525,
+        "reload_median_ms": 30.198061489500105,
+        "rss_kib": 10016
+      },
+      {
+        "startup_ms": 3.1718489481136203,
+        "reload_median_ms": 30.207871517632157,
+        "rss_kib": 9872
+      },
+      {
+        "startup_ms": 3.3332399907521904,
+        "reload_median_ms": 30.14113599783741,
+        "rss_kib": 9916
+      },
+      {
+        "startup_ms": 3.1195490155369043,
+        "reload_median_ms": 30.157815985148773,
+        "rss_kib": 9944
+      },
+      {
+        "startup_ms": 3.2387800165452063,
+        "reload_median_ms": 30.21360101411119,
+        "rss_kib": 10196
+      },
+      {
+        "startup_ms": 3.0774089973419905,
+        "reload_median_ms": 30.18916698056273,
+        "rss_kib": 10144
+      }
+    ]
+  }
+}

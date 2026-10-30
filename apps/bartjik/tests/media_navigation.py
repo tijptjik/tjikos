@@ -1,4 +1,10 @@
 """Real QML/helper with synthetic MPRIS and a navigation-only app command."""
+
+# Test-only comparison oracle; production launches the Rust binary.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
 import json
 import os
 from pathlib import Path
@@ -18,23 +24,25 @@ def main():
         raise RuntimeError('Private bus required')
     with tempfile.TemporaryDirectory(prefix='bartjik-navigation-') as td:
         temp=Path(td);shutil.copytree(ROOT/'qml',temp/'qml')
-        shutil.copytree(ROOT/'bartjik_core',temp/'bartjik_core')
         events=temp/'events.json'
-        # A synthetic CLI stands in for Spotify; the helper must navigate with
-        # --uri and never call the fixture's playback-oriented OpenUri method.
-        navigations = temp/'navigations.json'
-        app = temp/'spotify_fixture.py'
-        app.write_text('import json,sys\nfrom pathlib import Path\np=Path('+repr(str(navigations))+')\n'
-                       'rows=json.loads(p.read_text()) if p.exists() else []\n'
-                       'rows.append(sys.argv[1:]);p.write_text(json.dumps(rows))\n')
-        helper = temp/'qml/media_navigate.py'
-        code = helper.read_text()
-        start = code.index('def navigation_command(')
-        end = code.index('def navigate(', start)
-        code = code[:start] + 'def navigation_command(uri, owner_pid):\n    return ["/usr/bin/python3", '+repr(str(app))+', "--uri="+uri]\n\n' + code[end:]
-        helper.write_text(code)
-        # Production QML, helper and D-Bus run; compositor focus stays synthetic.
-        (temp/'qml/tray_focus.py').write_text('def main(app):\n    assert app == "spotify"\n')
+        navigations=temp/'navigations.json'
+        # Embed the system interpreter in a synthetic native executable named
+        # spotify. The real helper validates its D-Bus owner's /proc executable.
+        source=temp/'spotify.c'
+        source.write_text(r'''#include <Python.h>
+#include <string.h>
+int main(int argc,char **argv){
+ if(argc==2 && strncmp(argv[1],"--uri=",6)==0){
+  char *run[]={argv[0],"-c","import os,json,sys;from pathlib import Path;p=Path(os.environ['BARTJIK_TEST_NAV_LOG']);a=json.loads(p.read_text()) if p.exists() else [];a.append([sys.argv[1]]);p.write_text(json.dumps(a))",argv[1],NULL};
+  return Py_BytesMain(4,run);
+ }
+ return Py_BytesMain(argc,argv);
+}
+''')
+        flags=subprocess.check_output(['pkg-config','--cflags','--libs','python3-embed'],text=True).split()
+        subprocess.run(['cc',str(source),'-o',str(temp/'spotify'),*flags],check=True)
+        native_env={**os.environ,'BARTJIK_HOME':str(ROOT),'BARTJIK_TEST_NAV_LOG':str(navigations)}
+        native_env.pop('HYPRLAND_INSTANCE_SIGNATURE',None)
         (temp/'qml/shell.qml').write_text('''import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -67,8 +75,8 @@ ShellRoot {
             if result.returncode:raise ValueError('Fixture unavailable')
             return result.stdout
         with (temp/'render.log').open('w') as log:
-            shell=subprocess.Popen(['quickshell','--path',str(temp/'qml')],stdout=log,stderr=log)
-            service=subprocess.Popen(['/usr/bin/python3','-B',str(temp/'fixture.py'),str(temp/'events.json'),str(temp/'control')],stdout=log,stderr=log)
+            shell=subprocess.Popen(['quickshell','--path',str(temp/'qml')],stdout=log,stderr=log,env=native_env)
+            service=subprocess.Popen([str(temp/'spotify'),'-B',str(temp/'fixture.py'),str(temp/'events.json'),str(temp/'control')],stdout=log,stderr=log,env=native_env)
             try:
                 wait_for(lambda:json.loads(call('state'))['players']==1)
                 call('click','player.artist');call('click','player.playlist')

@@ -1,4 +1,10 @@
 """Private-bus synthetic HTTP covers: caching, delayed loads, failures and races."""
+
+# Test-only comparison oracle; production launches the Rust binary.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
 import collections
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -73,10 +79,11 @@ def main():
             p.write_text(p.read_text().replace('    id:details', '''    id:details
     function artworkState(){return {source:cover.displayedSource,ready:cover.ready,transitioning:cover.transitioning};}'''))
             p = temp / 'qml/DetailPanel.qml'
-            p.write_text(p.read_text().replace('return {opened:visible,title:', 'return {image:mediaDetails.artworkState(),opened:visible,title:'))
+            p.write_text(p.read_text().replace('function inspect(){return {', 'function inspect(){return {image:mediaDetails.artworkState(),'))
             cfg = json.loads((ROOT / 'examples/comparison.json').read_text())
             for bar in cfg['bars']:
                 bar['autoHide'] = False
+                bar['monitors'] = 'all'
             path = temp / 'config.json'
             path.write_text(json.dumps(cfg))
             os.environ.update(BARTJIK_CONFIG=str(path), BARTJIK_QML=str(temp / 'qml'), XDG_CACHE_HOME=str(temp / 'cache'))

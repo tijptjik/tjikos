@@ -1,3 +1,6 @@
+Current native-runtime evidence is in [Rust migration](rust-migration.md).
+The report below records earlier development stages.
+
 # Verification and boundaries
 
 Validated on 2026-10-25 with Quickshell 0.3.2 on the existing Hyprland/Wayland session.
@@ -74,7 +77,7 @@ is covered by deterministic tests.
   auto-hidden bar and permits keyboard/IPC-originated opening without a Wayland
   pointer serial. Nested menus use an explicit Back button.
 - HTTP fetches run off the QML thread and have bounded timeouts. Removing a provider
-  cancels its subscription immediately; an already-running Python HTTP thread can
+  cancels its subscription immediately; an already-running HTTP request can
   finish its bounded request before the process exits. Caches are in memory only.
 - The build has not enabled bartjik for the desktop session. Use the documented
   deliberate switch-over and rollback after reviewing connector/routes configuration.

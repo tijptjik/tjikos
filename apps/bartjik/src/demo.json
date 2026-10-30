@@ -1,0 +1,863 @@
+{
+  "battery": [
+    {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Battery · 67%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "battery_grid",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 67,
+        "external": false
+      },
+      "panel": {
+        "title": "Battery",
+        "percent": 67,
+        "external": false,
+        "status": "On battery",
+        "seconds": 14820,
+        "estimateLabel": "Battery life remaining",
+        "estimateUnavailable": "Estimating…",
+        "profiles": [
+          {
+            "id": "performance",
+            "label": "Performance",
+            "available": true,
+            "active": false
+          },
+          {
+            "id": "balanced",
+            "label": "Balanced",
+            "available": true,
+            "active": true
+          },
+          {
+            "id": "power-saver",
+            "label": "Power Saver",
+            "available": true,
+            "active": false
+          }
+        ],
+        "profileMessage": ""
+      }
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "1",
+      "type": "text",
+      "state": {
+        "active": false,
+        "focused": false,
+        "urgent": false
+      },
+      "tooltip": "Synthetic workspace",
+      "visible": true,
+      "enabled": true,
+      "text": {
+        "value": "1",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    },
+    {
+      "id": "2",
+      "type": "text",
+      "state": {
+        "active": false,
+        "focused": false,
+        "urgent": false
+      },
+      "tooltip": "Synthetic workspace",
+      "visible": true,
+      "enabled": true,
+      "text": {
+        "value": "2",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    },
+    {
+      "id": "3",
+      "type": "text",
+      "state": {
+        "active": true,
+        "focused": true,
+        "urgent": false
+      },
+      "tooltip": "Synthetic workspace",
+      "visible": true,
+      "enabled": true,
+      "text": {
+        "value": "3",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    },
+    {
+      "id": "6",
+      "type": "text",
+      "state": {
+        "active": false,
+        "focused": false,
+        "urgent": true
+      },
+      "tooltip": "Synthetic workspace",
+      "visible": true,
+      "enabled": true,
+      "text": {
+        "value": "6",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    },
+    {
+      "id": "10",
+      "type": "text",
+      "state": {
+        "active": false,
+        "focused": false,
+        "urgent": false
+      },
+      "tooltip": "Synthetic workspace",
+      "visible": true,
+      "enabled": true,
+      "text": {
+        "value": "10",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    },
+    {
+      "id": "14",
+      "type": "text",
+      "state": {
+        "active": false,
+        "focused": false,
+        "urgent": false
+      },
+      "tooltip": "Synthetic workspace",
+      "visible": true,
+      "enabled": true,
+      "text": {
+        "value": "14",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    }
+  ],
+  "playerctl": [
+    {
+      "id": "demo-player",
+      "type": "icon_text",
+      "state": {},
+      "tooltip": "",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "pause",
+        "style": {},
+        "actions": {
+          "leftClick": "player.toggle"
+        }
+      },
+      "text": {
+        "value": "Evening light across the quiet harbour",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "middleClick": "player.toggle",
+        "scrollUp": "player.previous",
+        "scrollDown": "player.next"
+      },
+      "artist": {
+        "value": "Synthetic Artist",
+        "style": {},
+        "actions": {
+          "leftClick": "player.artist"
+        }
+      },
+      "track": {
+        "value": "Evening light across the quiet harbour",
+        "style": {},
+        "actions": {
+          "leftClick": "player.playlist"
+        }
+      },
+      "media": {
+        "artist": "Synthetic Artist",
+        "title": "Evening light across the quiet harbour",
+        "album": "Evening sessions",
+        "artwork": "@ROOT@/qml/icons/demo-album.png",
+        "playing": true,
+        "canToggle": true,
+        "canPrevious": true,
+        "canNext": true,
+        "canShuffle": true,
+        "shuffle": false,
+        "playlistAvailable": false,
+        "player": "Synthetic player"
+      }
+    }
+  ],
+  "crypto": [
+    {
+      "id": "BTC/USD",
+      "type": "icon_text",
+      "state": {},
+      "tooltip": "",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "image",
+        "value": "@ROOT@/qml/icons/bitcoin.svg",
+        "style": {},
+        "actions": {}
+      },
+      "text": {
+        "value": "67432",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "crypto.panel"
+      },
+      "changes": {
+        "1h": 0.43,
+        "24h": -1.72,
+        "7d": 4.81
+      }
+    },
+    {
+      "id": "SOL/USD",
+      "type": "icon_text",
+      "state": {},
+      "tooltip": "",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "image",
+        "value": "@ROOT@/qml/icons/solana.svg",
+        "style": {},
+        "actions": {}
+      },
+      "text": {
+        "value": "148",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "crypto.panel"
+      },
+      "changes": {
+        "1h": 0.43,
+        "24h": -1.72,
+        "7d": 4.81
+      }
+    },
+    {
+      "id": "AR/USD",
+      "type": "icon_text",
+      "state": {},
+      "tooltip": "",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "image",
+        "value": "@ROOT@/qml/icons/arweave.svg",
+        "style": {},
+        "actions": {}
+      },
+      "text": {
+        "value": "18.4",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "crypto.panel"
+      },
+      "changes": {
+        "1h": 0.43,
+        "24h": -1.72,
+        "7d": 4.81
+      }
+    }
+  ],
+  "icontray": [
+    {
+      "id": "tray-0",
+      "type": "icon",
+      "state": {
+        "urgent": false
+      },
+      "tooltip": "Synthetic tray item",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "image",
+        "value": "@ROOT@/qml/icons/tray/chatgpt.svg",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    },
+    {
+      "id": "tray-1",
+      "type": "icon",
+      "state": {
+        "urgent": true
+      },
+      "tooltip": "Synthetic tray item",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "image",
+        "value": "@ROOT@/qml/icons/tray/telegram.svg",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    },
+    {
+      "id": "tray-2",
+      "type": "icon",
+      "state": {
+        "urgent": false
+      },
+      "tooltip": "Synthetic tray item",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "image",
+        "value": "@ROOT@/qml/icons/tray/whatsapp.svg",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    }
+  ],
+  "network": [
+    {
+      "id": "demo",
+      "type": "icon_text",
+      "state": {},
+      "tooltip": "Synthetic network",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "wifi",
+        "style": {},
+        "actions": {}
+      },
+      "text": {
+        "value": "Demo Wi-Fi",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    }
+  ],
+  "mullvad": [
+    {
+      "id": "demo",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Synthetic mullvad",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "image",
+        "value": "@ROOT@/qml/icons/flags/jp.svg",
+        "style": {
+          "greyscaleIcons": false,
+          "monochromeIcon": false
+        },
+        "actions": {}
+      },
+      "actions": {},
+      "panel": {
+        "title": "Mullvad",
+        "subtitle": "",
+        "rows": [
+          {
+            "label": "Connection",
+            "value": "Connected",
+            "detail": ""
+          },
+          {
+            "label": "Location",
+            "value": "Japan, Tokyo",
+            "detail": ""
+          }
+        ],
+        "connection": "connected",
+        "country": "Japan",
+        "city": "Tokyo",
+        "countryCode": "jp",
+        "cityCode": "tyo",
+        "cities": [
+          {
+            "id": "osa",
+            "name": "Osaka",
+            "active": false
+          },
+          {
+            "id": "tyo",
+            "name": "Tokyo",
+            "active": true
+          }
+        ],
+        "countries": [
+          {
+            "id": "nl",
+            "name": "Netherlands",
+            "active": false
+          },
+          {
+            "id": "jp",
+            "name": "Japan",
+            "active": true
+          },
+          {
+            "id": "sg",
+            "name": "Singapore",
+            "active": false
+          }
+        ],
+        "locationsAvailable": true
+      }
+    }
+  ],
+  "tailscale": [
+    {
+      "id": "demo",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Synthetic tailscale",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "vpn_lock",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {},
+      "panel": {
+        "title": "Tailscale",
+        "subtitle": "",
+        "rows": [
+          {
+            "label": "Backend",
+            "value": "Running",
+            "detail": ""
+          },
+          {
+            "label": "This device",
+            "value": "demo-desktop",
+            "detail": ""
+          },
+          {
+            "label": "Addresses",
+            "value": "100.64.0.1",
+            "detail": ""
+          },
+          {
+            "label": "Peers online",
+            "value": "1 / 2",
+            "detail": ""
+          }
+        ],
+        "connection": "Running",
+        "device": "demo-desktop",
+        "address": "100.64.0.1",
+        "peers": [
+          {
+            "id": "laptop",
+            "name": "demo-laptop",
+            "online": true,
+            "address": "100.64.0.2",
+            "os": ""
+          },
+          {
+            "id": "phone",
+            "name": "demo-phone",
+            "online": false,
+            "address": "100.64.0.3",
+            "os": ""
+          }
+        ],
+        "online": 1,
+        "total": 2
+      }
+    }
+  ],
+  "audio": [
+    {
+      "id": "demo",
+      "type": "icon_text",
+      "state": {},
+      "tooltip": "Synthetic audio",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "headphones",
+        "style": {},
+        "actions": {}
+      },
+      "text": {
+        "value": "42%",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    }
+  ],
+  "datetime": [
+    {
+      "id": "demo",
+      "type": "text",
+      "state": {},
+      "tooltip": "Synthetic datetime",
+      "visible": true,
+      "enabled": true,
+      "text": {
+        "value": "21:34",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {},
+      "panel": {
+        "title": "World clock",
+        "subtitle": "Local times · daylight saving aware",
+        "rows": [
+          {
+            "label": "New York",
+            "value": "08:00",
+            "detail": "Mon 15 Jun · EDT"
+          },
+          {
+            "label": "London",
+            "value": "13:00",
+            "detail": "Mon 15 Jun · BST"
+          },
+          {
+            "label": "Amsterdam",
+            "value": "14:00",
+            "detail": "Mon 15 Jun · CEST"
+          },
+          {
+            "label": "Tokyo",
+            "value": "21:00",
+            "detail": "Mon 15 Jun · JST"
+          }
+        ]
+      }
+    }
+  ],
+  "locale": [
+    {
+      "id": "demo",
+      "type": "text",
+      "state": {},
+      "tooltip": "Synthetic locale",
+      "visible": true,
+      "enabled": true,
+      "text": {
+        "value": "EN",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {},
+      "panel": {
+        "title": "Input methods",
+        "subtitle": "Fcitx group · Demo",
+        "rows": [
+          {
+            "label": "EN",
+            "value": "Active",
+            "detail": "English",
+            "id": "keyboard-us",
+            "active": true
+          },
+          {
+            "label": "拼",
+            "value": "",
+            "detail": "Pinyin",
+            "id": "pinyin"
+          },
+          {
+            "label": "速",
+            "value": "",
+            "detail": "Quick",
+            "id": "quick-classic"
+          }
+        ]
+      }
+    }
+  ],
+  "codex": [
+    {
+      "id": "demo",
+      "type": "icon_text",
+      "state": {},
+      "tooltip": "Synthetic codex",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "image",
+        "value": "@ROOT@/qml/icons/codex.svg",
+        "style": {},
+        "actions": {}
+      },
+      "text": {
+        "value": "83%",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {},
+      "panel": {
+        "title": "Codex usage",
+        "subtitle": "codex-lb · read-only · weekly quota",
+        "rows": [
+          {
+            "label": "Weekly remaining",
+            "value": "83%",
+            "detail": "Capacity-weighted",
+            "id": "weekly"
+          },
+          {
+            "label": "Requests · 24h",
+            "value": "1,234",
+            "detail": "3 failed",
+            "id": "requests",
+            "amount": 1234,
+            "failures": 3
+          },
+          {
+            "label": "Input / output tokens",
+            "value": "423,100 / 81,200",
+            "detail": "",
+            "id": "tokens",
+            "input": 423100,
+            "output": 81200
+          },
+          {
+            "label": "Cached input",
+            "value": "212,000",
+            "detail": "",
+            "id": "cached",
+            "amount": 212000
+          },
+          {
+            "label": "Recorded cost · 24h",
+            "value": "$12.34",
+            "detail": "Synthetic usage",
+            "id": "cost",
+            "amount": 12.34
+          },
+          {
+            "label": "Mean request latency",
+            "value": "2.4s",
+            "detail": "",
+            "id": "latency",
+            "seconds": 2.4
+          },
+          {
+            "label": "A01",
+            "value": "83%",
+            "detail": "pro · resets in 3d12h",
+            "progress": 0.83,
+            "group": "account",
+            "plan": "pro",
+            "resetAt": 1793689967.9725842
+          },
+          {
+            "label": "B02",
+            "value": "72%",
+            "detail": "pro · resets in 2d8h",
+            "progress": 0.72,
+            "group": "account",
+            "plan": "pro",
+            "resetAt": 1793589167.9725847
+          },
+          {
+            "label": "C03",
+            "value": "94%",
+            "detail": "pro · resets in 5d1h",
+            "progress": 0.94,
+            "group": "account",
+            "plan": "pro",
+            "resetAt": 1793823167.972585
+          },
+          {
+            "label": "D04",
+            "value": "81%",
+            "detail": "pro · resets in 4d6h",
+            "progress": 0.81,
+            "group": "account",
+            "plan": "pro",
+            "resetAt": 1793754767.9725852
+          }
+        ]
+      }
+    }
+  ],
+  "openrouter": [
+    {
+      "id": "demo",
+      "type": "icon_text",
+      "state": {},
+      "tooltip": "Synthetic openrouter",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "image",
+        "value": "@ROOT@/qml/icons/openrouter.svg",
+        "style": {},
+        "actions": {}
+      },
+      "text": {
+        "value": "24.80",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {},
+      "panel": {
+        "title": "OpenRouter",
+        "subtitle": "",
+        "rows": [
+          {
+            "label": "2026-06-14",
+            "value": "128,400",
+            "detail": "",
+            "id": "2026-06-14",
+            "tokens": 128400
+          },
+          {
+            "label": "2026-06-13",
+            "value": "86,400",
+            "detail": "",
+            "id": "2026-06-13",
+            "tokens": 86400
+          },
+          {
+            "label": "2026-06-12",
+            "value": "45,200",
+            "detail": "",
+            "id": "2026-06-12",
+            "tokens": 45200
+          }
+        ],
+        "balance": "24.80",
+        "balanceLabel": "Credits remaining",
+        "activityStatus": "available",
+        "activityNote": "Last 30 completed days · UTC"
+      }
+    }
+  ],
+  "DND": [
+    {
+      "id": "demo",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Synthetic DND",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "notifications",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    }
+  ],
+  "caffeine": [
+    {
+      "id": "demo",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Synthetic caffeine",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "coffee",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    }
+  ],
+  "nightlight": [
+    {
+      "id": "demo",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Synthetic nightlight",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "nightlight",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    }
+  ],
+  "monitor-layout": [
+    {
+      "id": "demo",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Synthetic monitor-layout",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "desktop_windows",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    }
+  ],
+  "process": [
+    {
+      "id": "demo",
+      "type": "text",
+      "state": {},
+      "tooltip": "Synthetic process",
+      "visible": true,
+      "enabled": true,
+      "text": {
+        "value": "Demo",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {}
+    }
+  ]
+}

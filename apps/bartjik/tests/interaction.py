@@ -1,5 +1,11 @@
 """Synthesize QML mouse events into a private test surface, never desktop commands."""
 
+# Test-only comparison oracle; production launches the Rust binary.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+
 import json, os, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
 from render import wait_for

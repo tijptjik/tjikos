@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native Bartjik film with public market/music snapshots and isolated controls."""
+"""Native Bartjik film with synthetic fixtures and isolated controls."""
 import argparse
 import hashlib
 import json
@@ -18,14 +18,14 @@ ROOT = shared.ROOT
 SOURCE = ROOT / "apps/bartjik"
 SCALE = 1.2
 FEATURES = (
-    ("Real rates. Fluid tracking.", "CoinGecko prices and history; move the pointer to follow the panel."),
-    ("The music has a pulse.", "Real album art moves to the bass of Karla Blum’s Acid Rain."),
+    ("Synthetic rates. Fluid tracking.", "Synthetic prices and history; move the pointer to follow the panel."),
+    ("The music has a pulse.", "Synthetic album art moves to a generated audio fixture."),
     ("See your workspaces before switching.", "Hover for live window previews, then click to change workspace."),
     ("Connections, within reach.", "VPN locations, Tailscale devices and connection controls."),
     ("Your desktop, under control.", "Usage, audio, clocks and desktop/game mode in a second bar."),
     ("A softer landing.", "Drag a chart away; its release settles into an independent window."),
 )
-PUBLIC_DATA = Path.home()/"Videos/tjikos/os/bartjik-public-20261028/snapshot.json"
+PUBLIC_DATA = None
 
 
 
@@ -33,15 +33,7 @@ def prepare(app):
     qml = app / "qml"
     shutil.copy2(shared.HERE / "ShowcaseStage.qml", qml / "ShowcaseStage.qml")
     shutil.copy2(shared.HERE / "CapturePlayback.qml", qml / "CapturePlayback.qml")
-    shutil.copy2(shared.HERE / "showcase_public.py", app / "bartjik_core/showcase_public.py")
-    demo=app/"bartjik_core/demo.py"
-    text=demo.read_text().replace('    options = options or {}', '    options = options or {}\n    from .showcase_public import items as captured_items\n    captured=captured_items(provider,options)\n    if captured is not None:return captured',1)
-    demo.write_text(text)
-    engine=app/"bartjik_core/engine.py"
-    text=engine.read_text().replace('            if self.demo:\n                import math', '            if self.demo and os.environ.get("BARTJIK_PUBLIC_DATA"):\n                from .showcase_public import DATA\n                result=DATA["markets"][context["item"]]["chart"]\n            elif self.demo:\n                import math',1)
-    text=text.replace('    async def panel_action(self, msg):\n        if self.demo:\n            return', '    async def panel_action(self, msg):\n        if self.demo:\n            from .showcase_public import control\n            if control(msg["context"]):self.changed()\n            return',1)
-    if 'import os\n' not in text:text='import os\n'+text
-    engine.write_text(text)
+    (app / ".synthetic-only").write_text("Synthetic showcase only\n")
     # Use the actual private compositor windows for the workspace chapter.
     workspace=qml/"WorkspacePreview.qml"
     text=workspace.read_text().replace('popup.controller.demo', 'false').replace('controller.demo', 'false')
@@ -64,7 +56,7 @@ def prepare(app):
         repository: "github.com/tijptjik/tjikos/tree/main/apps/bartjik"
         heading: "Panels at your fingertips"
         introHeading: "Panels at your fingertips"
-        introCaption: "Real rates. Music that moves. Your desktop, connected."
+        introCaption: "Synthetic rates. Music that moves. Desktop controls."
         iconRoot: "file://" + Quickshell.env("SHOWCASE_ICONS")
     }
 ''')
@@ -166,6 +158,16 @@ def configuration(monitor):
     return cfg
 
 
+def ipc(request):
+    result = subprocess.run(["quickshell", "ipc", "--path", os.environ["BARTJIK_QML"],
+                             "call", "bartjik", "request", json.dumps(request)],
+                            check=True, capture_output=True, text=True, timeout=5)
+    value = json.loads(result.stdout)
+    if not value.get("ok"):
+        raise ValueError(value.get("error", "IPC failed"))
+    return value
+
+
 class Director(shared.Director):
     def __init__(self,app,env,pointer,monitor,review):
         self.app,self.env,self.review=app,env,review
@@ -176,7 +178,6 @@ class Director(shared.Director):
         self.move(*self.position,duration=.1)
 
     def ipc(self,**request):
-        from bartjik import ipc
         return ipc(request)
 
     def command(self,command):
@@ -248,7 +249,7 @@ class Director(shared.Director):
 
     def launch_workspaces(self,directory):
         self.windows=[]
-        from_text=[('1','Editor',SOURCE/'bartjik_core/history.py'),('1','Panels',SOURCE/'qml/DetailPanel.qml'),('2','Workspaces',SOURCE/'qml/WorkspacePreview.qml'),('3','Configuration',SOURCE/'examples/demo.json')]
+        from_text=[('1','Editor',SOURCE/'src/cache.rs'),('1','Panels',SOURCE/'qml/DetailPanel.qml'),('2','Workspaces',SOURCE/'qml/WorkspacePreview.qml'),('3','Configuration',SOURCE/'examples/demo.json')]
         for workspace,title,path in from_text:
             shared.checked(['hyprctl','eval','hl.dispatch(hl.dsp.focus({workspace='+json.dumps(workspace)+'}))'])
             process=subprocess.Popen(['kitty','--config','NONE','--title',title,'--class','BartjikCapture',
@@ -272,7 +273,7 @@ class Director(shared.Director):
         self.events.append({'time':round(time.monotonic()-self.started,3),'input':'native bar click','module':module,'item':target['item']})
 
     def run(self,source):
-        self.observe(scene={'mode':'intro','heading':'Panels at your fingertips','caption':'Real rates. Music that moves. Your desktop, connected.','chapterCount':len(FEATURES)})
+        self.observe(scene={'mode':'intro','heading':'Panels at your fingertips','caption':'Synthetic rates. Music that moves. Desktop controls.','chapterCount':len(FEATURES)})
         time.sleep(2.3);self.frame('00-intro')
         self.scene(1);self.ipc(op='show',bar='all');time.sleep(.65)
         self.evidence('two native bars',bars=self.ipc(op='bars')['bars'])
@@ -398,27 +399,41 @@ class Director(shared.Director):
 
 
 def record(output):
-    sys.path.insert(0,str(SOURCE))
-    snapshot=json.loads(PUBLIC_DATA.read_text())
+    snapshot=json.loads(PUBLIC_DATA.read_text()) if PUBLIC_DATA else None
+    if snapshot is not None and snapshot.get("synthetic") is not True:
+        raise ValueError("Showcase data must use synthetic fixtures")
     review=output.with_suffix(".review");review.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix="bc-") as name:
         directory=Path(name);app=directory/"app"
-        for part in ("qml","themes","bartjik_core"):
+        for part in ("qml","themes"):
             shutil.copytree(SOURCE/part,app/part)
-        shutil.copy2(SOURCE/"bartjik.py",app/"bartjik.py")
+        shutil.copytree(SOURCE/"dist/bin",app/"bin")
+        if snapshot is None:
+            snapshot={"synthetic":True,"music":{"artist":"Synthetic Artist","title":"Evening light across the quiet harbour","album":"Evening sessions","artwork":str(app/"qml/icons/demo-album.png")},"assets":[],"fetchedAt":"synthetic"}
+            audio=directory/"synthetic.wav"
+            subprocess.run(["ffmpeg","-v","error","-f","lavfi","-i","sine=frequency=220:duration=120","-y",str(audio)],check=True)
+            snapshot["music"]["audio"]=str(audio)
+        fixture=json.loads((SOURCE/"src/demo.json").read_text().replace("@ROOT@",str(app)))
+        fixture["workspaces"]=[{"id":str(n),"type":"text","text":{"value":str(n),"style":{},"actions":{}},"state":{},"tooltip":"Synthetic workspace","visible":True,"enabled":True,"actions":{"leftClick":"workspace.activate"},"workspace":n} for n in (1,2,3,9)]
+        music=snapshot["music"]
+        fixture["playerctl"][0]["text"]["value"]=music["title"]
+        fixture["playerctl"][0]["artist"]["value"]=music["artist"]
+        fixture["playerctl"][0]["track"]["value"]=music["title"]
+        fixture["playerctl"][0]["media"].update(artist=music["artist"],title=music["title"],album=music["album"],artwork=Path(music["artwork"]).as_uri())
+        fixture_path=directory/"demo-data.json"
+        fixture_path.write_text(json.dumps({"synthetic":True,"providers":fixture,"markets":snapshot.get("markets",{})}))
         prepare(app)
         pointer=shared.build_pointer(directory)
         try:
             with shared.native_session(directory,scale=SCALE) as (env,monitor):
                 env.update(BARTJIK_HOME=str(app),BARTJIK_QML=str(app/"qml"),BARTJIK_CONFIG=str(directory/"config.json"),
-                           BARTJIK_DEMO="1",BARTJIK_PUBLIC_DATA=str(PUBLIC_DATA),BARTJIK_CAPTURE_AUDIO=Path(snapshot["music"]["audio"]).as_uri(),SHOWCASE_ICONS=str(ROOT/"docs/icons"),SHOWCASE_MONITOR=monitor)
+                           BARTJIK_DEMO="1",BARTJIK_DEMO_FIXTURE=str(fixture_path),BARTJIK_CAPTURE_AUDIO=Path(snapshot["music"]["audio"]).as_uri(),SHOWCASE_ICONS=str(ROOT/"docs/icons"),SHOWCASE_MONITOR=monitor)
                 Path(env["BARTJIK_CONFIG"]).write_text(json.dumps(configuration(monitor)))
                 previous=os.environ.copy();os.environ.clear();os.environ.update(env)
                 child=recorder=director=None
                 try:
                     with (directory/"app.log").open("w") as log,(directory/"record.log").open("w") as capture_log:
                         child=subprocess.Popen(["quickshell","--path",str(app/"qml"),"--no-color"],env=env,stdout=log,stderr=log)
-                        from bartjik import ipc
                         shared.wait_for(lambda:ipc({"op":"status"}).get("ready"))
                         ipc({"op":"hide","bar":"all"})
                         director=Director(app,env,pointer,monitor,review)
@@ -441,8 +456,8 @@ def record(output):
                         stream=probe["streams"][0]
                         if (stream["width"],stream["height"],stream["r_frame_rate"])!=(1200,720,"60/1"):
                             raise ValueError("Unexpected capture dimensions")
-                        receipt={"tool":"bartjik","dimensions":[1200,720],"fps":60,"dataMode":"real public market/music snapshots; isolated desktop controls",
-                            "publicDataSha256":hashlib.sha256(PUBLIC_DATA.read_bytes()).hexdigest(),"fetchedAt":snapshot["fetchedAt"],"publicAssets":snapshot["assets"],
+                        receipt={"tool":"bartjik","dimensions":[1200,720],"fps":60,"dataMode":"synthetic fixtures", "synthetic":True,
+                            "publicDataSha256":hashlib.sha256(fixture_path.read_bytes()).hexdigest(),"fetchedAt":snapshot["fetchedAt"],"publicAssets":snapshot["assets"],
                             "input":"private Wayland compositor seat; no QtTest or comparison renderer", "scale":SCALE,
                             "audio":"none", "duration":probe["format"]["duration"],"sha256":hashlib.sha256(output.read_bytes()).hexdigest(),
                             "sourceCommit":shared.checked(["git","-C",str(ROOT),"rev-parse","HEAD"]),
@@ -471,7 +486,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output",type=Path,nargs="?")
     parser.add_argument("--plan",action="store_true")
-    parser.add_argument("--data",type=Path,help="verified public rates, artwork and audio snapshot JSON")
+    parser.add_argument("--data",type=Path,help="synthetic fixture snapshot JSON")
     args=parser.parse_args()
     if args.plan:
         print(json.dumps({"dimensions":[1200,720],"fps":60,"features":FEATURES,"comparison":False},indent=2));return

@@ -1,0 +1,230 @@
+{
+  "PROVIDERS": [
+    "battery",
+    "workspaces",
+    "playerctl",
+    "crypto",
+    "icontray",
+    "network",
+    "mullvad",
+    "tailscale",
+    "audio",
+    "datetime",
+    "locale",
+    "codex",
+    "openrouter",
+    "DND",
+    "caffeine",
+    "nightlight",
+    "monitor-layout",
+    "process"
+  ],
+  "EVENTS": [
+    "click",
+    "leftClick",
+    "rightClick",
+    "middleClick",
+    "doubleClick",
+    "hoverEnter",
+    "hoverLeave",
+    "scrollUp",
+    "scrollDown"
+  ],
+  "BAR": {
+    "monitors": "all",
+    "side": "b",
+    "position": "c",
+    "alignment": "c",
+    "offsetX": 0,
+    "offsetY": -16,
+    "padding": 0,
+    "screenGutter": "edgeOffset",
+    "overflow": "clip",
+    "islandGap": 10,
+    "stackGap": 8,
+    "thickness": 44,
+    "verticalWidth": 160,
+    "enabled": true,
+    "visible": true,
+    "layer": "top",
+    "reserve": false,
+    "autoHide": false,
+    "syncMonitors": true,
+    "activationEdge": "side",
+    "activationDelay": 0,
+    "keepVisibleDistance": "64px",
+    "hideDelay": 0,
+    "fadeDuration": 180,
+    "revealSize": 3,
+    "islands": [],
+    "perMonitor": {}
+  },
+  "DEFAULTS": {
+    "theme": "monochrome",
+    "style": {},
+    "layout": {},
+    "perMonitor": {},
+    "modules": {
+      "clock": {
+        "provider": "datetime"
+      }
+    },
+    "bars": [
+      {
+        "id": "clock",
+        "islands": [
+          {
+            "id": "clock",
+            "modules": [
+              "clock"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "INTERNAL": [
+    "DND.toggle",
+    "audio.down",
+    "audio.mute",
+    "audio.panel",
+    "audio.route",
+    "audio.up",
+    "battery.panel",
+    "caffeine.toggle",
+    "crypto.panel",
+    "datetime.toggle",
+    "locale.cycle",
+    "monitor.toggle",
+    "network.panel",
+    "nightlight.toggle",
+    "notifications.panel",
+    "player.artist",
+    "player.next",
+    "player.playlist",
+    "player.previous",
+    "player.quit",
+    "player.shuffle",
+    "player.toggle",
+    "tailscale.toggle",
+    "tray.activate",
+    "tray.down",
+    "tray.menu",
+    "tray.secondary",
+    "tray.up",
+    "workspace.activate",
+    "workspace.next",
+    "workspace.previous"
+  ],
+  "ASSETS": [
+    {
+      "symbol": "BTC",
+      "price_precision": 0
+    },
+    {
+      "symbol": "SOL",
+      "price_precision": 0
+    },
+    {
+      "symbol": "AR",
+      "price_precision": 1
+    }
+  ],
+  "COUNTRY_FLAGS": {
+    "Albania": "al",
+    "Australia": "au",
+    "Austria": "at",
+    "Belgium": "be",
+    "Brazil": "br",
+    "Bulgaria": "bg",
+    "Canada": "ca",
+    "Colombia": "co",
+    "Croatia": "hr",
+    "Czech Republic": "cz",
+    "Denmark": "dk",
+    "Estonia": "ee",
+    "Finland": "fi",
+    "France": "fr",
+    "Germany": "de",
+    "Greece": "gr",
+    "Hong Kong": "hk",
+    "Hungary": "hu",
+    "Ireland": "ie",
+    "Israel": "il",
+    "Italy": "it",
+    "Japan": "jp",
+    "Latvia": "lv",
+    "Luxembourg": "lu",
+    "Moldova": "md",
+    "Netherlands": "nl",
+    "New Zealand": "nz",
+    "North Macedonia": "mk",
+    "Norway": "no",
+    "Poland": "pl",
+    "Portugal": "pt",
+    "Romania": "ro",
+    "Serbia": "rs",
+    "Singapore": "sg",
+    "Slovakia": "sk",
+    "South Africa": "za",
+    "Spain": "es",
+    "Sweden": "se",
+    "Switzerland": "ch",
+    "UK": "gb",
+    "United Kingdom": "gb",
+    "United States": "us",
+    "Taiwan": "tw",
+    "USA": "us",
+    "United Arab Emirates": "ae"
+  },
+  "METHODS": {
+    "keyboard-us-altgr-intl": [
+      "EN",
+      "English — US International (AltGr accents)"
+    ],
+    "keyboard-us-intl": [
+      "EN",
+      "English — US International (dead keys)"
+    ],
+    "keyboard-us": [
+      "EN",
+      "English — US"
+    ],
+    "keyboard-gb": [
+      "EN",
+      "English — UK"
+    ],
+    "pinyin": [
+      "拼",
+      "Pinyin — Traditional Chinese"
+    ],
+    "quick-classic": [
+      "速",
+      "Quick (速成) — Traditional Chinese"
+    ],
+    "quick3": [
+      "速",
+      "Quick 3 (速成) — Traditional Chinese"
+    ],
+    "cantonese": [
+      "粵",
+      "Cantonese"
+    ]
+  },
+  "INTERVALS": {
+    "battery": 2,
+    "crypto": 600,
+    "network": 3,
+    "mullvad": 10,
+    "tailscale": 5,
+    "audio": 1,
+    "datetime": 1,
+    "locale": 1,
+    "codex": 30,
+    "openrouter": 600,
+    "DND": 1,
+    "caffeine": 2,
+    "nightlight": 2,
+    "monitor-layout": 2
+  }
+}

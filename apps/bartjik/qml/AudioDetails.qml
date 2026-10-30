@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -46,14 +47,14 @@ Item {
     Process {
         id: routing
         onExited: (code,status)=>{if(code!==0 && !root.message)root.message="Could not switch the audio output."}
-        command: ["python3", Qt.resolvedUrl("audio_controls.py").toString().replace("file://", ""), "toggle-output"]
+        command: [Quickshell.env("BARTJIK_HOME")+"/bin/bartjikctl", "helper", "audio", "toggle-output"]
         stdout: StdioCollector { onStreamFinished: root.message = text.trim() }
     }
 
     property var levels: ({})
     Process {
         id: meters
-        command: ["python3", Qt.resolvedUrl("audio_levels.py").toString().replace("file://", "")]
+        command: [Quickshell.env("BARTJIK_HOME")+"/bin/bartjikctl", "helper", "audio-levels"]
         running: root.active && !root.demo
         stdout: SplitParser {
             onRead: line => {

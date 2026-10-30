@@ -1,0 +1,25 @@
+[package]
+name = "bartjik-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+serde_json = "1"
+sha2 = "0.10"
+sha1 = "0.10"
+hmac = "0.12"
+unicode-normalization = "0.1"
+regex = "1"
+libc = "0.2"
+chrono = "0.4"
+chrono-tz = "0.10"
+rusqlite = { version = "0.32", features = ["hooks"] }
+tempfile = "3"
+url = "2"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+
+[profile.release]
+lto = "thin"
+strip = true

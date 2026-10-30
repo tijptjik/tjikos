@@ -16,20 +16,20 @@ QtObject {
     property var attention: ({})
     property Process attentionReader: Process {
         running: !native.demo
-        command: ['/usr/bin/python3', '-B', Qt.resolvedUrl('tray_attention.py').toString().replace('file://','')]
+        command: [Quickshell.env('BARTJIK_HOME')+'/bin/bartjikctl','helper','tray-attention']
         stdout: SplitParser {onRead: data => {try {native.attention=Logic.reconcile(native.attention,JSON.parse(data));} catch(e) {console.warn('tray attention: invalid update');}}}
         onExited: (code,status) => {native.attention={};if(!native.demo){console.warn('tray attention reader exited: '+code);native.attentionRetry.restart();}}
     }
     property Timer attentionRetry: Timer {interval:5000;onTriggered:native.attentionReader.running=!native.demo}
     property Process spotifyStart: Process {
-        command: ['/usr/bin/python3','-B',Qt.resolvedUrl('media_play.py').toString().replace('file://','')]
+        command: [Quickshell.env('BARTJIK_HOME')+'/bin/bartjikctl','helper','media-play']
         stderr: StdioCollector {onStreamFinished:if(text.trim())native.navigationError=text.trim();}
     }
     property string navigationError: ''
     property var navigationQueue: []
     property var navigationRequest: ({})
     property Process mediaNavigation: Process {
-        command: ['/usr/bin/python3','-B',Qt.resolvedUrl('media_navigate.py').toString().replace('file://','')]
+        command: [Quickshell.env('BARTJIK_HOME')+'/bin/bartjikctl','helper','media-navigate']
         onStarted: {write(JSON.stringify(native.navigationRequest));stdinEnabled=false;}
         stderr: StdioCollector {onStreamFinished:if(text.trim())native.navigationError=text.trim();}
         onExited: (code,status) => {
@@ -56,7 +56,7 @@ QtObject {
     property var focusQueue: []
     property string focusApp: ''
     property Process appFocus: Process {
-        command: ['/usr/bin/python3','-B',Qt.resolvedUrl('tray_focus.py').toString().replace('file://',''),native.focusApp]
+        command: [Quickshell.env('BARTJIK_HOME')+'/bin/bartjikctl','helper','tray-focus',native.focusApp]
         onExited: (code,status) => {if(code!==0)console.warn('tray app focus failed: '+code);native.nextFocus();}
     }
     function nextFocus() {

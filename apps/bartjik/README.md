@@ -15,7 +15,7 @@ the screen column. No desktop, account, SSID or usage records are captured.
 
 ## Install and run
 
-Requires Quickshell **0.3.2+**, Qt 6 Quick/Controls/Effects, Python 3.11+, and a Wayland
+Requires Quickshell **0.3.2+**, Qt 6 Quick/Controls/Effects, the native Rust backend, and a Wayland
 compositor with layer-shell support. Hyprland workspace actions target the current
 **Lua** configuration interface. Bun/Turborepo are build tools, not runtime services.
 
@@ -111,7 +111,7 @@ JSON, named-theme files, provider settings, action bindings, style and layout al
 reload within about one second. Invalid edits retain the last valid state and
 subscriptions. Impossible centre widths are rejected against connected screens;
 an invalid hotplug layout retains the prior valid model until corrected. QML,
-Python source, environment credentials and process-level Qt settings require a
+Backend binary updates, environment credentials and process-level Qt settings require a
 restart. A helper restart reconnects providers; it does not replay actions.
 
 ## Configuration and precedence
@@ -411,7 +411,7 @@ expand/shrink and panel-handoff cases, including a scrolled list that becomes sh
 
 ## Extending modules
 
-Python providers live in `bartjik_core/providers.py:REGISTRY`; native services live
+Rust providers live in `src/providers.rs`; native services live
 in `qml/Native.qml`. Renderers consume the same item contract:
 
 ```json
@@ -444,12 +444,12 @@ is JSON in `BARTJIK_CONTEXT`: bar, barKey, monitor connector, module, item, part
 and monitor-local logical anchor `{x,y,width,height}`. Metadata is never substituted
 into argv or Lua; workspace identifiers use explicit Lua-string escaping.
 
-All internal action names are listed in `bartjik_core/config.py:INTERNAL`. Providers
+All internal action names are listed in `src/contract.json:INTERNAL`. Providers
 are deduplicated by normalized provider configuration, excluding visual/action
 settings. One compositor subscription supplies all workspace views; MPRIS and tray
 are singleton services. No poll is added when an existing module is displayed again.
 
-A custom executable can provide typed JSON without installing Python code:
+A custom executable can provide typed JSON through the native process provider:
 
 ```json
 {"modules":{"load":{"provider":"process",
@@ -792,8 +792,7 @@ Tray icons stay white; only their unread dot uses the theme accent (primary). Na
 the red unread-counter badge before replacing the artwork. Enable ZapZap's
 "Show the number of unread messages" setting for this signal. Clearing the app's
 unread state clears the highlight; opening the app alone does not clear it.
-The shared, read-only adapter requires `/usr/bin/python3` with dbus-python and
-PyGObject, watches tray signals, and resynchronizes every 15 seconds. It neither
+The shared, read-only Rust adapter uses `busctl` and `dbus-monitor`, watches tray signals, and resynchronizes every 15 seconds. It neither
 reads message content nor owns the notification service. Demo mode skips it.
 ChatGPT is matched by its tooltip title; Chromium-style tray IDs alone cannot
 identify an Electron application. Tray vectors are supersampled for small sizes.
@@ -962,3 +961,13 @@ installed UI files do not import another app. Bartjik reads history through its
 existing Notjik service connection and shows an unavailable state if that service
 is stopped. History exports hide content while locked and never export executable
 commands. Native process-local image handles fall back to portable artwork.
+
+
+## Native runtime
+
+All bundled providers, controller commands and QML process helpers run through
+`bartjik-core`. Build with Cargo through `bun run build`; Quickshell remains the
+Qt/QML renderer. `busctl` and `dbus-monitor` provide the tray adapter transport.
+Python is used only for development scripts, test drivers and the test-only
+migration oracle under `tests/reference`; none is installed with Bartjik.
+See [migration validation and measurements](docs/rust-migration.md).

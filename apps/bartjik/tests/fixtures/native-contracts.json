@@ -1,0 +1,6237 @@
+[
+  {
+    "op": "untrusted",
+    "args": [
+      {
+        "text": "<b>Hello</b> &amp; bye",
+        "tooltip": "&lt;tag&gt;",
+        "class": [
+          "ok",
+          "active"
+        ]
+      }
+    ],
+    "result": [
+      {
+        "id": "value",
+        "type": "text",
+        "state": {
+          "ok": true,
+          "active": true
+        },
+        "tooltip": "<tag>",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "Hello & bye",
+          "style": {}
+        }
+      }
+    ]
+  },
+  {
+    "op": "untrusted",
+    "args": [
+      [
+        {
+          "id": "a",
+          "type": "icon_text",
+          "state": {},
+          "tooltip": "",
+          "visible": true,
+          "enabled": true,
+          "icon": {
+            "kind": "glyph",
+            "value": "glyph",
+            "style": {}
+          },
+          "text": {
+            "value": "text",
+            "style": {}
+          }
+        }
+      ]
+    ],
+    "result": [
+      {
+        "id": "a",
+        "type": "icon_text",
+        "state": {},
+        "tooltip": "",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "glyph",
+          "value": "glyph",
+          "style": {}
+        },
+        "text": {
+          "value": "text",
+          "style": {}
+        }
+      }
+    ]
+  },
+  {
+    "op": "nm_fields",
+    "args": [
+      "1:foo\\:bar:path\\\\file"
+    ],
+    "result": [
+      "1",
+      "foo:bar",
+      "path\\file"
+    ]
+  },
+  {
+    "op": "nm_fields",
+    "args": [
+      "a::c"
+    ],
+    "result": [
+      "a",
+      "",
+      "c"
+    ]
+  },
+  {
+    "op": "nm_fields",
+    "args": [
+      "\\:x:"
+    ],
+    "result": [
+      ":x",
+      ""
+    ]
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      0,
+      false
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Battery \u00b7 0%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "battery_grid",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 0,
+        "external": false
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": false
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": false
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": false,
+      "status": "On battery",
+      "seconds": 600,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": false
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": false
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": false
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      0,
+      true
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "AC power \u00b7 0%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "bolt",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 0,
+        "external": true
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": true
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": true,
+      "status": "Charging",
+      "seconds": 300,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": true
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": true,
+      "status": "AC power",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": true
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": true,
+      "status": "Charging paused",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Charging paused",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": true
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": true,
+      "status": "Fully charged",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Fully charged",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 0,
+        "external": true
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 0,
+      "external": true,
+      "status": "Charging paused",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Charging paused",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      4.5,
+      false
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Battery \u00b7 4%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "battery_grid",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 4.5,
+        "external": false
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": false
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": false
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": false,
+      "status": "On battery",
+      "seconds": 600,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": false
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": false
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": false
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      4.5,
+      true
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "AC power \u00b7 4%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "bolt",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 4.5,
+        "external": true
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": true
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": true,
+      "status": "Charging",
+      "seconds": 300,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": true
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": true,
+      "status": "AC power",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": true
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": true,
+      "status": "Charging paused",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Charging paused",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": true
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": true,
+      "status": "Fully charged",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Fully charged",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 4.5,
+        "external": true
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 4.5,
+      "external": true,
+      "status": "Charging paused",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Charging paused",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      5,
+      false
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Battery \u00b7 5%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "battery_grid",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 5,
+        "external": false
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": false
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": false
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": false,
+      "status": "On battery",
+      "seconds": 600,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": false
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": false
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": false
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      5,
+      true
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "AC power \u00b7 5%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "bolt",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 5,
+        "external": true
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": true
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": true,
+      "status": "Charging",
+      "seconds": 300,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": true
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": true,
+      "status": "AC power",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": true
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": true,
+      "status": "Charging paused",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Charging paused",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": true
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": true,
+      "status": "Fully charged",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Fully charged",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 5,
+        "external": true
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 5,
+      "external": true,
+      "status": "Charging paused",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Charging paused",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      67,
+      false
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Battery \u00b7 67%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "battery_grid",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 67,
+        "external": false
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": false
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": false
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": false,
+      "status": "On battery",
+      "seconds": 600,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": false
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": false
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": false
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      67,
+      true
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "AC power \u00b7 67%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "bolt",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 67,
+        "external": true
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": true
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": true,
+      "status": "Charging",
+      "seconds": 300,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": true
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": true,
+      "status": "AC power",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": true
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": true,
+      "status": "Charging paused",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Charging paused",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": true
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": true,
+      "status": "Fully charged",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Fully charged",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 67,
+        "external": true
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 67,
+      "external": true,
+      "status": "Charging paused",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Charging paused",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      100,
+      false
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "Battery \u00b7 100%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "battery_grid",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 100,
+        "external": false
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": false
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": false
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": false,
+      "status": "On battery",
+      "seconds": 600,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": false
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": false
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": false
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": false,
+      "status": "On battery",
+      "seconds": null,
+      "estimateLabel": "Battery life remaining",
+      "estimateUnavailable": "Estimating\u2026",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_row",
+    "args": [
+      100,
+      true
+    ],
+    "result": {
+      "id": "battery",
+      "type": "icon",
+      "state": {},
+      "tooltip": "AC power \u00b7 100%",
+      "visible": true,
+      "enabled": true,
+      "icon": {
+        "kind": "symbol",
+        "value": "bolt",
+        "style": {},
+        "actions": {}
+      },
+      "actions": {
+        "leftClick": "battery.panel"
+      },
+      "battery": {
+        "percent": 100,
+        "external": true
+      }
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": true
+      },
+      {
+        "State": 1,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": true,
+      "status": "Fully charged",
+      "seconds": 300,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Fully charged",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": true
+      },
+      {
+        "State": 2,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": true,
+      "status": "Fully charged",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Fully charged",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": true
+      },
+      {
+        "State": 3,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": true,
+      "status": "Fully charged",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Fully charged",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": true
+      },
+      {
+        "State": 4,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": true,
+      "status": "Fully charged",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Fully charged",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "battery_panel",
+    "args": [
+      {
+        "percent": 100,
+        "external": true
+      },
+      {
+        "State": 5,
+        "TimeToFull": 300,
+        "TimeToEmpty": 600
+      },
+      {
+        "ActiveProfile": "balanced",
+        "Profiles": [
+          {
+            "Profile": {
+              "data": "balanced"
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Battery",
+      "percent": 100,
+      "external": true,
+      "status": "Fully charged",
+      "seconds": null,
+      "estimateLabel": "Until fully charged",
+      "estimateUnavailable": "Fully charged",
+      "profiles": [
+        {
+          "id": "performance",
+          "label": "Performance",
+          "available": false,
+          "active": false
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "available": true,
+          "active": true
+        },
+        {
+          "id": "power-saver",
+          "label": "Power Saver",
+          "available": false,
+          "active": false
+        }
+      ],
+      "profileMessage": ""
+    }
+  },
+  {
+    "op": "relays",
+    "args": [
+      "Japan (jp)\n\tTokyo (tyo) @ 1\n\tOsaka (osa) @ 2\nNetherlands (nl)\n\tAmsterdam (ams) @ 3"
+    ],
+    "result": {
+      "jp": {
+        "id": "jp",
+        "name": "Japan",
+        "cities": [
+          {
+            "id": "tyo",
+            "name": "Tokyo"
+          },
+          {
+            "id": "osa",
+            "name": "Osaka"
+          }
+        ]
+      },
+      "nl": {
+        "id": "nl",
+        "name": "Netherlands",
+        "cities": [
+          {
+            "id": "ams",
+            "name": "Amsterdam"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "op": "mullvad_panel",
+    "args": [
+      "connected",
+      "Japan, Tokyo",
+      {
+        "jp": {
+          "id": "jp",
+          "name": "Japan",
+          "cities": [
+            {
+              "id": "tyo",
+              "name": "Tokyo"
+            },
+            {
+              "id": "osa",
+              "name": "Osaka"
+            }
+          ]
+        },
+        "nl": {
+          "id": "nl",
+          "name": "Netherlands",
+          "cities": [
+            {
+              "id": "ams",
+              "name": "Amsterdam"
+            }
+          ]
+        }
+      },
+      [
+        "nl",
+        "jp",
+        "sg"
+      ]
+    ],
+    "result": {
+      "title": "Mullvad",
+      "subtitle": "",
+      "rows": [
+        {
+          "label": "Connection",
+          "value": "Connected",
+          "detail": ""
+        },
+        {
+          "label": "Location",
+          "value": "Japan, Tokyo",
+          "detail": ""
+        }
+      ],
+      "connection": "connected",
+      "country": "Japan",
+      "city": "Tokyo",
+      "countryCode": "jp",
+      "cityCode": "tyo",
+      "cities": [
+        {
+          "id": "tyo",
+          "name": "Tokyo",
+          "active": true
+        },
+        {
+          "id": "osa",
+          "name": "Osaka",
+          "active": false
+        }
+      ],
+      "countries": [
+        {
+          "id": "nl",
+          "name": "Netherlands",
+          "active": false
+        },
+        {
+          "id": "jp",
+          "name": "Japan",
+          "active": true
+        }
+      ],
+      "locationsAvailable": true
+    }
+  },
+  {
+    "op": "mullvad_panel",
+    "args": [
+      "disconnected",
+      "",
+      {
+        "jp": {
+          "id": "jp",
+          "name": "Japan",
+          "cities": [
+            {
+              "id": "tyo",
+              "name": "Tokyo"
+            },
+            {
+              "id": "osa",
+              "name": "Osaka"
+            }
+          ]
+        },
+        "nl": {
+          "id": "nl",
+          "name": "Netherlands",
+          "cities": [
+            {
+              "id": "ams",
+              "name": "Amsterdam"
+            }
+          ]
+        }
+      },
+      [
+        "nl",
+        "jp",
+        "sg"
+      ]
+    ],
+    "result": {
+      "title": "Mullvad",
+      "subtitle": "",
+      "rows": [
+        {
+          "label": "Connection",
+          "value": "Disconnected",
+          "detail": ""
+        },
+        {
+          "label": "Location",
+          "value": "\u2014",
+          "detail": ""
+        }
+      ],
+      "connection": "disconnected",
+      "country": "Choose a country",
+      "city": "",
+      "countryCode": "",
+      "cityCode": "",
+      "cities": [],
+      "countries": [
+        {
+          "id": "nl",
+          "name": "Netherlands",
+          "active": false
+        },
+        {
+          "id": "jp",
+          "name": "Japan",
+          "active": false
+        }
+      ],
+      "locationsAvailable": true
+    }
+  },
+  {
+    "op": "mullvad_panel",
+    "args": [
+      "connecting",
+      "Netherlands, Amsterdam",
+      {
+        "jp": {
+          "id": "jp",
+          "name": "Japan",
+          "cities": [
+            {
+              "id": "tyo",
+              "name": "Tokyo"
+            },
+            {
+              "id": "osa",
+              "name": "Osaka"
+            }
+          ]
+        },
+        "nl": {
+          "id": "nl",
+          "name": "Netherlands",
+          "cities": [
+            {
+              "id": "ams",
+              "name": "Amsterdam"
+            }
+          ]
+        }
+      },
+      [
+        "nl",
+        "jp",
+        "sg"
+      ]
+    ],
+    "result": {
+      "title": "Mullvad",
+      "subtitle": "",
+      "rows": [
+        {
+          "label": "Connection",
+          "value": "Connecting",
+          "detail": ""
+        },
+        {
+          "label": "Location",
+          "value": "Netherlands, Amsterdam",
+          "detail": ""
+        }
+      ],
+      "connection": "connecting",
+      "country": "Netherlands",
+      "city": "Amsterdam",
+      "countryCode": "nl",
+      "cityCode": "ams",
+      "cities": [
+        {
+          "id": "ams",
+          "name": "Amsterdam",
+          "active": true
+        }
+      ],
+      "countries": [
+        {
+          "id": "nl",
+          "name": "Netherlands",
+          "active": true
+        },
+        {
+          "id": "jp",
+          "name": "Japan",
+          "active": false
+        }
+      ],
+      "locationsAvailable": true
+    }
+  },
+  {
+    "op": "tailscale_panel",
+    "args": [
+      {
+        "BackendState": "Running",
+        "Self": {
+          "HostName": "synthetic"
+        },
+        "TailscaleIPs": [
+          "100.64.0.1"
+        ],
+        "Peer": {
+          "b": {
+            "HostName": "B",
+            "Online": false
+          },
+          "a": {
+            "HostName": "A",
+            "Online": true,
+            "TailscaleIPs": [
+              "100.64.0.2"
+            ]
+          }
+        }
+      }
+    ],
+    "result": {
+      "title": "Tailscale",
+      "subtitle": "",
+      "rows": [
+        {
+          "label": "Backend",
+          "value": "Running",
+          "detail": ""
+        },
+        {
+          "label": "This device",
+          "value": "synthetic",
+          "detail": ""
+        },
+        {
+          "label": "Addresses",
+          "value": "100.64.0.1",
+          "detail": ""
+        },
+        {
+          "label": "Peers online",
+          "value": "1 / 2",
+          "detail": ""
+        }
+      ],
+      "connection": "Running",
+      "device": "synthetic",
+      "address": "100.64.0.1",
+      "peers": [
+        {
+          "id": "a",
+          "name": "A",
+          "online": true,
+          "address": "100.64.0.2",
+          "os": ""
+        },
+        {
+          "id": "b",
+          "name": "B",
+          "online": false,
+          "address": "",
+          "os": ""
+        }
+      ],
+      "online": 1,
+      "total": 2
+    }
+  },
+  {
+    "op": "tailscale_panel",
+    "args": [
+      {
+        "BackendState": "Stopped"
+      }
+    ],
+    "result": {
+      "title": "Tailscale",
+      "subtitle": "",
+      "rows": [
+        {
+          "label": "Backend",
+          "value": "Stopped",
+          "detail": ""
+        },
+        {
+          "label": "This device",
+          "value": "This device",
+          "detail": ""
+        },
+        {
+          "label": "Addresses",
+          "value": "\u2014",
+          "detail": ""
+        },
+        {
+          "label": "Peers online",
+          "value": "0 / 0",
+          "detail": ""
+        }
+      ],
+      "connection": "Stopped",
+      "device": "This device",
+      "address": "",
+      "peers": [],
+      "online": 0,
+      "total": 0
+    }
+  },
+  {
+    "op": "timed_lines",
+    "args": [
+      "[00:01.50]Hello\n[00:03]World"
+    ],
+    "result": [
+      {
+        "time": 1.5,
+        "text": "Hello"
+      },
+      {
+        "time": 3,
+        "text": "World"
+      }
+    ]
+  },
+  {
+    "op": "lyrics_parse",
+    "args": [
+      {
+        "syncedLyrics": "[00:01.50]Hello\n[00:03]World"
+      }
+    ],
+    "result": {
+      "status": "ready",
+      "text": "Hello\nWorld",
+      "lines": [
+        {
+          "time": 1.5,
+          "text": "Hello"
+        },
+        {
+          "time": 3,
+          "text": "World"
+        }
+      ]
+    }
+  },
+  {
+    "op": "timed_lines",
+    "args": [
+      "[offset:+500]\n[00:00.2]One\n[00:02][00:04]Repeat"
+    ],
+    "result": [
+      {
+        "time": 0,
+        "text": "One"
+      },
+      {
+        "time": 1.5,
+        "text": "Repeat"
+      },
+      {
+        "time": 3.5,
+        "text": "Repeat"
+      }
+    ]
+  },
+  {
+    "op": "lyrics_parse",
+    "args": [
+      {
+        "syncedLyrics": "[offset:+500]\n[00:00.2]One\n[00:02][00:04]Repeat"
+      }
+    ],
+    "result": {
+      "status": "ready",
+      "text": "One\nRepeat",
+      "lines": [
+        {
+          "time": 0,
+          "text": "One"
+        },
+        {
+          "time": 1.5,
+          "text": "Repeat"
+        },
+        {
+          "time": 3.5,
+          "text": "Repeat"
+        }
+      ]
+    }
+  },
+  {
+    "op": "timed_lines",
+    "args": [
+      "[ar:Artist]\n[00:05] <00:05.5>Words"
+    ],
+    "result": [
+      {
+        "time": 5,
+        "text": "Words"
+      }
+    ]
+  },
+  {
+    "op": "lyrics_parse",
+    "args": [
+      {
+        "syncedLyrics": "[ar:Artist]\n[00:05] <00:05.5>Words"
+      }
+    ],
+    "result": {
+      "status": "ready",
+      "text": "<00:05.5>Words",
+      "lines": [
+        {
+          "time": 5,
+          "text": "Words"
+        }
+      ]
+    }
+  },
+  {
+    "op": "timed_lines",
+    "args": [
+      "[00:02]one\n[00:02]two\n[00:02]one"
+    ],
+    "result": [
+      {
+        "time": 2,
+        "text": "one\ntwo"
+      }
+    ]
+  },
+  {
+    "op": "lyrics_parse",
+    "args": [
+      {
+        "syncedLyrics": "[00:02]one\n[00:02]two\n[00:02]one"
+      }
+    ],
+    "result": {
+      "status": "ready",
+      "text": "one\ntwo\none",
+      "lines": [
+        {
+          "time": 2,
+          "text": "one\ntwo"
+        }
+      ]
+    }
+  },
+  {
+    "op": "timed_lines",
+    "args": [
+      "garbage"
+    ],
+    "result": []
+  },
+  {
+    "op": "lyrics_parse",
+    "args": [
+      {
+        "syncedLyrics": "garbage"
+      }
+    ],
+    "result": {
+      "status": "ready",
+      "text": "garbage"
+    }
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song (2020 Remastered)",
+      false
+    ],
+    "result": "Song"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song (2020 Remastered)",
+      true
+    ],
+    "result": "Song"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song - Live",
+      false
+    ],
+    "result": "Song"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song - Live",
+      true
+    ],
+    "result": "Song - Live"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song (Remix)",
+      false
+    ],
+    "result": "Song"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song (Remix)",
+      true
+    ],
+    "result": "Song (Remix)"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song (I love you)",
+      false
+    ],
+    "result": "Song (I love you)"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song (I love you)",
+      true
+    ],
+    "result": "Song (I love you)"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "(I Can\u2019t Get No) Satisfaction",
+      false
+    ],
+    "result": "(I Can\u2019t Get No) Satisfaction"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "(I Can\u2019t Get No) Satisfaction",
+      true
+    ],
+    "result": "(I Can\u2019t Get No) Satisfaction"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song feat. Artist",
+      false
+    ],
+    "result": "Song"
+  },
+  {
+    "op": "clean_title",
+    "args": [
+      "Song feat. Artist",
+      true
+    ],
+    "result": "Song"
+  },
+  {
+    "op": "artist_matches",
+    "args": [
+      "Artist feat. Guest",
+      "Artist"
+    ],
+    "result": true
+  },
+  {
+    "op": "artist_matches",
+    "args": [
+      "Stra\u00dfe",
+      "STRASSE"
+    ],
+    "result": true
+  },
+  {
+    "op": "artist_matches",
+    "args": [
+      "AC/DC",
+      "AC/DC"
+    ],
+    "result": true
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "spotify:artist:AAAAAAAAAAAAAAAAAAAAAA",
+      "artist"
+    ],
+    "result": "spotify:artist:AAAAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "spotify:artist:AAAAAAAAAAAAAAAAAAAAAA",
+      "playlist"
+    ],
+    "result": ""
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "spotify:artist:AAAAAAAAAAAAAAAAAAAAAA",
+      "track"
+    ],
+    "result": ""
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "https://open.spotify.com/intl-en/playlist/BBBBBBBBBBBBBBBBBBBBBB?si=x",
+      "artist"
+    ],
+    "result": ""
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "https://open.spotify.com/intl-en/playlist/BBBBBBBBBBBBBBBBBBBBBB?si=x",
+      "playlist"
+    ],
+    "result": "spotify:playlist:BBBBBBBBBBBBBBBBBBBBBB"
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "https://open.spotify.com/intl-en/playlist/BBBBBBBBBBBBBBBBBBBBBB?si=x",
+      "track"
+    ],
+    "result": ""
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "https://bad/track/CCCCCCCCCCCCCCCCCCCCCC",
+      "artist"
+    ],
+    "result": ""
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "https://bad/track/CCCCCCCCCCCCCCCCCCCCCC",
+      "playlist"
+    ],
+    "result": ""
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "https://bad/track/CCCCCCCCCCCCCCCCCCCCCC",
+      "track"
+    ],
+    "result": ""
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "spotify:track:x",
+      "artist"
+    ],
+    "result": ""
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "spotify:track:x",
+      "playlist"
+    ],
+    "result": ""
+  },
+  {
+    "op": "spotify_uri",
+    "args": [
+      "spotify:track:x",
+      "track"
+    ],
+    "result": ""
+  },
+  {
+    "op": "totp",
+    "args": [
+      {
+        "1": [
+          10,
+          20,
+          30
+        ],
+        "4": [
+          42,
+          255,
+          1,
+          0
+        ]
+      },
+      1234567890
+    ],
+    "result": [
+      "4",
+      "952245"
+    ]
+  },
+  {
+    "op": "totp",
+    "args": [
+      {
+        "1": [
+          10,
+          20,
+          30
+        ],
+        "4": [
+          42,
+          255,
+          1,
+          0
+        ]
+      },
+      1780000000
+    ],
+    "result": [
+      "4",
+      "202718"
+    ]
+  },
+  {
+    "op": "spotify_parse",
+    "args": [
+      {
+        "lyrics": {
+          "syncType": "LINE_SYNCED",
+          "lines": [
+            {
+              "startTimeMs": "1000",
+              "words": " One "
+            },
+            {
+              "startTimeMs": "2000",
+              "words": "Two"
+            }
+          ]
+        }
+      }
+    ],
+    "result": {
+      "status": "ready",
+      "text": "One\nTwo",
+      "source": "Spotify",
+      "lines": [
+        {
+          "time": 1.0,
+          "text": "One"
+        },
+        {
+          "time": 2.0,
+          "text": "Two"
+        }
+      ]
+    }
+  },
+  {
+    "op": "spotify_parse",
+    "args": [
+      {
+        "lyrics": {
+          "syncType": "UNSYNCED",
+          "lines": [
+            {
+              "words": "Words"
+            }
+          ]
+        }
+      }
+    ],
+    "result": {
+      "status": "ready",
+      "text": "Words",
+      "source": "Spotify"
+    }
+  },
+  {
+    "op": "unread",
+    "args": [
+      "TelegramDesktop",
+      {
+        "IconName": "org.telegram.attention"
+      }
+    ],
+    "result": true
+  },
+  {
+    "op": "unread",
+    "args": [
+      "ZapZap",
+      {
+        "IconPixmap": [
+          [
+            8,
+            8,
+            [
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0
+            ]
+          ]
+        ]
+      }
+    ],
+    "result": true
+  },
+  {
+    "op": "unread",
+    "args": [
+      "Other",
+      {
+        "IconPixmap": [
+          [
+            8,
+            8,
+            [
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0,
+              255,
+              255,
+              0,
+              0
+            ]
+          ]
+        ]
+      }
+    ],
+    "result": false
+  },
+  {
+    "op": "unread",
+    "args": [
+      "Other",
+      {
+        "Status": "NeedsAttention"
+      }
+    ],
+    "result": true
+  },
+  {
+    "op": "pointer",
+    "args": [
+      {
+        "x": 10,
+        "y": 20
+      },
+      [
+        {
+          "name": "DEMO",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "scale": 1,
+          "transform": 0
+        }
+      ]
+    ],
+    "result": {
+      "valid": true,
+      "monitor": "DEMO",
+      "x": 10.0,
+      "y": 20.0
+    }
+  },
+  {
+    "op": "pointer",
+    "args": [
+      {
+        "x": 2000,
+        "y": 0
+      },
+      [
+        {
+          "name": "DEMO",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "scale": 1,
+          "transform": 0
+        }
+      ]
+    ],
+    "result": {
+      "valid": true,
+      "monitor": "",
+      "x": 0,
+      "y": 0
+    }
+  },
+  {
+    "op": "pointer",
+    "args": [
+      {
+        "x": -10,
+        "y": 20
+      },
+      [
+        {
+          "name": "DEMO",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "scale": 1,
+          "transform": 0
+        }
+      ]
+    ],
+    "result": {
+      "valid": true,
+      "monitor": "",
+      "x": 0,
+      "y": 0
+    }
+  },
+  {
+    "op": "workspace_view",
+    "args": [
+      {
+        "monitors": [
+          {
+            "id": 0,
+            "name": "DEMO",
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080,
+            "scale": 1,
+            "activeWorkspace": {
+              "id": 2
+            },
+            "specialWorkspace": {
+              "id": -9
+            },
+            "focused": true
+          }
+        ],
+        "workspaces": [
+          {
+            "id": 2,
+            "name": "2",
+            "monitor": "DEMO",
+            "windows": 2
+          },
+          {
+            "id": -9,
+            "name": "special:term",
+            "monitor": "DEMO",
+            "windows": 1
+          },
+          {
+            "id": 3,
+            "name": "three",
+            "monitor": "OTHER"
+          }
+        ],
+        "clients": [],
+        "urgent": [
+          2
+        ]
+      },
+      "DEMO",
+      {}
+    ],
+    "result": [
+      {
+        "id": "2",
+        "type": "text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": true,
+          "placeholder": false
+        },
+        "tooltip": "2 \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "2",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "workspace": 2,
+        "special": false
+      },
+      {
+        "id": "-9",
+        "type": "text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": false,
+          "placeholder": false
+        },
+        "tooltip": "special:term \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "term",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "workspace": "special:term",
+        "special": true
+      }
+    ]
+  },
+  {
+    "op": "workspace_view",
+    "args": [
+      {
+        "monitors": [
+          {
+            "id": 0,
+            "name": "DEMO",
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080,
+            "scale": 1,
+            "activeWorkspace": {
+              "id": 2
+            },
+            "specialWorkspace": {
+              "id": -9
+            },
+            "focused": true
+          }
+        ],
+        "workspaces": [
+          {
+            "id": 2,
+            "name": "2",
+            "monitor": "DEMO",
+            "windows": 2
+          },
+          {
+            "id": -9,
+            "name": "special:term",
+            "monitor": "DEMO",
+            "windows": 1
+          },
+          {
+            "id": 3,
+            "name": "three",
+            "monitor": "OTHER"
+          }
+        ],
+        "clients": [],
+        "urgent": [
+          2
+        ]
+      },
+      "DEMO",
+      {
+        "special": false
+      }
+    ],
+    "result": [
+      {
+        "id": "2",
+        "type": "text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": true,
+          "placeholder": false
+        },
+        "tooltip": "2 \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "2",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "workspace": 2,
+        "special": false
+      }
+    ]
+  },
+  {
+    "op": "workspace_view",
+    "args": [
+      {
+        "monitors": [
+          {
+            "id": 0,
+            "name": "DEMO",
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080,
+            "scale": 1,
+            "activeWorkspace": {
+              "id": 2
+            },
+            "specialWorkspace": {
+              "id": -9
+            },
+            "focused": true
+          }
+        ],
+        "workspaces": [
+          {
+            "id": 2,
+            "name": "2",
+            "monitor": "DEMO",
+            "windows": 2
+          },
+          {
+            "id": -9,
+            "name": "special:term",
+            "monitor": "DEMO",
+            "windows": 1
+          },
+          {
+            "id": 3,
+            "name": "three",
+            "monitor": "OTHER"
+          }
+        ],
+        "clients": [],
+        "urgent": [
+          2
+        ]
+      },
+      "DEMO",
+      {
+        "occupiedOnly": true
+      }
+    ],
+    "result": [
+      {
+        "id": "2",
+        "type": "text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": true,
+          "placeholder": false
+        },
+        "tooltip": "2 \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "2",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "workspace": 2,
+        "special": false
+      },
+      {
+        "id": "-9",
+        "type": "text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": false,
+          "placeholder": false
+        },
+        "tooltip": "special:term \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "term",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "workspace": "special:term",
+        "special": true
+      }
+    ]
+  },
+  {
+    "op": "workspace_view",
+    "args": [
+      {
+        "monitors": [
+          {
+            "id": 0,
+            "name": "DEMO",
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080,
+            "scale": 1,
+            "activeWorkspace": {
+              "id": 2
+            },
+            "specialWorkspace": {
+              "id": -9
+            },
+            "focused": true
+          }
+        ],
+        "workspaces": [
+          {
+            "id": 2,
+            "name": "2",
+            "monitor": "DEMO",
+            "windows": 2
+          },
+          {
+            "id": -9,
+            "name": "special:term",
+            "monitor": "DEMO",
+            "windows": 1
+          },
+          {
+            "id": 3,
+            "name": "three",
+            "monitor": "OTHER"
+          }
+        ],
+        "clients": [],
+        "urgent": [
+          2
+        ]
+      },
+      "DEMO",
+      {
+        "persistent": {
+          "DEMO": [
+            1,
+            2,
+            10
+          ]
+        }
+      }
+    ],
+    "result": [
+      {
+        "id": "1",
+        "type": "text",
+        "state": {
+          "active": false,
+          "focused": false,
+          "urgent": false,
+          "placeholder": true
+        },
+        "tooltip": "1 \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "1",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "workspace": 1,
+        "special": false
+      },
+      {
+        "id": "2",
+        "type": "text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": true,
+          "placeholder": false
+        },
+        "tooltip": "2 \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "2",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "workspace": 2,
+        "special": false
+      },
+      {
+        "id": "10",
+        "type": "text",
+        "state": {
+          "active": false,
+          "focused": false,
+          "urgent": false,
+          "placeholder": true
+        },
+        "tooltip": "10 \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "10",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "workspace": 10,
+        "special": false
+      },
+      {
+        "id": "-9",
+        "type": "text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": false,
+          "placeholder": false
+        },
+        "tooltip": "special:term \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "term",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "workspace": "special:term",
+        "special": true
+      }
+    ]
+  },
+  {
+    "op": "workspace_view",
+    "args": [
+      {
+        "monitors": [
+          {
+            "id": 0,
+            "name": "DEMO",
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080,
+            "scale": 1,
+            "activeWorkspace": {
+              "id": 2
+            },
+            "specialWorkspace": {
+              "id": -9
+            },
+            "focused": true
+          }
+        ],
+        "workspaces": [
+          {
+            "id": 2,
+            "name": "2",
+            "monitor": "DEMO",
+            "windows": 2
+          },
+          {
+            "id": -9,
+            "name": "special:term",
+            "monitor": "DEMO",
+            "windows": 1
+          },
+          {
+            "id": 3,
+            "name": "three",
+            "monitor": "OTHER"
+          }
+        ],
+        "clients": [],
+        "urgent": [
+          2
+        ]
+      },
+      "DEMO",
+      {
+        "label": "circles",
+        "labels": {
+          "2": "Work"
+        }
+      }
+    ],
+    "result": [
+      {
+        "id": "2",
+        "type": "icon",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": true,
+          "placeholder": false
+        },
+        "tooltip": "2 \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/circle-filled.svg",
+          "style": {},
+          "actions": {}
+        },
+        "workspace": 2,
+        "special": false
+      },
+      {
+        "id": "-9",
+        "type": "icon",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": false,
+          "placeholder": false
+        },
+        "tooltip": "special:term \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/circle-filled.svg",
+          "style": {},
+          "actions": {}
+        },
+        "workspace": "special:term",
+        "special": true
+      }
+    ]
+  },
+  {
+    "op": "workspace_view",
+    "args": [
+      {
+        "monitors": [
+          {
+            "id": 0,
+            "name": "DEMO",
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080,
+            "scale": 1,
+            "activeWorkspace": {
+              "id": 2
+            },
+            "specialWorkspace": {
+              "id": -9
+            },
+            "focused": true
+          }
+        ],
+        "workspaces": [
+          {
+            "id": 2,
+            "name": "2",
+            "monitor": "DEMO",
+            "windows": 2
+          },
+          {
+            "id": -9,
+            "name": "special:term",
+            "monitor": "DEMO",
+            "windows": 1
+          },
+          {
+            "id": 3,
+            "name": "three",
+            "monitor": "OTHER"
+          }
+        ],
+        "clients": [],
+        "urgent": [
+          2
+        ]
+      },
+      "DEMO",
+      {
+        "label": "circles_name",
+        "offscreen": true
+      }
+    ],
+    "result": [
+      {
+        "id": "2",
+        "type": "icon_text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": true,
+          "placeholder": false
+        },
+        "tooltip": "2 \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "2",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/circle-filled.svg",
+          "style": {},
+          "actions": {}
+        },
+        "workspace": 2,
+        "special": false,
+        "offscreen": {
+          "left": [],
+          "right": []
+        }
+      },
+      {
+        "id": "-9",
+        "type": "icon_text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": false,
+          "placeholder": false
+        },
+        "tooltip": "special:term \u00b7 DEMO",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "term",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "workspace.activate",
+          "scrollUp": "workspace.previous",
+          "scrollDown": "workspace.next"
+        },
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/circle-filled.svg",
+          "style": {},
+          "actions": {}
+        },
+        "workspace": "special:term",
+        "special": true
+      }
+    ]
+  },
+  {
+    "op": "choose",
+    "args": [
+      {
+        "actions": {
+          "click": [
+            "a"
+          ],
+          "leftClick": null
+        }
+      },
+      {
+        "id": "x",
+        "type": "text",
+        "state": {},
+        "tooltip": "",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "X",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      },
+      "text",
+      "click"
+    ],
+    "result": null
+  },
+  {
+    "op": "choose",
+    "args": [
+      {
+        "text": {
+          "actions": {
+            "leftClick": [
+              "x"
+            ]
+          }
+        }
+      },
+      {
+        "id": "x",
+        "type": "text",
+        "state": {},
+        "tooltip": "",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "X",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": [
+            "base"
+          ]
+        }
+      },
+      "text",
+      "leftClick"
+    ],
+    "result": [
+      "x"
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "battery",
+      {}
+    ],
+    "result": [
+      {
+        "id": "battery",
+        "type": "icon",
+        "state": {},
+        "tooltip": "Battery \u00b7 67%",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "symbol",
+          "value": "battery_grid",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "battery.panel"
+        },
+        "battery": {
+          "percent": 67,
+          "external": false
+        },
+        "panel": {
+          "title": "Battery",
+          "percent": 67,
+          "external": false,
+          "status": "On battery",
+          "seconds": 14820,
+          "estimateLabel": "Battery life remaining",
+          "estimateUnavailable": "Estimating\u2026",
+          "profiles": [
+            {
+              "id": "performance",
+              "label": "Performance",
+              "available": true,
+              "active": false
+            },
+            {
+              "id": "balanced",
+              "label": "Balanced",
+              "available": true,
+              "active": true
+            },
+            {
+              "id": "power-saver",
+              "label": "Power Saver",
+              "available": true,
+              "active": false
+            }
+          ],
+          "profileMessage": ""
+        }
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "workspaces",
+      {}
+    ],
+    "result": [
+      {
+        "id": "1",
+        "type": "text",
+        "state": {
+          "active": false,
+          "focused": false,
+          "urgent": false
+        },
+        "tooltip": "Synthetic workspace",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "1",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      },
+      {
+        "id": "2",
+        "type": "text",
+        "state": {
+          "active": false,
+          "focused": false,
+          "urgent": false
+        },
+        "tooltip": "Synthetic workspace",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "2",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      },
+      {
+        "id": "3",
+        "type": "text",
+        "state": {
+          "active": true,
+          "focused": true,
+          "urgent": false
+        },
+        "tooltip": "Synthetic workspace",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "3",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      },
+      {
+        "id": "6",
+        "type": "text",
+        "state": {
+          "active": false,
+          "focused": false,
+          "urgent": true
+        },
+        "tooltip": "Synthetic workspace",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "6",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      },
+      {
+        "id": "10",
+        "type": "text",
+        "state": {
+          "active": false,
+          "focused": false,
+          "urgent": false
+        },
+        "tooltip": "Synthetic workspace",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "10",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      },
+      {
+        "id": "14",
+        "type": "text",
+        "state": {
+          "active": false,
+          "focused": false,
+          "urgent": false
+        },
+        "tooltip": "Synthetic workspace",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "14",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "playerctl",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo-player",
+        "type": "icon_text",
+        "state": {},
+        "tooltip": "",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "symbol",
+          "value": "pause",
+          "style": {},
+          "actions": {
+            "leftClick": "player.toggle"
+          }
+        },
+        "text": {
+          "value": "Evening light across the quiet harbour",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "middleClick": "player.toggle",
+          "scrollUp": "player.previous",
+          "scrollDown": "player.next"
+        },
+        "artist": {
+          "value": "Synthetic Artist",
+          "style": {},
+          "actions": {
+            "leftClick": "player.artist"
+          }
+        },
+        "track": {
+          "value": "Evening light across the quiet harbour",
+          "style": {},
+          "actions": {
+            "leftClick": "player.playlist"
+          }
+        },
+        "media": {
+          "artist": "Synthetic Artist",
+          "title": "Evening light across the quiet harbour",
+          "album": "Evening sessions",
+          "artwork": "@ROOT@/qml/icons/demo-album.png",
+          "playing": true,
+          "canToggle": true,
+          "canPrevious": true,
+          "canNext": true,
+          "canShuffle": true,
+          "shuffle": false,
+          "playlistAvailable": false,
+          "player": "Synthetic player"
+        }
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "crypto",
+      {}
+    ],
+    "result": [
+      {
+        "id": "BTC/USD",
+        "type": "icon_text",
+        "state": {},
+        "tooltip": "",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/bitcoin.svg",
+          "style": {},
+          "actions": {}
+        },
+        "text": {
+          "value": "67432",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "crypto.panel"
+        },
+        "changes": {
+          "1h": 0.43,
+          "24h": -1.72,
+          "7d": 4.81
+        }
+      },
+      {
+        "id": "SOL/USD",
+        "type": "icon_text",
+        "state": {},
+        "tooltip": "",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/solana.svg",
+          "style": {},
+          "actions": {}
+        },
+        "text": {
+          "value": "148",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "crypto.panel"
+        },
+        "changes": {
+          "1h": 0.43,
+          "24h": -1.72,
+          "7d": 4.81
+        }
+      },
+      {
+        "id": "AR/USD",
+        "type": "icon_text",
+        "state": {},
+        "tooltip": "",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/arweave.svg",
+          "style": {},
+          "actions": {}
+        },
+        "text": {
+          "value": "18.4",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "crypto.panel"
+        },
+        "changes": {
+          "1h": 0.43,
+          "24h": -1.72,
+          "7d": 4.81
+        }
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "icontray",
+      {}
+    ],
+    "result": [
+      {
+        "id": "tray-0",
+        "type": "icon",
+        "state": {
+          "urgent": false
+        },
+        "tooltip": "Synthetic tray item",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/tray/chatgpt.svg",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      },
+      {
+        "id": "tray-1",
+        "type": "icon",
+        "state": {
+          "urgent": true
+        },
+        "tooltip": "Synthetic tray item",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/tray/telegram.svg",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      },
+      {
+        "id": "tray-2",
+        "type": "icon",
+        "state": {
+          "urgent": false
+        },
+        "tooltip": "Synthetic tray item",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/tray/whatsapp.svg",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "network",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "icon_text",
+        "state": {},
+        "tooltip": "Synthetic network",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "symbol",
+          "value": "wifi",
+          "style": {},
+          "actions": {}
+        },
+        "text": {
+          "value": "Demo Wi-Fi",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "mullvad",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "icon",
+        "state": {},
+        "tooltip": "Synthetic mullvad",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/flags/jp.svg",
+          "style": {
+            "greyscaleIcons": false,
+            "monochromeIcon": false
+          },
+          "actions": {}
+        },
+        "actions": {},
+        "panel": {
+          "title": "Mullvad",
+          "subtitle": "",
+          "rows": [
+            {
+              "label": "Connection",
+              "value": "Connected",
+              "detail": ""
+            },
+            {
+              "label": "Location",
+              "value": "Japan, Tokyo",
+              "detail": ""
+            }
+          ],
+          "connection": "connected",
+          "country": "Japan",
+          "city": "Tokyo",
+          "countryCode": "jp",
+          "cityCode": "tyo",
+          "cities": [
+            {
+              "id": "osa",
+              "name": "Osaka",
+              "active": false
+            },
+            {
+              "id": "tyo",
+              "name": "Tokyo",
+              "active": true
+            }
+          ],
+          "countries": [
+            {
+              "id": "nl",
+              "name": "Netherlands",
+              "active": false
+            },
+            {
+              "id": "jp",
+              "name": "Japan",
+              "active": true
+            },
+            {
+              "id": "sg",
+              "name": "Singapore",
+              "active": false
+            }
+          ],
+          "locationsAvailable": true
+        }
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "tailscale",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "icon",
+        "state": {},
+        "tooltip": "Synthetic tailscale",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "symbol",
+          "value": "vpn_lock",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {},
+        "panel": {
+          "title": "Tailscale",
+          "subtitle": "",
+          "rows": [
+            {
+              "label": "Backend",
+              "value": "Running",
+              "detail": ""
+            },
+            {
+              "label": "This device",
+              "value": "demo-desktop",
+              "detail": ""
+            },
+            {
+              "label": "Addresses",
+              "value": "100.64.0.1",
+              "detail": ""
+            },
+            {
+              "label": "Peers online",
+              "value": "1 / 2",
+              "detail": ""
+            }
+          ],
+          "connection": "Running",
+          "device": "demo-desktop",
+          "address": "100.64.0.1",
+          "peers": [
+            {
+              "id": "laptop",
+              "name": "demo-laptop",
+              "online": true,
+              "address": "100.64.0.2",
+              "os": ""
+            },
+            {
+              "id": "phone",
+              "name": "demo-phone",
+              "online": false,
+              "address": "100.64.0.3",
+              "os": ""
+            }
+          ],
+          "online": 1,
+          "total": 2
+        }
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "audio",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "icon_text",
+        "state": {},
+        "tooltip": "Synthetic audio",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "symbol",
+          "value": "headphones",
+          "style": {},
+          "actions": {}
+        },
+        "text": {
+          "value": "42%",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "locale",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "text",
+        "state": {},
+        "tooltip": "Synthetic locale",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "EN",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {},
+        "panel": {
+          "title": "Input methods",
+          "subtitle": "Fcitx group \u00b7 Demo",
+          "rows": [
+            {
+              "label": "EN",
+              "value": "Active",
+              "detail": "English",
+              "id": "keyboard-us",
+              "active": true
+            },
+            {
+              "label": "\u62fc",
+              "value": "",
+              "detail": "Pinyin",
+              "id": "pinyin"
+            },
+            {
+              "label": "\u901f",
+              "value": "",
+              "detail": "Quick",
+              "id": "quick-classic"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "openrouter",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "icon_text",
+        "state": {},
+        "tooltip": "Synthetic openrouter",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/openrouter.svg",
+          "style": {},
+          "actions": {}
+        },
+        "text": {
+          "value": "24.80",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {},
+        "panel": {
+          "title": "OpenRouter",
+          "subtitle": "",
+          "rows": [
+            {
+              "label": "2026-06-14",
+              "value": "128,400",
+              "detail": "",
+              "id": "2026-06-14",
+              "tokens": 128400
+            },
+            {
+              "label": "2026-06-13",
+              "value": "86,400",
+              "detail": "",
+              "id": "2026-06-13",
+              "tokens": 86400
+            },
+            {
+              "label": "2026-06-12",
+              "value": "45,200",
+              "detail": "",
+              "id": "2026-06-12",
+              "tokens": 45200
+            }
+          ],
+          "balance": "24.80",
+          "balanceLabel": "Credits remaining",
+          "activityStatus": "available",
+          "activityNote": "Last 30 completed days \u00b7 UTC"
+        }
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "DND",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "icon",
+        "state": {},
+        "tooltip": "Synthetic DND",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "symbol",
+          "value": "notifications",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "caffeine",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "icon",
+        "state": {},
+        "tooltip": "Synthetic caffeine",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "symbol",
+          "value": "coffee",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "nightlight",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "icon",
+        "state": {},
+        "tooltip": "Synthetic nightlight",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "symbol",
+          "value": "nightlight",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "monitor-layout",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "icon",
+        "state": {},
+        "tooltip": "Synthetic monitor-layout",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "symbol",
+          "value": "desktop_windows",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      }
+    ]
+  },
+  {
+    "op": "demo",
+    "args": [
+      "process",
+      {}
+    ],
+    "result": [
+      {
+        "id": "demo",
+        "type": "text",
+        "state": {},
+        "tooltip": "Synthetic process",
+        "visible": true,
+        "enabled": true,
+        "text": {
+          "value": "Demo",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {}
+      }
+    ]
+  },
+  {
+    "op": "crypto_items",
+    "args": [
+      {
+        "status": {
+          "error_code": 0
+        },
+        "data": {
+          "BTC": {
+            "quote": {
+              "USD": {
+                "price": 100.25,
+                "percent_change_24h": 2.4,
+                "percent_change_1h": -1.2,
+                "percent_change_7d": 7.3
+              }
+            }
+          },
+          "SOL": {
+            "quote": {
+              "USD": {
+                "price": 32.5,
+                "percent_change_24h": 2.4,
+                "percent_change_1h": -1.2,
+                "percent_change_7d": 7.3
+              }
+            }
+          }
+        }
+      },
+      {
+        "assets": [
+          {
+            "symbol": "BTC"
+          },
+          {
+            "symbol": "SOL",
+            "in_tooltip": true
+          }
+        ],
+        "currency": "USD",
+        "currencySymbol": "$",
+        "display": [
+          "price",
+          "percent_change_24h"
+        ]
+      }
+    ],
+    "result": [
+      {
+        "id": "BTC/USD",
+        "type": "icon_text",
+        "state": {},
+        "tooltip": "BTC/USD\n24h: 2.40%\nSOL $32.50 24h:2.40%",
+        "visible": true,
+        "enabled": true,
+        "icon": {
+          "kind": "image",
+          "value": "@ROOT@/qml/icons/bitcoin.svg",
+          "style": {},
+          "actions": {}
+        },
+        "text": {
+          "value": "$100.25 24h:2.40%",
+          "style": {},
+          "actions": {}
+        },
+        "actions": {
+          "leftClick": "crypto.panel"
+        },
+        "changes": {
+          "1h": -1.2,
+          "24h": 2.4,
+          "7d": 7.3
+        }
+      }
+    ]
+  }
+]

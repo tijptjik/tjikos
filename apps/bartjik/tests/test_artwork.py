@@ -1,3 +1,9 @@
+
+# Test-only comparison oracle; production launches the Rust binary.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
 import asyncio
 import io
 from pathlib import Path
@@ -45,6 +51,9 @@ class ArtworkTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(artwork, 'MAX_ENTRIES', 2), patch.object(artwork, 'urlopen', side_effect=lambda *a, **k: Response(b'GIF89a' + b'x' * 16)):
             a = await self.cache.get(Response.url + '?a')
             b = await self.cache.get(Response.url + '?b')
+            # Ensure the access ordering is explicit even on coarse-mtime filesystems.
+            import os
+            os.utime(Path(b.removeprefix("file://")), (1, 1))
             await self.cache.get(Response.url + '?a')
             c = await self.cache.get(Response.url + '?c')
             self.assertTrue(Path(a.removeprefix('file://')).exists())

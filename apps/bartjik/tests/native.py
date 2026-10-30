@@ -1,5 +1,11 @@
 """Real native MPRIS and tray services on a private D-Bus session."""
 
+# Test-only comparison oracle; production launches the Rust binary.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+
 import json, os, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
 
@@ -30,6 +36,10 @@ def main():
         (temp/'qml/tray_focus.py').write_text(
             'import json,sys\nfrom pathlib import Path\np=Path('+repr(str(focus_events))+')\n'
             'rows=json.loads(p.read_text()) if p.exists() else []\nrows.append(sys.argv[1])\np.write_text(json.dumps(rows))\n')
+        native_qml=temp/'qml/Native.qml'
+        native_qml.write_text(native_qml.read_text().replace(
+            "[Quickshell.env('BARTJIK_HOME')+'/bin/bartjikctl','helper','tray-focus',native.focusApp]",
+            "['/usr/bin/python3','-B',"+repr(str(temp/'qml/tray_focus.py'))+",native.focusApp]"))
         cfg = {
             "theme": "rose-punk",
             "modules": {
@@ -250,6 +260,8 @@ def main():
             l
             for l in (temp / "log").read_text().splitlines()
             if any(s in l for s in ("WARN scene", "ERROR", "Traceback"))
+            # This private fixture has no PipeWire daemon; audio is tested separately.
+            and "Failed to connect pipewire context" not in l
         ]
         if errors:
             raise AssertionError("\n".join(errors))

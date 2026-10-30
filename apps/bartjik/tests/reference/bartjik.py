@@ -9,7 +9,7 @@ import subprocess
 import sys
 from bartjik_core import config
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def ipc(request):
