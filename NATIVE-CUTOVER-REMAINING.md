@@ -73,41 +73,28 @@ The previously queued Si/Li work retains its reviewed pins. These newer cosmetic
 and cleanup changes can reach them through normal policy synchronization after
 that cutover; no remote job was changed during this follow-up.
 
-## Si: queued behind real backup and restore evidence
+## Si: repaired backup and new guarded cutover
 
-The backup and validator remained running with unchanged PIDs 1910018 and
-1919892. Validation status was `running`, phase `waiting-for-backup` at the
-last check. Its installed user/root Synctjik binaries remain unchanged because
-that running validator invokes the user binary again during restoration.
+The original Drive run failed at 03:45 HKT on 2026-10-30; its validator and
+cutover stopped safely. See [SI-BACKUP-REPAIR.md](SI-BACKUP-REPAIR.md) for the
+current repair evidence and exact follow-up commands/paths.
 
-The new release is downloaded and checksum-verified in the TjikOS checkout.
-`tjikup-si-native-cutover.service` remains queued after those existing jobs.
-The reviewed script now:
+- Application backup now succeeds with the SQLite-fixed release: snapshot
+  `9f078a50`, 25,797 files / 23.3 GB; 46 SQLite checks and a sample restore passed.
+- Concurrent recovery restarted Drive at 14:08:38 HKT with a new validator.
+  Both remain active; no current Drive success is claimed.
+- `bootstrap.5` adds private dependency logs and is staged for installation only
+  after the running validator finishes.
+- `tjikup-si-native-cutover-repair-20261030.service` is queued against the new
+  validator and also requires a fresh successful application backup.
+- Transmission's sandbox is repaired and its dry-run passed. Actual removal of
+  12 eligible torrents remains blocked by automatic approval review pending
+  explicit user approval. The timer is paused and a temporary service guard
+  prevents indirect deletion through queued convergence.
 
-1. Requires the validator's durable status to be `passed` / `complete`, exit 0.
-2. Checks the reviewed policy/tool revisions, clean tracked worktrees, and
-   Tjikup/staged Synctjik checksums. The old script's stale revision/checksum
-   guards were corrected; live baseline snapshots still matched before queuing.
-3. Preserves previous runtimes, installs the staged release for user and root,
-   and retains obsolete Python deployment modules in private recovery storage.
-4. Runs native baseline adoption under protection locks, then Tjikup with
-   repository synchronization and package upgrades skipped.
-5. Checks nginx, storage, Compose, retired Python entry points and native
-   archive readiness. Conflicting changes fail closed rather than being forced.
-
-Private evidence remains under
-`~/.local/state/tjikup/si-native-cutover-20261029T151734Z/`:
-`queued-run.log`, `queued-run.exit`, `queued-run.finished`.
-The old script and binary recovery copies are retained there. No completion
-marker is inferred from an inactive systemd unit.
-
-On Si, inspect:
-
-```sh
-systemctl --user list-jobs
-systemctl --user status tjikup-si-native-cutover.service
-cat ~/.local/state/tjikup/si-native-cutover-20261029T151734Z/queued-run.exit
-```
+The original cutover evidence is preserved; the new attempt writes `repair-run.*`
+markers in the same private cutover directory. Neither a queued unit nor an
+inactive unit establishes successful cutover.
 
 ## Li: automatic catch-up when reachable
 
