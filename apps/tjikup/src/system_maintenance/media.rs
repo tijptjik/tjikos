@@ -263,6 +263,24 @@ fn paths(torrent: &Value, policy: &Value) -> Result<Vec<PathBuf>> {
 fn removal_receipt(torrent: &Value, reason: &str, action: &str) -> Value {
     json!({"time":chrono::Utc::now().to_rfc3339(),"hash":torrent["hashString"],"name":torrent["name"],"labels":torrent["labels"],"bytes":torrent["totalSize"],"seconds_seeding":torrent["secondsSeeding"],"reason":reason,"action":action})
 }
+fn root_files(torrent: &Value) -> Result<Value> {
+    torrent["files"]
+        .as_array()
+        .context("torrent files missing")?
+        .iter()
+        .map(|file| {
+            let name = Path::new(text(file, "name")?)
+                .components()
+                .next()
+                .context("empty torrent file path")?
+                .as_os_str()
+                .to_str()
+                .context("torrent file path is not UTF-8")?;
+            Ok(json!({"name": name}))
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(Value::Array)
+}
 fn audit(path: &Path, value: &Value) -> Result<()> {
     use std::os::unix::fs::OpenOptionsExt;
     let mut file = fs::OpenOptions::new()
@@ -309,7 +327,7 @@ pub fn cleanup(policy: &Value, apply: bool) -> Result<i32> {
             continue;
         }
         let mut root_torrent = torrent.clone();
-        root_torrent["files"]=json!(torrent["files"].as_array().unwrap().iter().map(|f|json!({"name":Path::new(f["name"].as_str().unwrap()).components().next().unwrap().as_os_str()})).collect::<Vec<_>>());
+        root_torrent["files"] = root_files(torrent)?;
         let roots: Vec<_> = paths(&root_torrent, policy)?
             .iter()
             .map(|p| resolved(p))
@@ -572,6 +590,25 @@ pub fn guard(policy: &Value, dry: bool) -> Result<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn shared_payload_roots_remain_json_strings() {
+        let directory = tempfile::tempdir().unwrap();
+        let policy =
+            json!({"media":{"downloads":directory.path(),"download_prefixes":["/downloads"]}});
+        let mut torrent = json!({"downloadDir":"/downloads", "files":[{"name":"Season/episode.mkv"},{"name":"single.mkv"}]});
+        torrent["files"] = root_files(&torrent).unwrap();
+        assert_eq!(
+            torrent["files"],
+            json!([{"name":"Season"},{"name":"single.mkv"}])
+        );
+        assert_eq!(
+            paths(&torrent, &policy).unwrap(),
+            vec![
+                directory.path().join("Season"),
+                directory.path().join("single.mkv")
+            ]
+        );
+    }
     #[test]
     fn torrent_removal_requires_complete_managed_payload_and_strict_private_seed_age() {
         let policy = json!({"media":{"labels":["sonarr","radarr"],"minimum_seed_seconds":1209600,"private_tracker_hosts":["tracker.example"],"private_tracker_domains":["private.example"]}});
