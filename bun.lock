@@ -35,6 +35,10 @@
         "@tjikos/tjik-ui": "workspace:*",
       },
     },
+    "apps/tasktjik": {
+      "name": "@tjikos/tasktjik",
+      "version": "0.1.0",
+    },
     "apps/tjikos-sh": {
       "name": "@tjikos/sh",
       "version": "0.1.0",
@@ -208,6 +212,8 @@
     "@tjikos/sh": ["@tjikos/sh@workspace:apps/tjikos-sh"],
 
     "@tjikos/synctjik": ["@tjikos/synctjik@workspace:apps/synctjik"],
+
+    "@tjikos/tasktjik": ["@tjikos/tasktjik@workspace:apps/tasktjik"],
 
     "@tjikos/tjik-ui": ["@tjikos/tjik-ui@workspace:packages/tjik-ui"],
 

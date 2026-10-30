@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Tasktjik
+Comment=Tasks, reading and agent verification
+Exec=tasktjik show
+Icon=tasktjik
+Terminal=false
+Categories=Office;ProjectManagement;

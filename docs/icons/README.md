@@ -22,3 +22,6 @@ belong to Hasbro. It is not an official project logo.
 README headings use 96 px PNG exports displayed at 32 px, with top alignment
 to keep every icon on the same heading line. SVG remains the editable source.
 Regenerate an export with `magick -background none -density 192 NAME.svg -resize 96x96 NAME.png`.
+
+Tasktjik is authored in `docs/icons/tasktjik.svg`: sage rounded-square frame,
+dark inset and warm-white rounded checkmark. Its export is installed by Tasktjik.

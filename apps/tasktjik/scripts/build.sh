@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+python3 -B scripts/check.py
+rm -rf dist
+mkdir -p dist
+cp -R bin qml systemd examples tasktjik.py README.md dist/
+cp ../../docs/icons/tasktjik.svg dist/

@@ -5,6 +5,7 @@ Odds, ends, and mildly opinionated machinery for a Linux desktop.
 <p>
   <a href="apps/bartjik/README.md"><img src="docs/icons/bartjik.png" width="48" height="48" alt="Bartjik" title="Bartjik"></a>
   <a href="apps/notjik/README.md"><img src="docs/icons/notjik.png" width="48" height="48" alt="Notjik" title="Notjik"></a>
+  <a href="apps/tasktjik/README.md"><img src="docs/icons/tasktjik.png" width="48" height="48" alt="Tasktjik" title="Tasktjik"></a>
   <a href="apps/runtjik/README.md"><img src="docs/icons/runtjik.png" width="48" height="48" alt="Runtjik" title="Runtjik"></a>
   <a href="apps/synctjik/README.md"><img src="docs/icons/synctjik.png" width="48" height="48" alt="Synctjik" title="Synctjik"></a>
   <a href="apps/tjikup/README.md"><img src="docs/icons/tjikup.png" width="48" height="48" alt="Tjikup" title="Tjikup"></a>
@@ -33,6 +34,13 @@ history keep the pile manageable; Telegram replies can happen right on the card.
 [Overview](apps/notjik/README.md) ·
 [Installation](apps/notjik/README.md#install-and-start) ·
 [Card types and API](apps/notjik/docs/cards.md)
+
+<h2><img src="docs/icons/tasktjik.png" width="32" height="32" align="top" alt=""> Tasktjik</h2>
+
+Tasks, reading lists and agent work with blockers and attributed verification evidence.
+Standalone window and shared authority, also accessible from Runtjik and Notjik.
+
+[Usage and agent API](apps/tasktjik/README.md)
 
 <h2><img src="docs/icons/runtjik.png" width="32" height="32" align="top" alt=""> Runtjik</h2>
 

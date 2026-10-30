@@ -1,0 +1,7 @@
+[Unit]
+Description=Claim and display due todos through Notjik
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/tasktjik notify
