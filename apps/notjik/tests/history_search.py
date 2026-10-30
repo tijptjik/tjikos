@@ -31,6 +31,7 @@ def run():
             open:drawerOpen, rows:historyRows, matches:filteredHistoryItems.map(n=>n.historyKey),
             selected:historySelectedKey, live:notices.length, groups:expandedGroups};
         case "searchKey": historyDrawer.searchKey(request.key, request.control || false); return {ok:true};
+        case "searchLock": root.lockState=request.state; return {ok:true};
         case "searchFocus": historyDrawer.focusHistory(); return {ok:true};
         case "searchGroup": toggleGroup(request.key); return {ok:true};
         case "searchCapture": historyDrawer.capture(request.path); return {ok:true};
@@ -38,14 +39,14 @@ def run():
         drawer = root / "qml/HistoryDrawer.qml"
         drawer.write_text(drawer.read_text().replace("import QtQuick\n", "import QtQuick\nimport QtTest\n", 1)
             .replace("    id: drawer", '''    id: drawer
-    function searchEditing() { return searchInput.activeFocus; }
+    function searchEditing() { return historyView.editing; }
     function searchKey(key, control) {
         const modifiers = control ? Qt.ControlModifier : Qt.NoModifier;
         if (key.length === 1) testKeys.keyClickChar(key, modifiers, 0);
         else testKeys.keyClick(Qt["Key_" + key], modifiers, 0);
     }
-    function capture(path) { drawerContent.grabToImage(result => result.saveToFile(path)); }''', 1)
-            .replace("id: drawerContent", "id: drawerContent\n        TestEvent { id: testKeys }", 1)
+    function capture(path) { backdrop.grabToImage(result => result.saveToFile(path)); }''', 1)
+            .replace("id:backdrop;", "id:backdrop; TestEvent { id: testKeys }", 1)
             .replace("WlrKeyboardFocus.OnDemand", "WlrKeyboardFocus.None")
             .replace("else if (drawer.visible && drawer.hadWindowFocus)", "else if (false)")
             .replace("mask: Region { item: backdrop; radius: backdrop.radius }", "mask: Region { width: 0; height: 0 }"))
@@ -143,7 +144,25 @@ def run():
                 call("history", mode="hide")
                 call("history", mode="show")
                 assert state()["query"] == "" and len(state()["matches"]) == 3 and not state()["editing"], state()
-                print("PASS: slash, typing, literal slash, editing, filtered navigation, Tab/Shift+Tab, counts, groups, Escape, reopening")
+                marker=root/'invoked'
+                notice=call('send',notice={'app':'History API test','title':'Action fixture','timeout':0,'resident':True,
+                    'actions':[{'label':'Run fixture','command':['touch',str(marker)]}]})
+                wait_for(lambda:any(n['id']==notice['id'] for n in call('history-data')['items']))
+                exported=next(n for n in call('history-data')['items'] if n['id']==notice['id'])
+                assert exported['actions']==[{'label':'Run fixture'}],exported
+                call('history-action',key=exported['historyKey'],action='invoke',index=0)
+                wait_for(marker.exists)
+                call('searchLock',state='locked')
+                assert call('history-data')['items']==[]
+                try:call('history-action',key=exported['historyKey'],action='invoke',index=0)
+                except ValueError:pass
+                else:raise AssertionError('Locked history action was accepted')
+                call('searchLock',state='unlocked')
+                call('history-action',key=exported['historyKey'],action='dismiss')
+                try:call('history-action',key=exported['historyKey'],action='invoke',index=0)
+                except ValueError:pass
+                else:raise AssertionError('Archived action was replayed')
+                print("PASS: shared search and keyboard navigation, export sanitization, live actions, locked history and archived-action rejection")
             finally:
                 process.terminate()
                 process.wait(timeout=5)

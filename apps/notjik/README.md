@@ -999,3 +999,14 @@ seeds it from existing bridge history. Bridge cards resolve by chat ID. Native
 Desktop cards, which lack that ID, resolve by an exact, unique cached chat title;
 ambiguous or unknown names retain Desktop's supplied image. New bridge photos
 replace cached versions. Synthetic demos never populate or consult this cache.
+
+### Shared history views
+
+The standalone history drawer and Bartjik's notification panel share search,
+grouping, navigation and expanded card rendering. Each build bundles its UI and
+artwork; Notjik's standalone drawer does not require Bartjik.
+
+`notjikctl history-data` exposes the current history cards and display preferences
+for an independent view. It returns no history or avatars while locked, strips
+executable actions, and omits process-local image handles. `notjikctl history-action KEY invoke --index N` and `history-action KEY dismiss` resolve the entry inside
+Notjik and reject archived entries, old sessions and actions while locked.

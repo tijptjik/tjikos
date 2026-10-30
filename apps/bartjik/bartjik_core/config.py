@@ -61,6 +61,7 @@ INTERNAL = {
     "network.panel",
     "audio.panel",
     "battery.panel",
+    "notifications.panel",
     "audio.route",
     "audio.up",
     "audio.down",

@@ -946,3 +946,19 @@ bar beneath the flag indicates Tailscale is running. The shared panel places
 Mullvad connection and location controls above Tailscale status and devices.
 Both sections use matching icon headers, typography, dividers and content spacing.
 Both providers keep polling independently; Tailscale controls target its own module.
+
+## Notification history
+
+Hover the notification bell to search saved notifications in a Bartjik panel.
+Left-click still toggles notifications; right-click pins the history panel.
+Use Search or `/` to filter by app, title and body, Tab/Shift+Tab to browse
+matches, and Escape to clear the filter before closing. Groups expand on search;
+selected entries use the same full card renderer as Notjik. Active notifications
+retain their actions and dismissal; archived actions cannot be replayed.
+
+Notjik's standalone `notjikctl history` remains available. Both apps bundle the
+shared history view, model and card assets from `packages/notification-history`;
+installed UI files do not import another app. Bartjik reads history through its
+existing Notjik service connection and shows an unavailable state if that service
+is stopped. History exports hide content while locked and never export executable
+commands. Native process-local image handles fall back to portable artwork.
