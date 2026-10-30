@@ -168,7 +168,7 @@ highlighted; keyboard scrolling preserves the keyboard selection.
 | Ctrl+Enter | Request that the app close gracefully; retry surviving processes with SIGTERM, then SIGKILL |
 | Shift+Enter / Shift+click | Launch another application instance; browser Read later integration is pending |
 | Ctrl+L | Toggle the current session between grid and list |
-| Esc | Return from the window picker, otherwise close |
+| Esc | Return from a command or window picker to general search; press again to close |
 | `/pin` | Keep the launcher visible on outside clicks and app actions; dragging still works |
 | `/processes`, `?` | Browse running applications; add a name to filter. Uses matching desktop windows, not background processes. Existing launch/switch/close bindings still apply. |
 | `/run`, `/run name` | Browse/search previously used executable commands; clear the prefix to return to apps |

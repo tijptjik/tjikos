@@ -32,7 +32,7 @@ columns = 3 # 1–6
 Append text to filter titles, case insensitively. Window search also matches its
 contained tab titles. Enter focuses the window and activates the selected tab. Shift+Enter on a
 window opens only its unpinned tabs in Runtjik; typing filters that list, and
-Escape returns to browser windows. Leaving `/tabs` clears the window filter. Ctrl+Enter closes
+Escape returns to general search. Leaving `/tabs` clears the window filter. Ctrl+Enter closes
 the selected tab through Zen, or the selected desktop window through Hyprland.
 Window closure first identifies the exact client using a temporary unique title
 marker, then sends a graceful compositor close request. Zen may show its own

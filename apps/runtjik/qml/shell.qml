@@ -204,9 +204,11 @@ ShellRoot {
         send({op:'resume'});
     }
     function back() {
-        if (browserTabScope) {browserTabScope=false;searchBox.text='/browser ';return;}
-        if (windowEntry) {windowEntry='';query='';searchBox.text='';search();}
-        else close();
+        if (windowEntry || browserTabScope || commandQuery.trim().startsWith('/') || runMode || runningMode) {
+            windowEntry='';browserTabScope=false;pendingAction=null;
+            query='';searchBox.text='';debounce.stop();
+            busy=false;loadingMore=false;search();root.focusInput();
+        } else close();
     }
     function receive(msg) {
         if (actionDelay.running && msg.kind==='results') return;

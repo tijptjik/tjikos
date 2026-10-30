@@ -129,7 +129,7 @@ SHORTCUTS = [
     ("Ctrl+Up / Ctrl+Down", "Previous / next launcher command; Down past newest restores the draft"),
     ("Shift+Enter / Shift+click", "Launch a new application instance; browser Read later integration is pending"),
     ("Ctrl+L", "Toggle grid / list for this session"),
-    ("Esc", "Return from the instance picker, otherwise close"),
+    ("Esc", "Return from a command or instance picker to general search; otherwise close"),
     ("Drag the header or frame", "Move within a monitor; release on another monitor to move there"),
 ]
 
@@ -1079,7 +1079,7 @@ class Launcher:
                          "icon": self.control_icon(e.icon), "favicon": e.data.get("favicon", ""), "hide_launcher": bool(e.data.get("capture")), "keep_open": bool(e.data.get("keep_open")), "thumbnail": e.data.get("thumbnail", ""), "empty_state": bool(e.data.get("empty_state")), "disabled": bool(e.data.get("disabled")), "count": 0, "windows": 0} for e in entries[offset:offset + limit]]
                 scope = getattr(self.providers[name], 'window_scope', None)
                 return self.payload(rows, query=display_query, browser_tab_scope=bool(scope),
-                                    message=('Tabs in ' + scope[2] + ' · Esc returns to windows') if scope else '',
+                                    message=('Tabs in ' + scope[2] + ' · Esc returns to search') if scope else '',
                                     pending=bool(getattr(self.providers[name], "pending", False)), total=len(entries), offset=offset,
                                     next_offset=offset + len(rows), has_more=offset + len(rows) < len(entries))
             except Exception as exc:

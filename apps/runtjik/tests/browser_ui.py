@@ -66,8 +66,19 @@ with private_compositor():
             wait_for(lambda: state().get('resultQuery') == '/tabs Firefox')
             assert len(state()['rows']) == 1
             ipc('browserBack')
-            wait_for(lambda: state().get('resultQuery') == '/browser ')
-            assert not state()['scope'] and len(state()['rows']) == 2
+            wait_for(lambda: state().get('resultQuery') == '')
+            assert not state()['scope'] and state()['rows']
+            for command in ('/browser', '/tabs', '/config', '/missing-command', '/run', '!browser', '!!', '?'):
+                ipc('test', command)
+                wait_for(lambda: state().get('resultQuery') == command)
+                ipc('browserBack')
+                wait_for(lambda: state().get('resultQuery') == '')
+                assert process.poll() is None, command
+            try:
+                ipc('browserBack')
+            except subprocess.CalledProcessError:
+                pass  # Demo exits on close, possibly before IPC receives its reply.
+            assert process.wait(timeout=5) == 0
             time.sleep(0.2)
             print('PASS: browser grid, aliases, tab list, title filtering')
         finally:
