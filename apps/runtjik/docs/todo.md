@@ -18,7 +18,8 @@ through, including tasks completed today outside the date filter.
 `g` focuses the group dropdown; `s` opens snooze. Up/Down or j/k select tasks.
 The requested `n` bindings conflicted, so today uses Shift+N.
 
-The editor includes title, group, tags, ISO due date, repeat interval and plan.
+The editor includes title, group, tags, ISO due date, repeat interval and reference. Groups are free text with existing-group suggestions,
+defaulting to All. Existing Plan values remain available as references.
 Quick always sets due to today. Repeat unit is days, weeks, months, years,
 days-of-the-week (ISO Monday=1 through Sunday=7), or days-of-the-month (1–31).
 Value is a positive interval or comma-separated day numbers. Month/year intervals
@@ -43,6 +44,7 @@ Configure each client's existing runtjik.conf:
 ```toml
 [plugin_settings.Todo]
 authority = "si" # configured SSH host, with an already trusted host key
+ssh_command = ["ssh"] # argv prefix; e.g. ["mullvad-exclude", "ssh"] when required
 # This path is on Si, not the client:
 directory = "~/.local/share/runtjik-todo"
 # This path is local to each client:
@@ -108,3 +110,13 @@ Providers may declare `mode = 'app'` and implement `state(request, settings)`.
 Command query responses carry `app_mode` and `app_state`; `app-action` requests
 are routed only to enabled app providers. Todo supplies the first dedicated QML
 view. Search providers retain their existing query and activation contracts.
+
+## Reading list
+
+`/reading` opens reading items; the header selector switches between Todo and
+Reading. Reading items inherit task scheduling, tags, reminders and completion.
+Reference contains the HTTP(S) URL; Enter opens it without marking it done.
+The browser plugin's Shift+Enter opens a prefilled filing panel and closes the
+tab only after the authority acknowledges durable creation. Cancellation and
+save failures leave the tab open. Saved items are retained if tab closure fails.
+The authority must be upgraded alongside clients for reading support.

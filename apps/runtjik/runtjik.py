@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 import tomllib
+import uuid
 from dataclasses import asdict, dataclass, field
 from todo import Todo, OPTIONS as TODO_OPTIONS
 from browser import Browser, DEFAULT_OPTIONS as BROWSER_OPTIONS
@@ -1069,7 +1070,7 @@ class Launcher:
             try:
                 if getattr(self.providers[name], 'mode', '') == 'app':
                     return self.payload([], query=display_query, app_mode=name,
-                                        app_state=self.providers[name].state({}, self.settings))
+                                        app_state={**self.providers[name].state({}, self.settings), 'collection': 'reading' if command == '/reading' else 'todo'})
                 entries = [value if isinstance(value, Entry) else Entry(**value)
                            for value in self.providers[name].query(query, self.settings)]
                 if any(e.provider != name or not e.id.startswith(name + ":") for e in entries):
@@ -1252,6 +1253,32 @@ class Launcher:
         return {'kind': 'activated', 'action': 'close', 'demo': False, 'entry': entry.id,
                 'message': 'Close requested for ' + entry.name + ': ' + ', '.join(labels[stage] for stage in sorted(stages))}
 
+    def app_action(self, request):
+        provider = self.providers.get(request.get('provider'))
+        if provider is None or getattr(provider, 'mode', '') != 'app':
+            raise ValueError('App provider is unavailable')
+        if request.get('action') in ('reading-save', 'reading-cancel'):
+            pending = getattr(self, 'pending_reading', None)
+            if not pending or request.get('draft_id') != pending['id']:
+                raise ValueError('Reading draft expired; select the tab again')
+            if request['action'] == 'reading-cancel':
+                self.pending_reading = None
+                return {**self.query(pending['query']), 'edit_query': pending['query']}
+            fields = {**request.get('fields', {}), 'kind': 'reading'}
+            # The authority must acknowledge durable creation before any tab close.
+            task = provider.request({'action': 'create', 'request_id': pending['id'], 'fields': fields}, self.settings)
+            if task.get('kind') != 'reading' or not task.get('reference'):
+                raise ValueError('Todo authority does not support reading items; tab left open')
+            message = 'Saved to Reading list'
+            try:
+                self.providers['Browser'].tab_request(pending['source'], 'close', url=pending['url'])
+                message += ' · tab closed'
+            except Exception as exc:
+                message += ' · tab left open: ' + str(exc)
+            self.pending_reading = None
+            return {**self.query(pending['query']), 'edit_query': pending['query'], 'message': message}
+        return {'kind': 'app-state', 'app_state': provider.state(request, self.settings)}
+
     def activate(self, entry_id, mode="launch", address="", prepare=False):
         if mode == 'close' and entry_id.startswith('/'):
             return {'kind': 'message', 'message': 'Ctrl+Enter closes applications, not launcher commands'}
@@ -1411,10 +1438,7 @@ def main():
             if request["op"] == "query":
                 value = launcher.query(request.get("query", ""), request.get('offset',0), request.get('limit'))
             elif request["op"] == "app-action":
-                provider = launcher.providers.get(request.get('provider'))
-                if provider is None or getattr(provider, 'mode', '') != 'app':
-                    raise ValueError('App provider is unavailable')
-                value = {'kind': 'app-state', 'app_state': provider.state(request, launcher.settings)}
+                value = launcher.app_action(request)
             elif request["op"] == "resume":
                 # Reopening observes external TOML edits, including provider changes.
                 if config() != launcher.settings:

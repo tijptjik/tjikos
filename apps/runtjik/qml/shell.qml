@@ -445,7 +445,7 @@ ShellRoot {
                 stateData: root.appState; theme: root.theme; errorMessage: root.message
                 onRequest: request => {if(root.busy)return;root.busy=true;root.send(Object.assign({op:'app-action',provider:root.appMode}, request));}
                 onExitApp: { root.appMode=''; searchBox.text=''; root.query=''; root.search(); root.focusInput(); }
-                onVisibleChanged: if(visible) forceActiveFocus()
+                onVisibleChanged: {if(visible) forceActiveFocus();else {editor='';draftId='';}}
             }
             Column {
                 visible: root.appMode === ''
