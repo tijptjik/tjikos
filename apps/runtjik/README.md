@@ -16,23 +16,24 @@ caches, fuzzy ranking, pagination, SQLite history, application launches, Hyprlan
 window selection/focusing, and graceful-close escalation using process identities
 and pidfds. GTK/GdkPixbuf still resolve themes and rasterize SVGs.
 
-The Words and Browser providers now also run in Rust. Dictionary requests use
-`curl` with bounded response size, HTTPS-only redirects, timeouts and three worker
-threads; results appear independently and stale jobs cannot replace a newer query.
-Browser queries/actions retain the existing private Unix-socket protocol and
-window-scoped tab navigation. Its separate Firefox native-messaging bridge is
-still Python.
+All bundled providers now run in Rust: Words, Browser, Clipboard, Screenshots,
+Recorder and the Tasktjik adapter. Task rules are shared with Tasktjik's native
+API. HTTPS and Unix-socket authorities, local JSON stores, and existing SSH
+installations remain supported. Older SSH authorities still execute their remote
+Python service; no launcher Python process is needed for that transport.
 
-Python remains as the reference backend and an on-demand compatibility host for
-Clipboard, Screenshots, Recorder, the Tasktjik adapter and third-party API-v1
-providers. Capture workers/countdown, the image-viewer helper and the browser
-extension bridge also remain Python. The compatibility host stays alive after use
-to preserve provider state, so those paths still carry its startup/memory cost.
-Third-party extensions retain reference query routing through that host.
-Normal search/open/switch/close, command menus, config, Words and Browser no longer
-need to start the launcher compatibility host.
+The Firefox native-messaging bridge, recorder worker, desktop Trash/undo and
+image-viewer helper are native too. The cancellable countdown uses Quickshell/QML.
+Dictionary requests use bounded curl HTTPS requests; clipboard and recording
+previews use two background workers. Active recorder socket compatibility is
+preserved across this migration.
 
-[Current migration status and measurements](docs/native-providers.md) ·
+Python remains intentionally available as the reference backend and compatibility
+host for explicitly enabled third-party API-v1 extensions. Third-party extensions
+retain reference query routing. Build/test and browser-registration scripts also
+still use Python. Normal bundled-provider use no longer starts that host.
+
+[Current migration status and measurements](docs/native-runtime.md) ·
 [Historical first-stage comparison](docs/rust-rewrite.md)
 
 For comparison, fully quit the current instance before selecting the reference:
@@ -150,8 +151,9 @@ not be read as a new paired comparison.
 
 ## Install and run
 
-Requires Python 3.11+, Quickshell 0.3+, Wayland, PyGObject, Gio, GTK 3 and
-GdkPixbuf with SVG support. Fish supplies `fish_indent` for history parsing.
+Requires Quickshell 0.3+, Wayland, Gio, GTK 3, GdkPixbuf with SVG support,
+and curl. Python 3.11+ and PyGObject are needed for build/reference tests and
+third-party Python providers. Fish supplies `fish_indent` for history parsing.
 Hyprland with its Lua API supplies layer rules and passive outside-click dismissal; Hyprland supplies window switching (Lua and legacy dispatch APIs); systemd user
 services isolate launched applications. The default terminal is Kitty.
 

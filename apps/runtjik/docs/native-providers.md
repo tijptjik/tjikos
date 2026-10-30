@@ -1,10 +1,11 @@
-# Native migration: configuration, close actions, Words and Browser
+# Native migration: bundled providers and runtime helpers
 
 The initial Rust core was merged into main in `3ca928e` (implementation commit
-`7f6fb90`). This continuation moves command menus, configuration editing/migration,
-application close actions, and the Words and Browser providers into Rust. Main's
-new searchable commands (`todo` → `/todo`, for example) and bundled command artwork
-are preserved. Nothing was installed into the live desktop or pushed remotely.
+`7f6fb90`). The native core now also owns all bundled providers and runtime helpers.
+Tasktjik's adapter uses the Tasktjik Rust model for local/demo mutations and
+recurrence; it preserves dedicated-config precedence, device identity, request
+UUIDs, HTTPS Tailscale validation and DNS fallback, socket and legacy SSH modes.
+Nothing was installed into the live desktop or pushed remotely.
 
 ## Current boundary
 
@@ -16,15 +17,20 @@ are preserved. Nothing was installed into the live desktop or pushed remotely.
 | Graceful application close, persistent retry tracking, SIGTERM/SIGKILL escalation | Rust |
 | Words: dictionary/thesaurus lookup, independent source results and activation | Rust, HTTPS transport through curl |
 | Browser: window/tab lists, filters, scoped navigation, focus/close requests | Rust, existing Unix-socket protocol |
-| Clipboard, Screenshots, Recorder, Tasktjik adapter | Python compatibility host |
+| Clipboard, Screenshots, Recorder, Tasktjik adapter | Rust |
 | Third-party API-v1 extensions | Python compatibility host and reference query routing |
-| Firefox native-messaging bridge, capture workers/countdown, image-viewer helper | Python helper programs |
+| Firefox native-messaging bridge, recorder worker, Trash/undo, image viewer | Rust |
+| Recording countdown | Quickshell/QML |
 
-Python removal is not complete. The remaining compatibility host still starts on
-demand and remains resident after use. Porting the three desktop providers and
-Tasktjik adapter, followed by their ancillary helper programs, is the next stage.
-The retained Python backend remains a reference implementation selectable with
-`RUNTJIK_BACKEND=python`; quit before switching backends.
+Python remains for the explicit reference backend, third-party API-v1 extensions,
+and build/test/registration scripts. Legacy SSH Tasktjik authorities retain their
+remote Python command until those authorities are upgraded; HTTPS/socket/local
+modes require no Python adapter. The Tasktjik application notification CLI itself
+is outside this Runtjik migration. Existing browser host registrations need to be
+registered again after installation to point at `runtjik-core browser-host`.
+
+The following timings and validation describe the earlier migration stage;
+see `native-runtime.md` for the completed bundled runtime migration.
 
 ## Behavior retained
 
@@ -50,8 +56,8 @@ Tests deliberately queue the slow source first to verify independent publication
 Browser retains the private runtime-directory check, bounded responses, socket
 timeouts, exact session/window/tab identifiers, pinned-tab exclusion, favicon
 validation and tab-scope reset when leaving `/tabs`. The extension's separate
-Python native-messaging bridge is unchanged; this stage does not replace an active
-browser connection or the installed extension.
+Python native-messaging bridge was unchanged in that earlier stage. It is now
+ported as described in `native-runtime.md`; no installed connection was replaced.
 
 ## Measurements
 

@@ -19,6 +19,11 @@ walkdir = "2"
 shlex = "1.3"
 url = "2"
 
+tasktjik-api = { path = "../tasktjik" }
+tempfile = "3"
+chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }
+
 [profile.release]
 lto = "thin"
 strip = true

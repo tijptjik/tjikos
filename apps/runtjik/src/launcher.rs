@@ -29,6 +29,9 @@ pub struct Launcher {
     reset_scope: bool,
     words: crate::words::Words,
     browser: crate::browser::Browser,
+    todo: crate::todo::Todo,
+    clipboard: crate::clipboard::Clipboard,
+    captures: crate::capture::Captures,
 }
 impl Launcher {
     pub fn new(demo: bool) -> Result<Self> {
@@ -66,6 +69,9 @@ impl Launcher {
             reset_scope: true,
             words: crate::words::Words::default(),
             browser: crate::browser::Browser::default(),
+            todo: crate::todo::Todo::default(),
+            clipboard: crate::clipboard::Clipboard::default(),
+            captures: crate::capture::Captures::default(),
         };
         app.refresh(false)?;
         Ok(app)
@@ -122,6 +128,13 @@ impl Launcher {
                 Err(e)
             }
         }
+    }
+    fn provider_error(&self, name: &str, display: &str, error: anyhow::Error) -> Value {
+        let mut v = self.payload(vec![]);
+        v["query"] = json!(display);
+        v["message"] = json!(format!("{name}: {error}"));
+        v["app_mode"] = json!(if name == "Todo" { "Todo" } else { "" });
+        v
     }
     fn provider_payload(
         &mut self,
@@ -235,6 +248,61 @@ impl Launcher {
             self.browser.scope = None;
         }
         let enabled = strings(&self.settings["plugins"]["enabled"]);
+        let capture_provider =
+            if ["/grab", "/shot", "/screenshot", "/ss", "/snap"].contains(&command) {
+                "Screenshots"
+            } else if ["/rec", "/screenrecord"].contains(&command) {
+                "Recorder"
+            } else {
+                ""
+            };
+        if !capture_provider.is_empty() && enabled.iter().any(|s| s == capture_provider) {
+            let rows = match self
+                .captures
+                .query(capture_provider, q, &self.settings, self.demo)
+            {
+                Ok(rows) => rows,
+                Err(e) => return Ok(self.provider_error(capture_provider, display, e)),
+            };
+            return Ok(self.provider_payload(
+                rows,
+                display,
+                offset,
+                limit,
+                self.captures.pending,
+                false,
+            ));
+        }
+        if enabled.iter().any(|s| s == "Clipboard") && command == "/cliphist" {
+            let rows = match self.clipboard.query(q, &self.settings, self.demo) {
+                Ok(rows) => rows,
+                Err(e) => return Ok(self.provider_error("Clipboard", display, e)),
+            };
+            return Ok(self.provider_payload(
+                rows,
+                display,
+                offset,
+                limit,
+                self.clipboard.pending,
+                false,
+            ));
+        }
+        if enabled.iter().any(|s| s == "Todo") && ["/todo", "/reading"].contains(&command) {
+            let mut state = match self.todo.state(json!({}), &self.settings, self.demo) {
+                Ok(state) => state,
+                Err(e) => return Ok(self.provider_error("Todo", display, e)),
+            };
+            state["collection"] = json!(if command == "/reading" {
+                "reading"
+            } else {
+                "todo"
+            });
+            let mut v = self.payload(vec![]);
+            v["query"] = json!(display);
+            v["app_mode"] = json!("Todo");
+            v["app_state"] = state;
+            return Ok(v);
+        }
         if enabled.iter().any(|s| s == "Words") && ["/define", "/synonym"].contains(&command) {
             let rows = self.words.query(q, &self.settings, self.demo);
             return Ok(self.provider_payload(
@@ -464,6 +532,11 @@ impl Launcher {
             if let Some(c) = crate::menus::commands(&self.settings).iter().find(|c| {
                 !c.provider.is_empty() && (c.id == id || c.aliases.iter().any(|a| a == id))
             }) {
+                if c.app && c.provider == "Todo" {
+                    let mut v = self.query(id, 0, None)?;
+                    v["edit_query"] = json!(id);
+                    return Ok(v);
+                }
                 if !c.app {
                     return Ok(json!({"kind":"edit","text":format!("{id} ")}));
                 }
@@ -475,6 +548,34 @@ impl Launcher {
             .or_else(|| self.entries.iter().find(|e| e.id == id))
             .cloned();
         if let Some(e) = &entry {
+            if ["Screenshots", "Recorder"].contains(&e.provider.as_str()) {
+                if mode == "close" && e.data.get("file").is_none() {
+                    return Ok(
+                        json!({"kind":"message", "message":"Ctrl+Enter is available for applications and commands with matching windows"}),
+                    );
+                }
+                let action =
+                    crate::capture::Captures::activate(e, &self.settings, mode, self.demo)?;
+                if mode == "close" {
+                    let q = if self.last_query.is_empty() {
+                        s(&action["refresh_query"]).to_owned()
+                    } else {
+                        self.last_query.clone()
+                    };
+                    let mut v = self.query(&q, 0, None)?;
+                    v["message"] = action["message"].clone();
+                    return Ok(v);
+                }
+                return Ok(action);
+            }
+            if e.provider == "Clipboard" {
+                if mode == "close" {
+                    return Ok(
+                        json!({"kind":"message", "message":"Ctrl+Enter is available for applications and commands with matching windows"}),
+                    );
+                }
+                return crate::clipboard::Clipboard::activate(e, self.demo);
+            }
             if e.provider == "Words" {
                 if mode == "close" {
                     return Ok(
@@ -682,7 +783,26 @@ impl Launcher {
                 v
             }
             "activate" => self.activate(req)?,
-            "app-action" | "undo-trash" => self.bridge(req)?,
+            "app-action" if req["provider"] == "Todo" => {
+                anyhow::ensure!(
+                    strings(&self.settings["plugins"]["enabled"])
+                        .iter()
+                        .any(|p| p == "Todo"),
+                    "Todo is disabled"
+                );
+                json!({"kind":"app-state", "app_state":self.todo.state(req, &self.settings, self.demo)?})
+            }
+            "undo-trash" => {
+                let message = if self.demo {
+                    json!("Demo mode leaves Trash unchanged")
+                } else {
+                    crate::trash::action(None)?["message"].clone()
+                };
+                let mut v = self.query(s(&req["query"]), 0, None)?;
+                v["message"] = message;
+                v
+            }
+            "app-action" => self.bridge(req)?,
             _ => bail!("Unknown operation"),
         };
         Ok(Some(result))

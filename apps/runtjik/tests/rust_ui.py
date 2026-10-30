@@ -41,11 +41,15 @@ def main():
             initial = status()
             assert initial['indexed'] == 15 and initial['total'] == 15, initial
             pid = initial['pid']
-            for query, expected in [('fire', 1), ('todo', 1), ('zzzzzz', 0), ('', 15), ('/define test', 2), ('/cliphist', 3)]:
+            for query, expected in [('fire', 1), ('todo', 1), ('zzzzzz', 0), ('', 15), ('/define test', 2), ('/cliphist', 3), ('/grab', 4), ('/grab history', 9), ('/rec history', 9), ('/todo', 0), ('/reading', 0)]:
                 ipc('test', query)
                 wait(lambda: json.loads(ipc('testState'))['resultQuery'] == query)
                 rows = json.loads(ipc('testState'))['rows']
                 assert len(rows) == expected, (query, rows)
+            countdown_result = root / 'countdown-complete'
+            env = {**os.environ, 'RUNTJIK_COUNTDOWN_SECONDS':'1', 'RUNTJIK_COUNTDOWN_SUCCESS':str(countdown_result)}
+            countdown = subprocess.run(['quickshell', '--path', str(APP / 'qml/countdown')], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=10)
+            assert countdown.returncode == 0 and countdown_result.exists(), countdown.stdout
             ipc('test', '')
             wait(lambda: json.loads(ipc('testState'))['resultQuery'] == '')
             image = root / 'rust-demo.png'

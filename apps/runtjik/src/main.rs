@@ -1,14 +1,21 @@
 mod browser;
+mod browser_host;
+mod capture;
+mod capture_worker;
+mod clipboard;
 mod close;
 mod compat;
 mod config;
 mod controller;
 mod discovery;
 mod icons;
+mod image_viewer;
 mod launcher;
 mod menus;
 mod settings;
 mod store;
+mod todo;
+mod trash;
 mod util;
 mod windows;
 mod words;
@@ -25,7 +32,11 @@ fn main() -> std::process::ExitCode {
     match execute() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
-            let _ = emit(&json!({"kind":"error","message":e.to_string()}));
+            if std::env::args().nth(1).as_deref() == Some("browser-host") {
+                eprintln!("Browser host: {e}");
+            } else {
+                let _ = emit(&json!({"kind":"error","message":e.to_string()}));
+            }
             std::process::ExitCode::FAILURE
         }
     }
@@ -34,6 +45,16 @@ fn execute() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("serve");
     match cmd {
+        "image" => crate::image_viewer::cli(&args[1..])?,
+        "image-viewer" => crate::image_viewer::open(&serde_json::from_str(
+            args.get(1)
+                .ok_or_else(|| anyhow::anyhow!("Missing viewer specification"))?,
+        )?)?,
+        "capture-worker" => crate::capture_worker::serve(serde_json::from_str(
+            args.get(1)
+                .ok_or_else(|| anyhow::anyhow!("Missing capture specification"))?,
+        )?)?,
+        "browser-host" => crate::browser_host::serve()?,
         "version" | "--version" => println!("0.8.3"),
         "check" => {
             config::load()?;

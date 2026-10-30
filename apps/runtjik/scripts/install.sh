@@ -34,7 +34,7 @@ bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" run
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 && ! -e "$config_root/runtjik/runtjik.conf" ]]; then
     install -m 644 "$root_dir/dist/examples/runtjik.conf" "$config_root/runtjik/runtjik.conf"
 fi
-printf 'Installed Runtjik %s (warm after first open; no background service)\n' "$(python3 -B "$target/runtjik.py" version)"
+printf 'Installed Runtjik %s (warm after first open; no background service)\n' "$("$target/runtjik-core" version)"
 
 install -m 755 "$root_dir/dist/bin/runtjik-image" "$install_home/.local/bin/runtjik-image"
 install -d -m 755 "$install_home/.local/share/applications"

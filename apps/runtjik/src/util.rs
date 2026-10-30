@@ -192,3 +192,57 @@ pub fn dispatch(mut args: Vec<String>, settings: &Value) -> Result<()> {
     }
     Ok(())
 }
+
+// Binary subprocess I/O for clipboard images; drain and write concurrently, bound
+// output, and redirect wl-copy output because its selection owner inherits FDs.
+pub fn binary(args: &[String], input: Vec<u8>, timeout: u64, discard: bool) -> Result<Vec<u8>> {
+    let mut child = Command::new(args.first().context("Empty command")?)
+        .args(&args[1..])
+        .stdin(Stdio::piped())
+        .stdout(if discard {
+            Stdio::null()
+        } else {
+            Stdio::piped()
+        })
+        .stderr(Stdio::null())
+        .spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let writer = std::thread::spawn(move || stdin.write_all(&input));
+    let stdout = child.stdout.take();
+    let reader = std::thread::spawn(move || -> std::io::Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        if let Some(out) = stdout {
+            out.take(64 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
+        }
+        Ok(bytes)
+    });
+    let start = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if start.elapsed() > Duration::from_secs(timeout) {
+            let _ = child.kill();
+            let _ = child.wait();
+            bail!("Command timed out: {}", args[0]);
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    let bytes = reader
+        .join()
+        .map_err(|_| anyhow::anyhow!("Output reader failed"))??;
+    ensure_binary_status(status.success(), bytes.len())?;
+    writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("Input writer failed"))??;
+    Ok(bytes)
+}
+fn ensure_binary_status(success: bool, length: usize) -> Result<()> {
+    if !success {
+        bail!("Desktop command failed");
+    }
+    if length > 64 * 1024 * 1024 {
+        bail!("Desktop output too large");
+    }
+    Ok(())
+}
