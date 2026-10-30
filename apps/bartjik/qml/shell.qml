@@ -84,7 +84,7 @@ ShellRoot {
             availableCryptoPanel();
             if(cryptoPanel.open(context,window,row))send({op:'crypto',context:context,token:cryptoPanel.token});return;
         }
-        if(['audio.panel','network.panel'].includes(action)){detailPanel.open(context,window,row);return;}
+        if(['audio.panel','network.panel','battery.panel','notifications.panel'].includes(action)){detailPanel.open(context,window,row);return;}
         if(demo)return;
         if(typeof action==='string' && native.act(action,row.id,window,context.anchor))return;
         send({op:'action',context:context});

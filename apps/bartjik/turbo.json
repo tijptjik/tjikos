@@ -1,0 +1,14 @@
+{
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../../packages/notification-history/**",
+        "../notjik/qml/**"
+      ]
+    }
+  }
+}

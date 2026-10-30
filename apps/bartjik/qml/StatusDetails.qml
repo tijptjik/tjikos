@@ -23,6 +23,7 @@ Column {
     spacing:12
     function action(name,selection){popup.actionFor(actionModule,name,selection);}
     Text {width:parent.width;visible:!!details.statusRow?.state?.stale;text:'Cached · waiting for an update';font.pixelSize:11;color:details.theme.muted}
+    BatteryDetails {width:parent.width;visible:details.provider==='battery';popup:details.popup}
     Item {
         id:mullvadStatus
         readonly property real cityHeight:cityOptions.implicitHeight>0?cityOptions.implicitHeight+12:0

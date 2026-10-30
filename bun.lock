@@ -59,6 +59,10 @@
         "@tjikos/tjik-ui": "workspace:*",
       },
     },
+    "packages/notification-history": {
+      "name": "@tjikos/notification-history",
+      "version": "0.1.0",
+    },
     "packages/tjik-ui": {
       "name": "@tjikos/tjik-ui",
       "version": "0.1.0",
@@ -210,6 +214,8 @@
     "@tjikos/greetjik": ["@tjikos/greetjik@workspace:apps/greetjik"],
 
     "@tjikos/mailtjik": ["@tjikos/mailtjik@workspace:apps/mailtjik"],
+
+    "@tjikos/notification-history": ["@tjikos/notification-history@workspace:packages/notification-history"],
 
     "@tjikos/notjik": ["@tjikos/notjik@workspace:apps/notjik"],
 

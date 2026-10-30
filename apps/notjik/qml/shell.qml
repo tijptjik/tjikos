@@ -17,22 +17,19 @@ ShellRoot {
     property bool drawerOpen: false
     property string drawerMonitor: ""
     property var avatarCache: ({byChat: {}, byTitle: {}})
-    property var historyItems: []
-    property string historyQuery: ""
-    readonly property bool historyFiltering: historyQuery.trim().length > 0
-    readonly property var filteredHistoryItems: Logic.filterHistory(historyItems, historyQuery)
-    property var searchExpandedGroups: ({})
-    onHistoryQueryChanged: searchExpandedGroups = ({})
-    onFilteredHistoryItemsChanged: {
-        if (!filteredHistoryItems.some(n => n.historyKey === historySelectedKey)) historySelectedKey = "";
-    }
-    property var expandedGroups: ({})
-    property string historySelectedKey: ""
+    HistoryModel {id:historyModel;grouping:root.config.grouping?.enabled!==false}
+    property alias historyItems:historyModel.items
+    property alias historyQuery:historyModel.query
+    readonly property bool historyFiltering:historyModel.filtering
+    readonly property var filteredHistoryItems:historyModel.filtered
+    property alias searchExpandedGroups:historyModel.searchExpanded
+    property alias expandedGroups:historyModel.expanded
+    property alias historySelectedKey:historyModel.selected
     property string selectedId: ""
     property bool keyboardMode: false
     property string keyboardMonitor: ""
-    readonly property var historyGroups: Logic.historyGroups(filteredHistoryItems, config.grouping?.enabled !== false)
-    readonly property var historyRows: makeHistoryRows()
+    readonly property var historyGroups: historyModel.groups
+    readonly property var historyRows: historyModel.rows
     onScreensChanged: {
         if (!screens.some(s => s.name === keyboardMonitor)) { keyboardMode = false; selectedId = ""; }
         if (!screens.some(s => s.name === drawerMonitor)) drawerMonitor = screens[0]?.name || "";
@@ -359,33 +356,9 @@ ShellRoot {
         return screens.some(s => s.name === focused) ? focused : (screens[0]?.name || "");
     }
 
-    function makeHistoryRows() {
-        const rows = [];
-        for (const group of historyGroups) {
-            rows.push({kind: "group", key: group.key, app: group.app, label: group.label, count: group.notices.length});
-            if (historyGroupExpanded(group.key)) for (const notice of group.notices)
-                rows.push({kind: "notice", key: notice.historyKey, notice: notice});
-        }
-        return rows;
-    }
-
-    function historyGroupExpanded(key) {
-        return historyFiltering ? searchExpandedGroups[key] !== false : !!expandedGroups[key];
-    }
-
-    function toggleGroup(key) {
-        if (historyFiltering) searchExpandedGroups = Object.assign({}, searchExpandedGroups, {[key]: !historyGroupExpanded(key)});
-        else expandedGroups = Object.assign({}, expandedGroups, {[key]: !expandedGroups[key]});
-    }
-
-    function selectHistory(key) {
-        historySelectedKey = key;
-        const notice = historyItems.find(n => n.historyKey === key);
-        if (notice) {
-            const group = historyGroups.find(g => g.notices.some(n => n.historyKey === key));
-            if (group && !historyGroupExpanded(group.key)) toggleGroup(group.key);
-        }
-    }
+    function historyGroupExpanded(key) {return historyModel.isExpanded(key);}
+    function toggleGroup(key) {historyModel.toggle(key);}
+    function selectHistory(key) {historyModel.select(key);}
 
     function historyCard(snapshot) {
         const active = snapshot.session === session ? find(snapshot.id) : null;
@@ -449,6 +422,25 @@ ShellRoot {
     function handle(request) {
         if (!ready) throw Error("notjik configuration is not ready: " + backendError);
         switch (request.op) {
+        case "history-data": {
+            const items=locked?[]:historyItems.map(n=>{
+                const card=historyCard(n), value=snapshot(card);
+                // Native image-provider handles belong to this process only.
+                if(String(value.image || '').startsWith('image:'))value.image='';
+                return Object.assign(value,{historyKey:n.historyKey,session:n.session,archived:card.archived,lastEvent:card.lastEvent,loggedAt:n.loggedAt});
+            });
+            return {ok:true,items:items,paused:paused,locked:locked,avatars:locked?{}:avatarCache,
+                config:{style:config.style,grouping:config.grouping,actions:config.actions,components:config.components,stack:config.stack}};
+        }
+        case "history-action": {
+            if(locked)throw Error("Notification actions are disabled while locked");
+            const notice=historyItems.find(n=>n.historyKey===request.key);
+            if(!notice || notice.session!==session || !find(notice.id))throw Error("Notification is no longer active");
+            if(request.action==='dismiss')close(notice.id,false);
+            else if(request.action==='invoke')invoke(notice.id,request.index);
+            else throw Error("Unknown history action");
+            break;
+        }
         case "history":
             if (!["show", "hide", "toggle"].includes(request.mode)) throw Error("Invalid history mode");
             setDrawer(request.mode === "show" || (request.mode === "toggle" && !drawerOpen)); break;

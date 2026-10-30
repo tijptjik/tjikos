@@ -37,7 +37,7 @@ def main():
     function controlTest(name,inspectOnly) {
         function find(node){if(node.objectName===name)return node;for(const child of node.children || []){const match=find(child);if(match)return match;}return null;}
         const target=find(body);if(!target)throw Error('Control missing: '+name);
-        const before={ok:true,enabled:target.enabled,visible:target.visible};
+        const before={ok:true,enabled:target.enabled,visible:target.visible,selected:target.selected===true};
         if(!inspectOnly)testInput.mouseClick(target,target.width/2,target.height/2,Qt.LeftButton,Qt.NoModifier,0);
         return before;
     }''',1);p.write_text(s)
@@ -54,7 +54,7 @@ def main():
             process=subprocess.Popen([str(ROOT/'bin/bartjik'),'--demo'],stdout=log,stderr=log)
             try:
                 wait_for(lambda:ipc({'op':'status'}).get('ready'))
-                for module,controls in [('vpn',[('mullvad-city-osa','city',{'country':'jp','city':'osa'}),('mullvad-country-nl','country','nl'),('mullvad-country-jp','country','jp'),('mullvad-country-sg','country','sg')]),('tailnet',[('tailscale-toggle','toggle',None),('tailscale-ping-laptop','ping','laptop'),('tailscale-copy-laptop','copy','laptop')]),('input',[('input-method-pinyin','select','pinyin')])]:
+                for module,controls in [('vpn',[('mullvad-city-osa','city',{'country':'jp','city':'osa'}),('mullvad-country-nl','country','nl'),('mullvad-country-jp','country','jp'),('mullvad-country-sg','country','sg')]),('tailnet',[('tailscale-toggle','toggle',None),('tailscale-ping-laptop','ping','laptop'),('tailscale-copy-laptop','copy','laptop')]),('input',[('input-method-pinyin','select','pinyin')]),('battery',[('battery-profile-performance','profile','performance'),('battery-profile-power-saver','profile','power-saver')])]:
                     ipc({'op':'detailTest','module':module})
                     wait_for(lambda:ipc({'op':'detailState'})['panel']['opened'])
                     if module=='vpn':
@@ -98,6 +98,27 @@ def main():
                         assert last['module']==module and last['action']==action and last.get('selection')==selection,last
                         assert last['monitor'] and last['barKey'] and last['item'] and 'anchor' in last,last
                         if action=='city':wait_for(lambda:not city_visible())
+                    if module=='battery':
+                        before=len(ipc({'op':'testActions'})['actions'])
+                        ipc({'op':'controlTest','name':'battery-profile-balanced'})
+                        assert len(ipc({'op':'testActions'})['actions'])==before
+                        for profile in ('performance','balanced','power-saver'):
+                            cfg['modules']['battery']['demoProfile']=profile
+                            path.write_text(json.dumps(cfg))
+                            def selected_profiles():
+                                return [key for key in ('performance','balanced','power-saver')
+                                        if ipc({'op':'controlTest','name':'battery-profile-'+key,'inspectOnly':True})['selected']]
+                            wait_for(lambda:selected_profiles()==[profile])
+                        if len(sys.argv)>1:
+                            destination=Path(sys.argv[1]);destination.mkdir(parents=True,exist_ok=True)
+                            for external in (False,True):
+                                cfg['modules']['battery']['demoExternal']=external
+                                path.write_text(json.dumps(cfg))
+                                wait_for(lambda:next(m for m in ipc({'op':'modules'})['modules'] if m['provider']=='battery')['items'][0]['battery']['external']==external)
+                                time.sleep(.4)
+                                image=destination/('battery-charging.png' if external else 'battery-remaining.png')
+                                ipc({'op':'captureDetail','path':str(image)})
+                                wait_for(lambda:image.exists() and image.read_bytes().endswith(b'IEND\xaeB`\x82'))
                     if module=='tailnet':
                         before=len(ipc({'op':'testActions'})['actions'])
                         assert not ipc({'op':'controlTest','name':'tailscale-ping-phone'})['enabled']
@@ -117,7 +138,7 @@ def main():
                 process.terminate();process.wait(timeout=5)
         errors=[line for line in (temp/'log').read_text().splitlines() if any(x in line for x in ('WARN scene','ERROR','Traceback','Binding loop'))]
         assert not errors,errors[:10]
-    print('Mullvad city expand/collapse with stationary flags and synchronized section edges across animation frames, exact city selection, current-city disabling, reopen reset, country shortcuts, Tailscale and input selection: real Qt clicks and originating context passed')
+    print('Mullvad city expand/collapse with stationary flags and synchronized section edges across animation frames, exact city selection, current-city disabling, reopen reset, country shortcuts, Tailscale, input selection and exclusive battery power modes: real Qt clicks and originating context passed')
 
 
 if __name__=='__main__':main()

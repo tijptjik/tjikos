@@ -9,6 +9,15 @@ from .icons import icon as artwork
 
 def items(provider, options=None):
     options = options or {}
+    if provider == "battery":
+        from .battery import battery_item, panel_data, PROFILES
+        row = battery_item(options.get("demoPercent", 67), options.get("demoExternal", False))
+        row["panel"] = panel_data(row["battery"], {
+            "State": 1 if row["battery"]["external"] else 2,
+            "TimeToFull": 2520, "TimeToEmpty": 14820,
+        }, {"ActiveProfile": options.get("demoProfile", "balanced"),
+            "Profiles": [{"Profile": {"data": key}} for key, _ in PROFILES]})
+        return [row]
     if provider == "workspaces":
         return [
             item(

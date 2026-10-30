@@ -205,7 +205,7 @@ function detailHover(module, row) {
     if(row.idle)return false;
     if(['audio','network'].includes(module.provider))
         return module.panel?.hover!==false && (module.panel?.hover===true || choose(module,row,'item','hoverEnter')===module.provider+'.panel');
-    return ['crypto','datetime','mullvad','tailscale','locale','codex','openrouter','playerctl'].includes(module.provider) && module.panel?.hover===true;
+    return ['crypto','datetime','mullvad','tailscale','locale','codex','openrouter','playerctl','battery','DND'].includes(module.provider) && module.panel?.hover===true;
 }
 
 // Centre a popup on its triggering part, clamping only to the target screen.

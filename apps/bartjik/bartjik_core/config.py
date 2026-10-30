@@ -10,6 +10,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 PROVIDERS = (
+    "battery",
     "workspaces",
     "playerctl",
     "crypto",
@@ -59,6 +60,8 @@ INTERNAL = {
     "tray.down",
     "network.panel",
     "audio.panel",
+    "battery.panel",
+    "notifications.panel",
     "audio.route",
     "audio.up",
     "audio.down",

@@ -303,7 +303,13 @@
     "notifications": {
       "provider": "DND",
       "actions": {
-        "leftClick": "DND.toggle"
+        "leftClick": "DND.toggle",
+        "rightClick": "notifications.panel"
+      },
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
       }
     },
     "idle": {
@@ -323,10 +329,12 @@
         "middleClick": null
       }
     },
-    "display": {
-      "provider": "monitor-layout",
-      "actions": {
-        "leftClick": "monitor.toggle"
+    "battery": {
+      "provider": "battery",
+      "panel": {
+        "hover": true,
+        "delay": 300,
+        "closeDelay": 160
       }
     }
   },
@@ -435,7 +443,7 @@
             "notifications",
             "idle",
             "filter",
-            "display"
+            "battery"
           ]
         }
       ]

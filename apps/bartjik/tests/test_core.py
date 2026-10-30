@@ -54,7 +54,7 @@ class ConfigTests(unittest.TestCase):
             c = config.load(ROOT / "examples" / f"{name}.json")
             self.assertEqual(
                 set(m["provider"] for m in c["modules"].values()),
-                set(config.PROVIDERS) - {"process"},
+                set(config.PROVIDERS) - ({"process", "monitor-layout"} if name == "laptop" else {"process"}),
             )
 
     def test_exact_default_and_arrays_replace(self):
