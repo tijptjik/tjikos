@@ -9,3 +9,6 @@ __pycache__/
 *.mbox
 *.age
 *.partial
+
+# Rust build output
+**/target/
