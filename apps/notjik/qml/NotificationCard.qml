@@ -202,7 +202,7 @@ Rectangle {
                     else card.controller.selectHistory(card.notice.historyKey);
                 } else if (cardTap.point.modifiers & Qt.ControlModifier) {
                     card.controller.handle({op: "dismiss", id: "all"});
-                } else if (!card.floating) card.controller.close(card.notice.id, false);
+                } else if (!card.floating) card.controller.dismissNotice(card.notice.id);
             }
         }
         DragHandler {
@@ -345,7 +345,7 @@ Rectangle {
                 opacity: card.controlsRevealed ? 1 : 0
                 enabled: card.controlsRevealed
                 Accessible.name: "Dismiss notification"
-                onClicked: card.controller.close(card.notice.id, false)
+                onClicked: card.controller.dismissNotice(card.notice.id)
             }
         }
         Loader {

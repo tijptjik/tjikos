@@ -155,6 +155,20 @@ ShellRoot {
         hovered = activeHover;
     }
 
+    function dismissReadIds() {
+        if (!ready || paused || locked) return [];
+        return (screens.length ? visibleNotices.map(n => n.id) : [])
+            .concat(floatingIds.filter(id => id !== draggingId));
+    }
+
+    function dismissNotice(id, visibleIds) {
+        const notice = find(id);
+        const shown = visibleIds || dismissReadIds();
+        if (notice && !notice.archived && shown.includes(id))
+            log("user-dismissed", notice);
+        close(id, false);
+    }
+
     function close(id, expired) {
         const n = nativeNotices[id];
         if (n) { if (expired) n.expire(); else n.dismiss(); }
@@ -423,7 +437,7 @@ ShellRoot {
 
     function dismissSelected() {
         const active = drawerOpen ? historyCard(historyItems.find(n => n.historyKey === historySelectedKey) || {}) : find(selectedId);
-        if (active && !active.archived && find(active.id)) close(active.id, false);
+        if (active && !active.archived && find(active.id)) dismissNotice(active.id);
     }
 
     function setPaused(value) {
@@ -449,10 +463,16 @@ ShellRoot {
         case "pause": setPaused(true); break;
         case "resume": setPaused(false); break;
         case "toggle": setPaused(!paused); break;
-        case "dismiss":
-            if (request.id !== "all" && !find(request.id)) throw Error("Notification not found");
-            for (const n of notices.slice()) if (request.id === "all" || request.id === n.id) close(n.id, false);
+        case "telegramRemove":
+            if (find(request.id)?.app === "Telegram via Notjik") remove(request.id, "sender-closed");
             break;
+        case "dismiss": {
+            if (request.id !== "all" && !find(request.id)) throw Error("Notification not found");
+            // Freeze eligibility before removing cards reveals queued/grouped ones.
+            const shown = dismissReadIds();
+            for (const n of notices.slice()) if (request.id === "all" || request.id === n.id) dismissNotice(n.id, shown);
+            break;
+        }
         case "openTelegramChat": openTelegramChat(request.id); break;
         case "action": invoke(request.id, request.index); break;
         case "reload": backend.running = false; backend.running = true; break;

@@ -798,7 +798,46 @@ and monitors. Playback requires a click, stops when its card is dismissed or its
 component is removed, and stops on desktop lock or notification pause. Archived
 cards do not animate, play audio or execute actions. Media and custom-emoji cards stay until dismissed;
 ordinary text cards expire after 12 seconds. Showing/downloading/playing media does
-not mark it read; **Mark read** is explicit.
+not mark it read; **Mark read** is explicit by default. Telegram read markers are
+cumulative: even selecting one message marks earlier messages in that chat read.
+
+To opt particular channels or private-user chats into reading on dismissal, add
+this to `~/.config/notjik/config.json`:
+
+```json
+"telegram": {
+  "dismissIsRead": ["@example_bot", "-1001234567890"],
+  "dismissReadMode": "safe"
+}
+```
+
+Entries are Telegram chat ID strings or public `@usernames`, resolved by Telegram
+and compared to the actual chat ID. Display names are never matched. Usernames
+select that user's private chat, not every group message they send. Prefer stable
+chat IDs if usernames may change. The default list is empty; settings reload
+without restarting the bridge.
+
+`safe` only advances the marker when the bridge can verify that earlier unread
+messages are unaffected: the dismissed message is the only unread message and
+latest in the chat, or its immediately preceding message is already read. If the
+boundary is uncertain, earlier messages are unread, or the message belongs to a
+topic, the card closes and the message stays unread. Dismissals are not deferred
+or retried. `through` explicitly allows earlier unread messages to become read.
+Telegram does not support independent per-message unread state.
+
+Click dismissal, the floating card's close button, keyboard dismissal and
+`notjikctl dismiss` (including `all`) honor this setting for currently displayed
+cards only. Paused notifications and hidden queued/grouped cards never request a
+read, even when dismissed in bulk. Earlier unread Telegram messages still block a
+safe read regardless of whether their notifications were shown.
+
+Expiry, focus suppression,
+action completion and Telegram-originated removal do not. Demo/history cards and
+locked-screen dismissals never trigger it. It applies only to the TDLib bridge's
+cards; native Telegram Desktop notifications lack the necessary message identity.
+A stopped/disconnected bridge cannot process the read. Rejections and missing
+confirmations appear in Notjik's backend status/log; a timeout can leave the read
+outcome uncertain. No automatic retries are performed.
 
 **Quote reply** opens a composer targeting the specific message. **Reply** sends a normal chat message. Use Send
 reply or Ctrl+Enter; text is literal and Telegram Desktop drafts remain intact.

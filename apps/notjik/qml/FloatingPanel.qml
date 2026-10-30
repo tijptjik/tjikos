@@ -29,7 +29,7 @@ FloatingWindow {
     mask: Region { item: card; radius: card.radius }
     onWindowConnected: contentItem.Window.window.flags = Qt.Window | Qt.FramelessWindowHint
     onBackingWindowVisibleChanged: if (backingWindowVisible && !placed) locateTimer.start()
-    onClosed: controller.close(noticeId, false)
+    onClosed: controller.dismissNotice(noticeId)
 
     function finishPlacement() {
         placed = true;
@@ -118,7 +118,7 @@ FloatingWindow {
         Keys.onEscapePressed: controller.unfocus()
         Keys.onPressed: event => {
             if (event.key === Qt.Key_Delete && !panel.controller.locked) {
-                panel.controller.close(panel.noticeId, false);
+                panel.controller.dismissNotice(panel.noticeId);
                 event.accepted = true;
             }
         }

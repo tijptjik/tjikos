@@ -866,6 +866,76 @@ class Bridge:
 
         self.td.send("getMessageProperties", properties, chat_id=chat, message_id=message)
 
+    def dismiss_read(self, entry, done):
+        from notjik import load_config
+        options = load_config(Path(__file__).resolve().parent)["telegram"]
+        chat, message = entry["message"]["chat_id"], entry["message"]["id"]
+        rules = options["dismissIsRead"]
+
+        def skip(reason):
+            done({"ok": True, "skipped": reason})
+
+        def read():
+            def checked(result):
+                if result.get("@type") == "ok":
+                    done({"ok": True})
+                else:
+                    done({"ok": False, "error": result.get("message", "Telegram rejected the read marker")})
+            self.td.send("viewMessages", checked, chat_id=chat, message_ids=[message],
+                         source={"@type": "messageSourceNotification"}, force_read=True)
+
+        def matched():
+            if options["dismissReadMode"] == "through":
+                read()
+                return
+            # Topic read markers have separate semantics. Fail closed until
+            # their boundaries can be verified independently.
+            if entry["message"].get("topic_id") or entry["message"].get("message_thread_id"):
+                skip("Cannot verify a topic read boundary")
+                return
+
+            def history(result, boundary):
+                messages = result.get("messages", [])
+                if (result.get("@type") == "messages" and len(messages) >= 2
+                        and messages[0].get("id") == message
+                        and all(item.get("chat_id") == chat for item in messages[:2])
+                        and 0 < messages[1].get("id", 0) <= boundary):
+                    read()
+                else:
+                    skip("Earlier unread messages may be affected")
+
+            def chat_result(result):
+                if result.get("@type") != "chat" or result.get("id") != chat:
+                    skip("Cannot verify the chat read boundary")
+                    return
+                boundary = result.get("last_read_inbox_message_id", 0)
+                if boundary >= message:
+                    skip("Message already read")
+                elif result.get("unread_count") == 1 and (result.get("last_message") or {}).get("id") == message:
+                    read()
+                else:
+                    self.td.send("getChatHistory", lambda result: history(result, boundary),
+                                 chat_id=chat, from_message_id=message, offset=0, limit=2, only_local=False)
+            self.td.send("getChat", chat_result, chat_id=chat)
+
+        if str(chat) in rules:
+            matched()
+            return
+        usernames = iter(rule[1:] for rule in rules if rule.startswith("@"))
+
+        def resolve_next():
+            username = next(usernames, None)
+            if username is None:
+                skip("Chat is not configured for dismissIsRead")
+                return
+            def resolved(result):
+                if result.get("@type") == "chat" and result.get("id") == chat:
+                    matched()
+                else:
+                    resolve_next()
+            self.td.send("searchPublicChat", resolved, username=username)
+        resolve_next()
+
     def action(self, request, done):
         try:
             if request.get("action") == "demoVoiceReply":
@@ -882,7 +952,9 @@ class Bridge:
                     done({"ok": False, "error": result.get("message", "Telegram rejected the action")})
                 else:
                     done({"ok": True})
-            if op == "transcribe":
+            if op == "dismissRead":
+                self.dismiss_read(entry, done)
+            elif op == "transcribe":
                 self.transcribe(key, entry, done)
             elif op == "read":
                 self.td.send("viewMessages", checked, chat_id=chat, message_ids=[message],
@@ -1056,7 +1128,7 @@ def run(root, login=False):
         auth = Authorization(td, login)
         presence = DesktopPresence(td)
         bridge = Bridge(td, lambda notice: ipc(root, {"op": "send", "notice": notice}),
-                        lambda ident: ipc(root, {"op": "dismiss", "id": ident}))
+                        lambda ident: ipc(root, {"op": "telegramRemove", "id": ident}))
         requests = queue.Queue(maxsize=32)
         server = None
         stopped = False

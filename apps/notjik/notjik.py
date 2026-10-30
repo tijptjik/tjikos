@@ -1,6 +1,7 @@
 """CLI, validated configuration and bounded local history for the QML server."""
 import argparse
 import copy
+import concurrent.futures
 import datetime as dt
 import hashlib
 import json
@@ -29,6 +30,7 @@ DEFAULTS = {
     "privacy": {"lockScreen": "hide"},
     "stack": {"animationMs": 220, "heightPercent": 75},
     "actions": {"blacklist": []},
+    "telegram": {"dismissIsRead": [], "dismissReadMode": "safe"},
     "components": {}, "handlers": [],
 }
 
@@ -107,9 +109,16 @@ def load_config(root):
     if not isinstance(patch, dict):
         raise ValueError("config must be an object")
     cfg = merge(DEFAULTS, patch)
-    for key in ("style", "placement", "timeouts", "history", "components", "grouping", "privacy", "stack", "actions"):
+    for key in ("style", "placement", "timeouts", "history", "components", "grouping", "privacy", "stack", "actions", "telegram"):
         if not isinstance(cfg[key], dict):
             raise ValueError(f"{key} must be an object")
+    rules = cfg["telegram"]["dismissIsRead"]
+    if (not isinstance(rules, list) or len(rules) > 100 or any(
+            not isinstance(rule, str) or not re.fullmatch(r"(?:-?[1-9][0-9]{0,15}|@[A-Za-z0-9_]{1,32})", rule)
+            or (not rule.startswith("@") and abs(int(rule)) > 2 ** 53 - 1) for rule in rules)):
+        raise ValueError("telegram.dismissIsRead must be an array of chat ID strings or @usernames (at most 100)")
+    if cfg["telegram"]["dismissReadMode"] not in ("safe", "through"):
+        raise ValueError("telegram.dismissReadMode must be safe or through")
     if not isinstance(cfg["placement"]["perMonitor"], dict):
         raise ValueError("placement.perMonitor must be an object")
     validate_placement(cfg["placement"])
@@ -356,12 +365,36 @@ def emit(value):
     print(json.dumps(value, ensure_ascii=False), flush=True)
 
 
+def dismiss_read_request(cfg, event):
+    """Only an explicit live-card dismissal can request an automatic read."""
+    notice = event.get("notice") or {}
+    data = notice.get("data") or {}
+    if (event.get("event") != "user-dismissed" or notice.get("type") != "telegram"
+            or notice.get("app") != "Telegram via Notjik" or data.get("demo")
+            or notice.get("archived") or not cfg["telegram"]["dismissIsRead"]):
+        return None
+    from telegram_bridge import identifier
+    return {"action": "dismissRead", "chatId": str(identifier(data.get("chatId"))),
+            "messageId": str(identifier(data.get("messageId")))}
+
+
+def send_dismiss_read(request):
+    from telegram_bridge import socket_request
+    try:
+        result = socket_request(request)
+        return None if result.get("ok") else result.get("error", "Telegram rejected the request")
+    except (OSError, ValueError) as error:
+        return str(error)
+
+
 def worker(root):
     os.umask(0o077)
     emit({"paused": load_paused()})
     cfg, db, previous = None, None, None
     buffer = b""
     observer = LockObserver()
+    dismiss_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    dismiss_jobs = []
     lock_state = None
     dirty_history = True
     last_history = 0
@@ -371,6 +404,12 @@ def worker(root):
         while True:
             now = time.monotonic()
             observer.connect()
+            for job in dismiss_jobs[:]:
+                if job.done():
+                    dismiss_jobs.remove(job)
+                    error = job.result()
+                    if error:
+                        emit({"error": "Dismiss read: " + error})
             if observer.state != lock_state:
                 lock_state = observer.state
                 emit({"lockState": lock_state})
@@ -430,6 +469,14 @@ def worker(root):
                     elif event.get("op") == "history":
                         dirty_history = True
                     elif cfg is not None:
+                        request = dismiss_read_request(cfg, event)
+                        if request:
+                            if len(dismiss_jobs) >= 100:
+                                emit({"error": "Dismiss read: queue full; message left unread"})
+                            else:
+                                dismiss_jobs.append(dismiss_pool.submit(send_dismiss_read, request))
+                        if event.get("event") == "user-dismissed":
+                            continue
                         if db is None:
                             db = database()
                         record(db, cfg, event)
@@ -437,6 +484,7 @@ def worker(root):
                 except (ValueError, OSError, sqlite3.Error) as error:
                     emit({"error": "History: " + str(error)})
     finally:
+        dismiss_pool.shutdown(wait=False, cancel_futures=True)
         observer.close()
         if db:
             db.close()
