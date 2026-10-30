@@ -21,8 +21,8 @@ with private_compositor():
     icon = 'data:image/svg+xml;base64,' + base64.b64encode(b'<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="6" fill="#ff53a6"/><circle cx="16" cy="16" r="8" fill="#191724"/></svg>').decode()
     provider.write_text(provider.read_text().replace("'url': 'https://example.org/firefox'", "'url': 'https://example.org/firefox', 'favicon': " + repr(icon)).replace("'Firefox extension documentation'", "'Firefox extension documentation with a long title that wraps across two lines for alignment testing'").replace("'https://example.org/hyprland'", "'about:blank'"))
     shell = home / 'qml/shell.qml'
-    shell.write_text(shell.read_text().replace('scrollY:items.contentY,rows:',
-                                               'scrollY:items.contentY,heading:resultsHeading.visible,columns:root.gridColumns,list:root.listMode,rows:'))
+    shell.write_text(shell.read_text().replace('function testState(): string {', "function browseWindow(): void {root.selected=0;root.activate(true); }\n        function browserBack(): void {root.back();}\n        function testState(): string {").replace('scrollY:items.contentY,rows:',
+                                               'scrollY:items.contentY,scope:root.browserTabScope,heading:resultsHeading.visible,columns:root.gridColumns,list:root.listMode,rows:'))
     config = temp / 'runtjik.conf'
     config.write_text('[plugins]\nenabled=["Browser"]\n[plugin_settings.Browser]\ncolumns=3\n')
     os.environ.update(RUNTJIK_HOME=str(home), RUNTJIK_DEMO='1', RUNTJIK_CONFIG=str(config),
@@ -57,6 +57,17 @@ with private_compositor():
                     assert result['rows'][0]['favicon'].startswith('data:image/'), result
                 time.sleep(0.2)
                 ipc('capture', str(temp / (('general' if not query.startswith('/') else 'tabs' if is_list else 'windows') + ('-filtered.png' if ' ' in query else '.png'))))
+            ipc('test', '/browser')
+            wait_for(lambda: state().get('resultQuery') == '/browser')
+            ipc('browseWindow')
+            wait_for(lambda: state().get('scope') and state().get('resultQuery') == '/tabs ')
+            assert len(state()['rows']) == 2
+            ipc('test', '/tabs Firefox')
+            wait_for(lambda: state().get('resultQuery') == '/tabs Firefox')
+            assert len(state()['rows']) == 1
+            ipc('browserBack')
+            wait_for(lambda: state().get('resultQuery') == '/browser ')
+            assert not state()['scope'] and len(state()['rows']) == 2
             time.sleep(0.2)
             print('PASS: browser grid, aliases, tab list, title filtering')
         finally:

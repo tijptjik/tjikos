@@ -38,6 +38,7 @@ class Browser:
 
     def __init__(self, demo=False):
         self.demo = demo
+        self.window_scope = None
 
     def query(self, query, settings):
         command, _, term = query.partition(' ')
@@ -64,6 +65,8 @@ class Browser:
         rows = []
         for session, state in sessions:
             for window in state['windows']:
+                if tabs_mode and self.window_scope and (session, window['id']) != self.window_scope[:2]:
+                    continue
                 title = window['title'] or 'Browser window'
                 tabs = [tab for tab in window['tabs'] if not tab.get('pinned')]
                 items = tabs if tabs_mode else [window]
@@ -97,6 +100,10 @@ class Browser:
                                  'favicon': favicon, 'keep_open': True,
                                  'tab': item['id'] if tabs_mode else None}})
         return rows
+
+    def open_tabs(self, entry):
+        self.window_scope = (entry.data['session'], entry.data['window'], entry.name)
+        return {'kind': 'edit', 'text': '/tabs '}
 
     def tab_request(self, data, op, **extra):
         if data.get('tab') is None and op not in ('focus', 'close'):

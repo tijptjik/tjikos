@@ -1062,6 +1062,8 @@ class Launcher:
         if running_mode:
             search_query = query[1:].lstrip() if query.startswith("?") else query.partition(" ")[2].lstrip()
         command = query.split(maxsplit=1)[0] if query.strip() else ""
+        if command != '/tabs' and 'Browser' in self.providers:
+            self.providers['Browser'].window_scope = None
         if command in self.plugin_commands:
             name, _ = self.plugin_commands[command]
             try:
@@ -1075,7 +1077,10 @@ class Launcher:
                 self.current = {e.id: e for e in entries}
                 rows = [{**{k: v for k, v in asdict(e).items() if k not in ("data", "keywords")},
                          "icon": self.control_icon(e.icon), "favicon": e.data.get("favicon", ""), "hide_launcher": bool(e.data.get("capture")), "keep_open": bool(e.data.get("keep_open")), "thumbnail": e.data.get("thumbnail", ""), "empty_state": bool(e.data.get("empty_state")), "disabled": bool(e.data.get("disabled")), "count": 0, "windows": 0} for e in entries[offset:offset + limit]]
-                return self.payload(rows, query=display_query, pending=bool(getattr(self.providers[name], "pending", False)), total=len(entries), offset=offset,
+                scope = getattr(self.providers[name], 'window_scope', None)
+                return self.payload(rows, query=display_query, browser_tab_scope=bool(scope),
+                                    message=('Tabs in ' + scope[2] + ' · Esc returns to windows') if scope else '',
+                                    pending=bool(getattr(self.providers[name], "pending", False)), total=len(entries), offset=offset,
                                     next_offset=offset + len(rows), has_more=offset + len(rows) < len(entries))
             except Exception as exc:
                 return self.payload([], query=display_query, message=f"{name}: {exc}",
@@ -1291,6 +1296,8 @@ class Launcher:
         if mode not in ("launch", "switch", "close"):
             raise ValueError("Unknown action")
         if entry.provider == 'Browser' and mode == 'switch':
+            if entry.data.get('tab') is None:
+                return self.providers['Browser'].open_tabs(entry)
             return {'kind': 'message', 'message': 'Read later is moving to Tasktjik; integration is not connected yet. Nothing was closed.'}
         if mode == 'close':
             if entry.provider == 'Browser':

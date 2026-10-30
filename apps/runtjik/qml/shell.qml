@@ -33,6 +33,7 @@ ShellRoot {
             else {if(found!==i)resultModel.move(found,i,1);resultModel.setProperty(i,'row',results[i]);}
         }
     }
+    property bool browserTabScope: false
     property string appMode: ""
     property var appState: ({})
     property var results: []
@@ -203,6 +204,7 @@ ShellRoot {
         send({op:'resume'});
     }
     function back() {
+        if (browserTabScope) {browserTabScope=false;searchBox.text='/browser ';return;}
         if (windowEntry) {windowEntry='';query='';searchBox.text='';search();}
         else close();
     }
@@ -213,6 +215,7 @@ ShellRoot {
         if (msg.kind !== 'results' || msg.serial === serial) busy = false;
         if (msg.kind === 'app-state') {message=msg.app_state.message || '';appState=Object.assign({},appState,msg.app_state);if(msg.app_state.tasks)todoApp.accepted();return;}
         if (msg.kind === 'results') {
+            browserTabScope=!!msg.browser_tab_scope;
             appMode=msg.app_mode || '';
             if(msg.app_state)appState=msg.app_state;
             if(msg.command_history!==undefined){commandHistory=msg.command_history;historyCursor=-1;}

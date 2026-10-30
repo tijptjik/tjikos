@@ -112,6 +112,26 @@ class BrowserTests(unittest.TestCase):
         exchange.assert_called_once_with(message)
         close.assert_not_called()
 
+    def test_shift_window_opens_filterable_tabs_without_focusing_browser(self):
+        settings = r.config('')
+        settings['plugins']['enabled'] = ['Browser']
+        with patch.object(r, 'config', return_value=settings):
+            launcher = r.Launcher(demo=True)
+        launcher._icons = Mock(resolve=lambda name: name)
+        window = launcher.query('/browser')['results'][0]
+        with patch.object(launcher.providers['Browser'], 'tab_request') as request:
+            action = launcher.activate(window['id'], 'switch')
+            self.assertEqual(action, {'kind': 'edit', 'text': '/tabs '})
+            rows = launcher.query(action['text'])
+            self.assertTrue(rows['browser_tab_scope'])
+            self.assertEqual(len(rows['results']), 2)
+            self.assertEqual(len(launcher.query('/tabs Firefox')['results']), 1)
+            self.assertEqual(launcher.query('/tabs reading')['results'], [])
+            request.assert_not_called()
+        launcher.query('/browser')
+        self.assertEqual(len(launcher.query('/tabs')['results']), 3)
+        self.assertFalse(launcher.query('/tabs')['browser_tab_scope'])
+
     def test_native_framing_limits_and_truncation(self):
         data = io.BytesIO()
         host.write_message(data, {'title': '山水'})
