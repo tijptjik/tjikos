@@ -1,9 +1,7 @@
 # Native cutover status — 2026-10-30
 
-The release and deployment preparation is complete through the safe waiting
-point. **The fleet is not yet fully cut over:** Si is waiting for its existing
-backup and restore validation; Li went offline during deployment. Neither is
-reported as successfully completed.
+**Li's native release catch-up and convergence are complete.** The fleet is not
+yet fully cut over: Si still awaits its backup and restore-validation gates.
 
 ## Completed
 
@@ -97,27 +95,34 @@ The original cutover evidence is preserved; the new attempt writes `repair-run.*
 markers in the same private cutover directory. Neither a queued unit nor an
 inactive unit establishes successful cutover.
 
-## Li: automatic catch-up when reachable
+## Li: catch-up completed on 30 October
 
-Li's privileged Tjikup update completed before the laptop became unreachable.
-Its Synctjik update is **not yet verified**.
-
-Fi has a one-off user service, `tjikup-li-native-release-catchup.service`, that
-retries every ten minutes and is enabled across Fi restarts. It uses pinned
-native SSH resolution and the reviewed script under
-`~/.local/state/tjikup/li-native-release-catchup-20261030/`.
-It accepts only clean checkouts that can fast-forward to the reviewed revisions,
-defers while Synctjik is running, installs/verifies the released binary,
-preserves obsolete Python modules, and checks readiness and schedule routing.
-It stops on review-required exit status 2 and disables itself after success.
-It does not initiate a new backup or replace Li's existing verified Restic data.
-
-On Fi, inspect:
-
-```sh
-systemctl --user status tjikup-li-native-release-catchup.service
-journalctl --user -u tjikup-li-native-release-catchup.service -n 30
-```
+- Connected through native pinned-host resolution. Both managed repositories
+  were clean initially and fast-forwarded to policy `971db4a6` and tools
+  `12a6158`; no local changes needed merging.
+- Waited for the existing private-folder sync to finish before installing
+  Synctjik `bootstrap.5`. User/system checksums match the published release.
+  All three Tjikup copies match published `bootstrap.6`.
+- Preserved obsolete Python runtime material under
+  `~/.local/state/tjikup/native-cutover-20261030/retired-python/`.
+- Native convergence succeeded in
+  `tjikup-li-converge-path-20261030.service`; configuration, icons, services and
+  missing terminal tools converged. A first manually launched job lacked PATH;
+  its corrected retry passed.
+- Package updates succeeded in `tjikup-li-updates-20261030.service`, including
+  OBS 33.0.1 and ChatGPT Desktop 26.1027.30824-1. The previous Zed installer
+  failure is resolved; Zed and the application verification tasks passed.
+- Retried the native encrypted private-assets backup to Si. Snapshot
+  `0a37770d`, dated 15:04:10 HKT, contains documents/media/projects/resources
+  (151.852 MiB). The service exited 0 and the durable success receipt is dated
+  `20261030T070558Z`. Native verification and retention completed. No additional
+  sample restore was performed during this catch-up.
+- Readiness and schedule migration passed. All four managed sync/backup/weekly
+  timers are enabled and active. Resolved historical failure flags were cleared;
+  final user and system failed-unit lists are empty.
+- Fi's old catch-up retry was disabled and marked complete. After the initially
+  clean checkout, concurrent Bartjik battery edits appeared on Li; these were
+  preserved untouched and are not included in this work.
 
 ## Remaining names and wider Python scope
 
@@ -127,12 +132,12 @@ This is not a claim that every historical string or Python file has vanished.
   baseline and receipt paths remain compatibility contracts.
 - Existing age identity recovery copies and the migration fallback are retained.
   Fi now keeps its duplicate only in private recovery storage.
-- Si's old checkout paths remain until home acceptance. Li's old links/checkouts
-  cannot be retired while it is offline. Fi's old Tooltjik checkout is clean
+- Si's old checkout paths remain until home acceptance. Li's old compatibility
+  links and clean legacy system checkout remain as recovery material. Fi's old Tooltjik checkout is clean
   and its commit is ancestral to TjikOS, but an open Fish shell still uses it
   as its working directory, so it was not moved.
-- Canonical icon naming is complete in policy and on Fi. Si/Li still need the
-  later policy revision after their already queued native cutover.
+- Canonical icon naming is complete in policy and on Fi/Li. Si still needs
+  final acceptance after its guarded native cutover.
 - Frozen Python test oracles, build/test utilities and Python application or
   host extensions remain. They are not all responsibilities of Tjikup/Synctjik.
 
@@ -149,4 +154,4 @@ This is not a claim that every historical string or Python file has vanished.
   focused rerun and subsequent full validation runs.
 
 Fleet results are observations at deployment time. Successful release tests and
-Fi readiness do not establish Si restore success or Li deployment completion.
+Fi/Li readiness do not establish Si restore success.
