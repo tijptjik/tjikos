@@ -22,6 +22,12 @@ async function handle(message) {
         }).map(item => ({id: item.id, title: (item.title || item.url).slice(0, 4096),
             url: item.url, lastVisitTime: item.lastVisitTime || 0, visitCount: item.visitCount || 0}))};
     }
+    if (message.op === 'delete-history') {
+        const url = new URL(message.url);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP(S) history entries can be deleted');
+        await browser.history.deleteUrl({url: message.url});
+        return {deleted: true};
+    }
     if (message.op === 'open-history') {
         const url = new URL(message.url);
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP(S) history entries can be opened');

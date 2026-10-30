@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Runtjik Browser Bridge",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Search Firefox or Zen windows, tabs and browsing history from Runtjik.",
   "browser_specific_settings": {
     "gecko": {

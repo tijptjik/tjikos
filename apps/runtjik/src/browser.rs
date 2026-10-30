@@ -218,9 +218,9 @@ impl Browser {
         Ok(rows)
     }
     pub fn activate(&mut self, e: &Entry, mode: &str, demo: bool) -> Result<Value> {
-        if e.data["history"] == true && ["switch", "close"].contains(&mode) {
+        if e.data["history"] == true && mode == "switch" {
             return Ok(
-                json!({"kind":"message","message":"Enter reopens this history item; browser history is never deleted by Runtjik."}),
+                json!({"kind":"message","message":"Enter reopens this history item; Ctrl+Enter removes its URL from browser history."}),
             );
         }
         if mode == "switch" {
@@ -247,7 +247,11 @@ impl Browser {
             bail!("Invalid browser session");
         }
         let op = if e.data["history"] == true {
-            "open-history"
+            if mode == "close" {
+                "delete-history"
+            } else {
+                "open-history"
+            }
         } else if mode == "close" {
             "close"
         } else {
@@ -262,6 +266,11 @@ impl Browser {
             }
             request(&directory()?.join(session), &msg)?
         };
+        if mode == "close" && e.data["history"] == true {
+            return Ok(
+                json!({"refresh_query":"/history","message":"URL removed from browser history"}),
+            );
+        }
         if mode == "close" {
             return Ok(
                 json!({"refresh_query":if e.data["tab"].is_null(){"/browser"}else{"/tabs"},"message":if e.data["tab"].is_null(){response["message"].as_str().unwrap_or("Hyprland window close requested")}else{"Tab closed"}}),
@@ -274,7 +283,7 @@ impl Browser {
 mod tests {
     use super::*;
     #[test]
-    fn history_is_separate_from_tab_scope_and_cannot_delete() {
+    fn history_is_separate_from_tab_scope_and_deletes_on_close() {
         let mut b = Browser::default();
         let window = b.query("/browser", true).unwrap().remove(0);
         b.activate(&window, "switch", true).unwrap();
@@ -282,8 +291,8 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].data["history"], true);
         assert_eq!(
-            b.activate(&rows[0], "close", true).unwrap()["kind"],
-            "message"
+            b.activate(&rows[0], "close", true).unwrap()["refresh_query"],
+            "/history"
         );
         assert_eq!(
             b.activate(&rows[0], "normal", true).unwrap()["kind"],

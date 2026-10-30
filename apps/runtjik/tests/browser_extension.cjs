@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const updates = [];
 const createdTabs = [];
 const historyQueries = [];
+const deletedHistory = [];
 const tabUpdates = [];
 const removed = [];
 const closedWindows = [];
@@ -21,6 +22,7 @@ const context = vm.createContext({URL, setTimeout() {}, browser: {
         update: async (id, value) => updates.push([id, value])
     },
     history: {
+        deleteUrl: async value => deletedHistory.push(value),
         search: async query => { historyQueries.push(query); return [{id:'h1', title:'Earlier page', url:'https://example.org/read', lastVisitTime:1234, visitCount:3}, {id:'bad',url:'javascript:alert(1)'}, {id:'file',url:'file:///private'}]; },
         getVisits: async ({url}) => url==='https://example.org/read' ? [{visitId:'v1'}] : []
     },
@@ -69,6 +71,11 @@ async function run(value) {
     const reopened = await run({op:'open-history',url:'https://example.org/read',marker:'[history] '});
     assert.equal(reopened.window,1);
     assert.equal(createdTabs[0].windowId,1);
+    assert.equal(createdTabs.length,1);
+    await assert.rejects(run({op:'delete-history',url:'file:///private'}),/HTTP/);
+    assert.equal(deletedHistory.length,0);
+    assert.equal((await run({op:'delete-history',url:'https://example.org/read'})).deleted,true);
+    assert.equal(JSON.stringify(deletedHistory),JSON.stringify([{url:'https://example.org/read'}]));
     assert.equal(createdTabs.length,1);
     console.log('PASS: private exclusion, stale tabs, tab activation, title prefix restoration');
 })().catch(error => { console.error(error); process.exitCode = 1; });

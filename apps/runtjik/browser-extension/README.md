@@ -87,8 +87,8 @@ status. Reload the extension in about:debugging after updating its files.
 profiles. `/history words` searches the browser's saved titles and URLs, across
 its retained history. Results are ordered by last visit and show the URL and
 visit count. Enter opens a new tab in the same profile and focuses its normal
-window. Private windows are never used. Shift/Ctrl+Enter do not modify or delete
-history. An entry removed since the query cannot be reopened through this action.
+window. Private windows are never used. Ctrl+Enter removes all visits for the selected URL from that profile’s
+history and refreshes the current search. Shift+Enter leaves history unchanged. An entry removed since the query cannot be reopened through this action.
 
 This uses the browser history API on demand. It does not scrape profiles or
 copy history into Runtjik's persistent index, and history is not mixed into

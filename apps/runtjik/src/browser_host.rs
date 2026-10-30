@@ -124,7 +124,8 @@ pub fn serve() -> Result<()> {
                         "details",
                         "close",
                         "history",
-                        "open-history"
+                        "open-history",
+                        "delete-history"
                     ]
                     .contains(&op),
                     "Unknown browser operation"
