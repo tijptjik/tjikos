@@ -65,6 +65,11 @@ or remaining runtime on battery, and Performance, Balanced and Power Saver modes
 Power modes use the system PowerProfiles D-Bus service (including tuned-ppd); only
 a supported, confirmed active mode is selected. Missing estimates and unsupported
 modes are shown explicitly.
+At 5% or lower while on battery, Bartjik sends one persistent `critical` warning
+to Notjik. It also warns when started below the threshold. The alert rearms on AC
+or after recovery to 7%; persistent state under `$XDG_STATE_HOME/bartjik/` prevents
+repeated warnings across bar restarts. Failed delivery retries after 30 seconds.
+Demo mode never sends battery warnings. Notjik's pause policy still applies.
 The provider polls every two seconds; `batteryGreen`, `batteryYellow`, and
 `batteryRed` style values override its colours. More than one bar in a section
 stacks inward. Services unavailable on a host report an unavailable state.

@@ -11,12 +11,14 @@ from . import config, providers, workspaces, demo, pointer, history, artwork, ly
 from .io import Unavailable, RateLimit, stop
 from .model import item, validate_items, untrusted_items
 from .actions import Executor, choose
+from .battery_alert import CriticalBatteryAlert
 
 
 class Worker:
-    def __init__(self, spec, notify):
+    def __init__(self, spec, notify, battery_alert=None):
         self.spec = spec
         self.notify = notify
+        self.battery_alert = battery_alert
         self.items = []
         self.error = "starting"
         self.updated = None
@@ -113,6 +115,8 @@ class Worker:
                     self.success(
                         await providers.REGISTRY[self.spec["provider"]](self.spec)
                     )
+                    if self.spec["provider"] == "battery" and self.battery_alert:
+                        await self.battery_alert.update(self.items)
             except Exception as e:
                 self.failures += 1
                 # API/process payloads and exception reprs may contain private data.
@@ -136,6 +140,7 @@ class Engine:
     def __init__(self, emit, demo_mode=False, history_path=None):
         self.emit = emit
         self.demo = demo_mode
+        self.battery_alert = None if demo_mode else CriticalBatteryAlert()
         self.config = None
         self.bars = []
         self.screens = []
@@ -254,7 +259,7 @@ class Engine:
                 )
             for key, spec in needed.items():
                 if key not in self.workers:
-                    self.workers[key] = Worker(spec, self.changed)
+                    self.workers[key] = Worker(spec, self.changed, self.battery_alert)
                     self.workers[key].start()
             need_pointer = any(
                 b["autoHide"]
