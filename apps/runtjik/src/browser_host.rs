@@ -118,19 +118,33 @@ pub fn serve() -> Result<()> {
                 let mut message: Value = serde_json::from_slice(&bytes)?;
                 let op = s(&message["op"]);
                 ensure!(
-                    ["list", "focus", "details", "close"].contains(&op),
+                    [
+                        "list",
+                        "focus",
+                        "details",
+                        "close",
+                        "history",
+                        "open-history"
+                    ]
+                    .contains(&op),
                     "Unknown browser operation"
                 );
+                let opening = op == "open-history";
                 let close = op == "close" && message["tab"].is_null();
-                if op != "focus" && !close {
+                if op != "focus" && !close && !opening {
                     return exchange(message);
                 }
                 let marker = format!("[runtjik-{}] ", Uuid::new_v4().simple());
-                let window = message["window"].clone();
-                message["op"] = json!("focus");
+                let mut window = message["window"].clone();
+                if !opening {
+                    message["op"] = json!("focus");
+                }
                 message["marker"] = json!(marker);
                 let result = (|| -> Result<Value> {
                     let response = exchange(message)?;
+                    if opening {
+                        window = response["window"].clone();
+                    }
                     let client = marked_window(&marker)?;
                     if close {
                         let target =

@@ -3,6 +3,8 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const updates = [];
+const createdTabs = [];
+const historyQueries = [];
 const tabUpdates = [];
 const removed = [];
 const closedWindows = [];
@@ -10,7 +12,7 @@ const windows = [
     {id: 1, titlePreface: 'Work: ', incognito: false, tabs: [{id: 11, title: 'Same page', active: true, url: 'https://example.org/read', favIconUrl: 'https://example.org/favicon.ico'}, {id: 12, title: 'Pinned', pinned: true}]},
     {id: 2, incognito: true, tabs: [{id: 22, title: 'Private'}]}
 ];
-const context = vm.createContext({setTimeout() {}, browser: {
+const context = vm.createContext({URL, setTimeout() {}, browser: {
     runtime: {connectNative: () => ({onMessage: {addListener() {}}, onDisconnect: {addListener() {}}})},
     windows: {
         getAll: async () => windows,
@@ -18,8 +20,13 @@ const context = vm.createContext({setTimeout() {}, browser: {
         get: async id => windows.find(w => w.id === id),
         update: async (id, value) => updates.push([id, value])
     },
+    history: {
+        search: async query => { historyQueries.push(query); return [{id:'h1', title:'Earlier page', url:'https://example.org/read', lastVisitTime:1234, visitCount:3}, {id:'bad',url:'javascript:alert(1)'}, {id:'file',url:'file:///private'}]; },
+        getVisits: async ({url}) => url==='https://example.org/read' ? [{visitId:'v1'}] : []
+    },
     tabs: {
-        get: async id => ({id, windowId: [11,12].includes(id) ? 1 : 3, pinned: id === 12, url: 'https://example.org/read', title: 'Same page'}),
+        create: async value => {createdTabs.push(value); return {id:13, windowId:value.windowId};},
+        get: async id => ({id, windowId: [11,12,13].includes(id) ? 1 : 3, pinned: id === 12, url: 'https://example.org/read', title: 'Same page'}),
         remove: async id => removed.push(id),
         update: async (id, value) => tabUpdates.push([id, value])
     }
@@ -51,5 +58,17 @@ async function run(value) {
     assert.equal(closedWindows.length, 0);
     await run({op: 'close', window: 1, tab: null});
     assert.deepEqual(closedWindows, [1]);
+    const history = await run({op:'history',text:'earlier'});
+    assert.equal(history.history.length,1);
+    assert.equal(history.history[0].visitCount,3);
+    assert.equal(historyQueries[0].maxResults,100);
+    assert.equal(historyQueries[0].startTime,0);
+    await assert.rejects(run({op:'history',text:'x'.repeat(513)}),/Invalid/);
+    await assert.rejects(run({op:'open-history',url:'javascript:alert(1)'}),/HTTP/);
+    await assert.rejects(run({op:'open-history',url:'https://example.org/deleted'}),/removed/);
+    const reopened = await run({op:'open-history',url:'https://example.org/read',marker:'[history] '});
+    assert.equal(reopened.window,1);
+    assert.equal(createdTabs[0].windowId,1);
+    assert.equal(createdTabs.length,1);
     console.log('PASS: private exclusion, stale tabs, tab activation, title prefix restoration');
 })().catch(error => { console.error(error); process.exitCode = 1; });

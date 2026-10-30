@@ -279,7 +279,7 @@ impl Launcher {
             ));
         }
         if enabled.iter().any(|s| s == "Browser")
-            && ["/browser", "/zen", "/tabs"].contains(&command)
+            && ["/browser", "/zen", "/tabs", "/history"].contains(&command)
         {
             return match self.browser.query(q, self.demo) {
                 Ok(rows) => Ok(self.provider_payload(rows, display, offset, limit, false, true)),

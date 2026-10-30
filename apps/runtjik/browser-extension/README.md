@@ -50,7 +50,7 @@ title matching when different windows display the same page. A title marker may
 briefly be visible in window decorations or bars. Zen-specific workspace/space
 switching beyond the standard Firefox tabs API still needs live verification.
 
-The extension needs `tabs` and `nativeMessaging` permissions. Private windows
+The extension needs `tabs`, `history` and `nativeMessaging` permissions. Private windows
 and pinned tabs are excluded, even if the extension is allowed in private
 browsing. Titles, URLs, favicon URLs and audio/unloaded status are returned on
 demand. Page content and screenshots are not sent. Favicons use embedded image
@@ -79,3 +79,24 @@ General search includes matching unpinned tabs and carries their favicons, just
 like `/tabs`. Browser window cards use the active tab's favicon when available.
 The general results heading is hidden unless it conveys a specific mode or pin
 status. Reload the extension in about:debugging after updating its files.
+
+
+## History search
+
+`/history` shows up to 100 recent HTTP(S) history entries across connected
+profiles. `/history words` searches the browser's saved titles and URLs, across
+its retained history. Results are ordered by last visit and show the URL and
+visit count. Enter opens a new tab in the same profile and focuses its normal
+window. Private windows are never used. Shift/Ctrl+Enter do not modify or delete
+history. An entry removed since the query cannot be reopened through this action.
+
+This uses the browser history API on demand. It does not scrape profiles or
+copy history into Runtjik's persistent index, and history is not mixed into
+general search. The existing launcher command-history preference still applies
+to typed search terms. Firefox/Zen do not record private-browsing visits in the
+history API. All connected profiles are searched, as with the tabs integration.
+
+After updating from bridge 0.1.0, reload the extension in Zen's
+`about:debugging#/runtime/this-firefox` and allow its new history permission.
+Reloading also reconnects the native host so it recognizes the new operations.
+The extension must remain connected for history search to work.

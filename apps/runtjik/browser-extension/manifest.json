@@ -1,9 +1,23 @@
 {
   "manifest_version": 2,
   "name": "Runtjik Browser Bridge",
-  "version": "0.1.0",
-  "description": "List and focus Firefox or Zen windows and tabs from Runtjik.",
-  "browser_specific_settings": {"gecko": {"id": "runtjik-browser@tjikos.local", "strict_min_version": "115.0"}},
-  "permissions": ["tabs", "nativeMessaging"],
-  "background": {"scripts": ["background.js"], "persistent": true}
+  "version": "0.2.0",
+  "description": "Search Firefox or Zen windows, tabs and browsing history from Runtjik.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "runtjik-browser@tjikos.local",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": [
+    "tabs",
+    "nativeMessaging",
+    "history"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": true
+  }
 }

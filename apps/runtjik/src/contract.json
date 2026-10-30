@@ -2860,6 +2860,10 @@
         [
           "/tabs",
           "Browser tabs"
+        ],
+        [
+          "/history",
+          "Browser history"
         ]
       ],
       "aliases": [

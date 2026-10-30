@@ -13,6 +13,30 @@ async function release(windowId, expected) {
 
 async function handle(message) {
     const windowId = message.window;
+    if (message.op === 'history') {
+        if (typeof message.text !== 'string' || message.text.length > 512) throw new Error('Invalid history query');
+        if (!browser.history) throw new Error('Reload the updated bridge and allow history access');
+        const items = await browser.history.search({text: message.text, startTime: 0, maxResults: 100});
+        return {history: items.filter(item => {
+            try { return ['http:', 'https:'].includes(new URL(item.url).protocol); } catch (_) { return false; }
+        }).map(item => ({id: item.id, title: (item.title || item.url).slice(0, 4096),
+            url: item.url, lastVisitTime: item.lastVisitTime || 0, visitCount: item.visitCount || 0}))};
+    }
+    if (message.op === 'open-history') {
+        const url = new URL(message.url);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP(S) history entries can be opened');
+        if (!(await browser.history.getVisits({url: message.url})).length) throw new Error('History entry was removed; refresh the list');
+        const windows = (await browser.windows.getAll({windowTypes: ['normal']})).filter(w => !w.incognito);
+        const target = windows.find(w => w.focused) || windows[0];
+        let tab;
+        if (target) tab = await browser.tabs.create({windowId: target.id, url: message.url, active: true});
+        else {
+            const created = await browser.windows.create({url: message.url, incognito: false});
+            tab = created.tabs[0];
+        }
+        await handle({op: 'focus', window: tab.windowId, tab: tab.id, marker: message.marker});
+        return {window: tab.windowId, tab: tab.id};
+    }
     if (message.op === 'list') {
         const windows = await browser.windows.getAll({populate: true, windowTypes: ['normal']});
         return {windows: windows.filter(w => !w.incognito).map(w => ({

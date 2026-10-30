@@ -44,6 +44,10 @@ pub struct Browser {
 impl Browser {
     pub fn query(&self, q: &str, demo: bool) -> Result<Vec<Entry>> {
         let (command, mut term) = q.split_once(' ').unwrap_or((q, ""));
+        let history_mode = command == "/history";
+        if history_mode && term.len() > 512 {
+            bail!("History query is too long");
+        }
         let tabs_mode = !["/browser", "/zen"].contains(&command);
         if !q.starts_with('/') {
             term = q;
@@ -51,7 +55,11 @@ impl Browser {
         let sessions = if demo {
             vec![(
                 "demo".into(),
-                json!({"windows":[{"id":1,"title":"Research","tabs":[{"id":11,"title":"Firefox extension documentation","url":"https://example.org/firefox"},{"id":12,"title":"Hyprland window management","url":"https://example.org/hyprland"}]},{"id":2,"title":"Reading","tabs":[{"id":21,"title":"A synthetic reading list","url":"https://example.org/reading"}]}]}),
+                if history_mode {
+                    json!({"history":[{"id":"history-demo","title":"Previously visited documentation","url":"https://example.org/docs","lastVisitTime":1000,"visitCount":2}]})
+                } else {
+                    json!({"windows":[{"id":1,"title":"Research","tabs":[{"id":11,"title":"Firefox extension documentation","url":"https://example.org/firefox"},{"id":12,"title":"Hyprland window management","url":"https://example.org/hyprland"}]},{"id":2,"title":"Reading","tabs":[{"id":21,"title":"A synthetic reading list","url":"https://example.org/reading"}]}]})
+                },
             )]
         } else {
             let mut paths: Vec<_> = match fs::read_dir(directory()?) {
@@ -66,7 +74,14 @@ impl Browser {
             paths.sort();
             let mut sessions = vec![];
             for path in paths {
-                match request(&path, &json!({"op":"list"})) {
+                match request(
+                    &path,
+                    &if history_mode {
+                        json!({"op":"history","text":term})
+                    } else {
+                        json!({"op":"list"})
+                    },
+                ) {
                     Ok(v) => {
                         sessions.push((path.file_name().unwrap().to_string_lossy().to_string(), v))
                     }
@@ -88,6 +103,32 @@ impl Browser {
         };
         let mut rows = vec![];
         for (session, state) in sessions {
+            if history_mode {
+                for item in state["history"]
+                    .as_array()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Reload the updated Browser bridge to enable history")
+                    })?
+                    .iter()
+                    .take(100)
+                {
+                    let url = s(&item["url"]);
+                    if !url::Url::parse(url).is_ok_and(|u| ["http", "https"].contains(&u.scheme()))
+                    {
+                        continue;
+                    }
+                    let title = if s(&item["title"]).is_empty() {
+                        url
+                    } else {
+                        s(&item["title"])
+                    };
+                    if demo && !folded(&format!("{title} {url}")).contains(folded(term).trim()) {
+                        continue;
+                    }
+                    rows.push(Entry { id: format!("Browser:{session}:history:{}", item["id"]), name:title.into(), subtitle:format!("{} · {} visits", url, item["visitCount"].as_u64().unwrap_or(0)), icon:"document-open-recent".into(), provider:"Browser".into(), keywords:String::new(), data:json!({"session":session,"url":url,"history":true,"lastVisitTime":item["lastVisitTime"]}) });
+                }
+                continue;
+            }
             for window in state["windows"]
                 .as_array()
                 .ok_or_else(|| anyhow::anyhow!("Invalid browser windows"))?
@@ -165,9 +206,23 @@ impl Browser {
                 }
             }
         }
+        if history_mode {
+            rows.sort_by(|a, b| {
+                b.data["lastVisitTime"]
+                    .as_f64()
+                    .unwrap_or(0.0)
+                    .total_cmp(&a.data["lastVisitTime"].as_f64().unwrap_or(0.0))
+            });
+            rows.truncate(100);
+        }
         Ok(rows)
     }
     pub fn activate(&mut self, e: &Entry, mode: &str, demo: bool) -> Result<Value> {
+        if e.data["history"] == true && ["switch", "close"].contains(&mode) {
+            return Ok(
+                json!({"kind":"message","message":"Enter reopens this history item; browser history is never deleted by Runtjik."}),
+            );
+        }
         if mode == "switch" {
             if e.data["tab"].is_null() {
                 self.scope = Some((
@@ -191,12 +246,18 @@ impl Browser {
         {
             bail!("Invalid browser session");
         }
-        let op = if mode == "close" { "close" } else { "focus" };
+        let op = if e.data["history"] == true {
+            "open-history"
+        } else if mode == "close" {
+            "close"
+        } else {
+            "focus"
+        };
         let response = if demo {
             json!({})
         } else {
             let mut msg = json!({"op":op,"window":e.data["window"],"tab":e.data["tab"]});
-            if mode == "close" {
+            if mode == "close" || e.data["history"] == true {
                 msg["url"] = e.data["url"].clone();
             }
             request(&directory()?.join(session), &msg)?
@@ -212,6 +273,24 @@ impl Browser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn history_is_separate_from_tab_scope_and_cannot_delete() {
+        let mut b = Browser::default();
+        let window = b.query("/browser", true).unwrap().remove(0);
+        b.activate(&window, "switch", true).unwrap();
+        let rows = b.query("/history example.org", true).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].data["history"], true);
+        assert_eq!(
+            b.activate(&rows[0], "close", true).unwrap()["kind"],
+            "message"
+        );
+        assert_eq!(
+            b.activate(&rows[0], "normal", true).unwrap()["kind"],
+            "activated"
+        );
+        assert!(b.query("/history nonexistent", true).unwrap().is_empty());
+    }
     #[test]
     fn demo_scope_and_filter() {
         let mut b = Browser::default();
