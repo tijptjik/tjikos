@@ -6,9 +6,13 @@ if [[ -f "$source_root/runtjik.py" ]]; then
 else
     export RUNTJIK_HOME="${RUNTJIK_HOME:-$HOME/.local/lib/runtjik}"
 fi
+core=("$RUNTJIK_HOME/runtjik-core")
+if [[ "${RUNTJIK_BACKEND:-rust}" == python ]]; then
+    core=(python3 -B "$RUNTJIK_HOME/runtjik.py")
+fi
 case "${1:-toggle}" in
-    --version|version) exec python3 -B "$RUNTJIK_HOME/runtjik.py" version ;;
-    refresh|stats|rebuild-counts|check|migrate-config) exec python3 -B "$RUNTJIK_HOME/runtjik.py" "$@" ;;
+    --version|version) exec "${core[@]}" version ;;
+    refresh|stats|rebuild-counts|check|migrate-config) exec "${core[@]}" "$@" ;;
     status) exec quickshell ipc --path "$RUNTJIK_HOME/qml" call runtjik status ;;
     close|quit|toggle|show) ;;
     --demo) export RUNTJIK_DEMO=1 ;;
@@ -25,4 +29,7 @@ fi
 if [[ "${1:-toggle}" == toggle ]] && quickshell ipc --path "$RUNTJIK_HOME/qml" call runtjik toggle >/dev/null 2>&1; then
     exit 0
 fi
-exec python3 -B "$RUNTJIK_HOME/control.py" "${1:-toggle}"
+if [[ "${RUNTJIK_BACKEND:-rust}" == python ]]; then
+    exec python3 -B "$RUNTJIK_HOME/control.py" "${1:-toggle}"
+fi
+exec "${core[@]}" control "${1:-toggle}"

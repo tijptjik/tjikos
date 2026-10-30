@@ -7,4 +7,6 @@ for path in root.rglob('*.py'):
         ast.parse(path.read_text(), filename=str(path))
 for path in [root / 'bin/runtjik', *root.glob('scripts/*.sh')]:
     subprocess.run(['bash', '-n', str(path)], check=True)
-print('Runtjik syntax checks passed')
+subprocess.run(['cargo', 'fmt', '--check', '--manifest-path', str(root / 'Cargo.toml')], check=True)
+subprocess.run(['python3', '-B', str(root / 'scripts/export_contract.py'), '--check'], check=True)
+print('Runtjik Python, shell, Rust formatting and contract checks passed')

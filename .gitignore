@@ -9,3 +9,7 @@ __pycache__/
 *.mbox
 *.age
 *.partial
+
+# Rust launcher build outputs
+apps/runtjik/target
+apps/runtjik/runtjik-core

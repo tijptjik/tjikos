@@ -285,7 +285,9 @@ ShellRoot {
     }
     Process {
         id: backend
-        command: ['python3','-B',Quickshell.env('RUNTJIK_HOME')+'/runtjik.py','serve'].concat(root.demo?['--demo']:[])
+        command: (Quickshell.env('RUNTJIK_BACKEND') === 'python'
+                  ? ['python3','-B',Quickshell.env('RUNTJIK_HOME')+'/runtjik.py','serve']
+                  : [Quickshell.env('RUNTJIK_HOME')+'/runtjik-core','serve']).concat(root.demo?['--demo']:[])
         running: true
         stdinEnabled: true
         stdout: SplitParser {onRead: data => {
