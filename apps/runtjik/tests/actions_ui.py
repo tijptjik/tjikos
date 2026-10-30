@@ -12,7 +12,7 @@ with private_compositor():
     temp = Path(os.environ['XDG_RUNTIME_DIR']).parent
     home = temp/'app';home.mkdir()
     shutil.copytree(app/'qml',home/'qml')
-    for name in ('runtjik.py','words.py','desktop_plugins.py','capture_worker.py','capture_countdown.py','capture_trash.py'):
+    for name in ('todo.py', 'runtjik.py','words.py','desktop_plugins.py','capture_worker.py','capture_countdown.py','capture_trash.py'):
         shutil.copy2(app/name,home/name)
     config=temp/'runtjik.conf';config.write_text('')
     env={**os.environ,'RUNTJIK_HOME':str(home),'RUNTJIK_DEMO':'1','RUNTJIK_CONFIG':str(config)}

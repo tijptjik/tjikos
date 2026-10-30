@@ -20,10 +20,12 @@ import tempfile
 import time
 import tomllib
 from dataclasses import asdict, dataclass, field
+from todo import Todo, OPTIONS as TODO_OPTIONS
 from words import Provider as Words, DEFAULT_OPTIONS, validate_options
 from desktop_plugins import Clipboard, Recorder, Screenshots, DEFAULT_OPTIONS as DESKTOP_OPTIONS, validate_options as validate_desktop_options
 
-BUNDLED_PROVIDERS = {provider.name: provider for provider in (Words, Clipboard, Recorder, Screenshots)}
+BUNDLED_PROVIDERS = {provider.name: provider for provider in (Words, Clipboard, Recorder, Screenshots, Todo)}
+
 
 VERSION = "0.8.3"
 API_VERSION = 1
@@ -40,7 +42,7 @@ DEFAULTS = {
     "launch": {"terminal": ["kitty", "--"], "isolate": True},
     "history": {"enabled": True},
     "plugins": {"enabled": list(BUNDLED_PROVIDERS)},
-    "plugin_settings": {"Words": DEFAULT_OPTIONS, **DESKTOP_OPTIONS},
+    "plugin_settings": {"Words": DEFAULT_OPTIONS, **DESKTOP_OPTIONS, "Todo": TODO_OPTIONS},
     "overrides": {},
 }
 
@@ -1056,6 +1058,9 @@ class Launcher:
         if command in self.plugin_commands:
             name, _ = self.plugin_commands[command]
             try:
+                if getattr(self.providers[name], 'mode', '') == 'app':
+                    return self.payload([], query=display_query, app_mode=name,
+                                        app_state=self.providers[name].state({}, self.settings))
                 entries = [value if isinstance(value, Entry) else Entry(**value)
                            for value in self.providers[name].query(query, self.settings)]
                 if any(e.provider != name or not e.id.startswith(name + ":") for e in entries):
@@ -1066,7 +1071,8 @@ class Launcher:
                 return self.payload(rows, query=display_query, pending=bool(getattr(self.providers[name], "pending", False)), total=len(entries), offset=offset,
                                     next_offset=offset + len(rows), has_more=offset + len(rows) < len(entries))
             except Exception as exc:
-                return self.payload([], query=display_query, message=f"{name}: {exc}")
+                return self.payload([], query=display_query, message=f"{name}: {exc}",
+                                    app_mode=name if getattr(self.providers[name], "mode", "") == "app" else "")
         if query.startswith("/") and not run_mode and not running_mode:
             if query.strip() in ("/shortcuts", "/bindings"):
                 return self.payload([{"id": "/shortcuts/" + str(i), "name": keys, "subtitle": description,
@@ -1385,6 +1391,11 @@ def main():
                 continue
             if request["op"] == "query":
                 value = launcher.query(request.get("query", ""), request.get('offset',0), request.get('limit'))
+            elif request["op"] == "app-action":
+                provider = launcher.providers.get(request.get('provider'))
+                if provider is None or getattr(provider, 'mode', '') != 'app':
+                    raise ValueError('App provider is unavailable')
+                value = {'kind': 'app-state', 'app_state': provider.state(request, launcher.settings)}
             elif request["op"] == "resume":
                 # Reopening observes external TOML edits, including provider changes.
                 if config() != launcher.settings:

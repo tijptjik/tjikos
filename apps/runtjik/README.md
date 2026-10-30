@@ -636,7 +636,7 @@ animate result positions. Close tracking polls every 180 ms only while needed.
 
 `runtjik migrate-config` adds missing bundled-plugin settings while preserving
 existing values, comments, file mode and plugin enablement. To explicitly enable
-all four bundled providers as well, use
+all bundled providers as well, use
 `runtjik migrate-config --enable-bundled-plugins`. Existing third-party providers
 remain enabled. A changed config receives a private `runtjik.conf.pre-plugins-*`
 backup beside the original and is replaced atomically under the settings lock.
@@ -684,3 +684,9 @@ imv keys: Left/Right previous/next, Up/Down zoom, `r` reset, `a` actual size,
 `f` fullscreen, `d` information overlay, `h/j/k/l` pan, Ctrl+R rotate,
 `gg` first image, Shift+G last image, and `q` quit. `x` removes the current
 image from the viewing list; it does not delete the file.
+
+## Todo app
+
+`/todo` opens the first keyboard-action app mode, with a collapsed search bar,
+grouped task lists, recurring completion history and shared Si authority.
+See [Todo controls, notification cards and encrypted backup setup](docs/todo.md).

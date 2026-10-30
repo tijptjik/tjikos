@@ -19,7 +19,7 @@ with private_compositor():
     home = temp / 'app'
     home.mkdir()
     shutil.copytree(app / 'qml', home / 'qml')
-    for name in ('runtjik.py', 'words.py', 'desktop_plugins.py', 'capture_worker.py', 'capture_countdown.py'):
+    for name in ('todo.py', 'runtjik.py', 'words.py', 'desktop_plugins.py', 'capture_worker.py', 'capture_countdown.py'):
         shutil.copy2(app / name, home / name)
     shell = home / 'qml/shell.qml'
     shell.write_text(shell.read_text().replace('function testState(): string {', 'function protectDemo(): void {panel.pinned=true;}\n        function testState(): string {'))

@@ -33,6 +33,8 @@ ShellRoot {
             else {if(found!==i)resultModel.move(found,i,1);resultModel.setProperty(i,'row',results[i]);}
         }
     }
+    property string appMode: ""
+    property var appState: ({})
     property var results: []
     property string runtimeVersion: ''
     property string view: 'grid'
@@ -138,10 +140,14 @@ ShellRoot {
         items.positionViewAtIndex(selected, GridView.Contain);
         if(delta>0 && selected>=results.length-2*settings.ui.columns)loadMore();
     }
+    function focusInput() {
+        if(appMode) { if(!todoApp.activeFocus)todoApp.forceActiveFocus(); }
+        else searchBox.forceActiveFocus();
+    }
     function focusSearch() {
         if(!opened || quitting)return;
         panel.acquireKeyboard();
-        searchBox.forceActiveFocus();
+        root.focusInput();
     }
     function activate(switchWindow, closeWindow=false) {
         if (busy || !results[selected]) return;
@@ -157,7 +163,7 @@ ShellRoot {
         request.prepare=switchWindow && !closeWindow && !windowEntry && ['apps','commands'].includes(results[selected].provider);
         if (!demo && !results[selected].keep_open && !closeWindow && !closingIds.includes(request.id) && !request.prepare && (windowEntry || !results[selected].id.startsWith('/'))) {
             queuedRequest=request;
-            if(panel.pinned && !results[selected].hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
+            if(panel.pinned && !results[selected]?.hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
             else panel.visible=false;
             actionDelay.restart();
         } else send(request);
@@ -183,14 +189,14 @@ ShellRoot {
         if(opened)return;
         initialMonitor=Hyprland.focusedMonitor?.name || '';
         movedMonitor='';transferring=false;centering=true;
-        panel.pinned=false;panel.ownsKeyboard=true;windowEntry='';query='';searchBox.text='';
+        panel.pinned=false;panel.ownsKeyboard=true;appMode='';windowEntry='';query='';searchBox.text='';
         message='';selected=0;pointerSelection=false;pendingAction=null;busy=false;
         loadingMore=false;hasMore=false;nextOffset=0;pendingSelection=-1;
         results=homeResults;resultQuery='';view=settings.ui.view;items.positionViewAtBeginning();
         opened=true;
         debounce.stop();
         panel.visible=true;
-        searchBox.forceActiveFocus();
+        root.focusInput();
         send({op:'resume'});
     }
     function back() {
@@ -202,7 +208,10 @@ ShellRoot {
         if (msg.serial && msg.serial < serial) return;
         if(msg.kind==='results' && ready && (msg.query || '')!==query && !msg.reset_query && msg.edit_query===undefined)return;
         if (msg.kind !== 'results' || msg.serial === serial) busy = false;
+        if (msg.kind === 'app-state') {message=msg.app_state.message || '';appState=Object.assign({},appState,msg.app_state);if(msg.app_state.tasks)todoApp.accepted();return;}
         if (msg.kind === 'results') {
+            appMode=msg.app_mode || '';
+            if(msg.app_state)appState=msg.app_state;
             if(msg.command_history!==undefined){commandHistory=msg.command_history;historyCursor=-1;}
             providerPending=!!msg.pending;
             if(root.wordMode && !providerPending && root.historyCursor<0)root.rememberCommand(root.query);
@@ -235,7 +244,7 @@ ShellRoot {
             if (pendingAction!==null) {const action=pendingAction;pendingAction=null;Qt.callLater(()=>root.activate(action.switchWindow,action.closeWindow));}
         } else if (msg.kind === 'edit') {
             searchBox.text=msg.text;
-            searchBox.forceActiveFocus();
+            root.focusInput();
             if(msg.select_value) {const start=msg.text.indexOf(' ',8)+1;searchBox.select(start,msg.text.length);}
         } else if (msg.kind === 'launch') {
             busy=true;
@@ -264,7 +273,7 @@ ShellRoot {
                 search();
             } else close();
         } else {loadingMore=false;message=msg.message || 'Unable to complete action';if(!root.ready)console.error(message);}
-        if (msg.kind!=='activated' && msg.kind!=='launch' && !root.quitting && root.opened && root.initialCaptured) {panel.visible=true;if(panel.ownsKeyboard)searchBox.forceActiveFocus();}
+        if (msg.kind!=='activated' && msg.kind!=='launch' && !root.quitting && root.opened && root.initialCaptured) {panel.visible=true;if(panel.ownsKeyboard){if(root.appMode)todoApp.forceActiveFocus();else root.focusInput();}}
     }
     Process {
         id: backend
@@ -285,10 +294,10 @@ ShellRoot {
     IpcHandler {
         target: 'runtjik'
         function close(): void {root.close();}
-        function releaseKeyboard(): void {if(panel.pinned && !results[selected].hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}}
+        function releaseKeyboard(): void {if(panel.pinned && !results[selected]?.hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}}
         function outsideClick(): void {
             // Consult current UI state even if the passive observer is still rearming.
-            if(panel.pinned && !results[selected].hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
+            if(panel.pinned && !results[selected]?.hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
             else root.close();
         }
         function focusSearch(): void {root.focusSearch();}
@@ -342,14 +351,14 @@ ShellRoot {
                 frame.y=(panel.height-frame.height)/2;
                 panel.updateBounds(frame.x,frame.y,frame.width,frame.height);
                 root.centering=false;
-                searchBox.forceActiveFocus();
+                root.focusInput();
             }
             if(placed && root.transferring){
                 frame.x=Math.max(0,Math.min(root.transferPosition.x,panel.width-frame.width));
                 frame.y=Math.max(0,Math.min(root.transferPosition.y,panel.height-frame.height));
                 panel.updateBounds(frame.x,frame.y,frame.width,frame.height);
                 root.transferring=false;
-                searchBox.forceActiveFocus();
+                root.focusInput();
             }
         }
         mask: Region {x:frame.x;y:frame.y;width:frame.width;height:frame.height;radius:22}
@@ -414,14 +423,24 @@ ShellRoot {
                             root.movedMonitor=target.name;
                             Qt.callLater(()=>{
                                 panel.visible=true;
-                                searchBox.forceActiveFocus();
+                                root.focusInput();
                             });
                         });
                     } else boundsTimer.restart();
                 }
                 onCanceled: {root.dragging=false;boundsTimer.restart();}
             }
+            TodoApp {
+                id: todoApp
+                anchors.fill: parent; anchors.margins: 20
+                visible: root.appMode === 'Todo'
+                stateData: root.appState; theme: root.theme; errorMessage: root.message
+                onRequest: request => root.send(Object.assign({op:'app-action',provider:root.appMode}, request))
+                onExitApp: { root.appMode=''; searchBox.text=''; root.query=''; root.search(); root.focusInput(); }
+                onVisibleChanged: if(visible) forceActiveFocus()
+            }
             Column {
+                visible: root.appMode === ''
                 anchors.fill: parent
                 anchors.margins: 20
                 anchors.bottomMargin: 8
