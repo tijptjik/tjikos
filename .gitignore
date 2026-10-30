@@ -12,3 +12,5 @@ __pycache__/
 
 # Rust build output
 **/target/
+apps/runtjik/target
+apps/runtjik/runtjik-core

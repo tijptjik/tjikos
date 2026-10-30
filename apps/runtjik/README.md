@@ -7,11 +7,48 @@ and Hyprland window switching. The layout takes inspiration from
 [Hamr](https://github.com/Stewart86/hamr); this implementation is independent.
 Rose Pine surfaces and Rose Punk accents match Bartjik and Notjik.
 
-## Motivation and measurements
+## Native backend worktree
+
+This branch runs a Rust launcher core behind the existing QML interface. Native
+code handles the controller, configuration reads and validation, Gio discovery,
+Fish-history filtering, index and icon caches, fuzzy ranking, pagination,
+SQLite history, application launches and Hyprland window selection/focusing.
+GTK/GdkPixbuf still resolve themes and rasterize SVGs using the same libraries.
+
+This is a **native core migration, not a Python-free rewrite**. Python remains as
+a reference backend and an on-demand compatibility host for API-v1 providers,
+configuration editing/migration, command menus, and close/escalation actions.
+The host stays alive after first use to preserve provider state. Consequently,
+normal search/open/switch runs without Python, but using a provider or one of
+those compatibility paths adds startup cost and can use more total helper RAM
+than the original implementation. The UI remains Quickshell/QML.
+
+[Paired timings, memory measurements and validation](docs/rust-rewrite.md)
+include the compatibility-host cost, raw samples and reproduction commands.
+
+For comparison, fully quit the current instance before selecting the reference:
+
+```sh
+bin/runtjik quit
+RUNTJIK_BACKEND=python bin/runtjik show
+RUNTJIK_BACKEND=python bin/runtjik quit
+bin/runtjik show  # Rust is the default in this branch
+```
+
+Build with Cargo/Rust (including rustfmt), a C linker, pkg-config and development
+headers for GTK 3, Gio, GdkPixbuf and SQLite, in addition to the workspace tools.
+`bun run build --filter=@tjikos/runtjik` builds Tasktjik and the Rust payload;
+`bun run check --filter=@tjikos/runtjik` checks syntax/formatting and exported
+contract freshness. `bun run test` in this app runs the existing Python tests
+and the executable Python/Rust parity checks after a build. Native focus-command
+tests run with `cargo test --release --locked`.
+
+## Motivation and historical measurements
 
 Runtjik keeps the launcher focused on application/command discovery and switching.
-One Quickshell process and one Python helper replace a resident UI, daemon and
-plugin processes. Since 0.6.0, Quickshell and its Python helper stay resident after
+The original Python implementation used one Quickshell process and one helper
+to replace a resident UI, daemon and plugin processes. Since 0.6.0, Quickshell
+and its backend stay resident after
 the first opening so subsequent requests can reuse the UI and index. Dismissal
 unmaps the layer, removes outside-click bindings and stops periodic index queries.
 The tradeoff is idle RAM in exchange for faster reopening. `runtjik quit` releases
@@ -122,10 +159,10 @@ runtjik --version
 
 The shared `scripts/install.sh runtjik` entry point is also supported. Installation
 preserves an existing config. There is no startup service: the first request starts
-Quickshell and one Python helper, which remain warm until `runtjik quit`, logout,
+Quickshell and the Rust helper, which remain warm until `runtjik quit`, logout,
 or a runtime failure. Installation stops the old resident pair before replacing
 its files. Index/history files remain on disk.
-Cold starts and explicit `show`/`close` requests use a short-lived controller with
+Cold starts and explicit `show`/`close` requests use a short-lived Rust controller with
 a per-display lock. Concurrent cold requests cannot start duplicate instances;
 `show` is idempotent and waits for UI readiness. Resident `toggle` requests go
 directly to Quickshell IPC and return after submitting the action, avoiding Python

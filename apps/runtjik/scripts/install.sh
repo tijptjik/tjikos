@@ -4,7 +4,7 @@ root_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 install_home="${RUNTJIK_INSTALL_HOME:-$HOME}"
 config_root="${RUNTJIK_INSTALL_CONFIG:-${XDG_CONFIG_HOME:-$install_home/.config}}"
 target="$install_home/.local/lib/runtjik"
-test -f "$root_dir/dist/runtjik.py"
+test -x "$root_dir/dist/runtjik-core"
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
     TASKTJIK_INSTALL_HOME="$install_home" TASKTJIK_INSTALL_CONFIG="$config_root" bash "$root_dir/../tasktjik/scripts/install.sh"
 fi
@@ -27,6 +27,8 @@ for directory in qml examples docs browser-extension; do
     rm -rf -- "$previous"
 done
 install -m 644 "$root_dir/dist/todo.py" "$root_dir/dist/browser.py" "$root_dir/dist/browser_host.py" "$root_dir/dist/image_viewer.py" "$root_dir/dist/runtjik.py" "$root_dir/dist/words.py" "$root_dir/dist/desktop_plugins.py" "$root_dir/dist/capture_worker.py" "$root_dir/dist/capture_countdown.py" "$root_dir/dist/capture_trash.py" "$root_dir/dist/control.py" "$root_dir/dist/README.md" "$target/"
+install -m 755 "$root_dir/dist/runtjik-core" "$target/runtjik-core"
+install -m 644 "$root_dir/dist/compat_host.py" "$target/compat_host.py"
 install -m 755 "$root_dir/dist/bin/runtjik" "$install_home/.local/bin/runtjik"
 bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" runtjik
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 && ! -e "$config_root/runtjik/runtjik.conf" ]]; then
