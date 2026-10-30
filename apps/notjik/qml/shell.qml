@@ -161,11 +161,11 @@ ShellRoot {
             .concat(floatingIds.filter(id => id !== draggingId));
     }
 
-    function dismissNotice(id, visibleIds) {
+    function dismissNotice(id, safeRead, visibleIds) {
         const notice = find(id);
         const shown = visibleIds || dismissReadIds();
         if (notice && !notice.archived && shown.includes(id))
-            log("user-dismissed", notice);
+            log(safeRead ? "user-safe-read" : "user-dismissed", notice);
         close(id, false);
     }
 
@@ -470,7 +470,7 @@ ShellRoot {
             if (request.id !== "all" && !find(request.id)) throw Error("Notification not found");
             // Freeze eligibility before removing cards reveals queued/grouped ones.
             const shown = dismissReadIds();
-            for (const n of notices.slice()) if (request.id === "all" || request.id === n.id) dismissNotice(n.id, shown);
+            for (const n of notices.slice()) if (request.id === "all" || request.id === n.id) dismissNotice(n.id, false, shown);
             break;
         }
         case "openTelegramChat": openTelegramChat(request.id); break;

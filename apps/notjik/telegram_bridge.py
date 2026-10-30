@@ -866,9 +866,10 @@ class Bridge:
 
         self.td.send("getMessageProperties", properties, chat_id=chat, message_id=message)
 
-    def dismiss_read(self, entry, done):
+    def dismiss_read(self, entry, done, explicit_safe=False):
         from notjik import load_config
-        options = load_config(Path(__file__).resolve().parent)["telegram"]
+        options = ({"dismissIsRead": [], "dismissReadMode": "safe"} if explicit_safe
+                   else load_config(Path(__file__).resolve().parent)["telegram"])
         chat, message = entry["message"]["chat_id"], entry["message"]["id"]
         rules = options["dismissIsRead"]
 
@@ -918,7 +919,7 @@ class Bridge:
                                  chat_id=chat, from_message_id=message, offset=0, limit=2, only_local=False)
             self.td.send("getChat", chat_result, chat_id=chat)
 
-        if str(chat) in rules:
+        if explicit_safe or str(chat) in rules:
             matched()
             return
         usernames = iter(rule[1:] for rule in rules if rule.startswith("@"))
@@ -952,8 +953,8 @@ class Bridge:
                     done({"ok": False, "error": result.get("message", "Telegram rejected the action")})
                 else:
                     done({"ok": True})
-            if op == "dismissRead":
-                self.dismiss_read(entry, done)
+            if op in ("dismissRead", "safeRead"):
+                self.dismiss_read(entry, done, explicit_safe=op == "safeRead")
             elif op == "transcribe":
                 self.transcribe(key, entry, done)
             elif op == "read":

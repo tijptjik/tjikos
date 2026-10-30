@@ -160,8 +160,10 @@ Buttons invoke their command or the application's standard D-Bus action. Actions
 dismiss the notification unless it is resident (`--resident` or the standard
 `resident` hint). A standard `default` action appears as an explicit button.
 Clicking any non-interactive part of a popup dismisses it. **Ctrl+click** that area
-on a popup or floating notice to dismiss all outstanding notifications, including
-grouped and queued notices. Drag that area instead
+on a Telegram bridge card to dismiss that card and attempt a safe Telegram read
+(earlier unread messages are protected). On other notifications, Ctrl+click
+dismisses all outstanding notifications, including grouped and queued notices.
+Drag that area instead
 to detach the notice as a regular floating window on the current Hyprland
 workspace. It stays on that workspace when you switch away; focus it to use the
 usual move-to-workspace, move-to-monitor and close shortcuts. Floating notices stay open past their
@@ -830,6 +832,10 @@ Click dismissal, the floating card's close button, keyboard dismissal and
 cards only. Paused notifications and hidden queued/grouped cards never request a
 read, even when dismissed in bulk. Earlier unread Telegram messages still block a
 safe read regardless of whether their notifications were shown.
+
+**Ctrl+click** a Telegram bridge card's non-interactive area to dismiss just that
+card and request a safe read, even if its chat is not in `dismissIsRead`. This
+always uses safe mode, including when `dismissReadMode` is `through`.
 
 Expiry, focus suppression,
 action completion and Telegram-originated removal do not. Demo/history cards and

@@ -113,6 +113,26 @@ class DismissReadTests(unittest.TestCase):
         self.respond({"@type": "error", "message": "denied"})
         self.assertEqual(self.results[-1], {"ok": False, "error": "denied"})
 
+    def test_ctrl_click_bypasses_allowlist_but_never_safe_checks(self):
+        self.configure([], "through")
+        event = {"event": "user-safe-read", "notice": {"type": "telegram", "app": telegram.APP,
+                 "data": {"chatId": "123", "messageId": "42"}}}
+        request = notjik.dismiss_read_request(notjik.load_config(ROOT), event)
+        self.assertEqual(request["action"], "safeRead")
+        self.bridge.entries[telegram.message_key(123, 42)] = self.entry
+        self.bridge.action(request, self.results.append)
+        self.assertEqual(self.td.calls[-1][0], "getChat")
+        self.chat()
+        self.respond({"@type": "messages", "messages": [
+            {"id": 42, "chat_id": 123}, {"id": 41, "chat_id": 123}]})
+        self.assertIn("skipped", self.results[-1])
+        self.assertNotIn("viewMessages", [call[0] for call in self.td.calls])
+        self.bridge.action(request, self.results.append)
+        self.chat(unread_count=1, last_message={"id": 42})
+        self.assertEqual(self.td.calls[-1][0], "viewMessages")
+        event["notice"]["data"]["demo"] = True
+        self.assertIsNone(notjik.dismiss_read_request(notjik.load_config(ROOT), event))
+
     @unittest.skipUnless(shutil.which("bun"), "Bun required for QML JavaScript checks")
     def test_qml_dismiss_only_reads_visible_cards_and_freezes_bulk_selection(self):
         source = (ROOT / "qml/shell.qml").read_text()
@@ -135,7 +155,7 @@ function reset() {
 reset();paused=true;dismissNotice('shown');assert.deepEqual(events,[]);paused=false;
 reset();locked=true;dismissNotice('shown');assert.deepEqual(events,[]);locked=false;
 reset();dismissNotice('queued');assert.deepEqual(events,[]);
-reset();dismissNotice('shown');assert.deepEqual(events,[['user-dismissed','shown']]);
+reset();dismissNotice('shown',true);assert.deepEqual(events,[['user-safe-read','shown']]);
 reset();bulkDismiss({op:'dismiss',id:'all'});
 assert.deepEqual(events,[['user-dismissed','shown']]);assert.equal(notices.length,0);
 """

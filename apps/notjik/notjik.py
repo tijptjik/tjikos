@@ -369,12 +369,13 @@ def dismiss_read_request(cfg, event):
     """Only an explicit live-card dismissal can request an automatic read."""
     notice = event.get("notice") or {}
     data = notice.get("data") or {}
-    if (event.get("event") != "user-dismissed" or notice.get("type") != "telegram"
+    explicit = event.get("event") == "user-safe-read"
+    if (event.get("event") not in ("user-dismissed", "user-safe-read") or notice.get("type") != "telegram"
             or notice.get("app") != "Telegram via Notjik" or data.get("demo")
-            or notice.get("archived") or not cfg["telegram"]["dismissIsRead"]):
+            or notice.get("archived") or (not explicit and not cfg["telegram"]["dismissIsRead"])):
         return None
     from telegram_bridge import identifier
-    return {"action": "dismissRead", "chatId": str(identifier(data.get("chatId"))),
+    return {"action": "safeRead" if explicit else "dismissRead", "chatId": str(identifier(data.get("chatId"))),
             "messageId": str(identifier(data.get("messageId")))}
 
 
@@ -475,7 +476,7 @@ def worker(root):
                                 emit({"error": "Dismiss read: queue full; message left unread"})
                             else:
                                 dismiss_jobs.append(dismiss_pool.submit(send_dismiss_read, request))
-                        if event.get("event") == "user-dismissed":
+                        if event.get("event") in ("user-dismissed", "user-safe-read"):
                             continue
                         if db is None:
                             db = database()

@@ -201,7 +201,8 @@ Rectangle {
                     if (card.controller.historySelectedKey === card.notice.historyKey) card.controller.historySelectedKey = "";
                     else card.controller.selectHistory(card.notice.historyKey);
                 } else if (cardTap.point.modifiers & Qt.ControlModifier) {
-                    card.controller.handle({op: "dismiss", id: "all"});
+                    if (card.notice.type === "telegram") card.controller.dismissNotice(card.notice.id, true);
+                    else card.controller.handle({op: "dismiss", id: "all"});
                 } else if (!card.floating) card.controller.dismissNotice(card.notice.id);
             }
         }
