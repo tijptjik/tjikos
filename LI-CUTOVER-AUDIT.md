@@ -192,7 +192,7 @@ repository override rename, the reviewed system apply was allowed and succeeded.
 Automatic approval review separately rejected this remaining command:
 
 ```sh
-tjikup --config ~/.local/share/dotjik/tjikup.json \
+tjikup --config ~/code/dotjik/tjikup.json \
   --apply-dotfiles --apply-sysfiles --skip-repo-sync
 ```
 

@@ -9,7 +9,7 @@ orchestration, template/file deployment, installers and ordinary maintenance.
 Port the remaining Python Google Drive/Restic backup, Si application snapshot,
 pull and restore, and SnapRAID maintenance/notification engines to Rust under
 `apps/synctjik`. Update the matching policy, wrappers, recipes and systemd units
-in `/home/io/.local/share/dotjik` to invoke Synctjik. Keep application runtimes
+in `/home/io/code/dotjik` to invoke Synctjik. Keep application runtimes
 and development test tools separate from fleet-helper dependencies.
 
 Preserve storage layouts, backup formats, locks shared with app updates, durable
