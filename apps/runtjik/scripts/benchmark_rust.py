@@ -107,7 +107,7 @@ def backends(root, trials):
 
 
 def ui(root, trials):
-    result = {name: {'cold': [], 'show': [], 'toggle': []} for name in ('python', 'rust')}
+    result = {name: {'cold': [], 'show': [], 'toggle': []} for name in ('rust',)}
     original = os.environ.copy()
     try:
         with private_compositor():
@@ -143,7 +143,7 @@ def ui(root, trials):
                 ready(name)
                 run(name, 'quit')
             for trial in range(trials):
-                for name in (('python', 'rust') if trial % 2 == 0 else ('rust', 'python')):
+                for name in ('rust',):
                     try:
                         elapsed, _ = timed(lambda: run(name, 'show'))
                         state = ready(name)

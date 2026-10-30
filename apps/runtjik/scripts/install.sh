@@ -26,9 +26,16 @@ for directory in qml examples docs browser-extension; do
     mv -- "$staging" "$target/$directory"
     rm -rf -- "$previous"
 done
-install -m 644 "$root_dir/dist/todo.py" "$root_dir/dist/browser.py" "$root_dir/dist/browser_host.py" "$root_dir/dist/image_viewer.py" "$root_dir/dist/runtjik.py" "$root_dir/dist/words.py" "$root_dir/dist/desktop_plugins.py" "$root_dir/dist/capture_worker.py" "$root_dir/dist/capture_countdown.py" "$root_dir/dist/capture_trash.py" "$root_dir/dist/control.py" "$root_dir/dist/README.md" "$target/"
-install -m 755 "$root_dir/dist/runtjik-core" "$target/runtjik-core"
-install -m 644 "$root_dir/dist/compat_host.py" "$target/compat_host.py"
+install -m 644 "$root_dir/dist/README.md" "$target/"
+# Atomic binary replacement leaves active recorder/browser workers on their inode.
+new_binary="$(mktemp "$target/.runtjik-core.XXXXXXXX")"
+install -m 755 "$root_dir/dist/runtjik-core" "$new_binary"
+mv -f -- "$new_binary" "$target/runtjik-core"
+rm -f -- "$target"/{todo,browser,browser_host,image_viewer,runtjik,words,desktop_plugins,capture_worker,capture_countdown,capture_trash,control,compat_host}.py
+if [[ -f "$install_home/.mozilla/native-messaging-hosts/org.tjikos.runtjik_browser.json" ]]; then
+    "$target/runtjik-core" register-browser-host --runtjik-dir "$target" --manifest-dir "$install_home/.mozilla/native-messaging-hosts"
+fi
+rm -rf -- "$target/__pycache__"
 install -m 755 "$root_dir/dist/bin/runtjik" "$install_home/.local/bin/runtjik"
 bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" runtjik
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 && ! -e "$config_root/runtjik/runtjik.conf" ]]; then

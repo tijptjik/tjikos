@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ -f "$source_root/tasktjik.py" ]]; then
+if [[ -x "$source_root/tasktjik-api" ]]; then
     export TASKTJIK_HOME="$source_root"
 else
     export TASKTJIK_HOME="${TASKTJIK_HOME:-$HOME/.local/lib/tasktjik}"
 fi
 case "${1:-show}" in
     show) export QT_QUICK_CONTROLS_STYLE=Basic; exec quickshell --path "$TASKTJIK_HOME/qml" --no-duplicate ;;
-    api|connect|devices|import-json|snapshot|request|state|serve|notify|done|dismiss|snooze) exec python3 -B "$TASKTJIK_HOME/tasktjik.py" "$@" ;;
+    api|connect|devices|import-json|snapshot|request|state|serve|notify|done|dismiss|snooze) exec "$TASKTJIK_HOME/tasktjik-api" "$@" ;;
     *) echo 'Usage: tasktjik [show|connect URL [--notifications]|devices|api|request|state|serve|notify|done|dismiss|snooze|import-json|snapshot]' >&2; exit 2 ;;
 esac

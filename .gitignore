@@ -14,3 +14,5 @@ __pycache__/
 **/target/
 apps/runtjik/target
 apps/runtjik/runtjik-core
+
+/apps/tasktjik/tasktjik-api

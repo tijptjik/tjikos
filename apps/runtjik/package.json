@@ -4,7 +4,7 @@
   "version": "0.8.3",
   "scripts": {
     "build": "bash scripts/build.sh",
-    "check": "python3 -B scripts/check.py",
+    "check": "bash scripts/check.sh",
     "test": "python3 -B -m unittest discover -s tests -v && python3 -B tests/rust_parity.py && python3 -B tests/rust_migration.py",
     "demo": "bin/runtjik --demo"
   },

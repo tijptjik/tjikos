@@ -97,8 +97,18 @@ pub fn parse(source: &str) -> Result<Value> {
         }
     }
     for name in settings["plugins"]["enabled"].as_array().unwrap() {
-        if !identifier(s(name)) {
-            bail!("Invalid provider name");
+        if !identifier(s(name))
+            || ![
+                "Words",
+                "Clipboard",
+                "Screenshots",
+                "Recorder",
+                "Todo",
+                "Browser",
+            ]
+            .contains(&s(name))
+        {
+            bail!("Unsupported provider; only native bundled providers are available");
         }
     }
     let defaults = contract();
@@ -238,7 +248,7 @@ fn capture_directory(value: &str) -> Result<()> {
         bail!("Capture directory must be absolute or start with ~/");
     }
     let path = resolved(&path);
-    let root = resolved(&crate::compat::root());
+    let root = resolved(&crate::paths::root());
     if path.starts_with(&root)
         || root
             .ancestors()

@@ -4,7 +4,6 @@ mod capture;
 mod capture_worker;
 mod clipboard;
 mod close;
-mod compat;
 mod config;
 mod controller;
 mod discovery;
@@ -12,6 +11,7 @@ mod icons;
 mod image_viewer;
 mod launcher;
 mod menus;
+mod paths;
 mod settings;
 mod store;
 mod todo;
@@ -54,6 +54,7 @@ fn execute() -> Result<()> {
             args.get(1)
                 .ok_or_else(|| anyhow::anyhow!("Missing capture specification"))?,
         )?)?,
+        "register-browser-host" => crate::browser_host::register(&args[1..])?,
         "browser-host" => crate::browser_host::serve()?,
         "version" | "--version" => println!("0.8.3"),
         "check" => {

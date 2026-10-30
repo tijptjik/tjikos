@@ -1,4 +1,4 @@
-use crate::{compat, config, discovery::Entry, settings, util::*};
+use crate::{config, discovery::Entry, paths, settings, util::*};
 use anyhow::Result;
 use serde_json::{json, Value};
 #[derive(Clone)]
@@ -105,7 +105,7 @@ pub fn commands(settings: &Value) -> Vec<Command> {
                 &c.id[1..]
             }
         );
-        let path = compat::root()
+        let path = paths::root()
             .join("qml/icons/commands")
             .join(format!("{name}.svg"));
         if path.is_file() {
@@ -129,7 +129,7 @@ pub fn entries(settings: &Value) -> Vec<Entry> {
         .collect()
 }
 fn control_icon(name: &str) -> String {
-    let path = compat::root()
+    let path = paths::root()
         .join("qml/icons/commands")
         .join(format!("{name}.svg"));
     if path.is_file() {

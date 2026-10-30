@@ -18,9 +18,8 @@ and pidfds. GTK/GdkPixbuf still resolve themes and rasterize SVGs.
 
 All bundled providers now run in Rust: Words, Browser, Clipboard, Screenshots,
 Recorder and the Tasktjik adapter. Task rules are shared with Tasktjik's native
-API. HTTPS and Unix-socket authorities, local JSON stores, and existing SSH
-installations remain supported. Older SSH authorities still execute their remote
-Python service; no launcher Python process is needed for that transport.
+API and client library. HTTPS, Unix sockets and native SSH authorities are
+supported. The SSH endpoint is `tasktjik-api serve`; no Python fallback exists.
 
 The Firefox native-messaging bridge, recorder worker, desktop Trash/undo and
 image-viewer helper are native too. The cancellable countdown uses Quickshell/QML.
@@ -28,28 +27,19 @@ Dictionary requests use bounded curl HTTPS requests; clipboard and recording
 previews use two background workers. Active recorder socket compatibility is
 preserved across this migration.
 
-Python remains intentionally available as the reference backend and compatibility
-host for explicitly enabled third-party API-v1 extensions. Third-party extensions
-retain reference query routing. Build/test and browser-registration scripts also
-still use Python. Normal bundled-provider use no longer starts that host.
+The installed runtime and build have no Python dependency. Python backend
+selection and API-v1 plugins have been removed; unsupported provider names are
+rejected. Python files in the source checkout are test/reference oracles only and
+are not packaged. Tasktjik enrollment, device queries, notifications, CLI actions
+and browser-host registration are native too.
 
-[Current migration status and measurements](docs/native-runtime.md) ·
-[Historical first-stage comparison](docs/rust-rewrite.md)
-
-For comparison, fully quit the current instance before selecting the reference:
-
-```sh
-bin/runtjik quit
-RUNTJIK_BACKEND=python bin/runtjik show
-RUNTJIK_BACKEND=python bin/runtjik quit
-bin/runtjik show  # Rust is the default in this branch
-```
+[Native-only release and installation](docs/native-only.md) ·
+[Previous migration measurements](docs/native-runtime.md)
 
 Build with Cargo/Rust (including rustfmt), a C linker, pkg-config and development
 headers for GTK 3, Gio, GdkPixbuf and SQLite, in addition to the workspace tools.
 `bun run build --filter=@tjikos/runtjik` builds Tasktjik and the Rust payload;
-`bun run check --filter=@tjikos/runtjik` checks syntax/formatting and exported
-contract freshness. `bun run test` in this app runs the existing Python tests
+`bun run check --filter=@tjikos/runtjik` checks shell syntax and Rust formatting. `bun run test` in this app runs the existing Python tests
 and the executable Python/Rust parity checks after a build. Native focus-command
 tests run with `cargo test --release --locked`.
 
@@ -152,8 +142,7 @@ not be read as a new paired comparison.
 ## Install and run
 
 Requires Quickshell 0.3+, Wayland, Gio, GTK 3, GdkPixbuf with SVG support,
-and curl. Python 3.11+ and PyGObject are needed for build/reference tests and
-third-party Python providers. Fish supplies `fish_indent` for history parsing.
+and curl. Python 3.11+ and PyGObject are used only by development/reference tests. Fish supplies `fish_indent` for history parsing.
 Hyprland with its Lua API supplies layer rules and passive outside-click dismissal; Hyprland supplies window switching (Lua and legacy dispatch APIs); systemd user
 services isolate launched applications. The default terminal is Kitty.
 
@@ -469,20 +458,10 @@ The log is local, unbounded and not synchronized between machines. Back up the
 state directory if you want to retain it. Stop the launcher before removing the
 database to reset statistics. Index and artwork caches can be deleted and rebuilt.
 
-## Provider API v1 and future ZenTabs
+## Native providers
 
-Providers are trusted local Python modules, explicitly enabled in TOML. They run
-inside the existing launcher helper; they do not each start a background process.
-Dynamic results are queried afresh, not persisted in the application index.
-ZenTabs is not implemented yet; the interface already supports its title search,
-opaque tab identifiers and activation/switch actions.
-
-Place a module at `~/.config/runtjik/plugins/ZenTabs.py` and set:
-
-```toml
-[plugins]
-enabled = ["Words", "ZenTabs"]
-```
+Only bundled Rust providers can be enabled. There is no dynamic Python plugin
+host. Add new providers to the native backend and rebuild.
 
 The bundled `Words` provider registers `/define` and `/synonym`. An explicit
 `plugins.enabled = []` disables it; add `"Words"` to an existing enabled list.
@@ -498,9 +477,8 @@ timeout_seconds = 5
 
 For example, `/config plugin_settings.Words.define_sources ["wiktionary", "urban_dictionary"]`
 enables slang alongside Wiktionary. `/config plugins.enabled ["Words"]` changes
-enabled providers immediately. External file edits apply on reopening. Other
-plugins can read their own `[plugin_settings.ProviderName]` table; scalar and
-array settings in that table appear in `/config`. Keep secrets out of these
+enabled providers immediately. External file edits apply on reopening. Bundled
+providers use their own `[plugin_settings.ProviderName]` tables. Keep secrets out of these
 UI-visible settings; use an external credential store or environment variables.
 
 Sources (English lookups):
@@ -593,47 +571,11 @@ Recorder failures are logged to `$XDG_STATE_HOME/runtjik/capture.log` and announ
 with a desktop notification. All desktop-plugin demo actions use synthetic data
 and leave the real clipboard, files and recorder unchanged.
 
-Providers may declare `aliases = {"/alias": "/command"}` in addition to `commands`.
-Aliases route to the same provider and appear beside the canonical menu command.
-
-Contract (the example is a shape, not a working browser bridge):
-
-```python
-API_VERSION = 1
-
-class Provider:
-    name = "ZenTabs"
-
-    def query(self, query, settings):
-        # Read a local browser bridge; return promptly.
-        return [{
-            "id": "ZenTabs:opaque-tab-id",
-            "provider": "ZenTabs",
-            "name": "A tab title",
-            "subtitle": "Zen · Work",
-            "icon": "zen-browser",
-            "keywords": "optional search terms",
-            "data": {"tab_id": "opaque-tab-id"},
-        }]
-
-    def activate(self, entry, settings, mode):
-        # Provider actions receive 'launch', 'switch', or 'close'.
-        # Request the bridge action and raise an exception on failure.
-        raise NotImplementedError("Connect the Zen bridge first")
-```
-
-Provider names and result IDs must be namespaced and cannot replace built-ins.
-Initialization/query errors are surfaced in the footer without hiding built-in
-results. Activation failures leave the launcher open. Extensions are trusted code,
-not sandboxed, and must implement bounded I/O; a blocking extension blocks its
-helper. Browser bridges should expose a local authenticated interface, use
-stable tab/window IDs, and avoid logging browsing titles or URLs by default.
-
 ## Development and validation
 
 ```sh
 python3 -B -m unittest discover -s tests -v
-python3 -B scripts/check.py
+bash scripts/check.sh
 bin/runtjik --demo
 # Optional live regression, with synthetic Kitty windows in a private Hyprland:
 python3 tests/native_smoke.py
@@ -703,7 +645,7 @@ FFmpeg in the private Runtjik thumbnail cache outside the repository.
 After selecting a region/screen/workspace, a visible countdown appears on that
 monitor. Escape cancels before any recorder is started; the overlay disappears
 before capture begins. Window recording counts down before opening the portal
-picker. The countdown requires system Python with GTK 3 and GtkLayerShell.
+picker. The countdown is a native Quickshell/QML overlay.
 
 `!ss` and `!snap` also open the screenshot plugin. Screen and window choices are
 sorted by name. Ctrl+Up / Ctrl+Down browse previously used launcher commands and

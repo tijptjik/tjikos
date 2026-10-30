@@ -1,5 +1,8 @@
 # Native bundled runtime migration
 
+Historical migration report: the later [native-only release](native-only.md)
+removes the Python compatibility paths described below.
+
 All six bundled providers now have Rust implementations. The Tasktjik adapter
 shares recurrence and task mutation rules with Tasktjik's native API. Clipboard,
 Screenshots and Recorder no longer require the Python compatibility host. The

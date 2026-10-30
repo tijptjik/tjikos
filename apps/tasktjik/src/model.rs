@@ -431,3 +431,54 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
     t["events"].as_array_mut().context("Invalid event history")?.push(json!({"action":op,"actor":r["actor"],"at":now(),"revision":revision,"status":status,"period":period}));
     Ok(t)
 }
+
+/// Next anchored occurrence, preserving month ends rather than drifting.
+pub fn next_period(task: &Value, current: &str) -> Result<String> {
+    let current = date(current)?;
+    let rule = &task["repeat"];
+    let unit = field(rule, "unit");
+    if unit.starts_with("days-of-") {
+        let week = unit == "days-of-the-week";
+        let allowed = days(&rule["value"], if week { 7 } else { 31 })?;
+        let mut day = current + Duration::days(1);
+        while !allowed.contains(&if week {
+            day.weekday().number_from_monday()
+        } else {
+            day.day()
+        }) {
+            day += Duration::days(1);
+        }
+        return Ok(day.to_string());
+    }
+    let value = interval(&rule["value"])?;
+    if unit == "days" || unit == "weeks" {
+        return Ok(
+            (current + Duration::days(value * if unit == "weeks" { 7 } else { 1 })).to_string(),
+        );
+    }
+    ensure!(["months", "years"].contains(&unit), "Invalid repeat unit");
+    let anchor = date(field(task, "due"))?;
+    let months =
+        (current.year() - anchor.year()) * 12 + current.month() as i32 - anchor.month() as i32;
+    ensure!(months >= 0, "Period precedes anchor");
+    Ok(anchor
+        .checked_add_months(Months::new(
+            months as u32 + value as u32 * if unit == "years" { 12 } else { 1 },
+        ))
+        .context("Repeat date out of range")?
+        .to_string())
+}
+
+#[cfg(test)]
+mod recurrence_tests {
+    use super::*;
+    #[test]
+    fn next_period_keeps_anchor_and_selected_days() {
+        let task = json!({"due":"2024-01-31","repeat":{"unit":"months","value":1}});
+        assert_eq!(next_period(&task, "2024-02-29").unwrap(), "2024-03-31");
+        let task = json!({"due":"2024-02-29","repeat":{"unit":"years","value":1}});
+        assert_eq!(next_period(&task, "2025-02-28").unwrap(), "2026-02-28");
+        let task = json!({"due":"2024-01-01","repeat":{"unit":"days-of-the-month","value":"31"}});
+        assert_eq!(next_period(&task, "2024-01-31").unwrap(), "2024-03-31");
+    }
+}

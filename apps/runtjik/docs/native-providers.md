@@ -1,5 +1,8 @@
 # Native migration: bundled providers and runtime helpers
 
+Historical migration report: the later [native-only release](native-only.md)
+removes the Python compatibility paths described below.
+
 The initial Rust core was merged into main in `3ca928e` (implementation commit
 `7f6fb90`). The native core now also owns all bundled providers and runtime helpers.
 Tasktjik's adapter uses the Tasktjik Rust model for local/demo mutations and

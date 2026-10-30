@@ -1,5 +1,4 @@
 use crate::{
-    compat::Host,
     config,
     discovery::{self, Entry},
     icons::Icons,
@@ -15,7 +14,6 @@ pub struct Launcher {
     demo: bool,
     store: Option<Store>,
     icons: Icons,
-    host: Option<Host>,
     warnings: Vec<String>,
     checked: Instant,
     current: HashMap<String, Entry>,
@@ -25,8 +23,6 @@ pub struct Launcher {
     page_query: String,
     page: Vec<(Entry, i64)>,
     closing: crate::close::Tracking,
-    custom: bool,
-    reset_scope: bool,
     words: crate::words::Words,
     browser: crate::browser::Browser,
     todo: crate::todo::Todo,
@@ -38,24 +34,12 @@ impl Launcher {
         let settings = config::load()?;
         let icons = Icons::new(&settings);
         let store = if demo { None } else { Some(Store::open()?) };
-        let custom = strings(&settings["plugins"]["enabled"]).iter().any(|n| {
-            ![
-                "Words",
-                "Clipboard",
-                "Recorder",
-                "Screenshots",
-                "Todo",
-                "Browser",
-            ]
-            .contains(&n.as_str())
-        });
         let mut app = Self {
             entries: vec![],
             settings,
             demo,
             store,
             icons,
-            host: None,
             warnings: vec![],
             checked: Instant::now(),
             current: HashMap::new(),
@@ -65,8 +49,6 @@ impl Launcher {
             page_query: String::new(),
             page: vec![],
             closing: crate::close::Tracking::new(),
-            custom,
-            reset_scope: true,
             words: crate::words::Words::default(),
             browser: crate::browser::Browser::default(),
             todo: crate::todo::Todo::default(),
@@ -110,24 +92,6 @@ impl Launcher {
         let mut v = self.query("", 0, None)?;
         v["command_history"] = self.history()?;
         Ok(v)
-    }
-    fn bridge(&mut self, mut req: Value) -> Result<Value> {
-        req["reset_scope"] = json!(self.reset_scope);
-        self.reset_scope = false;
-        req["native_providers"] = json!(["Words", "Browser"]);
-        req["settings"] = self.settings.clone();
-        req["entries"] = serde_json::to_value(&self.entries)?;
-        req["demo"] = json!(self.demo);
-        if self.host.is_none() {
-            self.host = Some(Host::start()?);
-        }
-        match self.host.as_mut().unwrap().request(&req) {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                self.host = None;
-                Err(e)
-            }
-        }
     }
     fn provider_error(&self, name: &str, display: &str, error: anyhow::Error) -> Value {
         let mut v = self.payload(vec![]);
@@ -328,23 +292,17 @@ impl Launcher {
                 }
             };
         }
-        if q.starts_with('/') && !run && !running && !self.custom {
-            if let Some(mut rows) = crate::menus::query(q, &self.settings)? {
-                for row in &mut rows {
-                    row["icon"] = json!(self.icons.resolve(s(&row["icon"])));
-                }
-                let _ = self.icons.flush();
-                let mut v = self.payload(rows);
-                v["query"] = json!(display);
-                return Ok(v);
-            }
-        }
         if q.starts_with('/') && !run && !running {
-            return self
-                .bridge(json!({"op":"query","query":display,"offset":offset,"limit":limit}));
+            let mut rows = crate::menus::query(q, &self.settings)?.unwrap_or_default();
+            for row in &mut rows {
+                row["icon"] = json!(self.icons.resolve(s(&row["icon"])));
+            }
+            let _ = self.icons.flush();
+            let mut v = self.payload(rows);
+            v["query"] = json!(display);
+            return Ok(v);
         }
-        self.reset_scope = true;
-        // Rank discovery, commands and optional Browser tabs; extensions use the reference path.
+        // Rank native discovery, commands and optional Browser tabs.
         let mut candidates: Vec<Entry> = self
             .entries
             .iter()
@@ -718,32 +676,17 @@ impl Launcher {
             }
             return Ok(json!({"kind":"activated","demo":self.demo}));
         }
-        let mut req = req.clone();
-        if let Some(e) = entry {
-            req["entry"] = serde_json::to_value(e)?;
+        if ["/shortcuts", "/bindings", "/config"].contains(&id) {
+            return Ok(json!({"kind":"edit", "text":id}));
         }
-        let result = self.bridge(req)?;
-        if result["apply_config"] == true {
-            self.settings = config::load()?;
-            self.icons = Icons::new(&self.settings);
-            self.custom = strings(&self.settings["plugins"]["enabled"])
-                .iter()
-                .any(|n| {
-                    ![
-                        "Words",
-                        "Clipboard",
-                        "Recorder",
-                        "Screenshots",
-                        "Todo",
-                        "Browser",
-                    ]
-                    .contains(&n.as_str())
-                });
-            self.refresh(false)?;
-            self.reset();
+        if id.starts_with("/shortcuts/") || id == "/config/error" {
+            return Ok(
+                json!({"kind":"message","message":"Type a command or press Escape to close"}),
+            );
         }
-        Ok(result)
+        bail!("Entry is no longer available; refresh the index")
     }
+
     pub fn handle(&mut self, req: Value) -> Result<Option<Value>> {
         let result = match s(&req["op"]) {
             "query" => {
@@ -802,7 +745,7 @@ impl Launcher {
                 v["message"] = message;
                 v
             }
-            "app-action" => self.bridge(req)?,
+            "app-action" => bail!("App provider is unavailable"),
             _ => bail!("Unknown operation"),
         };
         Ok(Some(result))

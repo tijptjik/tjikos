@@ -11,8 +11,8 @@ Existing Runtjik Todo configuration is read as a fallback, with Tasktjik values
 winning. The historical `~/.local/share/runtjik-todo` directory deliberately
 remains the default: no records are moved, duplicated or rewritten on install.
 Install the HTTPS authority on Si before updating clients. There is one writable
-authority; unavailable authorities fail visibly. Legacy SSH is retained only for
-explicit older configurations.
+authority; unavailable authorities fail visibly. SSH endpoints must run the native `tasktjik-api serve` command. No Python
+fallback is installed.
 
 `tasktjik request` accepts one JSON request on stdin and returns JSON on stdout.
 `tasktjik state` returns UI state. `tasktjik serve` is the authority endpoint.
@@ -36,8 +36,7 @@ The UI displays status, assignee, acceptance, blockers and the latest evidence.
 Creation does not launch agents or grant execution authority.
 
 Enable `tasktjik.timer` on configured graphical clients for reminders. When
-switching, disable `runtjik-todo.timer` first; the compatibility helper remains
-available for older integrations. Installation never enables or stops timers.
+switching, disable `runtjik-todo.timer` first; the old Runtjik timer unit now invokes the same native Tasktjik CLI. Installation never enables or stops timers.
 Keep all task records, configuration and evidence outside the repository.
 See the HTTPS authority and backup instructions below.
 
@@ -69,6 +68,10 @@ creates a verified private snapshot. `tasktjik-api import-json DATABASE DIRECTOR
 imports legacy JSON transactionally, retains originals and rejects conflicts.
 Deployment policy, service units and enrollment activation are owned by Dotjik
 and Tjikup. Task data, credentials and local device IDs stay outside Git.
+
+The CLI, enrollment, device transport, reminder leases and notification IPC are
+Rust, shared with the Runtjik adapter. Build and installation do not require
+Python; source Python implementations are development test oracles only.
 
 Build requires Cargo; `bun run test` in this app runs Python and Rust tests.
 

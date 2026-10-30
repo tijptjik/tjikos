@@ -172,3 +172,41 @@ mod tests {
         assert!(read_message(&mut [1u8, 0, 0, 0].as_slice()).is_err());
     }
 }
+
+pub fn register(args: &[String]) -> Result<()> {
+    use std::{os::unix::fs::PermissionsExt, path::PathBuf};
+    let mut root = home().join(".local/lib/runtjik");
+    let mut directory = home().join(".mozilla/native-messaging-hosts");
+    let mut i = 0;
+    while i < args.len() {
+        let value = args
+            .get(i + 1)
+            .ok_or_else(|| anyhow::anyhow!("Missing registration path"))?;
+        match args[i].as_str() {
+            "--runtjik-dir" => root = PathBuf::from(value),
+            "--manifest-dir" => directory = PathBuf::from(value),
+            _ => bail!("Unknown registration option"),
+        }
+        i += 2;
+    }
+    let root = fs::canonicalize(root)?;
+    let host = root.join("runtjik-core");
+    ensure!(host.is_file(), "Install Runtjik first");
+    let launcher = root.join("browser-native-host");
+    let quoted = format!("'{}'", host.to_string_lossy().replace('\'', "'\\''"));
+    atomic(
+        &launcher,
+        format!("#!/bin/sh\nexec {quoted} browser-host\n").as_bytes(),
+    )?;
+    fs::set_permissions(&launcher, fs::Permissions::from_mode(0o700))?;
+    private_dir(&directory)?;
+    let manifest = directory.join("org.tjikos.runtjik_browser.json");
+    atomic(
+        &manifest,
+        &serde_json::to_vec_pretty(
+            &json!({"name":"org.tjikos.runtjik_browser","description":"Runtjik browser bridge","path":launcher,"type":"stdio","allowed_extensions":["runtjik-browser@tjikos.local"]}),
+        )?,
+    )?;
+    println!("Registered {}", manifest.display());
+    Ok(())
+}

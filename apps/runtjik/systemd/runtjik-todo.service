@@ -4,4 +4,4 @@ After=graphical-session.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 %h/.local/lib/runtjik/todo.py notify
+ExecStart=%h/.local/bin/tasktjik notify

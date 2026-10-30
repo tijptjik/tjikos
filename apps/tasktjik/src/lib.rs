@@ -1,2 +1,4 @@
-//! Shared task rules for the API and native desktop adapters.
+//! Shared native authority, client and task rules.
+pub mod client;
+mod client_util;
 pub mod model;

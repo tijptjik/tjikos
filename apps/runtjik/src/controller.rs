@@ -1,4 +1,4 @@
-use crate::{compat, util::*};
+use crate::{paths, util::*};
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -14,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 fn qml() -> String {
-    compat::root().join("qml").to_string_lossy().into()
+    paths::root().join("qml").to_string_lossy().into()
 }
 fn ipc(method: &str) -> Option<Value> {
     let args = [

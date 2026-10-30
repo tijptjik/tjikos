@@ -18,7 +18,7 @@ ShellRoot {
     Process {
         id: backend
         property string payload
-        command: ['python3', '-B', Quickshell.env('TASKTJIK_HOME') + '/tasktjik.py', 'state']
+        command: [Quickshell.env('TASKTJIK_HOME') + '/tasktjik-api', 'state'].concat(Quickshell.env('TASKTJIK_DEMO') === '1' ? ['--demo'] : [])
         stdinEnabled: true
         onStarted: { write(payload); stdinEnabled = false; }
         stdout: StdioCollector {

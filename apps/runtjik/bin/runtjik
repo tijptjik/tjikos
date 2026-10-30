@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ -f "$source_root/runtjik.py" ]]; then
+if [[ -x "$source_root/runtjik-core" ]]; then
     export RUNTJIK_HOME="$source_root"
 else
     export RUNTJIK_HOME="${RUNTJIK_HOME:-$HOME/.local/lib/runtjik}"
 fi
 core=("$RUNTJIK_HOME/runtjik-core")
-if [[ "${RUNTJIK_BACKEND:-rust}" == python ]]; then
-    core=(python3 -B "$RUNTJIK_HOME/runtjik.py")
-fi
 case "${1:-toggle}" in
     --version|version) exec "${core[@]}" version ;;
     refresh|stats|rebuild-counts|check|migrate-config) exec "${core[@]}" "$@" ;;
@@ -28,8 +25,5 @@ fi
 # the locked controller; `show` retains its synchronous readiness contract.
 if [[ "${1:-toggle}" == toggle ]] && quickshell ipc --path "$RUNTJIK_HOME/qml" call runtjik toggle >/dev/null 2>&1; then
     exit 0
-fi
-if [[ "${RUNTJIK_BACKEND:-rust}" == python ]]; then
-    exec python3 -B "$RUNTJIK_HOME/control.py" "${1:-toggle}"
 fi
 exec "${core[@]}" control "${1:-toggle}"

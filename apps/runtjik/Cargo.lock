@@ -1177,16 +1177,21 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "libc",
  "percent-encoding",
  "rusqlite",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "tokio",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
  "tower",
  "tower-http",
+ "url",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]

@@ -9,7 +9,7 @@ connection; each host owns a private Unix socket in
 ## Setup
 
 1. Build and install Runtjik using its normal install scripts.
-2. Run `python3 ~/.local/lib/runtjik/browser-extension/install-host.py`.
+2. Run `bash ~/.local/lib/runtjik/browser-extension/install-host.sh`.
    This registers the host in `~/.mozilla/native-messaging-hosts`, verified with
    the native Zen installation on this machine. Do not infer this directory
    from the profile location (`~/.zen`) or packaging wrapper: they can differ.

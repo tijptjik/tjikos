@@ -1,5 +1,5 @@
 mod db;
-mod model;
+use tasktjik_api::model;
 
 use anyhow::{Context, Result};
 use axum::{
@@ -286,7 +286,28 @@ fn router(app: Arc<App>) -> Router {
 }
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if tasktjik_api::client::command_line(&args)? {
+        return Ok(());
+    }
+    if args.first().is_some_and(|a| a == "api") {
+        args.remove(0);
+    }
+    if args.len() == 4
+        && ["snapshot", "import-json"].contains(&args[0].as_str())
+        && args[1] == "--directory"
+    {
+        args = vec![
+            args[0].clone(),
+            tasktjik_api::client::expand(&args[2])
+                .join("tasks.sqlite3")
+                .to_string_lossy()
+                .into_owned(),
+            tasktjik_api::client::expand(&args[3])
+                .to_string_lossy()
+                .into_owned(),
+        ];
+    }
     if args.len() == 3 && (args[0] == "snapshot" || args[0] == "import-json") {
         let path = PathBuf::from(&args[1]);
         let target = PathBuf::from(&args[2]);

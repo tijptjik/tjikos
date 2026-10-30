@@ -1,6 +1,7 @@
 use crate::{
-    capture_worker, compat,
+    capture_worker,
     discovery::{folded, Entry},
+    paths,
     util::*,
 };
 use anyhow::{bail, ensure, Context, Result};
@@ -82,7 +83,7 @@ pub fn directory(value: &str) -> Result<PathBuf> {
     for s in suffix.iter().rev() {
         path.push(s);
     }
-    let app = compat::root();
+    let app = paths::root();
     ensure!(
         !path.starts_with(&app),
         "Captures must be stored outside the application directory"
@@ -113,7 +114,7 @@ fn row(name: &str, key: &str, title: &str, subtitle: &str, mut data: Value) -> E
             "history"
         },
     );
-    let icon = compat::root().join(format!(
+    let icon = paths::root().join(format!(
         "qml/icons/capture-{}-{action}.svg",
         if name == "Recorder" { "record" } else { "shot" }
     ));
@@ -582,7 +583,7 @@ fn countdown(spec: &Value) -> Result<bool> {
     let mut child = Command::new("quickshell")
         .args([
             "--path",
-            &compat::root().join("qml/countdown").to_string_lossy(),
+            &paths::root().join("qml/countdown").to_string_lossy(),
         ])
         .env("RUNTJIK_COUNTDOWN_SECONDS", seconds.to_string())
         .env("RUNTJIK_COUNTDOWN_OUTPUT", output)
