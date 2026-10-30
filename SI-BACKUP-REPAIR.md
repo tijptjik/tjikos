@@ -70,7 +70,7 @@ Private logs and exit markers are `repair-run.log`, `repair-run.exit` and
 `~/.local/state/tjikup/si-native-cutover-20261029T151734Z/`.
 The previous failed run and its evidence remain preserved.
 
-## Transmission: sandbox repaired; deletion awaits approval
+## Transmission: repaired; approved removal completed
 
 Reproduced the failure: `ProtectSystem=strict` made `/tmp` read-only, while native
 subprocess capture requires temporary files. Added `PrivateTmp=true`, preserving
@@ -81,19 +81,26 @@ The real native dry-run under the corrected sandbox passed:
 390 torrents scanned; 54 incomplete, 297 below the IPT seeding-age threshold,
 27 unmanaged, and **12 eligible for removal**.
 
-Automatic approval review rejected running the actual cleanup because it deletes
-those torrents and their local data. No deletion run was performed. Pending
-explicit approval, the cleanup timer was disabled and a reversible guard prevents
-normal convergence from indirectly starting deletion:
+After explicit user approval, the fresh dry-run matched all 12 approved hashes.
+The first execution exposed an additional native bug before any deletion:
+serializing `OsStr` produced an object where the shared-file safety check expected
+a filename string. Commit `2140d07` fixes this and adds a regression test; all
+three targeted media tests passed. The checksum-verified release-mode build was
+installed in Si's system runtime with the previous binary preserved. This is a
+local repair build, not yet a published Tjikup binary release. The pinned user
+runtime and running backups were untouched.
 
-- `/var/lib/si-transmission-cleanup/awaiting-deletion-approval`
-- `/etc/systemd/system/si-transmission-cleanup.service.d/90-awaiting-approval.conf`
+At **14:54 HKT**, cleanup succeeded and verified removal of the exact 12 approved
+torrents and their downloaded files, representing 55,654,194,885 logical bytes
+(not a measurement of reclaimed disk space). Receipts matched the approved hash
+list. The follow-up dry-run scanned 379 torrents with no removal candidates.
+The temporary approval guards were removed and the previously enabled cleanup
+timer restored; its next run is 31 October at 04:36 HKT.
 
-Transmission itself remains running. Before approval execution, recheck the
-current dry-run candidates. After approval, remove this temporary guard, reload
-systemd, run the approved cleanup and restore the timer's previous enabled state.
-The original enablement and private dry-run output are preserved under
-`~/.local/state/tjikup/si-backup-repair-20261030/`.
+Private approval, recheck and removal receipts are preserved under
+`~/.local/state/tjikup/si-backup-repair-20261030/`, including
+`transmission-approved-removed.jsonl`. The normal audit remains at
+`/var/lib/si-transmission-cleanup/removals.jsonl`.
 
 ## Validation
 

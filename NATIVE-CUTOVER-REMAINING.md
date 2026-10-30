@@ -87,10 +87,11 @@ current repair evidence and exact follow-up commands/paths.
   after the running validator finishes.
 - `tjikup-si-native-cutover-repair-20261030.service` is queued against the new
   validator and also requires a fresh successful application backup.
-- Transmission's sandbox is repaired and its dry-run passed. Actual removal of
-  12 eligible torrents remains blocked by automatic approval review pending
-  explicit user approval. The timer is paused and a temporary service guard
-  prevents indirect deletion through queued convergence.
+- Transmission's sandbox and native shared-file filename check are repaired.
+  After explicit approval, all 12 approved torrents and downloaded files were
+  removed and verified at 14:54 HKT. The cleanup timer is restored. The system
+  runtime uses the tested local repair build from `2140d07`; publishing that fix
+  in the next Tjikup binary release remains outstanding.
 
 The original cutover evidence is preserved; the new attempt writes `repair-run.*`
 markers in the same private cutover directory. Neither a queued unit nor an
