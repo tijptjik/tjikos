@@ -10,8 +10,9 @@ Configuration is `$XDG_CONFIG_HOME/tasktjik/tasktjik.conf` (normally
 Existing Runtjik Todo configuration is read as a fallback, with Tasktjik values
 winning. The historical `~/.local/share/runtjik-todo` directory deliberately
 remains the default: no records are moved, duplicated or rewritten on install.
-Install Tasktjik on Si before updating clients. There is still one writable
-authority, reached through bounded SSH; unavailable authorities fail visibly.
+Install the HTTPS authority on Si before updating clients. There is one writable
+authority; unavailable authorities fail visibly. Legacy SSH is retained only for
+explicit older configurations.
 
 `tasktjik request` accepts one JSON request on stdin and returns JSON on stdout.
 `tasktjik state` returns UI state. `tasktjik serve` is the authority endpoint.
@@ -38,5 +39,35 @@ Enable `tasktjik.timer` on configured graphical clients for reminders. When
 switching, disable `runtjik-todo.timer` first; the compatibility helper remains
 available for older integrations. Installation never enables or stops timers.
 Keep all task records, configuration and evidence outside the repository.
-Back up the existing authority directory using the existing Synctjik policy;
-this extraction makes no claim of deployment or verified backup publication.
+See the HTTPS authority and backup instructions below.
+
+## Private HTTPS authority
+
+The authority is `tasktjik-api`, a Rust/Axum service with transactional SQLite
+storage. Production clients configure `url = "https://si.tailb49776.ts.net/tasktjik"`
+in `[tasktjik]`. `tasktjik connect URL --notifications` verifies the Tailscale
+identity, registers this device for reminders and saves the endpoint. Omit
+`--notifications` for devices that should only read/edit tasks.
+
+Tailscale Serve provides HTTPS and identity headers over a protected Unix
+socket. The server accepts root peers only and enforces an explicit login
+allowlist; tailnet membership alone does not grant task access. Browser clients
+use the same API. The device list controls reminder delivery, not authentication;
+remove a device from Tailscale to revoke its access. No app password is stored.
+
+All mutations accept UUID request IDs for retry deduplication. Native clients
+supply one automatically; integrations should retain the same ID when retrying
+a request whose outcome is unknown. Updates reject stale revisions. Notification
+claims have two-minute leases and are acknowledged after Notjik accepts them.
+A crash between delivery and acknowledgement can still cause a later repeat;
+this is coordinated delivery, not an exactly-once guarantee.
+
+The database is `/var/lib/tasktjik/tasks.sqlite3` on Si. Synctjik backs it up with
+online SQLite snapshots in the encrypted application-state repository; do not
+sync live writable database copies. `tasktjik-api snapshot DATABASE NEW_FILE`
+creates a verified private snapshot. `tasktjik-api import-json DATABASE DIRECTORY`
+imports legacy JSON transactionally, retains originals and rejects conflicts.
+Deployment policy, service units and enrollment activation are owned by Dotjik
+and Tjikup. Task data, credentials and local device IDs stay outside Git.
+
+Build requires Cargo; `bun run test` in this app runs Python and Rust tests.

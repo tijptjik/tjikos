@@ -8,6 +8,6 @@ else
 fi
 case "${1:-show}" in
     show) export QT_QUICK_CONTROLS_STYLE=Basic; exec quickshell --path "$TASKTJIK_HOME/qml" --no-duplicate ;;
-    request|state|serve|notify|done|dismiss|snooze) exec python3 -B "$TASKTJIK_HOME/tasktjik.py" "$@" ;;
-    *) echo 'Usage: tasktjik [show|request|state|serve|notify|done|dismiss|snooze]' >&2; exit 2 ;;
+    api|connect|devices|import-json|snapshot|request|state|serve|notify|done|dismiss|snooze) exec python3 -B "$TASKTJIK_HOME/tasktjik.py" "$@" ;;
+    *) echo 'Usage: tasktjik [show|connect URL [--notifications]|devices|api|request|state|serve|notify|done|dismiss|snooze|import-json|snapshot]' >&2; exit 2 ;;
 esac

@@ -1,5 +1,6 @@
 """Reading saves must be durable before browser tab closure."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -17,6 +18,9 @@ class ReadingTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.store = Store(self.temp.name)
+        environment = patch.dict(os.environ, {"XDG_CONFIG_HOME": self.temp.name})
+        environment.start()
+        self.addCleanup(environment.stop)
 
     def test_types_groups_legacy_reference_and_retry(self):
         old = self.store.request({'action': 'create', 'fields': {'title': 'Old plan', 'plan': 'Notes/plan.md'}})

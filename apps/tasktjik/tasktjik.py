@@ -13,7 +13,7 @@ import tomllib
 from urllib.parse import urlsplit
 
 GROUPS = ['All', 'Quick', 'General', 'Work', 'Socials', 'Domestic', 'Finances', 'Tech']
-OPTIONS = {'authority': 'si', 'directory': '~/.local/share/runtjik-todo', 'vault': '', 'ssh_command': ['ssh']}
+OPTIONS = {'authority': 'si', 'directory': '~/.local/share/runtjik-todo', 'vault': '', 'ssh_command': ['ssh'], 'url': ''}
 UNITS = ['days', 'weeks', 'months', 'years', 'days-of-the-week', 'days-of-the-month']
 
 
@@ -162,8 +162,11 @@ class Store:
             if os.path.exists(name):
                 os.unlink(name)
 
+    def read(self):
+        return [json.loads(p.read_text()) for p in sorted(self.root.glob('*.json'))]
+
     def apply(self, request):
-        tasks = [json.loads(p.read_text()) for p in sorted(self.root.glob('*.json'))]
+        tasks = self.read()
         for task in tasks:
             lifecycle_defaults(task)
             task.setdefault('kind', 'todo')
@@ -253,14 +256,31 @@ class Store:
                 raise ValueError('Snooze must be a future date with timezone')
             task['snoozedUntil'] = until.isoformat()
             task['notifications'].pop(period + ':' + today().isoformat(), None)
-        elif op in ('claim', 'dismiss'):
-            key = period + ':' + today().isoformat()
+        elif op in ('claim', 'dismiss', 'ack', 'release'):
+            key = request.get('notification_key') if op in ('ack', 'release') else None
+            key = key or period + ':' + today().isoformat()
+            now = dt.datetime.now(dt.timezone.utc)
+            previous = task['notifications'].get(key)
             if op == 'claim':
-                if task['notifications'].get(key) or task['completions'].get(period):
+                if task['completions'].get(period) or task.get('status') == 'cancelled':
                     return False
-                if task.get('snoozedUntil') and dt.datetime.fromisoformat(task['snoozedUntil']) > dt.datetime.now(dt.timezone.utc):
+                if previous:
+                    if previous.get('state') != 'pending' or dt.datetime.fromisoformat(previous['expires']) > now:
+                        return False
+                if task.get('snoozedUntil') and dt.datetime.fromisoformat(task['snoozedUntil']) > now:
                     return False
-            task['notifications'][key] = {'state': op, 'at': stamp(), 'device': request.get('device', '')}
+                task['notifications'][key] = {'state': 'pending', 'at': stamp(),
+                    'device': request.get('device', ''), 'token': str(uuid.uuid4()),
+                    'expires': (now + dt.timedelta(minutes=2)).isoformat()}
+            elif op in ('ack', 'release'):
+                if not previous or previous.get('token') != request.get('token') or previous.get('device') != request.get('device', ''):
+                    raise ValueError('Notification claim no longer belongs to this device')
+                if op == 'ack':
+                    previous['state'] = 'delivered'
+                elif previous.get('state') == 'pending':
+                    del task['notifications'][key]
+            else:
+                task['notifications'][key] = {'state': 'dismiss', 'at': stamp(), 'device': request.get('device', '')}
         else:
             raise ValueError('Unknown todo action')
         task['updatedAt'] = stamp()
@@ -286,6 +306,9 @@ class Todo:
             options.update(tomllib.loads(path.read_text()).get('tasktjik', {}))
         if self.demo:
             return Store(self.temporary.name).request(request)
+        if options.get('url'):
+            from client import api_request
+            return api_request(options['url'], request)
         if options['authority']:
             host = options['authority']
             if not all(c.isalnum() or c in '.-@_' for c in host) or host.startswith('-'):
@@ -337,6 +360,9 @@ class Todo:
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ('api', 'connect', 'devices', 'import-json', 'snapshot'):
+        from api import command
+        return command(sys.argv[1:])
     if len(sys.argv) > 1 and sys.argv[1] == 'serve':
         try:
             request = json.load(sys.stdin)
@@ -360,7 +386,8 @@ def main():
         return
     if command != 'notify':
         raise ValueError('Expected notify, done, dismiss or snooze')
-    import socket
+    from client import device_identity
+    device = device_identity()['id']
     for task in provider.state({}, settings)['tasks']:
         if not task['due'] or task.get('status') == 'cancelled':
             continue
@@ -372,10 +399,21 @@ def main():
         lead = dt.timedelta(**{task['notifyBeforeDueLeadUnit']: int(task['notifyBeforeDueLeadValue'])}) if task['notifyBeforeDue'] else dt.timedelta()
         if dt.datetime.now().astimezone() < due - lead:
             continue
-        if not provider.request({'action': 'claim', 'id': task['id'], 'period': task['period'], 'device': socket.gethostname()}, settings):
+        claim = provider.request({'action': 'claim', 'id': task['id'], 'period': task['period'], 'device': device}, settings)
+        if not claim:
             continue
+        key, reservation = max(((k, v) for k, v in claim['notifications'].items()
+            if v.get('state') == 'pending' and v.get('device') == device
+            and k.startswith(task['period'] + ':')), key=lambda item: item[0])
+        token = reservation['token']
         data = {'group': task['group'], 'due': task['period'], 'taskId': task['id'], 'period': task['period']}
-        subprocess.run(['notjikctl', 'send', task['title'], '--app', 'tasktjik', '--type', 'todo', '--id', task['id'], '--timeout', 'never', '--data', json.dumps(data), '--actions', '[]'], check=True, timeout=10)
+        try:
+            subprocess.run(['notjikctl', 'send', task['title'], '--app', 'tasktjik', '--type', 'todo', '--id', task['id'], '--timeout', 'never', '--data', json.dumps(data), '--actions', '[]'], check=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            provider.request({'action': 'release', 'id': task['id'], 'period': task['period'], 'device': device, 'token': token, 'notification_key': key}, settings)
+            raise
+        provider.request({'action': 'ack', 'id': task['id'], 'period': task['period'], 'device': device, 'token': token, 'notification_key': key}, settings)
+
 
 
 if __name__ == '__main__':
