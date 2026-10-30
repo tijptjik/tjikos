@@ -89,6 +89,28 @@ class NavigationTests(unittest.TestCase):
         self.assertIn('/shortcuts',by_id['/bindings']['name'])
         self.assertEqual(self.launcher.query('/bindings')['results'],self.launcher.query('/shortcuts')['results'])
 
+    def test_general_search_finds_and_opens_slash_commands(self):
+        rows = self.launcher.query('todo')['results']
+        self.assertEqual(rows[0]['id'], '/todo')
+        self.assertEqual(rows[0]['provider'], 'internal')
+        edit = self.launcher.activate(rows[0]['id'])
+        self.assertEqual(edit, {'kind': 'edit', 'text': '/todo '})
+        self.assertEqual(self.launcher.query(edit['text'])['app_mode'], 'Todo')
+        for query, command in [('reading', '/reading'), ('config', '/config'),
+                               ('shortcuts', '/bindings'), ('rebuild', '/refresh')]:
+            with self.subTest(query=query):
+                ids = [row['id'] for row in self.launcher.query(query)['results']]
+                self.assertIn(command, ids)
+                self.assertEqual(ids.count(command), 1)
+        self.assertEqual(self.launcher.activate('/config'), {'kind': 'edit', 'text': '/config'})
+
+    def test_general_commands_respect_enabled_providers_and_search_modes(self):
+        self.launcher.plugin_commands.pop('/todo')
+        self.assertNotIn('/todo', [row['id'] for row in self.launcher.query('todo')['results']])
+        for query in ('', '/run todo', '?todo'):
+            with self.subTest(query=query):
+                self.assertFalse(any(row['provider'] == 'internal' for row in self.launcher.query(query)['results']))
+
     def test_retired_hamr_entries_are_removed_during_refresh(self):
         apps=[r.Entry('apps:hamr.desktop','Hamr',data={'executable':'hamr','desktop_id':'hamr.desktop'}),
               r.Entry('apps:keep.desktop','Keep',data={'executable':'keep'})]

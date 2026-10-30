@@ -611,6 +611,8 @@ fetches another page. Existing rows, selection and scroll position remain in
 place; ordinary index refreshes retain the loaded extent. A new query starts at
 the first page. Icons are resolved only for fetched pages.
 
+Type a command name in general search: `todo` finds `/todo`, and Enter opens it.
+Enabled slash commands also match their descriptions and aliases, alongside applications.
 Type `!` to browse launcher slash commands (`!define word` also works).
 Type `/run` or `!!` to search saved Fish commands; both `!!fish` and `!! fish`
 work. The slash menu shows aliases on one row: `/run · !!` and

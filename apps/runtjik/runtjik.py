@@ -808,6 +808,8 @@ def match_score(query, entry):
     if not query:
         return 0
     name = entry.name.casefold()
+    if entry.provider == 'internal' and entry.id.startswith('/'):
+        name = name.lstrip('/')
     hay = name + " " + entry.keywords.casefold() + " " + entry.subtitle.casefold()
     score = 0
     for word in query.casefold().split():
@@ -1042,6 +1044,20 @@ class Launcher:
         except Exception:
             return name  # Artwork must not hide usable launcher commands.
 
+    def slash_commands(self):
+        commands = [("/processes", "Search applications with running windows", "runtjik-stats"),
+                    ("/run", "Search previously used terminal commands", COMMAND_ICON),
+                    ("/refresh", "Rebuild the application and command index", "runtjik-refresh"),
+                    ("/pin", "Toggle keeping the launcher open on outside clicks", "runtjik-pin"),
+                    ("/grid", "Show applications as an icon grid", "runtjik-grid"),
+                    ("/list", "Show applications as a list", "runtjik-list"),
+                    ("/stats", "Show cumulative launches and window switches", "runtjik-stats"),
+                    ("/config", "View and change featured settings", "runtjik-config"),
+                    ("/bindings", "Show keyboard shortcuts and dragging", "runtjik-shortcuts")]
+        commands.extend((command, description, getattr(self.providers[name], "icon", "accessories-dictionary"))
+                        for command, (name, description) in self.plugin_commands.items() if command not in self.plugin_aliases)
+        return commands
+
     def query(self, query="", offset=0, limit=None):
         if type(offset) is not int or offset < 0:
             raise ValueError('Invalid result offset')
@@ -1109,17 +1125,7 @@ class Launcher:
                         rows.append({"id": "/config " + key, "name": key + " = " + json.dumps(get_setting(self.settings, key)),
                                      "subtitle": description, "disabled": False})
                 return self.payload([{**row, "provider": "internal", "icon": self.control_icon("runtjik-config"), "count": 0, "windows": 0} for row in rows], query=display_query)
-            commands = [("/processes", "Search applications with running windows", "runtjik-stats"),
-                        ("/run", "Search previously used terminal commands", COMMAND_ICON),
-                        ("/refresh", "Rebuild the application and command index", "runtjik-refresh"),
-                        ("/pin", "Toggle keeping the launcher open on outside clicks", "runtjik-pin"),
-                        ("/grid", "Show applications as an icon grid", "runtjik-grid"),
-                        ("/list", "Show applications as a list", "runtjik-list"),
-                        ("/stats", "Show cumulative launches and window switches", "runtjik-stats"),
-                        ("/config", "View and change featured settings", "runtjik-config"),
-                        ("/bindings", "Show keyboard shortcuts and dragging", "runtjik-shortcuts")]
-            commands.extend((command, description, getattr(self.providers[name], "icon", "accessories-dictionary"))
-                            for command, (name, description) in self.plugin_commands.items() if command not in self.plugin_aliases)
+            commands = self.slash_commands()
             results = [{"id": name, "name": name + ("  ·  " + ", ".join(alias for alias, canonical in self.plugin_aliases.items() if canonical == name) if name in self.plugin_aliases.values() else "") + ({'/processes':'  ·  ?', '/run':'  ·  !!', '/bindings':'  ·  /shortcuts'}.get(name,'')), "subtitle": text, "icon": self.control_icon(icon), "provider": "internal", "count": 0, "windows": 0}
                        for name, text, icon in sorted(commands, key=lambda row: row[0].casefold())
                        if name.startswith(query) or any(alias.startswith(query) and canonical == name for alias, canonical in self.plugin_aliases.items()) or (name == '/bindings' and '/shortcuts'.startswith(query))]
@@ -1129,6 +1135,13 @@ class Launcher:
             self.ranking_snapshot = self.store.frecency() if self.store else {}
         frecency = self.ranking_snapshot
         candidates = [entry for entry in self.entries if entry.provider == ("commands" if run_mode else "apps")]
+        if search_query.strip() and not run_mode and not running_mode:
+            for command, description, icon in self.slash_commands():
+                aliases = [alias for alias, canonical in self.plugin_aliases.items() if canonical == command]
+                if command == '/bindings':
+                    aliases.append('/shortcuts')
+                candidates.append(Entry(command, command, description, icon,
+                                        provider='internal', keywords=' '.join(aliases)))
         for name, provider in self.providers.items():
             if name in ("apps", "commands") or run_mode or running_mode:
                 continue
@@ -1179,7 +1192,7 @@ class Launcher:
         for entry, _, stat in page:
             row = {k: v for k, v in asdict(entry).items() if k not in ("data", "keywords")}
             try:
-                row["icon"] = self.icons.resolve(entry.icon)
+                row["icon"] = self.control_icon(entry.icon) if entry.provider == "internal" else self.icons.resolve(entry.icon)
             except Exception:
                 pass  # Broken optional artwork must not hide a runnable application.
             row.update(favicon=entry.data.get("favicon", ""), keep_open=bool(entry.data.get("keep_open")), count=stat["count"], windows=len(matched_windows(entry, clients, self.settings)))
