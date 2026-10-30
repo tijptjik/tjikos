@@ -86,9 +86,10 @@ The first execution exposed an additional native bug before any deletion:
 serializing `OsStr` produced an object where the shared-file safety check expected
 a filename string. Commit `2140d07` fixes this and adds a regression test; all
 three targeted media tests passed. The checksum-verified release-mode build was
-installed in Si's system runtime with the previous binary preserved. This is a
-local repair build, not yet a published Tjikup binary release. The pinned user
-runtime and running backups were untouched.
+installed in Si's system runtime with the previous binary preserved. The fix
+has since been published in signed Tjikup `bootstrap.7`; Si still uses the local
+repair build pending normal convergence. The pinned user runtime and running
+backups were untouched.
 
 At **14:54 HKT**, cleanup succeeded and verified removal of the exact 12 approved
 torrents and their downloaded files, representing 55,654,194,885 logical bytes

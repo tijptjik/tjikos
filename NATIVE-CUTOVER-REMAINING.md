@@ -88,8 +88,11 @@ current repair evidence and exact follow-up commands/paths.
 - Transmission's sandbox and native shared-file filename check are repaired.
   After explicit approval, all 12 approved torrents and downloaded files were
   removed and verified at 14:54 HKT. The cleanup timer is restored. The system
-  runtime uses the tested local repair build from `2140d07`; publishing that fix
-  in the next Tjikup binary release remains outstanding.
+  runtime uses the tested local repair build from `2140d07`. The fix is now
+  published in signed `tjikup-v0.2.0-bootstrap.7` from `c303b00`; release CI
+  passed and downloaded checksums, provenance, capabilities and static linking
+  were verified. Existing fleet runtimes still need their normal release
+  convergence; Si's queued user-runtime checksum gate remains untouched.
 
 The original cutover evidence is preserved; the new attempt writes `repair-run.*`
 markers in the same private cutover directory. Neither a queued unit nor an
