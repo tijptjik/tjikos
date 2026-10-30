@@ -50,8 +50,8 @@ identity, registers this device for reminders and saves the endpoint. Omit
 `--notifications` for devices that should only read/edit tasks.
 
 Tailscale Serve provides HTTPS and identity headers over a protected Unix
-socket. The server accepts root peers only and enforces an explicit login
-allowlist; tailnet membership alone does not grant task access. Browser clients
+socket. Root proxy peers must supply an explicitly allowed login; configured
+local user IDs authenticate through kernel peer credentials instead of headers; tailnet membership alone does not grant task access. Browser clients
 use the same API. The device list controls reminder delivery, not authentication;
 remove a device from Tailscale to revoke its access. No app password is stored.
 
@@ -71,3 +71,8 @@ Deployment policy, service units and enrollment activation are owned by Dotjik
 and Tjikup. Task data, credentials and local device IDs stay outside Git.
 
 Build requires Cargo; `bun run test` in this app runs Python and Rust tests.
+
+Si-local CLI clients use `socket = "/run/tasktjik/api.sock"`. This reaches the
+same API and database without looping through the server’s nginx listener.
+Socket access uses the tasktjik group, and UID 1000 maps to m@type.hk on Si.
+The database directory remains mode 0700, private to the service user.

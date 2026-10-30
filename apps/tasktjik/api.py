@@ -26,9 +26,11 @@ def command(args):
         from client import connect
         print(json.dumps(connect(options.url, options.notifications)))
     elif options.command == 'devices':
-        from client import http_request
+        from client import http_request, unix_request
         from tasktjik import config
-        print(json.dumps(http_request(config()['plugin_settings']['Todo']['url'], 'devices')))
+        options = config()['plugin_settings']['Todo']
+        transport = unix_request if options.get('socket') else http_request
+        print(json.dumps(transport(options.get('socket') or options['url'], 'devices')))
     else:
         database = Path(options.directory).expanduser() / 'tasks.sqlite3'
         os.execv(str(binary), [str(binary), options.command, str(database), str(Path(options.path).expanduser())])

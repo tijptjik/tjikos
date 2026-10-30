@@ -87,11 +87,33 @@ def http_request(url, endpoint, body=None):
         raise ValueError('Tasktjik is unreachable; check Tailscale: ' + str(error.reason)) from error
 
 
-def api_request(url, request):
+def unix_request(path, endpoint, body=None):
+    class Connection(http.client.HTTPConnection):
+        def connect(self):
+            self.sock = socket.socket(socket.AF_UNIX)
+            self.sock.settimeout(self.timeout)
+            self.sock.connect(path)
+    connection = Connection('localhost', timeout=10)
+    try:
+        connection.request('GET' if body is None else 'POST', '/api/v1/' + endpoint,
+            body=None if body is None else json.dumps(body),
+            headers={'Content-Type': 'application/json', 'X-Tasktjik-Request': '1',
+                     'X-Tasktjik-Device': device_identity()['id']})
+        response = connection.getresponse()
+        result = json.loads(response.read(8 * 1024 * 1024))
+        if response.status != 200:
+            raise ValueError(result.get('error', 'Local Tasktjik request failed'))
+        return result
+    finally:
+        connection.close()
+
+
+def api_request(url, request, socket_path=None):
     request = dict(request)
     if request.get('action', 'list') not in ('list', 'capabilities'):
         request.setdefault('request_id', str(uuid.uuid4()))
-    return http_request(url, 'request', request)['result']
+    transport = unix_request if socket_path else http_request
+    return transport(socket_path or url, 'request', request)['result']
 
 
 def connect(url, notifications=False):

@@ -13,7 +13,7 @@ import tomllib
 from urllib.parse import urlsplit
 
 GROUPS = ['All', 'Quick', 'General', 'Work', 'Socials', 'Domestic', 'Finances', 'Tech']
-OPTIONS = {'authority': 'si', 'directory': '~/.local/share/runtjik-todo', 'vault': '', 'ssh_command': ['ssh'], 'url': ''}
+OPTIONS = {'authority': 'si', 'directory': '~/.local/share/runtjik-todo', 'vault': '', 'ssh_command': ['ssh'], 'url': '', 'socket': ''}
 UNITS = ['days', 'weeks', 'months', 'years', 'days-of-the-week', 'days-of-the-month']
 
 
@@ -306,9 +306,9 @@ class Todo:
             options.update(tomllib.loads(path.read_text()).get('tasktjik', {}))
         if self.demo:
             return Store(self.temporary.name).request(request)
-        if options.get('url'):
+        if options.get('url') or options.get('socket'):
             from client import api_request
-            return api_request(options['url'], request)
+            return api_request(options['url'], request, options.get('socket'))
         if options['authority']:
             host = options['authority']
             if not all(c.isalnum() or c in '.-@_' for c in host) or host.startswith('-'):

@@ -13,7 +13,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     os::unix::fs::{FileTypeExt, PermissionsExt},
     path::PathBuf,
     sync::Arc,
@@ -28,6 +28,8 @@ struct Config {
     directory: PathBuf,
     origin: String,
     allowed_users: HashSet<String>,
+    #[serde(default)]
+    local_users: HashMap<String, String>,
 }
 #[derive(Deserialize)]
 struct FileConfig {
@@ -81,7 +83,12 @@ async fn auth(State(app): State<Arc<App>>, mut request: Request, next: Next) -> 
         .get::<ConnectInfo<Peer>>()
         .map(|p| p.0 .0);
     let headers = request.headers();
-    let login = if headers.get_all("tailscale-user-login").iter().count() == 1 {
+    let login = if let Some(login) = peer
+        .filter(|uid| *uid != 0)
+        .and_then(|uid| app.cfg.local_users.get(&uid.to_string()))
+    {
+        Some(login.clone())
+    } else if peer == Some(0) && headers.get_all("tailscale-user-login").iter().count() == 1 {
         headers
             .get("tailscale-user-login")
             .and_then(|s| s.to_str().ok())
@@ -90,10 +97,9 @@ async fn auth(State(app): State<Arc<App>>, mut request: Request, next: Next) -> 
     } else {
         None
     };
-    let approved = peer == Some(0)
-        && login
-            .as_ref()
-            .is_some_and(|s| app.cfg.allowed_users.contains(s));
+    let approved = login
+        .as_ref()
+        .is_some_and(|s| app.cfg.allowed_users.contains(s));
     if !approved {
         return (
             StatusCode::FORBIDDEN,
@@ -317,7 +323,14 @@ async fn main() -> Result<()> {
         std::fs::remove_file(&cfg.socket)?;
     }
     let listener = UnixListener::bind(&cfg.socket).context("Bind protected API socket")?;
-    std::fs::set_permissions(&cfg.socket, std::fs::Permissions::from_mode(0o600))?;
+    std::fs::set_permissions(
+        &cfg.socket,
+        std::fs::Permissions::from_mode(if cfg.local_users.is_empty() {
+            0o600
+        } else {
+            0o660
+        }),
+    )?;
     let app = Arc::new(App { cfg, database });
     axum::serve(
         listener,

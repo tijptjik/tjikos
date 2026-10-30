@@ -12,6 +12,7 @@ fn app(tmp: &tempfile::TempDir) -> Arc<App> {
             directory: tmp.path().into(),
             origin: "https://si.example.ts.net".into(),
             allowed_users: HashSet::from(["owner@example.test".into()]),
+            local_users: HashMap::new(),
         },
         database,
     })
@@ -329,4 +330,43 @@ fn import_failure_is_atomic_and_snapshot_requires_existing_source() {
         .unwrap()
         .is_empty());
     assert!(db::snapshot(&tmp.path().join("missing"), &tmp.path().join("snapshot")).is_err());
+}
+
+#[tokio::test]
+async fn local_client_identity_comes_from_peer_credentials() {
+    let tmp = tempfile::tempdir().unwrap();
+    let original = app(&tmp);
+    let mut cfg = original.cfg.clone();
+    cfg.local_users
+        .insert("1000".into(), "owner@example.test".into());
+    let a = Arc::new(App {
+        cfg,
+        database: original.database.clone(),
+    });
+    let (status, identity) = invoke(
+        a.clone(),
+        1000,
+        Some("forged@example.test"),
+        "/api/v1/identity",
+        None,
+        None,
+        false,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(identity["login"], "owner@example.test");
+    assert_eq!(
+        invoke(
+            a,
+            1001,
+            Some("owner@example.test"),
+            "/api/v1/identity",
+            None,
+            None,
+            false
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
 }
