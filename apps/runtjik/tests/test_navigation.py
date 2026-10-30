@@ -82,7 +82,7 @@ class NavigationTests(unittest.TestCase):
 
     def test_menu_aliases_share_single_rows_and_both_shortcut_queries_work(self):
         rows=self.launcher.query('/')['results']
-        self.assertEqual(len(rows),15)
+        self.assertEqual(len(rows),16)
         self.assertNotIn('/shortcuts',{row['id'] for row in rows})
         by_id={row['id']:row for row in rows}
         self.assertIn('!',by_id['/run']['name'])

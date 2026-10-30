@@ -28,7 +28,7 @@ class DesktopPluginTests(unittest.TestCase):
         launcher = r.Launcher(demo=True)
         launcher._icons = Mock(resolve=lambda name: name)
         menu = launcher.query('/')['results']
-        self.assertEqual(len(menu), 15)
+        self.assertEqual(len(menu), 16)
         self.assertNotIn('/shot', {row['id'] for row in menu})
         for alias, canonical in (('/shot', '/grab'), ('/screenshot', '/grab'), ('/screenrecord', '/rec')):
             self.assertEqual(launcher.query(alias)['results'], launcher.query(canonical)['results'])
