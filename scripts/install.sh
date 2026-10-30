@@ -7,12 +7,15 @@ fi
 # Validate all targets before installing any of them.
 for app in "$@"; do
     case "$app" in
-        mailtjik|notjik|tjikup|synctjik|bartjik|greetjik|runtjik) ;;
-        *) printf 'Unknown app: %s (expected mailtjik, notjik, tjikup, synctjik, bartjik, greetjik or runtjik)\n' "$app" >&2; exit 2 ;;
+        mailtjik|notjik|tjikup|synctjik|bartjik|greetjik|runtjik|tasktjik) ;;
+        *) printf 'Unknown app: %s (expected mailtjik, notjik, tjikup, synctjik, bartjik, greetjik, runtjik or tasktjik)\n' "$app" >&2; exit 2 ;;
     esac
 done
 for app in "$@"; do
     case "$app" in
+        tasktjik)
+            bash "$root_dir/apps/tasktjik/scripts/install.sh"
+            ;;
         runtjik)
             bash "$root_dir/apps/runtjik/scripts/install.sh"
             ;;
@@ -35,6 +38,9 @@ for app in "$@"; do
             bash "$root_dir/scripts/install-completions.sh" "$HOME/.local" mailtjik
             ;;
         notjik)
+            if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
+                bash "$root_dir/apps/tasktjik/scripts/install.sh"
+            fi
             source_dir="$root_dir/apps/notjik/dist"
             target_dir="$HOME/.local/lib/notjik"
             install -d -m 755 "$HOME/.local/bin" "$target_dir" "$HOME/.config/systemd/user"

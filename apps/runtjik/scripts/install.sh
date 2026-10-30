@@ -5,6 +5,9 @@ install_home="${RUNTJIK_INSTALL_HOME:-$HOME}"
 config_root="${RUNTJIK_INSTALL_CONFIG:-${XDG_CONFIG_HOME:-$install_home/.config}}"
 target="$install_home/.local/lib/runtjik"
 test -f "$root_dir/dist/runtjik.py"
+if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
+    TASKTJIK_INSTALL_HOME="$install_home" TASKTJIK_INSTALL_CONFIG="$config_root" bash "$root_dir/../tasktjik/scripts/install.sh"
+fi
 
 # Stop only this installed launcher before replacing a resident UI/backend pair.
 if [[ "$install_home" == "$HOME" && -n "${WAYLAND_DISPLAY:-}" && -n "${XDG_RUNTIME_DIR:-}" && -x "$install_home/.local/bin/runtjik" ]]; then

@@ -1,4 +1,11 @@
-# Todo app
+# Tasktjik integration
+
+Task storage, scheduling and the shared view now belong to
+[Tasktjik](../../tasktjik/README.md). Runtjik embeds the view as `/todo` and
+`/reading`. Install Tasktjik on the authority before updating clients.
+The details below describe the retained task behavior; new configuration uses
+`tasktjik/tasktjik.conf` and new reminder installations use `tasktjik.timer`.
+
 
 `/todo` is an app provider: the launcher search bar collapses and typing invokes
 commands. `/` opens task filtering; Escape exits filtering, then exits the app.
@@ -26,7 +33,7 @@ Todo data lives outside Dotjik and this repository. Each task is a private JSON
 file containing fields, completion history and notification claims. Writes use an
 exclusive authority lock, atomic replacement and fsync. There is one writable
 store: **Si**. Clients use bounded, noninteractive SSH calls to its installed
-`~/.local/lib/runtjik/todo.py serve`. No credentials are stored in Todo settings.
+`~/.local/lib/tasktjik/tasktjik.py serve`. No credentials are stored in Todo settings.
 When Si cannot be reached, changes fail visibly; there is no offline writable copy.
 
 Install the built Runtjik helper on Si and updated Runtjik and Notjik on clients.

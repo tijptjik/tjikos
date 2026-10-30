@@ -4,5 +4,5 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 python3 -B scripts/check.py
 rm -rf -- dist
 mkdir -p dist
-cp -R bin qml examples docs browser-extension systemd dist/
+cp -RL bin qml examples docs browser-extension systemd dist/
 cp todo.py browser.py browser_host.py image_viewer.py runtjik.py words.py desktop_plugins.py capture_worker.py capture_countdown.py capture_trash.py control.py README.md dist/

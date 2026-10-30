@@ -23,10 +23,16 @@
     "apps/notjik": {
       "name": "@tjikos/notjik",
       "version": "0.1.0",
+      "dependencies": {
+        "@tjikos/tasktjik": "workspace:*",
+      },
     },
     "apps/runtjik": {
       "name": "@tjikos/runtjik",
       "version": "0.8.3",
+      "dependencies": {
+        "@tjikos/tasktjik": "workspace:*",
+      },
     },
     "apps/synctjik": {
       "name": "@tjikos/synctjik",

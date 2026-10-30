@@ -7,5 +7,8 @@
     "check": "python3 -B scripts/check.py",
     "test": "python3 -B -m unittest discover -s tests -v",
     "demo": "dbus-run-session --config-file tests/bus.conf -- python3 -B tests/render.py docs --demo"
+  },
+  "dependencies": {
+    "@tjikos/tasktjik": "workspace:*"
   }
 }

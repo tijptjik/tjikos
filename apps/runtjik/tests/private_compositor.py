@@ -33,9 +33,9 @@ def private_compositor():
     config=directory/"hyprland.lua"
     config.write_text('hl.monitor({output="",mode="1000x680@60",position="0x0",scale=1})\n'
                       'hl.config({general={border_size=0},decoration={rounding=12,shadow={enabled=false}}})\n')
-    keys=("XDG_RUNTIME_DIR","WAYLAND_DISPLAY","HYPRLAND_INSTANCE_SIGNATURE","XDG_CONFIG_HOME","XDG_CACHE_HOME","XDG_DATA_HOME")
+    keys=("XDG_RUNTIME_DIR","WAYLAND_DISPLAY","HYPRLAND_INSTANCE_SIGNATURE","XDG_CONFIG_HOME","XDG_CACHE_HOME","XDG_DATA_HOME","TASKTJIK_HOME")
     previous={key:os.environ.get(key) for key in keys}
-    env={**os.environ,"XDG_RUNTIME_DIR":str(runtime),"XDG_CONFIG_HOME":str(directory/"config"),"XDG_CACHE_HOME":str(directory/"cache"),"XDG_DATA_HOME":str(directory/"data")}
+    env={**os.environ,"TASKTJIK_HOME":str(Path(__file__).resolve().parents[2]/"tasktjik"),"XDG_RUNTIME_DIR":str(runtime),"XDG_CONFIG_HOME":str(directory/"config"),"XDG_CACHE_HOME":str(directory/"cache"),"XDG_DATA_HOME":str(directory/"data")}
     parent_display=Path(os.environ.get("WAYLAND_DISPLAY","wayland-1"))
     env["WAYLAND_DISPLAY"]=str(parent_display if parent_display.is_absolute() else Path(os.environ["XDG_RUNTIME_DIR"])/parent_display)
     env.pop("HYPRLAND_INSTANCE_SIGNATURE",None)

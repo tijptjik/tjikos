@@ -22,9 +22,7 @@ Pane {
     property string error: ''
     function run(action, until) {
         if(card.historyMode || card.controller.locked || snooze.running)return;
-        const argv=card.notice.data.todoCommand;
-        if(!Array.isArray(argv) || argv.length!==2){card.error='Invalid todo command';return;}
-        snooze.command=argv.concat([action,card.notice.data.taskId,card.notice.data.period]).concat(until?[until]:[]);
+        snooze.command=['tasktjik',action,card.notice.data.taskId,card.notice.data.period].concat(until?[until]:[]);
         snooze.running=true;
     }
     ColumnLayout {
