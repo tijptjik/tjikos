@@ -21,6 +21,11 @@ Pane {
     property string lastDraftId: ''
     property string view: 'week'
     property bool searching: false
+    property bool showCompleted: true
+    property bool showCancelled: true
+    property bool showDetails: false
+    onShowCompletedChanged: selectVisibleTask()
+    onShowCancelledChanged: selectVisibleTask()
     property string filter: ''
     property string selectedId: ''
     property var editing: null
@@ -45,6 +50,46 @@ Pane {
         horizontalPadding: 14
         contentItem: Text {text:control.text;color:!control.enabled?theme.muted:control.primary?theme.background:theme.text;font.pixelSize:13;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
         background: Rectangle {radius:10;color:control.primary?theme.accent:control.down?theme.border:control.hovered?theme.surface:'transparent';opacity:control.enabled?1:0.45;border.color:control.activeFocus?theme.accent:control.primary || control.quiet?'transparent':theme.border}
+    }
+    component IconButton: Button {
+        id: control
+        property string symbol
+        property string description
+        implicitWidth:38;implicitHeight:38
+        Accessible.name:description
+        ToolTip.visible:hovered
+        ToolTip.text:description
+        ToolTip.delay:400
+        background:Rectangle {
+            radius:8
+            color:control.checked?theme.surface:control.hovered?theme.border:'transparent'
+            border.color:control.checked || control.activeFocus?theme.accent:'transparent'
+        }
+        contentItem:Canvas {
+            id:iconCanvas
+            implicitWidth:22;implicitHeight:22
+            onWidthChanged:requestPaint()
+            onHeightChanged:requestPaint()
+            Connections {target:control;function onCheckedChanged(){iconCanvas.requestPaint();}}
+            onPaint:{
+                const c=getContext('2d');c.reset();
+                c.translate((width-22)/2,(height-22)/2);
+                c.strokeStyle=control.checked?theme.accent:theme.text;c.fillStyle=c.strokeStyle;
+                c.lineWidth=1.5;c.lineCap='round';c.lineJoin='round';
+                if(control.symbol==='keyboard') {
+                    c.strokeRect(1,4,20,14);
+                    for(let y=7;y<=10;y+=3)for(let x=4;x<=18;x+=3)c.fillRect(x,y,1,1);
+                    c.beginPath();c.moveTo(6,14);c.lineTo(16,14);c.stroke();
+                } else {
+                    c.beginPath();c.arc(11,11,8,0,Math.PI*2);c.stroke();
+                    c.beginPath();
+                    if(control.symbol==='completed'){c.moveTo(6,11);c.lineTo(10,15);c.lineTo(16,7);}
+                    else if(control.symbol==='cancelled'){c.moveTo(7,7);c.lineTo(15,15);c.moveTo(15,7);c.lineTo(7,15);}
+                    else {c.moveTo(11,10);c.lineTo(11,15);c.fillRect(10.3,6,1.4,1.4);}
+                    c.stroke();
+                }
+            }
+        }
     }
     component Entry: TextField {
         color:theme.text;placeholderTextColor:theme.muted
@@ -221,7 +266,7 @@ Pane {
         const now=stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd');
         let end=new Date(now+'T12:00:00');end.setDate(end.getDate()+6-((end.getDay()+6)%7));
         const last=Qt.formatDate(end,'yyyy-MM-dd');
-        return (stateData.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (!filter || (t.title+' '+t.tags.join(' ')+' '+t.group+' '+(t.reference || '')).toLowerCase().includes(filter.toLowerCase())) &&
+        return (stateData.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && (!filter || (t.title+' '+t.tags.join(' ')+' '+t.group+' '+(t.reference || '')).toLowerCase().includes(filter.toLowerCase())) &&
             (view==='all' || (t.period!=='once' && t.period <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now)));
     }
     Keys.onPressed: event=>{
@@ -278,11 +323,13 @@ Pane {
                 }
             }
             Item {Layout.fillWidth:true}
-            QuietButton {text:'Search';quiet:true;onClicked:{searching=!searching;if(searching)filterInput.forceActiveFocus();}}
+            IconButton {symbol:'completed';description:'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
+            IconButton {symbol:'cancelled';description:'Show cancelled tasks';checkable:true;checked:app.showCancelled;onClicked:app.showCancelled=checked}
+            IconButton {symbol:'details';description:'Show selected task details';checkable:true;checked:app.showDetails;onClicked:app.showDetails=checked}
         }
-        Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:searching;Layout.fillWidth:true;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.forceActiveFocus();}}
+        Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:!editor;Layout.fillWidth:true;onActiveFocusChanged:app.searching=activeFocus;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.forceActiveFocus();}}
         Label {
-            visible:!editor && !!selected && text!==''
+            visible:!editor && showDetails && !!selected && text!==''
             Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted
             text:selected ? (selected.blockers || []).map(b=>'Blocked: '+b.reason+(b.task_id?' ['+b.task_id+']':'')).concat(
                 (selected.acceptance || []).map(c=>'Accept: '+c),
@@ -394,7 +441,7 @@ Pane {
             QuietButton {text:selected && selected.done?'Mark undone':'Mark done';enabled:!!selected;quiet:true;onClicked:action('toggle')}
             QuietButton {text:'Edit';enabled:!!selected;quiet:true;onClicked:openEditor()}
             Item {Layout.fillWidth:true}
-            QuietButton {text:'?  Shortcuts';quiet:true;onClicked:help.open()}
+            IconButton {symbol:'keyboard';description:'Keyboard shortcuts (?)';onClicked:help.open()}
         }
         ScrollView {
             id:editorScroll;visible:editor==='edit';Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth;ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
