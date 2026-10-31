@@ -119,7 +119,14 @@ impl Launcher {
     ) -> Value {
         let total = entries.len();
         self.current = entries.iter().map(|e| (e.id.clone(), e.clone())).collect();
-        let rows:Vec<_>=entries.into_iter().skip(offset).take(limit).map(|e|json!({"id":e.id,"name":e.name,"subtitle":e.subtitle,"provider":e.provider,"icon":self.icons.resolve(&e.icon),"favicon":s(&e.data["favicon"]),"hide_launcher":e.data["capture"].as_str().is_some_and(|s|!s.is_empty()),"keep_open":e.data["keep_open"]==true,"thumbnail":s(&e.data["thumbnail"]),"empty_state":e.data["empty_state"]==true,"disabled":e.data["disabled"]==true,"count":0,"windows":0})).collect();
+        let rows:Vec<_>=entries.into_iter().skip(offset).take(limit).map(|e| { let mut row = json!({"id":e.id,"name":e.name,"subtitle":e.subtitle,"provider":e.provider,"icon":self.icons.resolve(&e.icon),"favicon":s(&e.data["favicon"]),"hide_launcher":e.data["capture"].as_str().is_some_and(|s|!s.is_empty()),"keep_open":e.data["keep_open"]==true,"thumbnail":s(&e.data["thumbnail"]),"empty_state":e.data["empty_state"]==true,"disabled":e.data["disabled"]==true,"count":0,"windows":0});
+            for key in ["word_source", "part_of_speech", "examples", "url", "language", "section", "group", "etymology", "headword", "sense_number", "sense_depth", "sense_synonyms", "terms", "context"] {
+                if e.provider == "Words" {
+                    if let Some(value) = e.data.get(key) { row[key] = value.clone(); }
+                }
+            }
+            row
+        }).collect();
         let next = offset + rows.len();
         let mut v = self.payload(rows);
         let scope = if browser {
@@ -290,14 +297,20 @@ impl Launcher {
         }
         if enabled.iter().any(|s| s == "Words") && ["/define", "/synonym"].contains(&command) {
             let rows = self.words.query(q, &self.settings, self.demo);
-            return Ok(self.provider_payload(
-                rows,
-                display,
-                offset,
-                limit,
-                self.words.pending,
-                false,
-            ));
+            let mut counts = serde_json::Map::new();
+            for row in &rows {
+                if row.data["disabled"] == true {
+                    continue;
+                }
+                if let Some(source) = row.data["word_source"].as_str() {
+                    let count = counts.get(source).and_then(Value::as_u64).unwrap_or(0);
+                    counts.insert(source.to_owned(), json!(count + 1));
+                }
+            }
+            let mut value =
+                self.provider_payload(rows, display, offset, limit, self.words.pending, false);
+            value["word_source_counts"] = json!(counts);
+            return Ok(value);
         }
         if enabled.iter().any(|s| s == "Browser")
             && ["/browser", "/zen", "/tabs", "/history"].contains(&command)

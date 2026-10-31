@@ -23,6 +23,7 @@ tasktjik-api = { path = "../tasktjik" }
 tempfile = "3"
 chrono = "0.4"
 uuid = { version = "1", features = ["v4"] }
+scraper = "0.24"
 
 [profile.release]
 lto = "thin"

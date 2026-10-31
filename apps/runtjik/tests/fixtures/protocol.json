@@ -1063,15 +1063,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -2191,15 +2198,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -2529,15 +2543,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -3657,15 +3678,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -3784,15 +3812,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -3922,15 +3957,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -4060,15 +4102,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -4237,9 +4286,27 @@
               "windows": 0
             },
             {
+              "id": "/config plugin_settings.Words.languages",
+              "name": "plugin_settings.Words.languages = [\"English\"]",
+              "subtitle": "Entry languages by name, e.g. [\"English\", \"French\"]",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
+              "id": "/config plugin_settings.Words.sections",
+              "name": "plugin_settings.Words.sections = [\"definitions\", \"synonyms\", \"related_terms\"]",
+              "subtitle": "Sections: definitions, synonyms, related_terms, derived_terms, pronunciation, etymology, alternative_forms, antonyms, usage_notes, inflections, translations",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
               "id": "/config plugin_settings.Words.define_sources",
-              "name": "plugin_settings.Words.define_sources = [\"free_dictionary\", \"wiktionary\"]",
-              "subtitle": "Sources: free_dictionary, wiktionary, urban_dictionary (optional slang)",
+              "name": "plugin_settings.Words.define_sources = [\"wiktionary\", \"urban_dictionary\"]",
+              "subtitle": "Sources: wiktionary, urban_dictionary; free_dictionary also supported",
               "disabled": false,
               "provider": "internal",
               "count": 0,
@@ -4247,8 +4314,8 @@
             },
             {
               "id": "/config plugin_settings.Words.synonym_sources",
-              "name": "plugin_settings.Words.synonym_sources = [\"datamuse\", \"free_dictionary\"]",
-              "subtitle": "Sources: datamuse, free_dictionary",
+              "name": "plugin_settings.Words.synonym_sources = [\"wiktionary\"]",
+              "subtitle": "Sources: wiktionary; datamuse and free_dictionary also supported",
               "disabled": false,
               "provider": "internal",
               "count": 0,
@@ -4530,15 +4597,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -4662,15 +4736,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -4893,15 +4974,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -5087,7 +5175,7 @@
             },
             {
               "id": "/todo",
-              "name": "/todo",
+              "name": "/todo  ·  -",
               "subtitle": "Todo app",
               "provider": "internal",
               "count": 0,
@@ -5144,15 +5232,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -5438,15 +5533,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -5737,15 +5839,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -6036,15 +6145,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -6175,15 +6291,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -6303,15 +6426,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -6478,15 +6608,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -6622,15 +6759,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -6766,15 +6910,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -6952,15 +7103,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -7096,15 +7254,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -7240,15 +7405,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -7496,15 +7668,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -7710,15 +7889,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -7854,15 +8040,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -8110,15 +8303,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -8201,7 +8401,12 @@
               "empty_state": false,
               "disabled": false,
               "count": 0,
-              "windows": 0
+              "windows": 0,
+              "word_source": "Synthetic dictionary",
+              "part_of_speech": "verb",
+              "examples": [
+                "Please define this term."
+              ]
             },
             {
               "id": "Words:demo2",
@@ -8215,7 +8420,12 @@
               "empty_state": false,
               "disabled": false,
               "count": 0,
-              "windows": 0
+              "windows": 0,
+              "word_source": "Synthetic dictionary",
+              "part_of_speech": "verb",
+              "examples": [
+                "These principles define our work."
+              ]
             }
           ],
           "config": {
@@ -8268,15 +8478,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -8334,7 +8551,10 @@
           "offset": 0,
           "next_offset": 2,
           "has_more": false,
-          "serial": 7
+          "serial": 7,
+          "word_source_counts": {
+            "Synthetic dictionary": 2
+          }
         }
       },
       {
@@ -8359,7 +8579,12 @@
               "empty_state": false,
               "disabled": false,
               "count": 0,
-              "windows": 0
+              "windows": 0,
+              "word_source": "Synthetic dictionary",
+              "part_of_speech": "verb",
+              "examples": [
+                "Please define this term."
+              ]
             },
             {
               "id": "Words:demo2",
@@ -8373,7 +8598,12 @@
               "empty_state": false,
               "disabled": false,
               "count": 0,
-              "windows": 0
+              "windows": 0,
+              "word_source": "Synthetic dictionary",
+              "part_of_speech": "verb",
+              "examples": [
+                "These principles define our work."
+              ]
             }
           ],
           "config": {
@@ -8426,15 +8656,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -8492,7 +8729,10 @@
           "offset": 0,
           "next_offset": 2,
           "has_more": false,
-          "serial": 7
+          "serial": 7,
+          "word_source_counts": {
+            "Synthetic dictionary": 2
+          }
         }
       },
       {
@@ -8555,15 +8795,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -8677,15 +8924,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -8799,15 +9053,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -8921,15 +9182,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -9093,9 +9361,27 @@
               "windows": 0
             },
             {
+              "id": "/config plugin_settings.Words.languages",
+              "name": "plugin_settings.Words.languages = [\"English\"]",
+              "subtitle": "Entry languages by name, e.g. [\"English\", \"French\"]",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
+              "id": "/config plugin_settings.Words.sections",
+              "name": "plugin_settings.Words.sections = [\"definitions\", \"synonyms\", \"related_terms\"]",
+              "subtitle": "Sections: definitions, synonyms, related_terms, derived_terms, pronunciation, etymology, alternative_forms, antonyms, usage_notes, inflections, translations",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
               "id": "/config plugin_settings.Words.define_sources",
-              "name": "plugin_settings.Words.define_sources = [\"free_dictionary\", \"wiktionary\"]",
-              "subtitle": "Sources: free_dictionary, wiktionary, urban_dictionary (optional slang)",
+              "name": "plugin_settings.Words.define_sources = [\"wiktionary\", \"urban_dictionary\"]",
+              "subtitle": "Sources: wiktionary, urban_dictionary; free_dictionary also supported",
               "disabled": false,
               "provider": "internal",
               "count": 0,
@@ -9103,8 +9389,8 @@
             },
             {
               "id": "/config plugin_settings.Words.synonym_sources",
-              "name": "plugin_settings.Words.synonym_sources = [\"datamuse\", \"free_dictionary\"]",
-              "subtitle": "Sources: datamuse, free_dictionary",
+              "name": "plugin_settings.Words.synonym_sources = [\"wiktionary\"]",
+              "subtitle": "Sources: wiktionary; datamuse and free_dictionary also supported",
               "disabled": false,
               "provider": "internal",
               "count": 0,
@@ -9386,15 +9672,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -9617,15 +9910,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -9750,15 +10050,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -9888,15 +10195,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -10026,15 +10340,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -10164,15 +10485,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -10363,7 +10691,7 @@
             },
             {
               "id": "/todo",
-              "name": "/todo",
+              "name": "/todo  ·  -",
               "subtitle": "Todo app",
               "provider": "internal",
               "count": 0,
@@ -10420,15 +10748,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -10592,9 +10927,27 @@
               "windows": 0
             },
             {
+              "id": "/config plugin_settings.Words.languages",
+              "name": "plugin_settings.Words.languages = [\"English\"]",
+              "subtitle": "Entry languages by name, e.g. [\"English\", \"French\"]",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
+              "id": "/config plugin_settings.Words.sections",
+              "name": "plugin_settings.Words.sections = [\"definitions\", \"synonyms\", \"related_terms\"]",
+              "subtitle": "Sections: definitions, synonyms, related_terms, derived_terms, pronunciation, etymology, alternative_forms, antonyms, usage_notes, inflections, translations",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
               "id": "/config plugin_settings.Words.define_sources",
-              "name": "plugin_settings.Words.define_sources = [\"free_dictionary\", \"wiktionary\"]",
-              "subtitle": "Sources: free_dictionary, wiktionary, urban_dictionary (optional slang)",
+              "name": "plugin_settings.Words.define_sources = [\"wiktionary\", \"urban_dictionary\"]",
+              "subtitle": "Sources: wiktionary, urban_dictionary; free_dictionary also supported",
               "disabled": false,
               "provider": "internal",
               "count": 0,
@@ -10602,8 +10955,8 @@
             },
             {
               "id": "/config plugin_settings.Words.synonym_sources",
-              "name": "plugin_settings.Words.synonym_sources = [\"datamuse\", \"free_dictionary\"]",
-              "subtitle": "Sources: datamuse, free_dictionary",
+              "name": "plugin_settings.Words.synonym_sources = [\"wiktionary\"]",
+              "subtitle": "Sources: wiktionary; datamuse and free_dictionary also supported",
               "disabled": false,
               "provider": "internal",
               "count": 0,
@@ -10885,15 +11238,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -10969,7 +11329,12 @@
               "empty_state": false,
               "disabled": false,
               "count": 0,
-              "windows": 0
+              "windows": 0,
+              "word_source": "Synthetic dictionary",
+              "part_of_speech": "verb",
+              "examples": [
+                "Please define this term."
+              ]
             },
             {
               "id": "Words:demo2",
@@ -10983,7 +11348,12 @@
               "empty_state": false,
               "disabled": false,
               "count": 0,
-              "windows": 0
+              "windows": 0,
+              "word_source": "Synthetic dictionary",
+              "part_of_speech": "verb",
+              "examples": [
+                "These principles define our work."
+              ]
             }
           ],
           "config": {
@@ -11036,15 +11406,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -11102,7 +11479,10 @@
           "offset": 0,
           "next_offset": 2,
           "has_more": false,
-          "serial": 7
+          "serial": 7,
+          "word_source_counts": {
+            "Synthetic dictionary": 2
+          }
         }
       },
       {
@@ -11165,15 +11545,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -11303,15 +11690,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -11441,15 +11835,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -11563,15 +11964,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -11685,15 +12093,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -11818,15 +12233,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50
@@ -11988,15 +12410,22 @@
             "plugin_settings": {
               "Words": {
                 "define_sources": [
-                  "free_dictionary",
-                  "wiktionary"
+                  "wiktionary",
+                  "urban_dictionary"
                 ],
                 "synonym_sources": [
-                  "datamuse",
-                  "free_dictionary"
+                  "wiktionary"
                 ],
                 "max_results_per_source": 12,
-                "timeout_seconds": 5
+                "timeout_seconds": 5,
+                "languages": [
+                  "English"
+                ],
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ]
               },
               "Clipboard": {
                 "max_results": 50

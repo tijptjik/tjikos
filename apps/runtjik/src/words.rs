@@ -6,7 +6,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     mpsc, Arc, Mutex,
 };
-type Row = (String, String, String);
+pub(crate) type Row = (String, String, String, Value);
 pub fn encode(text: &str) -> String {
     url::form_urlencoded::byte_serialize(text.as_bytes())
         .collect::<String>()
@@ -95,7 +95,12 @@ pub fn parse(source: &str, command: &str, term: &str, data: &Value, limit: usize
                         let mut seen = std::collections::HashSet::new();
                         for word in words {
                             if seen.insert(word.clone()) {
-                                rows.push((word, part.into(), url.clone()));
+                                rows.push((
+                                    word,
+                                    part.into(),
+                                    url.clone(),
+                                    json!({"part_of_speech":part}),
+                                ));
                             }
                         }
                     } else {
@@ -112,6 +117,7 @@ pub fn parse(source: &str, command: &str, term: &str, data: &Value, limit: usize
                                 s(&d["definition"]).into(),
                                 format!("{part}{example}"),
                                 url.clone(),
+                                json!({"part_of_speech":part,"examples":[s(&d["example"])]}),
                             ));
                         }
                     }
@@ -134,6 +140,7 @@ pub fn parse(source: &str, command: &str, term: &str, data: &Value, limit: usize
                         plain(s(&d["definition"])),
                         format!("{}{suffix}", s(&meaning["partOfSpeech"])),
                         format!("https://en.wiktionary.org/wiki/{encoded}"),
+                        json!({"part_of_speech":meaning["partOfSpeech"],"examples":examples}),
                     ));
                 }
             }
@@ -151,6 +158,7 @@ pub fn parse(source: &str, command: &str, term: &str, data: &Value, limit: usize
                             .map(|n| n.to_string())
                             .unwrap_or_else(|| s(&d["defid"]).into())
                     ),
+                    json!({"examples":[s(&d["example"]).replace(['[', ']'], "")]}),
                 ));
             }
         }
@@ -160,6 +168,7 @@ pub fn parse(source: &str, command: &str, term: &str, data: &Value, limit: usize
                     s(&d["word"]).into(),
                     format!("Synonym of {term}"),
                     format!("https://en.wiktionary.org/wiki/{}", encode(s(&d["word"]))),
+                    json!({}),
                 ));
             }
         }
@@ -168,16 +177,71 @@ pub fn parse(source: &str, command: &str, term: &str, data: &Value, limit: usize
     rows.truncate(limit);
     rows
 }
-fn lookup(source: &str, command: &str, term: &str, timeout: u64, limit: usize) -> Result<Vec<Row>> {
+fn lookup(
+    source: &str,
+    command: &str,
+    term: &str,
+    timeout: u64,
+    limit: usize,
+    options: &Value,
+) -> Result<Vec<Row>> {
+    if source != "wiktionary" {
+        if !strings(&options["languages"])
+            .iter()
+            .any(|language| language.eq_ignore_ascii_case("English"))
+        {
+            return Ok(vec![]);
+        }
+        let section = if command == "/synonym" {
+            "synonyms"
+        } else {
+            "definitions"
+        };
+        if !strings(&options["sections"]).iter().any(|s| s == section) {
+            return Ok(vec![]);
+        }
+    }
     let t = encode(term);
     let url = match source {
         "free_dictionary" => format!("https://api.dictionaryapi.dev/api/v2/entries/en/{t}"),
-        "wiktionary" => format!("https://en.wiktionary.org/api/rest_v1/page/definition/{t}"),
+        "wiktionary" => format!("https://en.wiktionary.org/w/api.php?action=parse&page={t}&prop=text&redirects=1&formatversion=2&format=json"),
         "urban_dictionary" => format!("https://api.urbandictionary.com/v0/define?term={t}"),
         "datamuse" => format!("https://api.datamuse.com/words?rel_syn={t}&max={limit}"),
         _ => bail!("Unknown word source"),
     };
-    Ok(parse(source, command, term, &fetch(&url, timeout)?, limit))
+    let data = fetch(&url, timeout)?;
+    if source == "wiktionary" {
+        if let Some(error) = data.get("error") {
+            if error["code"] == "missingtitle" {
+                return Ok(vec![]);
+            }
+            bail!(
+                "{}",
+                error["info"].as_str().unwrap_or("Wiktionary lookup failed")
+            );
+        }
+        return Ok(crate::word_entry::parse(
+            term,
+            &data,
+            options,
+            command == "/synonym",
+        ));
+    }
+    let section = if command == "/synonym" {
+        "synonyms"
+    } else {
+        "definitions"
+    };
+    let mut rows = parse(source, command, term, &data, limit);
+    for (i, row) in rows.iter_mut().enumerate() {
+        row.3["language"] = json!("English");
+        row.3["section"] = json!(section);
+        row.3["group"] = json!(source);
+        if section == "definitions" {
+            row.3["sense_number"] = json!((i + 1).to_string());
+        }
+    }
+    Ok(rows)
 }
 struct Job {
     generation: u64,
@@ -186,6 +250,7 @@ struct Job {
     term: String,
     timeout: u64,
     limit: usize,
+    options: Value,
     reply: mpsc::Sender<(String, std::result::Result<Vec<Row>, String>)>,
 }
 pub struct Words {
@@ -245,8 +310,15 @@ impl Words {
                 if job.generation != generation.load(Ordering::Relaxed) {
                     continue;
                 }
-                let result = lookup(&job.source, &job.command, &job.term, job.timeout, job.limit)
-                    .map_err(|e| e.to_string());
+                let result = lookup(
+                    &job.source,
+                    &job.command,
+                    &job.term,
+                    job.timeout,
+                    job.limit,
+                    &job.options,
+                )
+                .map_err(|e| e.to_string());
                 let _ = job.reply.send((job.source, result));
             });
         }
@@ -261,8 +333,39 @@ impl Words {
                 "hint",
                 "Type a word to look up",
                 "Definitions and synonyms appear here as you type",
-                json!({"disabled":true}),
+                json!({"disabled":true,"empty_state":true}),
             )];
+        }
+        if demo && term == "glimmer" {
+            self.pending = false;
+            let options = &settings["plugin_settings"]["Words"];
+            let fixture = json!({"parse":{"text":include_str!("../tests/fixtures/word-entry.html").replace("{{term}}",term)}});
+            let mut rows: Vec<_> =
+                crate::word_entry::parse(term, &fixture, options, command == "/synonym")
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (name, subtitle, url, mut data))| {
+                        data["word_source"] = json!("Wiktionary");
+                        data["url"] = json!(url);
+                        row(
+                            &format!("demo-entry:{i}"),
+                            &name,
+                            &format!("Synthetic dictionary · {subtitle}"),
+                            data,
+                        )
+                    })
+                    .collect();
+            if command == "/define"
+                && strings(&options["sections"])
+                    .iter()
+                    .any(|s| s == "definitions")
+                && strings(&options["languages"])
+                    .iter()
+                    .any(|s| s == "English")
+            {
+                rows.push(row("demo-slang","A tiny spark of optimism in a chaotic day.","Synthetic slang example",json!({"word_source":"Urban Dictionary","language":"English","section":"definitions","group":"urban_dictionary","sense_number":"1","examples":["That friendly message was my glimmer today."],"url":"https://www.urbandictionary.com/define.php?term=glimmer"})));
+            }
+            return rows;
         }
         if demo {
             self.pending = false;
@@ -275,7 +378,7 @@ impl Words {
                         "explain"
                     },
                     "Synthetic dictionary · Verb · Example: Please define this term.",
-                    json!({}),
+                    json!({"word_source":"Synthetic dictionary","part_of_speech":"verb","examples":["Please define this term."]}),
                 ),
                 row(
                     "demo2",
@@ -285,7 +388,7 @@ impl Words {
                         "describe"
                     },
                     "Synthetic dictionary · Verb · Example: These principles define our work.",
-                    json!({}),
+                    json!({"word_source":"Synthetic dictionary","part_of_speech":"verb","examples":["These principles define our work."]}),
                 ),
             ];
         }
@@ -316,6 +419,7 @@ impl Words {
                     term: term.into(),
                     timeout: options["timeout_seconds"].as_u64().unwrap(),
                     limit: options["max_results_per_source"].as_u64().unwrap() as usize,
+                    options: options.clone(),
                     reply: tx.clone(),
                 });
             }
@@ -332,17 +436,26 @@ impl Words {
                 match result {
                     Ok(values) if values.is_empty() => rows.push(row(
                         &format!("{source}:empty"),
-                        "No entries found",
+                        "No entries in the selected languages and sections",
                         &source.replace('_', " "),
                         json!({"disabled":true}),
                     )),
                     Ok(values) => {
-                        for (i, (name, example, url)) in values.iter().enumerate() {
+                        for (i, (name, example, url, details)) in values.iter().enumerate() {
+                            let mut data = details.clone();
+                            data["url"] = json!(url);
+                            data["word_source"] = json!(match source.as_str() {
+                                "free_dictionary" => "Free Dictionary",
+                                "wiktionary" => "Wiktionary",
+                                "urban_dictionary" => "Urban Dictionary",
+                                "datamuse" => "Datamuse",
+                                _ => source,
+                            });
                             rows.push(row(
                                 &format!("{source}:{i}"),
                                 name,
                                 &format!("{} · {example}", source.replace('_', " ")),
-                                json!({"url":url}),
+                                data,
                             ))
                         }
                     }
@@ -387,7 +500,7 @@ impl Words {
                     &json!({"launch":{"isolate":false}}),
                 )?;
             }
-            return Ok(json!({"kind":"message","message":"Opened source · results stay here"}));
+            return Ok(json!({"kind":"message","message":""}));
         }
         Ok(json!({"kind":"message","message":"Results update as you type"}))
     }
@@ -410,6 +523,29 @@ mod tests {
             ["explain", "describe"]
         );
         assert_eq!(plain(" <b>A &amp; B</b> &#x1F41F; &eacute; "), "A & B 🐟 é");
+    }
+    #[test]
+    fn structured_details_preserve_parts_and_full_examples() {
+        let dictionary = json!([{"meanings":[{"partOfSpeech":"noun","definitions":[{"definition":"A meaning","example":"An example · with punctuation"}]}]}]);
+        let rows = parse("free_dictionary", "/define", "test", &dictionary, 10);
+        assert_eq!(rows[0].3["part_of_speech"], "noun");
+        assert_eq!(
+            rows[0].3["examples"],
+            json!(["An example · with punctuation"])
+        );
+        let wiki = json!({"en":[{"partOfSpeech":"Noun","definitions":[{"definition":"<b>Meaning</b>","examples":["<i>One</i>","Two &amp; three"]}]}]});
+        let rows = parse("wiktionary", "/define", "test", &wiki, 10);
+        assert_eq!(rows[0].0, "Meaning");
+        assert_eq!(rows[0].3["examples"], json!(["One", "Two & three"]));
+        let rows = parse(
+            "datamuse",
+            "/synonym",
+            "test",
+            &json!([{"word":"trial"}]),
+            10,
+        );
+        assert_eq!(rows[0].0, "trial");
+        assert!(rows[0].3.get("examples").is_none());
     }
     #[test]
     fn no_sources_and_demo_do_not_start_workers() {

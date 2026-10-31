@@ -40,12 +40,14 @@ pub fn featured(settings: &Value) -> Vec<(String, String)> {
             if config::identifier(&k) && !v.is_object() && !v.is_null() {
                 let key = format!("plugin_settings.{name}.{k}");
                 let description = match key.as_str() {
+                    "plugin_settings.Words.languages" => "Entry languages by name, e.g. [\"English\", \"French\"]".into(),
+                    "plugin_settings.Words.sections" => "Sections: definitions, synonyms, related_terms, derived_terms, pronunciation, etymology, alternative_forms, antonyms, usage_notes, inflections, translations".into(),
                     "plugin_settings.Words.define_sources" => {
-                        "Sources: free_dictionary, wiktionary, urban_dictionary (optional slang)"
+                        "Sources: wiktionary, urban_dictionary; free_dictionary also supported"
                             .into()
                     }
                     "plugin_settings.Words.synonym_sources" => {
-                        "Sources: datamuse, free_dictionary".into()
+                        "Sources: wiktionary; datamuse and free_dictionary also supported".into()
                     }
                     _ => format!("{name} plugin · {}", k.replace('_', " ")),
                 };

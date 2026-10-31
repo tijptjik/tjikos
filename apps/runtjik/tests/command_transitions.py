@@ -23,6 +23,16 @@ with tempfile.TemporaryDirectory(prefix='runtjik-transitions-') as temp:
             assert response['edit_query'].strip() == command, (command, response)
             assert response['query'] == response['edit_query'], (command, response)
             assert not any(row['id'] == command for row in response['results']), (command, response)
-        print(f'PASS: {len(commands)} command/alias destinations without an intermediate query')
+        for command in ('/define', '/synonym'):
+            response = backend.request(op='query', query=command)
+            assert response['results'][0]['empty_state']
+            assert response['results'][0]['disabled']
+        page = backend.request(op='query', query='/define glimmer', limit=1)
+        assert len(page['results']) == 1 and page['has_more'], page
+        assert page['word_source_counts']['Wiktionary'] > 1, page
+        assert page['word_source_counts']['Urban Dictionary'] == 1, page
+        opened = backend.request(op='activate', id='Words:demo-slang')
+        assert opened['kind'] == 'message' and opened['message'] == '', opened
+        print(f'PASS: {len(commands)} command/alias destinations, full provider counts before pagination and silent source opening')
     finally:
         backend.close()
