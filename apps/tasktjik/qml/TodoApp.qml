@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 Pane {
     padding: 0
-    background: Rectangle {color:theme.background}
+    background: Rectangle {color:"transparent"}
     palette.windowText: theme.text
     palette.window: theme.background
     palette.base: theme.background
@@ -38,10 +38,13 @@ Pane {
     }
     component QuietButton: Button {
         id: control
+        property bool primary: false
+        property bool quiet: false
+        implicitHeight: 38
         padding: 10
-        horizontalPadding: 16
-        contentItem: Text {text:control.text;color:control.enabled?theme.text:theme.muted;font.pixelSize:13;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
-        background: Rectangle {radius:8;color:control.down?theme.border:control.hovered?theme.surface:'transparent';border.color:control.activeFocus?theme.accent:theme.border}
+        horizontalPadding: 14
+        contentItem: Text {text:control.text;color:!control.enabled?theme.muted:control.primary?theme.background:theme.text;font.pixelSize:13;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
+        background: Rectangle {radius:10;color:control.primary?theme.accent:control.down?theme.border:control.hovered?theme.surface:'transparent';opacity:control.enabled?1:0.45;border.color:control.activeFocus?theme.accent:control.primary || control.quiet?'transparent':theme.border}
     }
     component Entry: TextField {
         color:theme.text;placeholderTextColor:theme.muted
@@ -52,7 +55,27 @@ Pane {
         id:control
         implicitWidth:Math.max(120,implicitContentWidth+48);implicitHeight:40
         padding:10;leftPadding:12;rightPadding:30
-        background: Rectangle {radius:8;color:theme.surface;border.color:control.activeFocus?theme.accent:theme.border}
+        contentItem: TextInput {
+            text: control.editable ? control.editText : control.displayText
+            readOnly: !control.editable
+            color: theme.text; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter
+            selectByMouse: control.editable
+            onTextEdited: control.editText = text
+        }
+        indicator: Text {text:'⌄';color:theme.muted;rightPadding:12;anchors.right:parent.right;anchors.verticalCenter:parent.verticalCenter}
+        background: Rectangle {radius:10;color:control.hovered?theme.border:theme.surface;border.color:control.activeFocus?theme.accent:theme.border}
+        delegate: ItemDelegate {
+            width:control.width;text:modelData
+            contentItem: Text {text:parent.text;color:theme.text;font.pixelSize:13;elide:Text.ElideRight}
+            background:Rectangle {radius:6;color:parent.highlighted?theme.border:'transparent'}
+            highlighted:control.highlightedIndex===index
+        }
+        popup: Popup {
+            y:control.height+6;width:control.width;padding:6
+            implicitHeight:Math.min(contentItem.implicitHeight+12,260)
+            background:Rectangle {radius:10;color:theme.surface;border.color:theme.border}
+            contentItem:ListView {clip:true;implicitHeight:contentHeight;model:control.popup.visible?control.delegateModel:null;currentIndex:control.highlightedIndex;ScrollIndicator.vertical:ScrollIndicator {}}
+        }
     }
     Shortcut {sequence:'?';onActivated:help.open()}
     Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !purgeDialog.visible && !!selected;onActivated:{purgeDialog.target=JSON.parse(JSON.stringify(selected));purgeDialog.open();}}
@@ -86,9 +109,13 @@ Pane {
         title: 'Purge task?'
         modal: true
         focus: true
+        padding: 20
+        background: Rectangle {radius:14;color:theme.surface;border.color:theme.border}
+        header: Label {text:purgeDialog.title;color:theme.text;font.pixelSize:18;font.weight:Font.DemiBold;padding:20;bottomPadding:4}
         standardButtons: Dialog.Ok | Dialog.Cancel
         onOpened: standardButton(Dialog.Cancel).forceActiveFocus()
         contentItem: Label {
+            color:theme.muted;font.pixelSize:14
             text: 'Permanently delete “' + (purgeDialog.target ? purgeDialog.target.title : '') + '”?'
             wrapMode: Text.Wrap
         }
@@ -131,6 +158,25 @@ Pane {
                 reference:planInput.text,notifyBeforeDue:notifyInput.checked,
                 notifyBeforeDueLeadValue:Number(leadValue.text),notifyBeforeDueLeadUnit:leadUnit.currentText}});
     }
+    function selectVisibleTask() {
+        const rows=(stateData.groups || []).reduce((items,g)=>items.concat(tasks(g)),[]);
+        if(!rows.some(t=>t.id===selectedId))selectedId=rows.length?rows[0].id:'';
+    }
+    onViewChanged: selectVisibleTask()
+    onFilterChanged: selectVisibleTask()
+    onCollectionChanged: selectVisibleTask()
+    function visibleCount() {return (stateData.groups || []).reduce((n,g)=>n+tasks(g).length,0);}
+    function taskMeta(task) {
+        const parts=[];
+        if(task.due)parts.push('Due '+Qt.formatDate(new Date(task.due+'T12:00:00'),'d MMM yyyy'));
+        else parts.push('No due date');
+        if(task.repeat && task.repeat.unit)parts.push('Repeats');
+        if(task.snoozedUntil)parts.push('Snoozed');
+        if(task.status && !['ready','inbox'].includes(task.status))parts.push(task.status.replace('_',' '));
+        if(task.assignee)parts.push(task.assignee);
+        if(task.verification && task.verification.length)parts.push('Check: '+task.verification[task.verification.length-1].outcome);
+        return parts.join(' · ');
+    }
     function tasks(group) {
         const now=stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd');
         let end=new Date(now+'T12:00:00');end.setDate(end.getDate()+6-((end.getDay()+6)%7));
@@ -163,14 +209,35 @@ Pane {
             draftId=stateData.draft_id;lastDraftId=draftId;
             Qt.callLater(()=>openEditor(stateData.draft));
         }
-        if(!selected && stateData.tasks){const rows=(stateData.groups || []).reduce((rows,g)=>rows.concat(tasks(g)),[]);selectedId=rows.length?rows[0].id:'';}
+        selectVisibleTask();
     }
     ColumnLayout {
-        anchors.fill:parent;spacing:20
+        anchors.fill:parent;anchors.margins:8;spacing:16
         RowLayout {
-            Label {text:(collection==='reading'?'READING · ':'TODO · ')+(app.view==='week'?'This week':app.view==='today'?'Today':'Later');font.pixelSize:22;color:theme.text;Layout.fillWidth:true}
-            Choice {model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectedId='';}}
-            QuietButton {text:'New';enabled:!draftId;onClicked:{selectedId='';openEditor();}}
+            Layout.fillWidth:true;spacing:12
+            ColumnLayout {
+                Layout.fillWidth:true;spacing:3
+                Label {text:collection==='reading'?'Reading':'Tasks';font.pixelSize:24;font.weight:Font.DemiBold;color:theme.text}
+                Label {text:editor==='edit'?'Keep the next step clear.':visibleCount()+' '+(collection==='reading'?'items':'tasks')+' · '+(view==='week'?'This week':view==='today'?'Today':'All dates');font.pixelSize:12;color:theme.muted}
+            }
+            Item {Layout.fillWidth:true}
+            Choice {model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectVisibleTask();}}
+            QuietButton {text:'+ New';primary:true;enabled:!draftId && !editor;onClicked:{selectedId='';openEditor();}}
+        }
+        RowLayout {
+            visible:!editor;Layout.fillWidth:true;spacing:4
+            Repeater {
+                model:[{label:'Today',value:'today'},{label:'This week',value:'week'},{label:'All tasks',value:'all'}]
+                QuietButton {
+                    required property var modelData
+                    text:modelData.label;quiet:true
+                    checked:app.view===modelData.value
+                    background:Rectangle {radius:9;color:parent.checked?theme.surface:'transparent';border.color:parent.checked?theme.border:'transparent'}
+                    onClicked:{app.view=modelData.value;app.forceActiveFocus();}
+                }
+            }
+            Item {Layout.fillWidth:true}
+            QuietButton {text:'Search';quiet:true;onClicked:{searching=!searching;if(searching)filterInput.forceActiveFocus();}}
         }
         Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:searching;Layout.fillWidth:true;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.forceActiveFocus();}}
         Label {
@@ -181,42 +248,75 @@ Pane {
                 (selected.verification || []).slice(-1).map(v=>v.outcome+' by '+v.actor+' · '+v.artifact+' · '+v.evidence)).join('\n') : ''
         }
         ScrollView {
+            id: taskScroll
             visible:!editor;Layout.fillWidth:true;Layout.fillHeight:true;clip:true
-            GridLayout {
-                width:parent.width;columns:2;columnSpacing:12;rowSpacing:12
+            contentWidth:availableWidth
+            ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
+            ColumnLayout {
+                width:taskScroll.availableWidth;spacing:14
                 Repeater {
-                    model:stateData.groups || []
+                    model:(stateData.groups || []).filter(g=>app.tasks(g).length>0)
                     ColumnLayout {
                         required property string modelData
-                        Layout.fillWidth:true;Layout.alignment:Qt.AlignTop;Layout.preferredWidth:app.width/2-12
-                        Label {text:modelData.toUpperCase();color:theme.accent;font.pixelSize:12}
+                        Layout.fillWidth:true;spacing:8
+                        RowLayout {
+                            Layout.fillWidth:true;spacing:8
+                            Label {text:modelData==='All'?'Inbox':modelData;font.pixelSize:12;font.weight:Font.DemiBold;color:theme.muted}
+                            Label {text:app.tasks(modelData).length;font.pixelSize:11;color:theme.muted}
+                            Rectangle {Layout.fillWidth:true;implicitHeight:1;color:theme.border;opacity:0.6}
+                        }
                         Repeater {
                             model:app.tasks(modelData)
                             Rectangle {
+                                id:taskCard
                                 required property var modelData
-                                Layout.fillWidth:true;implicitHeight:84;radius:8
+                                Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+24;radius:12
                                 color:selectedId===modelData.id?theme.surface:theme.background
                                 border.color:selectedId===modelData.id?theme.accent:theme.border
-                                Column {anchors.fill:parent;anchors.margins:8;spacing:4
-                                    Text {width:parent.width;text:(modelData.done?'✓  ':'○  ')+modelData.title;font.strikeout:modelData.done;color:theme.text;elide:Text.ElideRight}
-                                    Text {width:parent.width;text:(modelData.status || 'ready')+' · '+(modelData.assignee || 'unassigned')+' · '+(modelData.verification && modelData.verification.length ? 'last check: '+modelData.verification[modelData.verification.length-1].outcome : 'unverified');color:theme.accent;font.pixelSize:11;elide:Text.ElideRight}
-                                    Text {width:parent.width;text:(modelData.due?(modelData.period==='once'?modelData.due:modelData.period):'No due date')+(modelData.repeat.unit?' · ↻':'')+(modelData.snoozedUntil?' · snoozed':'');color:theme.muted;font.pixelSize:11;elide:Text.ElideRight}
+                                RowLayout {
+                                    id:cardBody
+                                    anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:12;spacing:12
+                                    Label {text:modelData.done?'✓':'○';color:modelData.done?theme.accent:theme.muted;font.pixelSize:20;Layout.alignment:Qt.AlignTop}
+                                    ColumnLayout {
+                                        Layout.fillWidth:true;spacing:7
+                                        Label {Layout.fillWidth:true;text:modelData.title;font.pixelSize:15;font.weight:Font.Medium;font.strikeout:modelData.done;color:theme.text;wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight}
+                                        Label {Layout.fillWidth:true;text:taskMeta(modelData);visible:text!=='';color:theme.muted;font.pixelSize:12;wrapMode:Text.Wrap}
+                                        Label {Layout.fillWidth:true;text:(modelData.tags || []).map(t=>'#'+t).join('   ');visible:text!=='';font.pixelSize:11;color:theme.accent;wrapMode:Text.Wrap}
+                                    }
                                 }
-                                MouseArea {anchors.fill:parent;onClicked:{selectedId=modelData.id;app.forceActiveFocus();}onDoubleClicked:app.action('toggle')}
+                                MouseArea {anchors.fill:parent;cursorShape:Qt.PointingHandCursor;onClicked:{selectedId=modelData.id;app.forceActiveFocus();}onDoubleClicked:app.action('toggle')}
                             }
                         }
-                        Label {visible:app.tasks(modelData).length===0;text:'No tasks';color:theme.muted}
                     }
+                }
+                ColumnLayout {
+                    visible:visibleCount()===0;Layout.fillWidth:true;Layout.topMargin:32;spacing:10
+                    Label {text:searching && filter?'No matching tasks':'Nothing scheduled here';color:theme.text;font.pixelSize:18;Layout.alignment:Qt.AlignHCenter}
+                    Label {text:view==='all'?'Add a task to get started.':'Check All tasks for upcoming or undated items.';color:theme.muted;font.pixelSize:13;wrapMode:Text.Wrap;Layout.fillWidth:true;horizontalAlignment:Text.AlignHCenter}
                 }
             }
         }
+        RowLayout {
+            visible:!editor;Layout.fillWidth:true;spacing:4
+            QuietButton {text:selected && selected.done?'Mark undone':'Mark done';enabled:!!selected;quiet:true;onClicked:action('toggle')}
+            QuietButton {text:'Edit';enabled:!!selected;quiet:true;onClicked:openEditor()}
+            Item {Layout.fillWidth:true}
+            QuietButton {text:'?  Shortcuts';quiet:true;onClicked:help.open()}
+        }
         ScrollView {
-            visible:editor==='edit';Layout.fillWidth:true;Layout.fillHeight:true;clip:true
+            id:editorScroll;visible:editor==='edit';Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth;ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
             ColumnLayout {
-                width:app.width-16;spacing:12
+                width:editorScroll.availableWidth;spacing:12
                 Label {text:draftId?'Read later · save before closing tab':editing && editing.id?'Edit item':'New item';color:theme.text}
                 Entry {color:theme.text;placeholderTextColor:theme.muted;id:titleInput;Layout.fillWidth:true;placeholderText:'What needs to be done?';font.pixelSize:20;onAccepted:if(text.trim())saveEditor()}
-                Label {visible:!!sections.group;text:'Group';color:theme.muted}
+                Flow {
+                    Layout.fillWidth:true;Layout.preferredHeight:childrenRect.height;spacing:6
+                    Repeater {
+                        model:[{label:'Domain',key:'group'},{label:'Tags',key:'tags'},{label:'Due date',key:'due'},{label:'Repeat',key:'repeat'},{label:'Note',key:'reference'},{label:'Reminder',key:'reminder'}]
+                        QuietButton {required property var modelData;text:'+ '+modelData.label;visible:!sections[modelData.key];onClicked:reveal(modelData.key)}
+                    }
+                }
+                Label {visible:!!sections.group;text:'Domain';color:theme.muted}
                 Choice {id:groupInput;visible:!!sections.group;Layout.fillWidth:true;editable:true;model:stateData.groups || [];inputMethodHints:Qt.ImhNoPredictiveText}
                 Entry {color:theme.text;placeholderTextColor:theme.muted;id:tagsInput;visible:!!sections.tags;Layout.fillWidth:true;placeholderText:'Tags, comma separated'}
                 Entry {color:theme.text;placeholderTextColor:theme.muted;id:dueInput;visible:!!sections.due;Layout.fillWidth:true;placeholderText:'Due date · YYYY-MM-DD'}
@@ -248,7 +348,7 @@ Pane {
                 }
                 RowLayout {
                     Layout.topMargin:8;spacing:8
-                    QuietButton {text:draftId?'Save and close tab':'Save';enabled:titleInput.text.trim()!=='';onClicked:saveEditor()}
+                    QuietButton {primary:true;text:draftId?'Save and close tab':'Save';enabled:titleInput.text.trim()!=='';onClicked:saveEditor()}
                     QuietButton {text:'Cancel';onClicked:cancelEditor()}
                 }
             }
