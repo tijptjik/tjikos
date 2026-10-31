@@ -13,7 +13,9 @@ pub fn connect(path: &Path) -> Result<Connection> {
         CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY,body TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY,digest TEXT NOT NULL,response TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY,owner TEXT NOT NULL,name TEXT NOT NULL,notifications INTEGER NOT NULL DEFAULT 0,last_seen TEXT NOT NULL);
-        PRAGMA user_version=1;")?;
+        CREATE TABLE IF NOT EXISTS undo_history(seq INTEGER PRIMARY KEY AUTOINCREMENT,owner TEXT NOT NULL,device TEXT NOT NULL,task_id TEXT NOT NULL,before_body TEXT NOT NULL,after_body TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS undo_history_device ON undo_history(owner,device,seq);
+        PRAGMA user_version=2;")?;
     Ok(c)
 }
 pub fn tasks(c: &Connection) -> Result<Vec<Value>> {
@@ -32,7 +34,7 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
     let op = r["action"].as_str().unwrap_or("list");
     if op == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"protocol":1,"sqlite":true}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"protocol":1,"sqlite":true,"undo":true}),
         );
     }
     if op == "list" {
@@ -69,8 +71,75 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
         );
         return Ok(serde_json::from_str(&reply)?);
     }
-    let result = model::mutate(&tasks(&tx)?, &r)?;
-    if op == "purge" {
+    let before_tasks = tasks(&tx)?;
+    let result = if op == "undo" {
+        let (seq, id, before, after): (i64, String, String, String) = tx.query_row(
+            "SELECT seq,task_id,before_body,after_body FROM undo_history WHERE owner=? AND device=? ORDER BY seq DESC LIMIT 1",
+            params![owner, device], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)),
+        ).context("Nothing to undo on this device")?;
+        let mut previous: Value = serde_json::from_str(&before)?;
+        let expected: Value = serde_json::from_str(&after)?;
+        let current = before_tasks
+            .iter()
+            .find(|t| t["id"] == id)
+            .cloned()
+            .unwrap_or(Value::Null);
+        ensure!(
+            current == expected,
+            "Task changed since this action; undo would overwrite newer changes"
+        );
+        let restored = if previous.is_null() {
+            json!({"id":id,"deleted":true})
+        } else {
+            previous["revision"] = json!(current["revision"]
+                .as_u64()
+                .unwrap_or(previous["revision"].as_u64().unwrap_or(0))
+                .checked_add(1)
+                .context("Invalid revision")?);
+            previous["updatedAt"] = json!(model::now());
+            if current["events"].is_array() {
+                previous["events"] = current["events"].clone();
+            }
+            previous["events"]
+                .as_array_mut()
+                .context("Invalid event history")?
+                .push(json!({"action":"undo","actor":owner,"at":model::now()}));
+            model::validate(&mut previous)?;
+            previous
+        };
+        tx.execute("DELETE FROM undo_history WHERE seq=?", [seq])?;
+        // Keep consecutive undos of this task possible despite the new revision.
+        // Only the exact previous snapshot is advanced; unrelated edits stay protected.
+        if restored["deleted"] != true {
+            tx.execute("UPDATE undo_history SET after_body=? WHERE owner=? AND device=? AND task_id=? AND after_body=?",
+                params![serde_json::to_string(&restored)?,owner,device,id,before])?;
+        }
+        restored
+    } else {
+        let result = model::mutate(&before_tasks, &r)?;
+        if [
+            "create", "edit", "toggle", "done", "status", "snooze", "verify", "purge",
+        ]
+        .contains(&op)
+            && result["id"].is_string()
+        {
+            let before = before_tasks
+                .iter()
+                .find(|t| t["id"] == result["id"])
+                .cloned()
+                .unwrap_or(Value::Null);
+            let after = if result["deleted"] == true {
+                Value::Null
+            } else {
+                result.clone()
+            };
+            tx.execute("INSERT INTO undo_history(owner,device,task_id,before_body,after_body) VALUES (?,?,?,?,?)",
+                params![owner,device,result["id"].as_str(),serde_json::to_string(&before)?,serde_json::to_string(&after)?])?;
+            tx.execute("DELETE FROM undo_history WHERE owner=? AND device=? AND seq NOT IN (SELECT seq FROM undo_history WHERE owner=? AND device=? ORDER BY seq DESC LIMIT 100)",params![owner,device,owner,device])?;
+        }
+        result
+    };
+    if result["deleted"] == true {
         tx.execute("DELETE FROM tasks WHERE id=?", [result["id"].as_str()])?;
     } else if result.is_object() {
         tx.execute(
@@ -182,5 +251,71 @@ mod purge_tests {
         assert_eq!(result["deleted"], true);
         assert_eq!(request(&path, purge, "test", "test").unwrap(), result);
         assert!(tasks(&connect(&path).unwrap()).unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod undo_tests {
+    use super::*;
+    fn call(path: &Path, device: &str, mut value: Value) -> Result<Value> {
+        value["request_id"] = json!(Uuid::new_v4().to_string());
+        value["actor"] = json!("owner");
+        request(path, value, "owner", device)
+    }
+    #[test]
+    fn undo_is_sequential_idempotent_and_device_scoped() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("undo.sqlite3");
+        let first = call(
+            &path,
+            "fi",
+            json!({"action":"create","fields":{"title":"Original","tags":["keep"]}}),
+        )
+        .unwrap();
+        assert!(call(&path, "li", json!({"action":"undo"})).is_err());
+        let edit = call(&path,"fi",json!({"action":"edit","id":first["id"],"revision":first["revision"],"fields":{"title":"Changed"}})).unwrap();
+        call(
+            &path,
+            "fi",
+            json!({"action":"toggle","id":edit["id"],"revision":edit["revision"]}),
+        )
+        .unwrap();
+        let undone = call(&path, "fi", json!({"action":"undo"})).unwrap();
+        assert_eq!(undone["title"], "Changed");
+        assert!(undone["completions"].as_object().unwrap().is_empty());
+        let original = call(&path, "fi", json!({"action":"undo"})).unwrap();
+        assert_eq!(original["title"], "Original");
+        assert_eq!(original["tags"], json!(["keep"]));
+        let req = json!({"action":"undo","request_id":Uuid::new_v4().to_string(),"actor":"owner"});
+        let deleted = request(&path, req.clone(), "owner", "fi").unwrap();
+        assert_eq!(deleted["deleted"], true);
+        assert_eq!(request(&path, req, "owner", "fi").unwrap(), deleted);
+        assert!(tasks(&connect(&path).unwrap()).unwrap().is_empty());
+        assert!(call(&path, "fi", json!({"action":"undo"})).is_err());
+    }
+    #[test]
+    fn undo_purge_restores_and_refuses_external_edits() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("undo.sqlite3");
+        let task = call(
+            &path,
+            "fi",
+            json!({"action":"create","fields":{"title":"Keep me"}}),
+        )
+        .unwrap();
+        call(
+            &path,
+            "fi",
+            json!({"action":"purge","id":task["id"],"revision":task["revision"]}),
+        )
+        .unwrap();
+        let restored = call(&path, "fi", json!({"action":"undo"})).unwrap();
+        assert_eq!(restored["id"], task["id"]);
+        let edited=call(&path,"li",json!({"action":"edit","id":restored["id"],"revision":restored["revision"],"fields":{"title":"Other device"}})).unwrap();
+        assert!(call(&path, "fi", json!({"action":"undo"}))
+            .unwrap_err()
+            .to_string()
+            .contains("changed"));
+        assert_eq!(tasks(&connect(&path).unwrap()).unwrap(), vec![edited]);
     }
 }
