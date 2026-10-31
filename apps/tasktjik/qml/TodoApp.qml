@@ -332,7 +332,44 @@ Pane {
                                                 Label {text:modelData.done?'✓':selectedId===modelData.id?'›':'·';color:modelData.done || selectedId===modelData.id?theme.accent:theme.muted;font.pixelSize:20;Layout.alignment:Qt.AlignTop}
                                                 ColumnLayout {
                                                     Layout.fillWidth:true;spacing:3
-                                                    Label {Layout.fillWidth:true;text:modelData.title;font.pixelSize:15;font.weight:selectedId===modelData.id?Font.DemiBold:Font.Normal;font.strikeout:modelData.done;color:selectedId===modelData.id?theme.accent:theme.text;wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight}
+                                                    Label {
+                                                        id: taskTitle
+                                                        Layout.fillWidth:true
+                                                        text:modelData.title
+                                                        textFormat:Text.PlainText
+                                                        font.pixelSize:15
+                                                        font.weight:selectedId===modelData.id?Font.DemiBold:Font.Normal
+                                                        font.strikeout:modelData.done && modelData.status!=='cancelled'
+                                                        color:selectedId===modelData.id?theme.accent:theme.text
+                                                        wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight
+                                                        property var strikeLines: []
+                                                        onLineLaidOut: line => {
+                                                            if(line.number===0) strikeLines=[];
+                                                            strikeLines.push({x:line.x,y:line.y+line.height*0.52,width:Math.min(line.width,line.implicitWidth)});
+                                                            cancelledStrike.requestPaint();
+                                                        }
+                                                        onColorChanged: cancelledStrike.requestPaint()
+                                                        Canvas {
+                                                            id: cancelledStrike
+                                                            anchors.fill:parent
+                                                            visible:modelData.status==='cancelled'
+                                                            onVisibleChanged:requestPaint()
+                                                            onWidthChanged:requestPaint()
+                                                            onHeightChanged:requestPaint()
+                                                            onPaint: {
+                                                                const ctx=getContext('2d');ctx.reset();
+                                                                ctx.strokeStyle=taskTitle.color;ctx.lineWidth=1.2;
+                                                                for(const line of taskTitle.strikeLines) {
+                                                                    ctx.beginPath();
+                                                                    for(let x=0;x<=line.width;x++) {
+                                                                        const y=line.y+1.6*Math.sin(x*Math.PI/5);
+                                                                        if(x===0)ctx.moveTo(line.x+x,y);else ctx.lineTo(line.x+x,y);
+                                                                    }
+                                                                    ctx.stroke();
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                     Label {Layout.fillWidth:true;text:taskMeta(modelData);visible:text!=='';color:theme.muted;font.pixelSize:12;wrapMode:Text.Wrap}
                                                     Label {Layout.fillWidth:true;text:(modelData.tags || []).map(t=>'#'+t).join('   ');visible:text!=='';font.pixelSize:11;color:theme.accent;wrapMode:Text.Wrap}
                                                 }
