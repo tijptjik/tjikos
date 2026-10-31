@@ -87,7 +87,8 @@ The database directory remains mode 0700, private to the service user.
 In the list, `/` or the search icon opens the text filter; Escape clears and
 hides it. The sort menu switches between due date and title, in either direction.
 Date badges use weekdays in weekly/today views and for this calendar week in
-All tasks. Other dates use D/W/M/Y intervals; a minus sign means overdue.
+All tasks. Other dates use D/W/M/Y intervals; overdue open tasks use red labels.
+The selected task shows a chevron in place of its date label.
 Snoozed dates are underlined and drive filtering/sorting. Undated tasks sort last.
 
 `U`, Ctrl+Z, or the undo icon reverses the latest reversible action made by this

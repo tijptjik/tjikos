@@ -267,6 +267,10 @@ Pane {
         if(task.snoozedUntil) return Qt.formatDate(new Date(task.snoozedUntil),'yyyy-MM-dd');
         return task.period && task.period!=='once' ? task.period : task.due || '';
     }
+    function isOverdue(task) {
+        const due=effectiveDue(task);
+        return !!due && !task.done && task.status!=='cancelled' && due < (stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd'));
+    }
     function dueLabel(task) {
         const value=effectiveDue(task);
         if(!value)return '·';
@@ -275,13 +279,13 @@ Pane {
         const delta=Math.round((date-today)/86400000);
         const weekday=(today.getDay()+6)%7;
         if(view!=='all' || (delta>=-weekday && delta<=6-weekday))return ['SUN','MON','TUE','WED','THU','FRI','SAT'][date.getDay()];
-        const days=Math.abs(delta),prefix=delta<0?'−':'';
-        if(days<10)return prefix+days+'D';
+        const days=Math.abs(delta);
+        if(days<10)return days+'D';
         const start=delta<0?date:today,end=delta<0?today:date;
         const months=(end.getFullYear()-start.getFullYear())*12+end.getMonth()-start.getMonth()-(end.getDate()<start.getDate()?1:0);
-        if(months<3)return prefix+Math.max(1,Math.floor(days/7))+'W';
-        if(months<12)return prefix+months+'M';
-        return prefix+Math.floor(months/12)+'Y';
+        if(months<3)return Math.max(1,Math.floor(days/7))+'W';
+        if(months<12)return months+'M';
+        return Math.floor(months/12)+'Y';
     }
     function compareTasks(a,b) {
         if(sortOrder>=2)return (sortOrder===3?-1:1)*a.title.localeCompare(b.title);
@@ -405,8 +409,14 @@ Pane {
                                             RowLayout {
                                                 id:cardBody
                                                 anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:6;spacing:10
-                                                Label {text:selectedId===modelData.id?'›':'';color:theme.accent;font.pixelSize:20;Layout.preferredWidth:10;Layout.alignment:Qt.AlignTop}
-                                                Label {text:app.dueLabel(modelData);color:theme.muted;font.pixelSize:11;font.weight:Font.DemiBold;font.underline:!!modelData.snoozedUntil;Layout.preferredWidth:38;Layout.topMargin:3;Layout.alignment:Qt.AlignTop}
+                                                Label {
+                                                    readonly property bool focusedTask: selectedId===modelData.id
+                                                    text:focusedTask?'›':app.dueLabel(modelData)
+                                                    color:focusedTask?theme.accent:app.isOverdue(modelData)?'#eb6f92':theme.muted
+                                                    font.pixelSize:focusedTask?20:11;font.weight:Font.DemiBold
+                                                    font.underline:!focusedTask && !!modelData.snoozedUntil
+                                                    Layout.preferredWidth:38;Layout.topMargin:focusedTask?0:3;Layout.alignment:Qt.AlignTop
+                                                }
                                                 ColumnLayout {
                                                     Layout.fillWidth:true;spacing:3
                                                     Label {
