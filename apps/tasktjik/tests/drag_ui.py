@@ -29,7 +29,7 @@ moving = request({'action': 'create', 'fields': {'title': 'Move this synthetic t
 anchor = request({'action': 'create', 'fields': {'title': 'Target synthetic task', 'group': 'Tech'}})
 request({'action': 'create', 'fields': {'title': 'Keep this task', 'group': 'Work'}})
 component = home / 'qml/TodoApp.qml'
-component.write_text(component.read_text().replace('    id: app', '''    id: app
+component.write_text(component.read_text().replace("Choice {model:['Due: soonest'", "Choice {objectName:'sortChoice';model:['Due: soonest'").replace('    id: app', '''    id: app
     function testRow(id) {
         for(const group of dropGroups)for(let i=0;i<group.rows.count;i++) {
             const row=group.rows.itemAt(i);
@@ -45,7 +45,7 @@ s = s.replace('    Component.onCompleted:', '''    TestCase {id:pointer;name:"Dr
     IpcHandler {
         target:"drag-test"
         function state():string {return JSON.stringify({tasks:view.stateData.tasks,drag:!!view.dragTask,pending:view.pendingMove,group:view.dropGroup,before:view.dropBefore,error:view.errorMessage});}
-        function manual():void {view.sortOrder=4;}
+        function manual():void {const c=pointer.findChild(view,'sortChoice');pointer.mouseClick(c,c.width/2,c.height/2,Qt.LeftButton);pointer.wait(250);pointer.keyClick(Qt.Key_End);pointer.keyClick(Qt.Key_Return);pointer.wait(250);if(view.sortOrder!==4)throw new Error('Manual selection failed: '+view.sortOrder);}
         function automatic():void {view.sortOrder=0;}
         function row(id:string):string {return JSON.stringify(view.testRow(id));}
         function press(x:real,y:real):void {pointer.mousePress(view,x,y,Qt.LeftButton);}

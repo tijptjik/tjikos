@@ -181,6 +181,7 @@ Pane {
         contentItem: TextInput {
             text: control.editable ? control.editText : control.displayText
             readOnly: !control.editable
+            enabled: control.editable
             color: theme.text; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter
             selectByMouse: control.editable
             onTextEdited: control.editText = text
