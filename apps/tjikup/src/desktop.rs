@@ -27,6 +27,31 @@ pub fn ini_value<'a>(text: &'a str, section: &str, key: &str) -> Option<&'a str>
     }
     found
 }
+fn migrate_runtjik_theme(text: &str) -> String {
+    let mut inside = false;
+    text.split_inclusive('\n')
+        .map(|line| {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                inside = trimmed.split('#').next().unwrap_or_default().trim() == "[theme]";
+            } else if inside {
+                if let Some((key, value)) = line.split_once('=') {
+                    if key.trim() == "icon_theme" {
+                        let value = value.trim_start();
+                        for quoted in ["\"rose-punk-illustrated\"", "'rose-punk-illustrated'"] {
+                            if value.strip_prefix(quoted).is_some_and(|rest| {
+                                rest.trim().is_empty() || rest.trim_start().starts_with('#')
+                            }) {
+                                return line.replacen("rose-punk-illustrated", "rose-punk", 1);
+                            }
+                        }
+                    }
+                }
+            }
+            line.to_owned()
+        })
+        .collect()
+}
 pub fn ini_setting(text: &str, section: &str, key: &str, value: &str) -> String {
     let mut lines: Vec<String> = text.split_inclusive('\n').map(str::to_owned).collect();
     let mut inside = false;
@@ -476,6 +501,18 @@ fn icons(repo: &Path) -> Result<i32> {
                 }
             }
         }
+        let path = config.join("runtjik/runtjik.conf");
+        if let Ok(text) = fs::read_to_string(&path) {
+            let updated = migrate_runtjik_theme(&text);
+            if updated != text {
+                atomic(
+                    &path,
+                    updated.as_bytes(),
+                    fs::metadata(&path)?.mode() & 0o777,
+                )?;
+                migrated = true;
+            }
+        }
         if std::env::var_os("WAYLAND_DISPLAY").is_some() || std::env::var_os("DISPLAY").is_some() {
             let out = Command::new("gsettings")
                 .args(["get", "org.gnome.desktop.interface", "icon-theme"])
@@ -540,6 +577,29 @@ pub fn cli(repo: &Path, args: &[String]) -> Result<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn runtjik_theme_migration_preserves_custom_choices_comments_and_layout() {
+        for quote in ['\'', '"'] {
+            let original = format!("# personal\n[theme] # colours\nicon_theme = {quote}rose-punk-illustrated{quote} # selected\naccent = '#ff53a6'\n[other]\nicon_theme = 'rose-punk-illustrated'\n");
+            let updated = migrate_runtjik_theme(&original);
+            assert_eq!(
+                updated,
+                original.replacen("rose-punk-illustrated", "rose-punk", 1)
+            );
+            assert_eq!(migrate_runtjik_theme(&updated), updated);
+        }
+        for theme in [
+            "Neuwaita",
+            "rose-punk-framed",
+            "rose-punk",
+            "rose-punk-illustrated-custom",
+        ] {
+            let original = format!("[theme]\nicon_theme = '{theme}'\n");
+            assert_eq!(migrate_runtjik_theme(&original), original);
+        }
+        let original = "[ui]\ncolumns = 5\n";
+        assert_eq!(migrate_runtjik_theme(original), original);
+    }
     #[test]
     fn launcher_icon_edits_preserve_actions_and_launch_commands() {
         let text = "[Desktop Entry]\nName=Example\nExec=example --safe %U\nIcon=/old.png\n\n[Desktop Action New]\nIcon=other\nExec=example --new\n";
