@@ -125,9 +125,9 @@ Pane {
         }
     }
     Shortcut {sequence:'?';onActivated:help.open()}
-    Shortcut {sequence:StandardKey.Undo;enabled:!editor && !searching && !help.visible && !purgeDialog.visible;onActivated:app.request({action:'undo'})}
-    Shortcut {sequence:'U';enabled:!editor && !searching && !help.visible && !purgeDialog.visible;onActivated:app.request({action:'undo'})}
-    Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !purgeDialog.visible && !!selected;onActivated:{purgeDialog.target=JSON.parse(JSON.stringify(selected));purgeDialog.open();}}
+    Shortcut {sequence:StandardKey.Undo;enabled:!editor && !searching && !help.visible;onActivated:app.undoLastAction()}
+    Shortcut {sequence:'U';enabled:!editor && !searching && !help.visible;onActivated:app.undoLastAction()}
+    Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !!selected && !pendingPurge;onActivated:app.purgeSelected()}
     Shortcut {sequence:'Alt+G';enabled:editor==='edit';onActivated:reveal('group')}
     Shortcut {sequence:'Alt+T';enabled:editor==='edit';onActivated:reveal('tags')}
     Shortcut {sequence:'Alt+D';enabled:editor==='edit';onActivated:reveal('due')}
@@ -188,31 +188,36 @@ Pane {
         }
     }
 
-    Dialog {
-        id: purgeDialog
-        property var target: null
-        anchors.centerIn: parent
-        width: Math.min(app.width-24, 440)
-        title: 'Purge task?'
-        modal: true
-        focus: true
-        padding: 20
-        background: Rectangle {radius:14;color:theme.surface;border.color:theme.border}
-        header: Label {text:purgeDialog.title;color:theme.text;font.pixelSize:18;font.weight:Font.DemiBold;padding:20;bottomPadding:4}
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        onOpened: standardButton(Dialog.Cancel).forceActiveFocus()
-        contentItem: Label {
-            color:theme.muted;font.pixelSize:14
-            text: 'Permanently delete “' + (purgeDialog.target ? purgeDialog.target.title : '') + '”?'
-            wrapMode: Text.Wrap
+    property var pendingPurge: null
+    property string undoToastTask: ''
+    property string undoToastTitle: ''
+    function purgeSelected() {
+        if(!selected || pendingPurge)return;
+        pendingPurge={id:selected.id,title:selected.title};
+        purgePendingTimer.restart();
+        request({action:'purge',id:selected.id,revision:selected.revision});
+    }
+    function undoLastAction() {
+        const task=undoToastTask;
+        undoToastTask='';toastTimer.stop();
+        request(task?{action:'undo',id:task,undo_action:'purge'}:{action:'undo'});
+    }
+    onErrorMessageChanged: {if(errorMessage){pendingPurge=null;purgePendingTimer.stop();}}
+    Timer {id:purgePendingTimer;interval:15000;onTriggered:app.pendingPurge=null;}
+    Timer {id:toastTimer;interval:3000;onTriggered:app.undoToastTask='';}
+    Rectangle {
+        id:purgeToast
+        z:100
+        anchors.horizontalCenter:parent.horizontalCenter
+        anchors.bottom:parent.bottom;anchors.bottomMargin:8
+        width:Math.min(app.width-16,440);height:54;radius:10
+        color:theme.surface
+        visible:app.undoToastTask!==''
+        RowLayout {
+            anchors.fill:parent;anchors.margins:8;spacing:12
+            Label {Layout.fillWidth:true;text:'Deleted “'+app.undoToastTitle+'”';elide:Text.ElideRight;color:theme.text}
+            QuietButton {text:'Undo';quiet:true;onClicked:app.undoLastAction()}
         }
-        onAccepted: {
-            const task = target;
-            target = null;
-            request({action:'purge',id:task.id,revision:task.revision});
-            app.forceActiveFocus();
-        }
-        onRejected: { target = null; app.forceActiveFocus(); }
     }
     signal request(var request)
     signal exitApp()
@@ -301,7 +306,7 @@ Pane {
             (view==='all' || (effectiveDue(t) && effectiveDue(t) <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now))).sort(compareTasks);
     }
     Keys.onPressed: event=>{
-        if(purgeDialog.visible || help.visible)return;
+        if(help.visible)return;
         if(editor || searching){if(event.key===Qt.Key_Escape && editor){cancelEditor();event.accepted=true;}return;}
         if(event.key===Qt.Key_N){if(event.modifiers & Qt.ShiftModifier)view='today';else {selectedId='';openEditor();}}
         else if(event.key===Qt.Key_L)view='all';
@@ -319,6 +324,10 @@ Pane {
         event.accepted=true;
     }
     onStateDataChanged: {
+        if(pendingPurge && Array.isArray(stateData.tasks) && !stateData.tasks.some(t=>t.id===pendingPurge.id)) {
+            undoToastTask=pendingPurge.id;undoToastTitle=pendingPurge.title;pendingPurge=null;
+            purgePendingTimer.stop();toastTimer.restart();
+        }
         if(stateData.plans)plans=stateData.plans;
         if(stateData.collection && collection!==stateData.collection){collection=stateData.collection;view=collection==='reading'?'all':'week';}
         if(stateData.draft_id && stateData.draft_id!==lastDraftId){
@@ -481,7 +490,7 @@ Pane {
             QuietButton {text:selected && selected.done?'Mark undone':'Mark done';enabled:!!selected;quiet:true;onClicked:action('toggle')}
             QuietButton {text:'Edit';enabled:!!selected;quiet:true;onClicked:openEditor()}
             Item {Layout.fillWidth:true}
-            IconButton {symbol:'undo';description:'Undo (U / Ctrl+Z)';onClicked:app.request({action:'undo'})}
+            IconButton {symbol:'undo';description:'Undo (U / Ctrl+Z)';onClicked:app.undoLastAction()}
             IconButton {symbol:'keyboard';description:'Keyboard shortcuts (?)';onClicked:help.open()}
         }
         ScrollView {

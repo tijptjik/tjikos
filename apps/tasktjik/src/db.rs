@@ -77,8 +77,16 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
             "SELECT seq,task_id,before_body,after_body FROM undo_history WHERE owner=? AND device=? ORDER BY seq DESC LIMIT 1",
             params![owner, device], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)),
         ).context("Nothing to undo on this device")?;
+        ensure!(
+            r.get("id").is_none() || r["id"] == id,
+            "Undo target changed; the latest action belongs to another task"
+        );
         let mut previous: Value = serde_json::from_str(&before)?;
         let expected: Value = serde_json::from_str(&after)?;
+        ensure!(
+            r["undo_action"] != "purge" || expected.is_null(),
+            "Undo target changed; the latest action is not a purge"
+        );
         let current = before_tasks
             .iter()
             .find(|t| t["id"] == id)
@@ -273,6 +281,13 @@ mod undo_tests {
         )
         .unwrap();
         assert!(call(&path, "li", json!({"action":"undo"})).is_err());
+        assert!(call(&path, "fi", json!({"action":"undo","id":"wrong-task"})).is_err());
+        assert!(call(
+            &path,
+            "fi",
+            json!({"action":"undo","id":first["id"],"undo_action":"purge"})
+        )
+        .is_err());
         let edit = call(&path,"fi",json!({"action":"edit","id":first["id"],"revision":first["revision"],"fields":{"title":"Changed"}})).unwrap();
         call(
             &path,
