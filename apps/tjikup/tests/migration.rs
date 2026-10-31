@@ -510,6 +510,9 @@ fn icon_retirement_preserves_theme_choice_and_launcher_behavior_with_recovery() 
     let settings = r.join("config/gtk-3.0/settings.ini");
     let prefs = "[Settings]\ngtk-icon-theme-name=Neuwaita\nuser-setting=keep\n";
     write(&settings, prefs);
+    let runtjik = r.join("config/runtjik/runtjik.conf");
+    let launcher_prefs = "[theme]\nicon_theme = 'Neuwaita' # personal\n[ui]\ncolumns = 6\n";
+    write(&runtjik, launcher_prefs);
     write(
         &r.join("home/.local/share/icons/rose-punk/index.theme"),
         "[Icon Theme]\nName=Rose Punk\n",
@@ -525,6 +528,7 @@ fn icon_retirement_preserves_theme_choice_and_launcher_behavior_with_recovery() 
     };
     success(&run());
     assert_eq!(fs::read_to_string(&settings).unwrap(), prefs);
+    assert_eq!(fs::read_to_string(&runtjik).unwrap(), launcher_prefs);
     assert_eq!(
         fs::read_to_string(&app).unwrap(),
         original.replace("Icon=rose-punk-example", "Icon=example")
@@ -538,10 +542,18 @@ fn icon_retirement_preserves_theme_choice_and_launcher_behavior_with_recovery() 
         &settings,
         prefs.replace("Neuwaita", "rose-punk-illustrated"),
     );
+    write(
+        &runtjik,
+        launcher_prefs.replace("Neuwaita", "rose-punk-illustrated"),
+    );
     success(&run());
     assert_eq!(
         fs::read_to_string(&settings).unwrap(),
         prefs.replace("Neuwaita", "rose-punk")
+    );
+    assert_eq!(
+        fs::read_to_string(&runtjik).unwrap(),
+        launcher_prefs.replace("Neuwaita", "rose-punk")
     );
 }
 #[test]

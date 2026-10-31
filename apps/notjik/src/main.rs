@@ -9,6 +9,7 @@ mod media;
 mod native;
 mod recording;
 mod telegram;
+mod telegram_clipboard;
 mod telegram_text;
 mod util;
 mod worker;

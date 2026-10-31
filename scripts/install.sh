@@ -50,7 +50,7 @@ for app in "$@"; do
             mv -f "$target_dir/bin/.notjik-core.pending" "$target_dir/bin/notjik-core"
             install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$target_dir/bin/"
             install -m 644 "$source_dir/install-telegram.sh" "$source_dir/README.md" "$target_dir/"
-            rm -f "$target_dir"/{notjik,lock_watch,telegram_bridge,telegram_recording,telegram_media_render,comparison,demo,demo_cycle}.py "$target_dir/requirements-telegram.txt"
+            rm -f "$target_dir"/{notjik,lock_watch,telegram_bridge,telegram_clipboard,telegram_recording,telegram_media_render,comparison,demo,demo_cycle}.py "$target_dir/requirements-telegram.txt"
             rm -rf "$target_dir/__pycache__"
             install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$HOME/.local/bin/"
             bash "$root_dir/scripts/install-completions.sh" "$HOME/.local" notjik

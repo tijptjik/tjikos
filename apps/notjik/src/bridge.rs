@@ -29,6 +29,9 @@ use std::{
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+#[path = "bridge_clipboard.rs"]
+mod clipboard;
+
 const MAX_FILE: u64 = 20 * 1024 * 1024;
 type Callback = Box<dyn FnOnce(&mut Bridge, Value)>;
 type Answer = mpsc::SyncSender<Value>;
@@ -104,6 +107,7 @@ pub struct Bridge {
     generation: u64,
     voice_uploads: HashMap<i64, Value>,
     voice_sends: HashMap<(i64, i64), String>,
+    clipboard: clipboard::Outbox,
     ready: bool,
     closed: bool,
     connected: bool,
@@ -163,6 +167,7 @@ impl Bridge {
             generation: 0,
             voice_uploads: HashMap::new(),
             voice_sends: HashMap::new(),
+            clipboard: clipboard::Outbox::default(),
             ready: false,
             closed: false,
             connected: false,
@@ -733,6 +738,7 @@ impl Bridge {
         }
     }
     fn handle(&mut self, v: Value) {
+        self.clipboard_event(&v);
         match text(&v["@type"]) {
             "updateNewChat" => {
                 if let Some(id) = v["chat"]["id"].as_i64() {
@@ -1067,6 +1073,12 @@ impl Bridge {
     }
     fn action(&mut self, request: Value, answer: Answer) {
         let result = (|| -> Result<()> {
+            if request["action"] == "saveClipboard" {
+                ensure!(self.ready && self.connected, "Telegram is not connected");
+                self.clipboard_start(text(&request["token"]))?;
+                let _ = answer.send(json!({"ok":true,"queued":true}));
+                return Ok(());
+            }
             if request["action"] == "demoVoiceReply" {
                 self.demo_voice(request.clone(), answer.clone());
                 return Ok(());
@@ -1340,6 +1352,7 @@ pub fn run_bridge(root: &Path, login: bool) -> Result<()> {
         while !STOP.load(Ordering::Relaxed) && !b.closed {
             let event = b.receive()?;
             b.poll_media();
+            b.clipboard_poll();
             if !b.auth_error.is_empty() {
                 let error = std::mem::take(&mut b.auth_error);
                 ensure!(login, "{error}");
@@ -1468,7 +1481,7 @@ pub fn run_bridge(root: &Path, login: bool) -> Result<()> {
     result
 }
 fn serve(mut stream: UnixStream, requests: mpsc::SyncSender<(Value, Answer)>) {
-    let mut voice = false;
+    let mut sending = false;
     let result = (|| -> Result<Value> {
         stream.set_read_timeout(Some(Duration::from_secs(35)))?;
         stream.set_write_timeout(Some(Duration::from_secs(35)))?;
@@ -1479,20 +1492,23 @@ fn serve(mut stream: UnixStream, requests: mpsc::SyncSender<(Value, Answer)>) {
         ensure!(raw.len() <= 32768, "Telegram request too large");
         let request: Value = serde_json::from_slice(&raw)?;
         ensure!(request.is_object(), "Telegram request must be an object");
-        voice = request["action"] == "voiceReply";
+        sending = matches!(
+            request["action"].as_str(),
+            Some("voiceReply" | "saveClipboard")
+        );
         let (tx, rx) = mpsc::sync_channel(1);
         requests
             .try_send((request, tx))
             .map_err(|_| anyhow::anyhow!("Telegram bridge did not accept the request"))?;
         Ok(rx.recv_timeout(Duration::from_secs(32))?)
     })();
-    let response=result.unwrap_or_else(|_|json!({"ok":false,"uncertain":voice,"error":if voice{"No confirmation from Telegram; check the chat before retrying"}else{"Telegram bridge did not accept the request"}}));
+    let response=result.unwrap_or_else(|_|json!({"ok":false,"uncertain":sending,"error":if sending{"No confirmation from Telegram; check the chat before retrying"}else{"Telegram bridge did not accept the request"}}));
     let _ = writeln!(stream, "{response}");
 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn bridge() -> Bridge {
+    pub(super) fn bridge() -> Bridge {
         Bridge::with_td(
             Path::new("/nonexistent/notjik-test"),
             false,
@@ -1500,7 +1516,7 @@ mod tests {
             Td::mock(),
         )
     }
-    fn respond(b: &mut Bridge, index: usize, v: Value) {
+    pub(super) fn respond(b: &mut Bridge, index: usize, v: Value) {
         let call = &Td::calls()[index];
         let (_, cb) = b
             .pending

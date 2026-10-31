@@ -6,6 +6,7 @@
     "build": "bash scripts/build.sh",
     "check": "bash scripts/check.sh",
     "test": "cargo test --release --locked",
+    "test:clipboard": "python3 -B tests/native_clipboard.py",
     "demo": "bin/notjikctl demo"
   },
   "dependencies": {

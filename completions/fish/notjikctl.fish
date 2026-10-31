@@ -56,6 +56,7 @@ complete -c notjikctl -n '__tjikos_context exact telegram' -a run -d Run
 complete -c notjikctl -n '__tjikos_context exact telegram' -a status -d Status
 complete -c notjikctl -n '__tjikos_context exact telegram' -a action -d Action
 complete -c notjikctl -n '__tjikos_context exact telegram' -a doctor -d Doctor
+complete -c notjikctl -n '__tjikos_context exact telegram' -a save-clipboard -d 'Save clipboard to Telegram Saved Messages'
 complete -c notjikctl -n '__tjikos_context exact compare' -a start -d Start
 complete -c notjikctl -n '__tjikos_context exact compare' -a stop -d Stop
 complete -c notjikctl -n '__tjikos_context exact compare' -a status -d Status

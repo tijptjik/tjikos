@@ -50,7 +50,12 @@ pub fn socket_request(request: &Value) -> Result<Value> {
         ensure!(v.is_object(), "Invalid Telegram response");
         Ok(v)
     })();
-    if result.is_err() && request["action"] == "voiceReply" {
+    if result.is_err()
+        && matches!(
+            request["action"].as_str(),
+            Some("voiceReply" | "saveClipboard")
+        )
+    {
         return Ok(
             serde_json::json!({"ok":false,"uncertain":true,"error":"No confirmation from Telegram; check the chat before retrying"}),
         );
@@ -65,6 +70,7 @@ pub fn main(root: &Path, args: &[String]) -> Result<()> {
     let op = args.first().map(String::as_str).unwrap_or("help");
     let result = (|| -> Result<()> {
         match op {
+            "save-clipboard" => crate::telegram_clipboard::save(root),
             "run" | "login" => crate::bridge::run_bridge(root, op == "login"),
             "doctor" => {
                 let td = crate::native::Td::new(root)?;
@@ -138,7 +144,9 @@ pub fn main(root: &Path, args: &[String]) -> Result<()> {
                 Ok(())
             }
             "help" | "--help" | "-h" => {
-                println!("notjikctl telegram <setup|login|run|status|action|doctor>");
+                println!(
+                    "notjikctl telegram <setup|login|run|status|action|doctor|save-clipboard>"
+                );
                 Ok(())
             }
             _ => bail!("Unknown Telegram operation"),

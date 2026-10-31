@@ -1034,7 +1034,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -2162,7 +2162,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -2500,7 +2500,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -3628,7 +3628,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -3755,7 +3755,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -3893,7 +3893,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -4031,7 +4031,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -4501,7 +4501,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -4633,7 +4633,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -4864,7 +4864,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -5087,7 +5087,7 @@
             },
             {
               "id": "/todo",
-              "name": "/todo",
+              "name": "/todo  ·  -",
               "subtitle": "Todo app",
               "provider": "internal",
               "count": 0,
@@ -5115,7 +5115,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -5409,7 +5409,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -5708,7 +5708,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -6007,7 +6007,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -6146,7 +6146,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -6274,7 +6274,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -6449,7 +6449,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -6593,7 +6593,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -6737,7 +6737,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -6923,7 +6923,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -7067,7 +7067,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -7211,7 +7211,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -7467,7 +7467,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -7681,7 +7681,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -7825,7 +7825,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -8081,7 +8081,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -8239,7 +8239,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -8397,7 +8397,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -8526,7 +8526,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -8648,7 +8648,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -8770,7 +8770,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -8892,7 +8892,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -9357,7 +9357,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -9588,7 +9588,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -9721,7 +9721,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -9859,7 +9859,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -9997,7 +9997,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -10135,7 +10135,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -10363,7 +10363,7 @@
             },
             {
               "id": "/todo",
-              "name": "/todo",
+              "name": "/todo  ·  -",
               "subtitle": "Todo app",
               "provider": "internal",
               "count": 0,
@@ -10391,7 +10391,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -10856,7 +10856,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -11007,7 +11007,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -11136,7 +11136,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -11274,7 +11274,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -11412,7 +11412,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -11534,7 +11534,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -11656,7 +11656,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -11789,7 +11789,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
@@ -11959,7 +11959,7 @@
               "muted": "#908caa",
               "accent": "#ff53a6",
               "border": "#403a52",
-              "icon_theme": "rose-punk-illustrated"
+              "icon_theme": "rose-punk"
             },
             "index": {
               "desktop_apps": true,
