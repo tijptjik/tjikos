@@ -254,6 +254,7 @@ ShellRoot {
             if (pendingAction!==null) {const action=pendingAction;pendingAction=null;Qt.callLater(()=>root.activate(action.switchWindow,action.closeWindow));}
         } else if (msg.kind === 'edit') {
             searchBox.text=msg.text;
+            debounce.stop();root.search();
             root.focusInput();
             if(msg.select_value) {const start=msg.text.indexOf(' ',8)+1;searchBox.select(start,msg.text.length);}
         } else if (msg.kind === 'launch') {
@@ -482,7 +483,17 @@ ShellRoot {
                             font.family:root.settings.ui.font;font.pixelSize:root.settings.ui.font_size+1
                             focus:true;clip:true;selectByMouse:true
                             readOnly:root.windowEntry!==''
-                            onTextChanged:{if(!root.navigatingHistory)root.historyCursor=-1;root.pointerSelection=false;root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;root.query=text;root.selected=0;if(!root.windowEntry)debounce.restart();}
+                            onTextChanged: {
+                                if(!root.navigatingHistory)root.historyCursor=-1;
+                                root.pointerSelection=false;root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;
+                                const previous=root.commandQuery.split(/\s+/)[0];
+                                root.query=text;root.selected=0;
+                                if(!root.windowEntry && !root.applyingResults){
+                                    const command=root.commandQuery.split(/\s+/)[0];
+                                    if(command.startsWith('/') && command!==previous){debounce.stop();root.search();}
+                                    else debounce.restart();
+                                }
+                            }
                             Text {
                                 anchors.fill:parent;verticalAlignment:Text.AlignVCenter
                                 text:root.windowEntry?'Choose a running window…':'A beginning is the time for taking the most delicate care…'

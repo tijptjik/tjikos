@@ -432,6 +432,13 @@ impl Launcher {
         for(k,value)in json!({"total":total,"query":display,"offset":offset,"next_offset":next,"has_more":next<total,"closing":self.closing.keys().collect::<Vec<_>>()}).as_object().unwrap(){v[k]=value.clone();}
         Ok(v)
     }
+    // Change the query and its contents in one response: never leave the command
+    // tile visible while the frontend waits for a second, debounced search.
+    fn open_query(&mut self, query: &str) -> Result<Value> {
+        let mut value = self.query(query, 0, None)?;
+        value["edit_query"] = json!(query);
+        Ok(value)
+    }
     fn activate(&mut self, req: Value) -> Result<Value> {
         let id = s(&req["id"]);
         let mode = req["mode"].as_str().unwrap_or("launch");
@@ -457,7 +464,7 @@ impl Launcher {
                 );
             }
             if ["/config", "/bindings", "/shortcuts"].contains(&id) {
-                return Ok(json!({"kind":"edit","text":id}));
+                return self.open_query(id);
             }
             if id == "/config/error" || id.starts_with("/shortcuts/") {
                 return Ok(
@@ -488,22 +495,23 @@ impl Launcher {
                 v["message"] = json!(format!("Saved {key} in runtjik.conf"));
                 return Ok(v);
             }
-            if id == "/stats" {
-                let mut v = self.query("/stats", 0, None)?;
-                v["edit_query"] = json!("/stats");
-                return Ok(v);
+            if ["/stats", "/run", "/processes"].contains(&id) {
+                let query = if id == "/stats" {
+                    id.to_owned()
+                } else {
+                    format!("{id} ")
+                };
+                return self.open_query(&query);
             }
             if let Some(c) = crate::menus::commands(&self.settings).iter().find(|c| {
                 !c.provider.is_empty() && (c.id == id || c.aliases.iter().any(|a| a == id))
             }) {
-                if c.app && c.provider == "Todo" {
-                    let mut v = self.query(id, 0, None)?;
-                    v["edit_query"] = json!(id);
-                    return Ok(v);
-                }
-                if !c.app {
-                    return Ok(json!({"kind":"edit","text":format!("{id} ")}));
-                }
+                let query = if c.app {
+                    id.to_owned()
+                } else {
+                    format!("{id} ")
+                };
+                return self.open_query(&query);
             }
         }
         let entry = self
@@ -573,9 +581,7 @@ impl Launcher {
             match id {
                 "/pin" => return Ok(json!({"kind":"pin"})),
                 "/grid" | "/list" => return Ok(json!({"kind":"view","view":&id[1..]})),
-                "/run" | "/processes" | "?" => {
-                    return Ok(json!({"kind":"edit","text":format!("{id} ")}))
-                }
+                "/run" | "/processes" | "?" => return self.open_query(&format!("{id} ")),
                 _ => {}
             }
         }
@@ -689,7 +695,7 @@ impl Launcher {
             return Ok(json!({"kind":"activated","demo":self.demo}));
         }
         if ["/shortcuts", "/bindings", "/config"].contains(&id) {
-            return Ok(json!({"kind":"edit", "text":id}));
+            return self.open_query(id);
         }
         if id.starts_with("/shortcuts/") || id == "/config/error" {
             return Ok(
