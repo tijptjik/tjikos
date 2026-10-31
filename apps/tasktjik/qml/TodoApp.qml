@@ -374,11 +374,27 @@ Pane {
         if(!ad || !bd)return ad?-1:bd?1:a.title.localeCompare(b.title);
         return (sortOrder===1?-1:1)*ad.localeCompare(bd) || a.title.localeCompare(b.title);
     }
+    function filterTag(tag) {
+        searching=true;
+        filterInput.text='tag:'+( /\s|"/.test(tag) ? JSON.stringify(tag) : tag );
+        filterInput.forceActiveFocus();
+    }
+    function matchesFilter(task) {
+        const tags=(task.tags || []).map(t=>t.toLowerCase());
+        let matches=true;
+        const text=filter.replace(/tag:("(?:\\.|[^"\\])*"|[^\s]+)/gi,(_,token)=>{
+            let tag=token;
+            if(token.startsWith('"')) {try {tag=JSON.parse(token);}catch(e){matches=false;}}
+            if(!tags.includes(tag.toLowerCase()))matches=false;
+            return '';
+        }).trim().toLowerCase();
+        return matches && (!text || (task.title+' '+(task.tags || []).join(' ')+' '+task.group+' '+(task.reference || '')).toLowerCase().includes(text));
+    }
     function tasks(group) {
         const now=listState?.today || Qt.formatDate(new Date(),'yyyy-MM-dd');
         let end=new Date(now+'T12:00:00');end.setDate(end.getDate()+6-((end.getDay()+6)%7));
         const last=Qt.formatDate(end,'yyyy-MM-dd');
-        return (listState?.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && (!filter || (t.title+' '+t.tags.join(' ')+' '+t.group+' '+(t.reference || '')).toLowerCase().includes(filter.toLowerCase())) &&
+        return (listState?.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && matchesFilter(t) &&
             (view==='all' || (effectiveDue(t) && effectiveDue(t) <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now))).sort(compareTasks);
     }
     Keys.onPressed: event=>{
@@ -471,6 +487,28 @@ Pane {
                     spacing:32
                     readonly property int columnCount: Math.max(1, Math.floor(taskScroll.availableWidth / 420))
                     readonly property var groups: (app.listState?.groups || []).filter(g=>app.tasks(g).length>0 || app.sortOrder===4)
+                    property var measuredHeights: ({})
+                    property var placements: ({})
+                    function noteHeight(group,height) {
+                        if(app.dragTask || height<=0 || Math.abs((measuredHeights[group] || 0)-height)<0.5)return;
+                        measuredHeights[group]=height;balanceTimer.restart();
+                    }
+                    function balance() {
+                        if(app.dragTask)return;
+                        const loads=Array(columnCount).fill(0),next={};
+                        const ordered=groups.map((g,i)=>({group:g,index:i,height:measuredHeights[g] || 30+app.tasks(g).length*48}));
+                        ordered.sort((a,b)=>b.height-a.height || a.index-b.index);
+                        for(const item of ordered) {
+                            const column=loads.indexOf(Math.min(...loads));
+                            next[item.group]=column;loads[column]+=item.height+28;
+                        }
+                        if(JSON.stringify(next)!==JSON.stringify(placements))placements=next;
+                    }
+                    onGroupsChanged:balanceTimer.restart()
+                    onColumnCountChanged:balanceTimer.restart()
+                    Timer {id:balanceTimer;interval:80;onTriggered:groupColumns.balance()}
+                    Connections {target:app;function onDragTaskChanged(){if(!app.dragTask)balanceTimer.restart();}}
+
                     Repeater {
                         model:groupColumns.columnCount
                         Column {
@@ -479,13 +517,14 @@ Pane {
                             width:(groupColumns.width - groupColumns.spacing * (groupColumns.columnCount - 1)) / groupColumns.columnCount
                             spacing:28
                             Repeater {
-                                model:groupColumns.groups.filter((g,i)=>i % groupColumns.columnCount === groupColumn.index)
+                                model:groupColumns.groups.filter((g,i)=>(groupColumns.placements[g] ?? i) % groupColumns.columnCount === groupColumn.index)
                                 ColumnLayout {
                                     id:groupPanel
                                     required property string modelData
                                     property alias rows:groupRows
                                     width:parent.width;spacing:6
-                                    Component.onCompleted:app.dropGroups=app.dropGroups.concat([groupPanel])
+                                    onImplicitHeightChanged:groupColumns.noteHeight(modelData,implicitHeight)
+                                    Component.onCompleted:{app.dropGroups=app.dropGroups.concat([groupPanel]);groupColumns.noteHeight(modelData,implicitHeight);}
                                     Component.onDestruction:app.dropGroups=app.dropGroups.filter(g=>g!==groupPanel)
                                     RowLayout {
                                         Layout.fillWidth:true;spacing:8
@@ -506,6 +545,7 @@ Pane {
                                             border.color:"transparent"
                                             RowLayout {
                                                 id:cardBody
+                                                z:1
                                                 anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:4;anchors.topMargin:4+taskCard.gapHeight;spacing:8
                                                 Label {
                                                     readonly property bool focusedTask: selectedId===modelData.id
@@ -579,7 +619,26 @@ Pane {
                                                         }
                                                     }
                                                     Label {Layout.fillWidth:true;text:taskMeta(modelData);visible:text!=='';color:theme.muted;font.pixelSize:12;wrapMode:Text.Wrap}
-                                                    Label {Layout.fillWidth:true;text:(modelData.tags || []).map(t=>'#'+t).join('   ');visible:text!=='';font.pixelSize:11;color:theme.accent;wrapMode:Text.Wrap}
+                                                    Flow {
+                                                        id:tagFlow
+                                                        Layout.fillWidth:true;Layout.minimumWidth:0
+                                                        spacing:8;visible:(taskCard.modelData.tags || []).length>0
+                                                        Repeater {
+                                                            model:taskCard.modelData.tags || []
+                                                            Label {
+                                                                required property string modelData
+                                                                text:'#'+modelData;textFormat:Text.PlainText
+                                                                width:Math.min(implicitWidth,tagFlow.width)
+                                                                font.pixelSize:11;color:tagMouse.containsMouse?theme.text:theme.accent
+                                                                wrapMode:Text.WrapAnywhere
+                                                                Accessible.name:'Filter by tag '+modelData
+                                                                MouseArea {
+                                                                    id:tagMouse;anchors.fill:parent;hoverEnabled:true;cursorShape:Qt.PointingHandCursor
+                                                                    onClicked:app.filterTag(parent.modelData)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                             MouseArea {
