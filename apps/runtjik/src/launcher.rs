@@ -119,7 +119,14 @@ impl Launcher {
     ) -> Value {
         let total = entries.len();
         self.current = entries.iter().map(|e| (e.id.clone(), e.clone())).collect();
-        let rows:Vec<_>=entries.into_iter().skip(offset).take(limit).map(|e|json!({"id":e.id,"name":e.name,"subtitle":e.subtitle,"provider":e.provider,"icon":self.icons.resolve(&e.icon),"favicon":s(&e.data["favicon"]),"hide_launcher":e.data["capture"].as_str().is_some_and(|s|!s.is_empty()),"keep_open":e.data["keep_open"]==true,"thumbnail":s(&e.data["thumbnail"]),"empty_state":e.data["empty_state"]==true,"disabled":e.data["disabled"]==true,"count":0,"windows":0})).collect();
+        let rows:Vec<_>=entries.into_iter().skip(offset).take(limit).map(|e| { let mut row = json!({"id":e.id,"name":e.name,"subtitle":e.subtitle,"provider":e.provider,"icon":self.icons.resolve(&e.icon),"favicon":s(&e.data["favicon"]),"hide_launcher":e.data["capture"].as_str().is_some_and(|s|!s.is_empty()),"keep_open":e.data["keep_open"]==true,"thumbnail":s(&e.data["thumbnail"]),"empty_state":e.data["empty_state"]==true,"disabled":e.data["disabled"]==true,"count":0,"windows":0});
+            for key in ["word_source", "part_of_speech", "examples", "url", "language", "section", "group", "etymology", "headword", "sense_number", "sense_depth", "sense_synonyms", "terms", "context"] {
+                if e.provider == "Words" {
+                    if let Some(value) = e.data.get(key) { row[key] = value.clone(); }
+                }
+            }
+            row
+        }).collect();
         let next = offset + rows.len();
         let mut v = self.payload(rows);
         let scope = if browser {
@@ -290,14 +297,20 @@ impl Launcher {
         }
         if enabled.iter().any(|s| s == "Words") && ["/define", "/synonym"].contains(&command) {
             let rows = self.words.query(q, &self.settings, self.demo);
-            return Ok(self.provider_payload(
-                rows,
-                display,
-                offset,
-                limit,
-                self.words.pending,
-                false,
-            ));
+            let mut counts = serde_json::Map::new();
+            for row in &rows {
+                if row.data["disabled"] == true {
+                    continue;
+                }
+                if let Some(source) = row.data["word_source"].as_str() {
+                    let count = counts.get(source).and_then(Value::as_u64).unwrap_or(0);
+                    counts.insert(source.to_owned(), json!(count + 1));
+                }
+            }
+            let mut value =
+                self.provider_payload(rows, display, offset, limit, self.words.pending, false);
+            value["word_source_counts"] = json!(counts);
+            return Ok(value);
         }
         if enabled.iter().any(|s| s == "Browser")
             && ["/browser", "/zen", "/tabs", "/history"].contains(&command)
@@ -432,6 +445,13 @@ impl Launcher {
         for(k,value)in json!({"total":total,"query":display,"offset":offset,"next_offset":next,"has_more":next<total,"closing":self.closing.keys().collect::<Vec<_>>()}).as_object().unwrap(){v[k]=value.clone();}
         Ok(v)
     }
+    // Change the query and its contents in one response: never leave the command
+    // tile visible while the frontend waits for a second, debounced search.
+    fn open_query(&mut self, query: &str) -> Result<Value> {
+        let mut value = self.query(query, 0, None)?;
+        value["edit_query"] = json!(query);
+        Ok(value)
+    }
     fn activate(&mut self, req: Value) -> Result<Value> {
         let id = s(&req["id"]);
         let mode = req["mode"].as_str().unwrap_or("launch");
@@ -457,7 +477,7 @@ impl Launcher {
                 );
             }
             if ["/config", "/bindings", "/shortcuts"].contains(&id) {
-                return Ok(json!({"kind":"edit","text":id}));
+                return self.open_query(id);
             }
             if id == "/config/error" || id.starts_with("/shortcuts/") {
                 return Ok(
@@ -488,22 +508,23 @@ impl Launcher {
                 v["message"] = json!(format!("Saved {key} in runtjik.conf"));
                 return Ok(v);
             }
-            if id == "/stats" {
-                let mut v = self.query("/stats", 0, None)?;
-                v["edit_query"] = json!("/stats");
-                return Ok(v);
+            if ["/stats", "/run", "/processes"].contains(&id) {
+                let query = if id == "/stats" {
+                    id.to_owned()
+                } else {
+                    format!("{id} ")
+                };
+                return self.open_query(&query);
             }
             if let Some(c) = crate::menus::commands(&self.settings).iter().find(|c| {
                 !c.provider.is_empty() && (c.id == id || c.aliases.iter().any(|a| a == id))
             }) {
-                if c.app && c.provider == "Todo" {
-                    let mut v = self.query(id, 0, None)?;
-                    v["edit_query"] = json!(id);
-                    return Ok(v);
-                }
-                if !c.app {
-                    return Ok(json!({"kind":"edit","text":format!("{id} ")}));
-                }
+                let query = if c.app {
+                    id.to_owned()
+                } else {
+                    format!("{id} ")
+                };
+                return self.open_query(&query);
             }
         }
         let entry = self
@@ -573,9 +594,7 @@ impl Launcher {
             match id {
                 "/pin" => return Ok(json!({"kind":"pin"})),
                 "/grid" | "/list" => return Ok(json!({"kind":"view","view":&id[1..]})),
-                "/run" | "/processes" | "?" => {
-                    return Ok(json!({"kind":"edit","text":format!("{id} ")}))
-                }
+                "/run" | "/processes" | "?" => return self.open_query(&format!("{id} ")),
                 _ => {}
             }
         }
@@ -689,7 +708,7 @@ impl Launcher {
             return Ok(json!({"kind":"activated","demo":self.demo}));
         }
         if ["/shortcuts", "/bindings", "/config"].contains(&id) {
-            return Ok(json!({"kind":"edit", "text":id}));
+            return self.open_query(id);
         }
         if id.starts_with("/shortcuts/") || id == "/config/error" {
             return Ok(

@@ -126,12 +126,37 @@ pub fn parse(source: &str) -> Result<Value> {
                     "define_sources",
                     vec!["free_dictionary", "wiktionary", "urban_dictionary"],
                 ),
-                ("synonym_sources", vec!["datamuse", "free_dictionary"]),
+                (
+                    "synonym_sources",
+                    vec!["wiktionary", "datamuse", "free_dictionary"],
+                ),
             ] {
                 let mut seen = std::collections::HashSet::new();
                 for v in values[key].as_array().unwrap() {
                     if !allowed.contains(&s(v)) || !seen.insert(s(v)) {
                         bail!("Invalid Words source");
+                    }
+                }
+            }
+            for key in ["languages", "sections"] {
+                let list = values[key].as_array().unwrap();
+                if list.is_empty() || list.len() > 32 {
+                    bail!("Words.{key} must contain 1 to 32 values");
+                }
+                let mut seen = std::collections::HashSet::new();
+                for value in list {
+                    let Some(value) = value.as_str() else {
+                        bail!("Words.{key} must contain strings");
+                    };
+                    if value.trim() != value
+                        || value.is_empty()
+                        || value.len() > 80
+                        || !seen.insert(value.to_lowercase())
+                    {
+                        bail!("Invalid or duplicate Words.{key} value");
+                    }
+                    if key == "sections" && !crate::word_entry::SECTIONS.contains(&value) {
+                        bail!("Unknown Words section: {value}");
                     }
                 }
             }

@@ -482,39 +482,76 @@ host. Add new providers to the native backend and rebuild.
 
 The bundled `Words` provider registers `/define` and `/synonym`. An explicit
 `plugins.enabled = []` disables it; add `"Words"` to an existing enabled list.
-Configure sources in TOML or the same `/config` settings panel:
+Configure languages, sections and sources in TOML or the same `/config` settings panel:
 
 ```toml
 [plugin_settings.Words]
-define_sources = ["free_dictionary", "wiktionary"]
-synonym_sources = ["datamuse", "free_dictionary"]
+define_sources = ["wiktionary", "urban_dictionary"]
+synonym_sources = ["wiktionary"]
+languages = ["English"]
+sections = ["definitions", "synonyms", "related_terms"]
 max_results_per_source = 12
 timeout_seconds = 5
 ```
 
-For example, `/config plugin_settings.Words.define_sources ["wiktionary", "urban_dictionary"]`
-enables slang alongside Wiktionary. `/config plugins.enabled ["Words"]` changes
-enabled providers immediately. External file edits apply on reopening. Bundled
-providers use their own `[plugin_settings.ProviderName]` tables. Keep secrets out of these
-UI-visible settings; use an external credential store or environment variables.
+`/define` presents an entry by source, etymology and part of speech, with compact
+language tags beside section headings.
+Numbered senses retain nested meanings, examples and sense-specific synonyms.
+The fixed provider bar shows icons and full result counts; click a provider to
+show or hide its rows. Hidden sources are skipped by keyboard navigation.
+Definition-row clicks select; linked terms start a lookup. Enter selects the
+entry's related words; Left/Right chooses a word and Enter looks it up. A single
+available word opens immediately on Enter. Escape
+returns to the entry, and Up/Down moves between entries. The explicit source
+arrow opens the source quietly, without a status banner. Loading is
+centered and muted. Later sources preserve the reading position.
 
-Sources (English lookups):
+`languages` contains the English Wiktionary's language heading names, for example
+`["English", "French", "Dutch"]`. English is the default. Languages appear in the
+configured order. Urban Dictionary and the legacy adapters only cover English.
 
-- [Free Dictionary API](https://dictionaryapi.dev/): senses grouped by part of
-  speech, examples where available, and sense/meaning synonyms. No API key.
-- [Wiktionary](https://en.wiktionary.org/): broad vocabulary, multiple senses and
-  usage examples where supplied. Uses its public REST definition endpoint.
-- [Datamuse](https://www.datamuse.com/api/): ranked synonym suggestions via
-  `rel_syn`; no usage examples. No API key currently required by this endpoint.
-- [Urban Dictionary](https://www.urbandictionary.com/): optional, user-submitted
-  slang and examples, including explicit content. Its public `v0/define` endpoint
-  currently works without a key; availability is not guaranteed.
+`sections` selects sections in the entry's original hierarchy: `definitions`,
+`synonyms`, `related_terms` (defaults), plus `derived_terms`, `pronunciation`,
+`etymology`, `alternative_forms`, `antonyms`, `usage_notes`, `inflections`
+(declension/conjugation tables), and `translations`. Missing sections are omitted.
+Pronunciation includes IPA/accent text; source links open the original page for
+audio, images and quotations. Translations can name other languages even when the
+entry-language filter is English.
+
+For example:
+
+```text
+/config plugin_settings.Words.languages ["English", "French"]
+/config plugin_settings.Words.sections ["definitions", "synonyms", "related_terms", "etymology", "pronunciation"]
+```
+
+`/synonym` focuses on enabled relation sections: synonyms, related terms, derived
+terms and antonyms. Urban Dictionary supplies slang definitions and examples, not
+structured synonyms. Sources remain independently configurable for each command.
+`max_results_per_source` bounds Urban/legacy results; for structured Wiktionary
+entries it bounds senses per level and relation/translation lists to ten times
+that value, so parts of speech and child senses stay together.
+
+Sources:
+
+- [Wiktionary](https://en.wiktionary.org/): full entry data from the public MediaWiki
+  parse API, reduced to text and dictionary links. Remote HTML, scripts and styles
+  are never rendered. Each entry links to Wiktionary for attribution and the original.
+- [Urban Dictionary](https://www.urbandictionary.com/): user-submitted English slang
+  and examples through its public `v0/define` endpoint.
+- [Free Dictionary API](https://dictionaryapi.dev/) and
+  [Datamuse](https://www.datamuse.com/api/) remain optional legacy adapters.
+
+Changes through `/config` apply immediately; external file edits apply on reopening.
+`/config plugins.enabled ["Words"]` changes enabled providers immediately.
+Keep secrets out of these UI-visible settings; use an external credential store
+or environment variables.
 
 Commercial dictionaries such as Merriam-Webster, Oxford and Collins are candidates
 for future licensed adapters when credentials and usage rights are available.
 Examples and coverage vary; none of these sources guarantees an example for every
-sense. Results retain source attribution and open the source page on Enter.
-Hover a long result to read its full text.
+sense. Results retain source attribution; the heading's source arrow opens the
+original page. Definitions and examples wrap in full within the entry.
 
 After a 350 ms typing pause, the term is sent to the selected sources concurrently.
 Results appear inline as each source responds, with a per-request timeout and 2 MB

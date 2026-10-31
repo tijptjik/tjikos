@@ -20,6 +20,7 @@ mod todo;
 mod trash;
 mod util;
 mod windows;
+mod word_entry;
 mod words;
 use anyhow::Result;
 use serde_json::{json, Value};

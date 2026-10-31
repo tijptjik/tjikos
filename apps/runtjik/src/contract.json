@@ -52,15 +52,22 @@
     "plugin_settings": {
       "Words": {
         "define_sources": [
-          "free_dictionary",
-          "wiktionary"
+          "wiktionary",
+          "urban_dictionary"
         ],
         "synonym_sources": [
-          "datamuse",
-          "free_dictionary"
+          "wiktionary"
         ],
         "max_results_per_source": 12,
-        "timeout_seconds": 5
+        "timeout_seconds": 5,
+        "languages": [
+          "English"
+        ],
+        "sections": [
+          "definitions",
+          "synonyms",
+          "related_terms"
+        ]
       },
       "Clipboard": {
         "max_results": 50
@@ -2731,6 +2738,8 @@
   ],
   "option_order": {
     "Words": [
+      "languages",
+      "sections",
       "define_sources",
       "synonym_sources",
       "max_results_per_source",
@@ -2857,7 +2866,12 @@
           "Reading list"
         ]
       ],
-      "aliases": [["-", "/todo"]],
+      "aliases": [
+        [
+          "-",
+          "/todo"
+        ]
+      ],
       "icon": "view-task",
       "mode": "app"
     },

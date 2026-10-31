@@ -305,7 +305,7 @@ url="${!#}"
 case "$url" in
   *stale*) sleep 0.2; printf '%s\\n200' '[{"meanings":[{"definitions":[{"definition":"stale result"}]}]}]' ;;
   *latest*) sleep 0.05; printf '%s\\n200' '[{"meanings":[{"definitions":[{"definition":"latest result"}]}]}]' ;;
-  *wiktionary*) sleep 0.3; printf '%s\\n200' '{"en":[{"partOfSpeech":"verb","definitions":[{"definition":"<b>Slow &amp; useful</b>"}]}]}' ;;
+  *wiktionary*) sleep 0.3; printf '%s\\n200' '{"parse":{"text":"<div class=mw-parser-output><h2 id=English>English</h2><h3 id=Verb>Verb</h3><ol><li><b>Slow &amp; useful</b></li></ol></div>"}}' ;;
   *) printf '%s\\n200' '[{"meanings":[{"partOfSpeech":"verb","definitions":[{"definition":"Fast result","example":"Synthetic example"}]}]}]' ;;
 esac
 ''')

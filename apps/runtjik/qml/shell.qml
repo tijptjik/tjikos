@@ -46,6 +46,8 @@ ShellRoot {
     property int total: 0
     property int selected: 0
     property bool pointerSelection: false
+    property bool wordSelectionEngaged: false
+    property var wordSourceCounts: ({})
     property int serial: 0
     property bool ready: false
     property bool busy: false
@@ -71,6 +73,7 @@ ShellRoot {
     readonly property string commandQuery: query.startsWith('!') && !query.startsWith('!!') ? '/' + query.slice(1).replace(/^\s+/, '') : query
     readonly property bool runMode: commandQuery === '/run' || commandQuery.startsWith('/run ') || query.startsWith('!!')
     readonly property bool runningMode: query.startsWith('?') || query==='/processes' || query.startsWith('/processes ')
+    readonly property var activeItems: wordMode ? wordPane.view : items
     readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(commandQuery)
     readonly property bool browserWindows: /^\/(browser|zen)( |$)/.test(commandQuery)
     readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(commandQuery)
@@ -132,15 +135,27 @@ ShellRoot {
         send({op:'query',query:query,offset:nextOffset});
     }
     function maybeLoadMore() {
-        if(items.height>0 && items.contentHeight>0 && items.contentY+items.height>=items.contentHeight-items.cellHeight*2)loadMore();
+        const view=activeItems;
+        if(view.height>0 && view.contentHeight>0 && view.contentY+view.height>=(wordMode?view.originY:0)+view.contentHeight-(wordMode?160:items.cellHeight*2))loadMore();
     }
     function move(delta) {
         pointerSelection=false;
+        if(wordMode)wordPane.leaveTerms();
+        if(wordMode)wordSelectionEngaged=true;
         if (!results.length) return;
+        if(wordMode){
+            const visible=wordPane.visibleIndices;
+            if(!visible.length)return;
+            const current=visible.indexOf(selected);
+            if(delta>0 && current===visible.length-1 && hasMore){pendingSelection=results.length;loadMore();return;}
+            selected=current<0?visible[delta>0?0:visible.length-1]:visible[(current+delta+visible.length)%visible.length];
+            activeItems.positionViewAtIndex(selected,ListView.Contain);
+            return;
+        }
         const target=(pendingSelection>=0?pendingSelection:selected)+delta;
         if(delta>0 && target>=results.length && hasMore){pendingSelection=target;loadMore();return;}
         selected = (target + results.length) % results.length;
-        items.positionViewAtIndex(selected, GridView.Contain);
+        activeItems.positionViewAtIndex(selected, GridView.Contain);
         if(delta>0 && selected>=results.length-2*settings.ui.columns)loadMore();
     }
     function focusInput() {
@@ -155,7 +170,7 @@ ShellRoot {
     function activate(switchWindow, closeWindow=false) {
         if (busy || !results[selected]) return;
         if (galleryEmpty && !closeWindow) { searchBox.text = galleryProvider === 'Recorder' ? '/rec' : '/grab'; return; }
-        if (results[selected].disabled) return;
+        if (results[selected].disabled || (wordMode && !wordPane.rowVisible(results[selected]))) return;
         if (!windowEntry && (debounce.running || resultQuery !== query)) {
             debounce.stop();pendingAction={switchWindow:switchWindow,closeWindow:closeWindow};search();return;
         }
@@ -224,36 +239,52 @@ ShellRoot {
             if(msg.app_state)appState=msg.app_state;
             if(msg.command_history!==undefined){commandHistory=msg.command_history;historyCursor=-1;}
             providerPending=!!msg.pending;
+            wordSourceCounts=msg.word_source_counts || ({});
             if(root.wordMode && !providerPending && root.historyCursor<0)root.rememberCommand(root.query);
             closingIds=msg.closing || [];
             applyingResults=true;
             const appending=(msg.offset || 0)>0 && resultQuery===(msg.query || '');
             const sameQuery=resultQuery===(msg.query || '');
-            const previousY=items.contentY;
+            const previousY=activeItems.contentY;
+            const wordPosition=wordMode && sameQuery ? wordPane.readingPosition() : {top:true};
             const previousId=results[selected]?.id;
             runtimeVersion=msg.version || '';
             if (msg.reset_query) {root.query='';searchBox.text='';debounce.stop();}
             if (msg.edit_query!==undefined) {root.query=msg.edit_query;searchBox.text=msg.edit_query;debounce.stop();}
             if (!ready || msg.apply_config) view=msg.config.ui.view;
             settings=msg.config;
+            const wordChanged=wordMode && JSON.stringify(results)!==JSON.stringify(msg.results);
             if(appending){
                 const known=new Set(results.map(row=>row.id));
                 results=results.concat(msg.results.filter(row=>!known.has(row.id)));
-            } else results=msg.results;
+            } else if(!wordMode || wordChanged)results=msg.results;
             loadingMore=false;hasMore=!!msg.has_more;nextOffset=msg.next_offset ?? results.length;
             indexed=msg.indexed;total=msg.total ?? results.length;
             resultQuery=msg.query || '';
             if(resultQuery==='')homeResults=msg.results;
-            const previousIndex=sameQuery?results.findIndex(row=>row.id===previousId):-1;
-            selected=previousIndex>=0?previousIndex:Math.min(selected,Math.max(0,results.length-1));
-            if(appending && pendingSelection>=0){selected=Math.min(pendingSelection,results.length-1);pendingSelection=-1;Qt.callLater(()=>items.positionViewAtIndex(selected,GridView.Contain));}
-            else if(sameQuery)Qt.callLater(()=>{items.contentY=Math.max(0,Math.min(previousY,items.contentHeight-items.height));root.maybeLoadMore();});
+            const previousIndex=sameQuery && (!wordMode || wordSelectionEngaged)?results.findIndex(row=>row.id===previousId):-1;
+            selected=wordMode && !wordSelectionEngaged?0:previousIndex>=0?previousIndex:Math.min(selected,Math.max(0,results.length-1));
+            if(wordMode && !wordPane.rowVisible(results[selected]))selected=wordPane.visibleIndices[0] ?? 0;
+            if(appending && pendingSelection>=0){
+                const next=wordMode?wordPane.visibleIndices.find(index=>index>=pendingSelection):Math.min(pendingSelection,results.length-1);
+                if(next!==undefined){
+                    selected=next;pendingSelection=-1;
+                    Qt.callLater(()=>activeItems.positionViewAtIndex(selected,wordMode?ListView.Contain:GridView.Contain));
+                } else {
+                    pendingSelection=hasMore?results.length:-1;
+                    if(hasMore)Qt.callLater(()=>root.loadMore());
+                }
+            }
+            else if(wordMode && wordChanged)wordPane.restoreReadingPosition(wordPosition);
+            else if(sameQuery && !wordMode)Qt.callLater(()=>{activeItems.contentY=Math.max(0,Math.min(previousY,activeItems.contentHeight-activeItems.height));root.maybeLoadMore();});
+            if(!sameQuery)activeItems.positionViewAtBeginning();
             message=msg.message || (msg.warnings || []).join(' · ');
             ready=true;captureInitialMonitor();
             applyingResults=false;
             if (pendingAction!==null) {const action=pendingAction;pendingAction=null;Qt.callLater(()=>root.activate(action.switchWindow,action.closeWindow));}
         } else if (msg.kind === 'edit') {
             searchBox.text=msg.text;
+            debounce.stop();root.search();
             root.focusInput();
             if(msg.select_value) {const start=msg.text.indexOf(' ',8)+1;searchBox.select(start,msg.text.length);}
         } else if (msg.kind === 'launch') {
@@ -282,7 +313,8 @@ ShellRoot {
                 panel.visible=true;
                 search();
             } else close();
-        } else {loadingMore=false;message=msg.message || 'Unable to complete action';if(!root.ready)console.error(message);}
+        } else if(msg.kind==='message') {loadingMore=false;message=msg.message || '';}
+        else {loadingMore=false;message=msg.message || 'Unable to complete action';if(!root.ready)console.error(message);}
         if (msg.kind!=='activated' && msg.kind!=='launch' && !root.quitting && root.opened && root.initialCaptured) {panel.visible=true;if(panel.ownsKeyboard){if(root.appMode)todoApp.forceActiveFocus();else root.focusInput();}}
     }
     Process {
@@ -482,7 +514,18 @@ ShellRoot {
                             font.family:root.settings.ui.font;font.pixelSize:root.settings.ui.font_size+1
                             focus:true;clip:true;selectByMouse:true
                             readOnly:root.windowEntry!==''
-                            onTextChanged:{if(!root.navigatingHistory)root.historyCursor=-1;root.pointerSelection=false;root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;root.query=text;root.selected=0;if(!root.windowEntry)debounce.restart();}
+                            onTextChanged: {
+                                wordPane.leaveTerms();
+                                if(!root.navigatingHistory)root.historyCursor=-1;
+                                root.pointerSelection=false;root.wordSelectionEngaged=false;root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;
+                                const previous=root.commandQuery.split(/\s+/)[0];
+                                root.query=text;root.selected=0;
+                                if(!root.windowEntry && !root.applyingResults){
+                                    const command=root.commandQuery.split(/\s+/)[0];
+                                    if(command.startsWith('/') && command!==previous){debounce.stop();root.search();}
+                                    else debounce.restart();
+                                }
+                            }
                             Text {
                                 anchors.fill:parent;verticalAlignment:Text.AlignVCenter
                                 text:root.windowEntry?'Choose a running window…':'A beginning is the time for taking the most delicate care…'
@@ -495,6 +538,9 @@ ShellRoot {
                                 if((event.modifiers & Qt.ControlModifier) && (event.key===Qt.Key_Up || event.key===Qt.Key_Down)){root.browseHistory(event.key===Qt.Key_Up?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Z && (event.modifiers & Qt.ControlModifier) && root.galleryMode){if(!root.busy){root.busy=true;root.send({op:'undo-trash',query:root.query});}event.accepted=true;}
                                 else if(root.statistics && [Qt.Key_Down,Qt.Key_Up,Qt.Key_PageDown,Qt.Key_PageUp].includes(event.key)){statsPane.scrollBy((event.key===Qt.Key_Up || event.key===Qt.Key_PageUp?-1:1)*(event.key===Qt.Key_PageDown || event.key===Qt.Key_PageUp?statsPane.height:30));event.accepted=true;}
+                                else if(root.wordMode && wordPane.navigatingTerms && [Qt.Key_Left,Qt.Key_Right].includes(event.key)){wordPane.moveTerm(event.key===Qt.Key_Left?-1:1);event.accepted=true;}
+                                else if(root.wordMode && wordPane.navigatingTerms && event.key===Qt.Key_Escape){wordPane.leaveTerms();event.accepted=true;}
+                                else if(root.wordMode && [Qt.Key_Return,Qt.Key_Enter].includes(event.key)){if(root.resultQuery===root.query)wordPane.enterSelected();event.accepted=true;}
                                 else if(event.key===Qt.Key_Tab || event.key===Qt.Key_Backtab){root.move((event.modifiers & Qt.ShiftModifier || event.key===Qt.Key_Backtab)?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Down){root.move(root.listMode?1:root.gridColumns);event.accepted=true;}
                                 else if(event.key===Qt.Key_Up){root.move(root.listMode?-1:-root.gridColumns);event.accepted=true;}
@@ -509,12 +555,20 @@ ShellRoot {
                 Row {
                     id:resultsHeading
                     visible:panel.pinned || root.galleryMode || root.wordMode || !!root.windowEntry || root.runningMode || root.runMode || root.commandQuery.startsWith('/config') || ['/shortcuts','/bindings'].includes(root.query.trim())
-                    width:parent.width;height:visible?24:0;spacing:8
+                    width:parent.width;height:visible?(root.wordMode?34:24):0;spacing:12
                     Text {
-                        width:parent.width-(pinStatus.visible?pinStatus.width+parent.spacing:0);height:parent.height
+                        id: resultsLabel
+                        width:root.wordMode?headingMetrics.advanceWidth:parent.width-(pinStatus.visible?pinStatus.width+parent.spacing:0);height:parent.height
                         text:root.statistics?'STATISTICS':root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.commandQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.commandQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.query.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.query?'SEARCH RESULTS':'APPLICATIONS'))))
                         font.family:root.settings.ui.font;font.pixelSize:11;font.letterSpacing:1.8
                         verticalAlignment:Text.AlignVCenter;color:root.theme.muted
+                        TextMetrics {id: headingMetrics; font: resultsLabel.font; text: resultsLabel.text}
+                    }
+                    Item {
+                        id: wordProviderHeader
+                        visible: root.wordMode
+                        width: parent.width-resultsLabel.width-parent.spacing-(pinStatus.visible?pinStatus.width+parent.spacing:0)
+                        height: parent.height
                     }
                     Text {
                         id:pinStatus
@@ -526,7 +580,7 @@ ShellRoot {
                     }
                 }
                 Column {
-                    width:parent.width;height:parent.height-(resultsHeading.visible?98:60);spacing:4
+                    width:parent.width;height:parent.height-(resultsHeading.visible?74+resultsHeading.height:60);spacing:4
                     Rectangle {
                         width:parent.width;height:parent.height-footer.height-4
                         radius:14;color:root.theme.background
@@ -545,9 +599,25 @@ ShellRoot {
                             statistics: root.statistics || ({})
                             theme: root.theme; settings: root.settings; indexed: root.indexed; demo: root.demo
                         }
+                        WordPane {
+                            id: wordPane
+                            anchors.fill: parent
+                            anchors.topMargin: paneMessage.visible ? paneMessage.height + 16 : 0
+                            visible: root.wordMode && root.statistics === null
+                            theme: root.theme; settings: root.settings
+                            headerHost: wordProviderHeader
+                            sourceCounts: root.resultQuery === root.query ? root.wordSourceCounts : ({})
+                            rowModel: resultModel
+                            query: root.commandQuery; rows: root.resultQuery === root.query ? root.results : []
+                            selected: root.selected; pointerSelection: root.pointerSelection
+                            onSelectRow: (index, pointer) => {if(index!==root.selected)wordPane.leaveTerms();root.wordSelectionEngaged=true;root.pointerSelection=pointer;root.selected=index;}
+                            onActivateRow: (index, alternate) => {root.wordSelectionEngaged=true;root.selected=index;root.activate(alternate);}
+                            onNearEnd: root.loadMore()
+                            onLookupWord: term => {searchBox.text='/define '+term;debounce.stop();root.search();root.focusInput();}
+                        }
                         GridView {
                             id:items
-                            visible: root.statistics === null
+                            visible: root.statistics === null && !root.wordMode
                             anchors.fill:parent;anchors.margins:8
                             anchors.topMargin:paneMessage.visible?paneMessage.height+18:8
                             clip:true;model:resultModel
@@ -573,6 +643,7 @@ ShellRoot {
                             ScrollBar.vertical:ScrollBar {policy:ScrollBar.AsNeeded}
                             MouseArea {
                                 parent: items.parent
+                                enabled: items.visible
                                 anchors.fill: parent
                                 z: 1
                                 acceptedButtons: Qt.NoButton
@@ -584,6 +655,7 @@ ShellRoot {
                             }
                             HoverHandler {
                                 id: selectionPointer
+                                enabled: items.visible
                                 // Track the fixed frame, not GridView's scrolling content.
                                 parent: items.parent
                                 property point lastScenePosition: Qt.point(-1, -1)
