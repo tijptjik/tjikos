@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "DueDate.js" as DueDate
 
 Pane {
     padding: 0
@@ -26,6 +27,18 @@ Pane {
     property bool showDetails: false
     property int sortOrder: 0
     property bool requestBusy: false
+    property var dueToday: new Date()
+    readonly property var parsedDue: DueDate.parse(dueInput.text, dueToday)
+    readonly property var dueSuggestions: DueDate.suggestions(dueInput.text, dueToday)
+    property int dueSuggestionIndex: -1
+    property bool dueSuggestionsDismissed: false
+    readonly property bool showDueSuggestions: dueInput.activeFocus && !dueSuggestionsDismissed && dueSuggestions.length>0
+    function acceptDueSuggestion(index) {
+        if(index<0 || index>=dueSuggestions.length)return;
+        dueInput.text=dueSuggestions[index].value;
+        dueSuggestionsDismissed=true;dueSuggestionIndex=-1;
+        dueInput.forceActiveFocus();
+    }
     property var dragTask: null
     property var dragSnapshot: ({})
     readonly property var listState: dragTask ? dragSnapshot : stateData
@@ -159,6 +172,8 @@ Pane {
         id: control
         property bool primary: false
         property bool quiet: false
+        Keys.onReturnPressed: event=>{if(!event.isAutoRepeat)clicked();event.accepted=true;}
+        Keys.onEnterPressed: event=>{if(!event.isAutoRepeat)clicked();event.accepted=true;}
         implicitHeight: 38
         padding: 10
         horizontalPadding: 14
@@ -358,6 +373,7 @@ Pane {
     property bool canOpenWindow: false
     function action(name, extra) {if(selected)request(Object.assign({action:name,id:selected.id,period:selected.period,revision:selected.revision},extra || {}));}
     function openEditor(draft) {
+        dueToday=new Date();
         editing=draft || (selected ? JSON.parse(JSON.stringify(selected)) : {title:'',kind:collection,group:'All',tags:[],due:'',repeat:{},reference:''});
         titleInput.text=editing.title;groupInput.editText=editing.group || 'All';
         tagsInput.text=editing.tags.join(', ');dueInput.text=editing.due;
@@ -377,10 +393,11 @@ Pane {
         else {editor='';app.forceActiveFocus();}
     }
     function saveEditor() {
+        if(parsedDue.error){errorMessage=parsedDue.error;dueInput.forceActiveFocus();return;}
         request({action:draftId?'reading-save':editing.id?'edit':'create',draft_id:draftId,
             id:editing.id || '',revision:editing.revision,
             fields:{kind:editing.kind || collection,title:titleInput.text,group:groupInput.editText.trim() || 'All',
-                tags:tagsInput.text.split(',').map(s=>s.trim()).filter(Boolean),due:dueInput.text,
+                tags:tagsInput.text.split(',').map(s=>s.trim()).filter(Boolean),due:parsedDue.value,
                 repeat:repeatUnit.currentText==='none'?{}:{unit:repeatUnit.currentText,value:repeatValue.text},
                 reference:planInput.text,notifyBeforeDue:notifyInput.checked,
                 notifyBeforeDueLeadValue:Number(leadValue.text),notifyBeforeDueLeadUnit:leadUnit.currentText}});
@@ -497,12 +514,12 @@ Pane {
             ColumnLayout {
                 Layout.fillWidth:true;spacing:3
                 Label {text:collection==='reading'?'Reading':'Tasks';font.pixelSize:24;font.weight:Font.DemiBold;color:theme.text}
-                Label {text:editor==='edit'?'Keep the next step clear.':visibleCount()+' '+(collection==='reading'?'items':'tasks')+' · '+(view==='week'?'This week':view==='today'?'Today':'All dates');font.pixelSize:12;color:theme.muted}
+                Label {text:editor==='edit'?(draftId?'Save this page to your reading list.':editing && editing.id?'Edit details':'Add a new '+(collection==='reading'?'reading item':'task')):visibleCount()+' '+(collection==='reading'?'items':'tasks')+' · '+(view==='week'?'This week':view==='today'?'Today':'All dates');font.pixelSize:12;color:theme.muted}
             }
             Item {Layout.fillWidth:true}
-            Choice {model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectVisibleTask();}}
-            QuietButton {text:'Open window';visible:canOpenWindow;enabled:!editor;quiet:true;onClicked:app.openWindow()}
-            QuietButton {text:'+ New';primary:true;enabled:!draftId && !editor;onClicked:{selectedId='';openEditor();}}
+            Choice {visible:!editor;model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectVisibleTask();}}
+            QuietButton {text:'Open window';visible:canOpenWindow && !editor;quiet:true;onClicked:app.openWindow()}
+            QuietButton {text:'+ New';visible:!editor;primary:true;enabled:!draftId;onClicked:{selectedId='';openEditor();}}
         }
         RowLayout {
             visible:!editor;Layout.fillWidth:true;spacing:4
@@ -762,40 +779,110 @@ Pane {
             IconButton {symbol:'keyboard';description:'Keyboard shortcuts (?)';onClicked:help.open()}
         }
         ScrollView {
-            id:editorScroll;visible:editor==='edit';Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth;ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
+            id:editorScroll;visible:editor==='edit';enabled:visible;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth;contentHeight:editorForm.implicitHeight;ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
             ColumnLayout {
-                width:editorScroll.availableWidth;spacing:12
-                Label {text:draftId?'Read later · save before closing tab':editing && editing.id?'Edit item':'New item';color:theme.text}
-                Entry {color:theme.text;placeholderTextColor:theme.muted;id:titleInput;Layout.fillWidth:true;placeholderText:'What needs to be done?';font.pixelSize:20;onAccepted:if(text.trim())saveEditor()}
-                Flow {
-                    Layout.fillWidth:true;Layout.preferredHeight:childrenRect.height;spacing:6
-                    Repeater {
-                        model:[{label:'Domain',key:'group'},{label:'Tags',key:'tags'},{label:'Due date',key:'due'},{label:'Repeat',key:'repeat'},{label:'Note',key:'reference'},{label:'Reminder',key:'reminder'}]
-                        QuietButton {required property var modelData;text:'+ '+modelData.label;visible:!sections[modelData.key];onClicked:reveal(modelData.key)}
-                    }
-                }
-                Label {visible:!!sections.group;text:'Domain';color:theme.muted}
-                Choice {id:groupInput;visible:!!sections.group;Layout.fillWidth:true;editable:true;model:stateData.groups || [];inputMethodHints:Qt.ImhNoPredictiveText}
-                Entry {color:theme.text;placeholderTextColor:theme.muted;id:tagsInput;visible:!!sections.tags;Layout.fillWidth:true;placeholderText:'Tags, comma separated'}
-                Entry {color:theme.text;placeholderTextColor:theme.muted;id:dueInput;visible:!!sections.due;Layout.fillWidth:true;placeholderText:'Due date · YYYY-MM-DD'}
-                Label {visible:!!sections.repeat;text:'Repeat';color:theme.muted}
-                RowLayout {
-                    visible:!!sections.repeat
-                    Choice {id:repeatUnit;model:['none','days','weeks','months','years','days-of-the-week','days-of-the-month']}
-                    Entry {color:theme.text;placeholderTextColor:theme.muted;id:repeatValue;Layout.fillWidth:true;placeholderText:'Interval or comma-separated day numbers'}
-                }
-                Label {visible:!!sections.reference;text:'Reference';color:theme.muted}
-                RowLayout {
-                    visible:!!sections.reference
-                    Entry {color:theme.text;placeholderTextColor:theme.muted;id:planInput;Layout.fillWidth:true;placeholderText:editing && editing.kind==='reading'?'Reference · https://…':'Reference · Obsidian vault path'}
-                    QuietButton {text:'Find note';visible:!editing || editing.kind!=='reading';onClicked:{request({action:'plans'});planPicker.visible=true;}}
+                id:editorForm
+                width:editorScroll.availableWidth;height:implicitHeight;spacing:18
+                ColumnLayout {
+                    Layout.fillWidth:true;spacing:6
+                    Label {text:'Title';color:theme.muted;font.pixelSize:12}
+                    Entry {id:titleInput;Layout.fillWidth:true;placeholderText:'What needs to be done?';font.pixelSize:18;onAccepted:if(text.trim())saveEditor()}
                 }
                 ColumnLayout {
-                    id:planPicker;visible:false;Layout.fillWidth:true
-                    Entry {color:theme.text;placeholderTextColor:theme.muted;id:planFilter;placeholderText:'Fuzzy file search';Layout.fillWidth:true}
+                    visible:!!sections.reference;Layout.fillWidth:true;spacing:6
+                    Label {text:editing && editing.kind==='reading'?'Link':'Reference';color:theme.muted;font.pixelSize:12}
+                    RowLayout {
+                        Layout.fillWidth:true;spacing:8
+                        Entry {id:planInput;Layout.fillWidth:true;placeholderText:editing && editing.kind==='reading'?'https://…':'Obsidian vault path'}
+                        QuietButton {text:'Find note';visible:!editing || editing.kind!=='reading';onClicked:{request({action:'plans'});planPicker.visible=true;}}
+                    }
+                    ColumnLayout {
+                        id:planPicker;visible:false;Layout.fillWidth:true
+                        Entry {id:planFilter;placeholderText:'Fuzzy file search';Layout.fillWidth:true}
+                        Repeater {
+                            model:plans.filter(p=>{let i=0;for(const c of p.toLowerCase())if(c===planFilter.text.toLowerCase()[i])i++;return i===planFilter.text.length;}).slice(0,15)
+                            QuietButton {required property string modelData;text:modelData;Layout.fillWidth:true;onClicked:{planInput.text=modelData;planPicker.visible=false;}}
+                        }
+                    }
+                }
+                Flow {
+                    id:detailButtons
+                    Layout.fillWidth:true;Layout.preferredHeight:implicitHeight;Layout.maximumHeight:implicitHeight;spacing:6
                     Repeater {
-                        model:plans.filter(p=>{let i=0;for(const c of p.toLowerCase())if(c===planFilter.text.toLowerCase()[i])i++;return i===planFilter.text.length;}).slice(0,15)
-                        QuietButton {required property string modelData;text:modelData;Layout.fillWidth:true;onClicked:{planInput.text=modelData;planPicker.visible=false;}}
+                        model:[{label:'Domain',key:'group'},{label:'Tags',key:'tags'},{label:'Due date',key:'due'},{label:'Repeat',key:'repeat'},{label:'Note',key:'reference'},{label:'Reminder',key:'reminder'}]
+                        QuietButton {required property var modelData;objectName:'add-'+modelData.key;text:'+ '+modelData.label;visible:!sections[modelData.key];implicitHeight:34;horizontalPadding:12;onClicked:reveal(modelData.key)}
+                    }
+                }
+                ColumnLayout {
+                    visible:!!sections.group;Layout.fillWidth:true;spacing:6
+                    Label {text:'Domain';color:theme.muted;font.pixelSize:12}
+                    Choice {id:groupInput;Layout.fillWidth:true;editable:true;model:stateData.groups || [];inputMethodHints:Qt.ImhNoPredictiveText}
+                }
+                ColumnLayout {
+                    visible:!!sections.tags;Layout.fillWidth:true;spacing:6
+                    Label {text:'Tags';color:theme.muted;font.pixelSize:12}
+                    Entry {id:tagsInput;Layout.fillWidth:true;placeholderText:'Comma separated'}
+                }
+                ColumnLayout {
+                    visible:!!sections.due;Layout.fillWidth:true;spacing:6
+                    Label {text:'Due date';color:theme.muted;font.pixelSize:12}
+                    Entry {
+                        id:dueInput;Layout.fillWidth:true;placeholderText:'Tomorrow, next Friday, or YYYY-MM-DD';Accessible.name:'Due date'
+                        onTextChanged:{dueSuggestionsDismissed=false;dueSuggestionIndex=text.trim() && DueDate.suggestions(text,dueToday).length?0:-1;}
+                        onActiveFocusChanged:{if(activeFocus)dueSuggestionsDismissed=false;}
+                        onAccepted:{if(showDueSuggestions && dueSuggestionIndex>=0)acceptDueSuggestion(dueSuggestionIndex);else saveEditor();}
+                        Keys.onDownPressed:event=>{
+                            if(dueSuggestions.length){dueSuggestionsDismissed=false;dueSuggestionIndex=(dueSuggestionIndex+1)%dueSuggestions.length;event.accepted=true;}
+                            else event.accepted=false;
+                        }
+                        Keys.onUpPressed:event=>{
+                            if(dueSuggestions.length){dueSuggestionsDismissed=false;dueSuggestionIndex=(dueSuggestionIndex<=0?dueSuggestions.length:dueSuggestionIndex)-1;event.accepted=true;}
+                            else event.accepted=false;
+                        }
+                        Keys.onTabPressed:event=>{
+                            if(showDueSuggestions && dueSuggestionIndex>=0){acceptDueSuggestion(dueSuggestionIndex);event.accepted=true;}
+                            else event.accepted=false;
+                        }
+                        Keys.onEscapePressed:event=>{
+                            if(showDueSuggestions){dueSuggestionsDismissed=true;event.accepted=true;}
+                            else event.accepted=false;
+                        }
+                    }
+                    ColumnLayout {
+                        id:dueSuggestionList
+                        visible:showDueSuggestions;Layout.fillWidth:true;spacing:2
+                        Repeater {
+                            model:dueSuggestions
+                            ItemDelegate {
+                                required property var modelData
+                                required property int index
+                                objectName:'due-suggestion-'+index
+                                Layout.fillWidth:true;implicitHeight:38;focusPolicy:Qt.NoFocus
+                                Accessible.name:modelData.label+', '+(modelData.value || 'No due date')
+                                background:Rectangle {radius:6;color:index===dueSuggestionIndex?Qt.alpha(theme.accent,0.16):parent.hovered?theme.surface:'transparent';border.color:index===dueSuggestionIndex?theme.accent:'transparent'}
+                                contentItem:RowLayout {
+                                    spacing:10
+                                    Label {text:modelData.label;color:theme.text;Layout.fillWidth:true;elide:Text.ElideRight;font.pixelSize:13}
+                                    Label {text:modelData.value?Qt.formatDate(new Date(modelData.value+'T12:00:00'),'ddd, d MMM'):'No due date';color:theme.muted;font.pixelSize:12}
+                                }
+                                onClicked:acceptDueSuggestion(index)
+                            }
+                        }
+                    }
+                    Label {
+                        id:duePreview
+                        Layout.fillWidth:true;wrapMode:Text.Wrap;font.pixelSize:12
+                        text:showDueSuggestions?'↑ ↓ choose · Enter or Tab to use · Esc to dismiss':parsedDue.error || (parsedDue.value?Qt.formatDate(new Date(parsedDue.value+'T12:00:00'),'dddd, d MMMM yyyy')+' · '+parsedDue.value:'Try “in 2 weeks” or “15 December”. Leave blank for no due date.')
+                        color:parsedDue.error && !showDueSuggestions?'#eb6f92':theme.muted
+                    }
+                }
+                ColumnLayout {
+                    visible:!!sections.repeat;Layout.fillWidth:true;spacing:6
+                    Label {text:'Repeat';color:theme.muted;font.pixelSize:12}
+                    RowLayout {
+                        Layout.fillWidth:true;spacing:8
+                        Choice {id:repeatUnit;model:['none','days','weeks','months','years','days-of-the-week','days-of-the-month']}
+                        Entry {id:repeatValue;Layout.fillWidth:true;placeholderText:'Interval or day numbers'}
                     }
                 }
                 RowLayout {
@@ -805,7 +892,8 @@ Pane {
                     Choice {id:leadUnit;model:['hours','days','weeks'];currentIndex:1}
                 }
                 RowLayout {
-                    Layout.topMargin:8;spacing:8
+                    id:editorActions
+                    Layout.topMargin:6;spacing:8
                     QuietButton {primary:true;text:draftId?'Save and close tab':'Save';enabled:titleInput.text.trim()!=='';onClicked:saveEditor()}
                     QuietButton {text:'Cancel';onClicked:cancelEditor()}
                 }

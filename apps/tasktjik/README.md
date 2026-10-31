@@ -20,6 +20,21 @@ the toast disappears. Purge removes the entire task, including recurrence histor
 
 `tasktjik request` accepts one JSON request on stdin and returns JSON on stdout.
 `tasktjik state` returns UI state. `tasktjik serve` is the authority endpoint.
+The desktop due-date field accepts `today`, `tomorrow`, `next Friday`,
+`in two weeks`, `3 days from now`, `next month`, `15 December`, and ISO dates.
+It previews the resolved date and saves `YYYY-MM-DD`; blank or `no due date`
+clears it. Weekdays mean the upcoming occurrence (including today); `next`
+excludes today. `next week` means seven days from today. Month/year offsets
+clamp to the last valid day, and named dates without a year use the next
+occurrence. Parsing uses the local calendar date when the editor opens.
+Ambiguous numeric dates and unsupported phrases stay in the editor for correction.
+Tab to an optional-field button such as `+ Due date` and press Enter (or Space)
+to reveal and focus that field. As you type a due date, matching suggestions
+show their resolved dates. Use Up/Down to choose and Enter or Tab to fill the
+field without saving; Escape dismisses suggestions. Complete dates still save
+with Enter. The editor keeps the title and link together,
+with compact optional details and save actions below.
+
 Task IDs, recurrence completions, revision checks and reading capture request IDs
 retain their existing format. Agent creates should supply a stable UUID
 `request_id` so retrying the same submission cannot duplicate a task.
