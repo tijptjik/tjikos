@@ -144,6 +144,15 @@ pub fn parse(source: &str) -> Result<Value> {
             range(&values["timeout_seconds"], 1, 15, "timeout_seconds")?;
         } else if name == "Browser" {
             range(&values["columns"], 1, 6, "Browser.columns")?;
+            argv(&values["history_browser"])?;
+            for profile in values["history_profiles"].as_array().unwrap() {
+                if !profile
+                    .as_str()
+                    .is_some_and(|p| std::path::Path::new(p).is_absolute())
+                {
+                    bail!("Browser.history_profiles must contain absolute profile paths");
+                }
+            }
         } else {
             range(&values["max_results"], 1, 200, "max_results")?;
         }

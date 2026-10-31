@@ -97,7 +97,15 @@ impl Browser {
                 }
             }
             if sessions.is_empty() {
-                bail!("Connect the Runtjik Browser extension in Zen or Firefox; see browser-extension/README.md");
+                if history_mode {
+                    if let Some(rows) = crate::offline_history::query(term)? {
+                        return Ok(rows);
+                    }
+                } else if !q.starts_with('/') {
+                    // A closed browser is normal; don't obscure application search.
+                    return Ok(vec![]);
+                }
+                bail!("Browser bridge disconnected. Start Zen/Firefox with the signed Runtjik extension installed; offline history can be configured in Browser settings.");
             }
             sessions
         };
@@ -218,6 +226,9 @@ impl Browser {
         Ok(rows)
     }
     pub fn activate(&mut self, e: &Entry, mode: &str, demo: bool) -> Result<Value> {
+        if e.data["offline_history"] == true && !demo {
+            return crate::offline_history::activate(e, mode);
+        }
         if e.data["history"] == true && mode == "switch" {
             return Ok(
                 json!({"kind":"message","message":"Enter reopens this history item; Ctrl+Enter removes its URL from browser history."}),

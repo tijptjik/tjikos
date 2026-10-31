@@ -1096,7 +1096,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -2217,7 +2221,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -2548,7 +2556,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -3669,7 +3681,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -3789,7 +3805,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -3920,7 +3940,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -4051,7 +4075,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -4350,6 +4378,24 @@
               "windows": 0
             },
             {
+              "id": "/config plugin_settings.Browser.history_profiles",
+              "name": "plugin_settings.Browser.history_profiles = []",
+              "subtitle": "Browser plugin · history profiles",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
+              "id": "/config plugin_settings.Browser.history_browser",
+              "name": "plugin_settings.Browser.history_browser = [\"zen-browser\"]",
+              "subtitle": "Browser plugin · history browser",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
               "id": "/config plugin_settings.Todo.authority",
               "name": "plugin_settings.Todo.authority = \"si\"",
               "subtitle": "Todo plugin · authority",
@@ -4487,7 +4533,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -4612,7 +4662,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -4836,7 +4890,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -5080,7 +5138,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -5367,7 +5429,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -5659,7 +5725,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -5951,7 +6021,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -6083,7 +6157,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -6204,7 +6282,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -6372,7 +6454,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -6509,7 +6595,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -6646,7 +6736,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -6825,7 +6919,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -6962,7 +7060,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -7099,7 +7201,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -7348,7 +7454,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -7555,7 +7665,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -7692,7 +7806,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -7941,7 +8059,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -8092,7 +8214,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -8243,7 +8369,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -8365,7 +8495,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -8480,7 +8614,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -8595,7 +8733,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -8710,7 +8852,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -9004,6 +9150,24 @@
               "windows": 0
             },
             {
+              "id": "/config plugin_settings.Browser.history_profiles",
+              "name": "plugin_settings.Browser.history_profiles = []",
+              "subtitle": "Browser plugin · history profiles",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
+              "id": "/config plugin_settings.Browser.history_browser",
+              "name": "plugin_settings.Browser.history_browser = [\"zen-browser\"]",
+              "subtitle": "Browser plugin · history browser",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
               "id": "/config plugin_settings.Todo.authority",
               "name": "plugin_settings.Todo.authority = \"si\"",
               "subtitle": "Todo plugin · authority",
@@ -9141,7 +9305,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -9365,7 +9533,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -9491,7 +9663,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -9622,7 +9798,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -9753,7 +9933,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -9884,7 +10068,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -10133,7 +10321,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -10427,6 +10619,24 @@
               "windows": 0
             },
             {
+              "id": "/config plugin_settings.Browser.history_profiles",
+              "name": "plugin_settings.Browser.history_profiles = []",
+              "subtitle": "Browser plugin · history profiles",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
+              "id": "/config plugin_settings.Browser.history_browser",
+              "name": "plugin_settings.Browser.history_browser = [\"zen-browser\"]",
+              "subtitle": "Browser plugin · history browser",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
               "id": "/config plugin_settings.Todo.authority",
               "name": "plugin_settings.Todo.authority = \"si\"",
               "subtitle": "Todo plugin · authority",
@@ -10564,7 +10774,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -10708,7 +10922,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -10830,7 +11048,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -10961,7 +11183,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -11092,7 +11318,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -11207,7 +11437,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -11322,7 +11556,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -11448,7 +11686,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",
@@ -11611,7 +11853,11 @@
                 "countdown_seconds": 3
               },
               "Browser": {
-                "columns": 3
+                "columns": 3,
+                "history_profiles": [],
+                "history_browser": [
+                  "zen-browser"
+                ]
               },
               "Todo": {
                 "authority": "si",

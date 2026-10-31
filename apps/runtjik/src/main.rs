@@ -11,6 +11,7 @@ mod icons;
 mod image_viewer;
 mod launcher;
 mod menus;
+mod offline_history;
 mod paths;
 mod settings;
 mod stats;

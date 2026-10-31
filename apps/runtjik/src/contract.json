@@ -82,7 +82,9 @@
         "countdown_seconds": 3
       },
       "Browser": {
-        "columns": 3
+        "columns": 3,
+        "history_profiles": [],
+        "history_browser": ["zen-browser"]
       },
       "Todo": {
         "authority": "si",
@@ -2748,7 +2750,9 @@
       "countdown_seconds"
     ],
     "Browser": [
-      "columns"
+      "columns",
+      "history_profiles",
+      "history_browser"
     ],
     "Todo": [
       "authority",
