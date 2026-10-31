@@ -237,7 +237,9 @@ fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
         ensure!(!s(&request["actor"]).trim().is_empty(), "Actor is required");
     }
     let result = model::mutate(tasks, request)?;
-    if result.is_object() {
+    if action == "purge" {
+        tasks.retain(|t| t["id"] != result["id"]);
+    } else if result.is_object() {
         if let Some(t) = tasks.iter_mut().find(|t| t["id"] == result["id"]) {
             *t = result.clone();
         } else {
@@ -341,10 +343,14 @@ impl Todo {
         if result.is_object() && request["action"] != "capabilities" {
             let id = s(&result["id"]);
             Uuid::parse_str(id)?;
-            atomic(
-                &root.join(format!("{id}.json")),
-                &serde_json::to_vec_pretty(&result)?,
-            )?;
+            if request["action"] == "purge" {
+                fs::remove_file(root.join(format!("{id}.json")))?;
+            } else {
+                atomic(
+                    &root.join(format!("{id}.json")),
+                    &serde_json::to_vec_pretty(&result)?,
+                )?;
+            }
             fs::File::open(&root)?.sync_all()?;
         }
         Ok(result)

@@ -23,11 +23,12 @@ with private_compositor():
     task = request({'action':'create','fields':{'title':'Synthetic agent task','assignee':'agent:demo','acceptance':['Render task details']}})
     request({'action':'status','id':task['id'],'revision':task['revision'],'actor':'agent:demo','status':'blocked','blockers':[{'reason':'Awaiting synthetic review'}]})
     component = home/'qml/TodoApp.qml'
-    component.write_text(component.read_text().replace('    id: app', '    id: app\n    property bool testHelpVisible: help.visible\n    function captureHelp(path) { help.contentItem.grabToImage(image=>image.saveToFile(path)); }'))
+    component.write_text(component.read_text().replace('    id: app', '    id: app\n    function focusPurgeConfirm() { purgeDialog.standardButton(Dialog.Ok).forceActiveFocus(); }\n    property bool testPurgeVisible: purgeDialog.opened\n    property bool testHelpVisible: help.visible\n    function captureHelp(path) { help.contentItem.grabToImage(image=>image.saveToFile(path)); }'))
     shell = home/'qml/shell.qml'
     shell.write_text(shell.read_text().replace('    Component.onCompleted:', '''    IpcHandler {
         target: "tasktjik-test"
-        function state(): string { return JSON.stringify({tasks:view.stateData.tasks,error:view.errorMessage,editor:view.editor,sections:view.sections,help:view.testHelpVisible}); }
+        function state(): string { return JSON.stringify({tasks:view.stateData.tasks,error:view.errorMessage,editor:view.editor,sections:view.sections,help:view.testHelpVisible,purge:view.testPurgeVisible,selected:view.selectedId}); }
+        function focusPurge(): void { view.focusPurgeConfirm(); }
         function refresh(): void { root.request({action:'list'}); }
         function capture(path:string): void { if(view.testHelpVisible) view.captureHelp(path); else view.grabToImage(image=>image.saveToFile(path)); }
     }
@@ -52,6 +53,24 @@ with private_compositor():
                 subprocess.run(['wtype', *args], check=True)
             def current():
                 return json.loads(ipc('state'))
+            key('-k', 'p')
+            wait_for(lambda: current()['purge'])
+            key('-k', 'Escape')
+            wait_for(lambda: not current()['purge'])
+            assert len(current()['tasks']) == 1
+            key('-k', 'p')
+            wait_for(lambda: current()['purge'])
+            ipc('focusPurge')
+            key('-k', 'space')
+            try:
+                wait_for(lambda: len(current()['tasks']) == 0)
+            except ValueError:
+                print('PURGE FAILURE',current(),flush=True)
+                raise
+            assert not current()['error'], current()
+            request({'action':'create','fields':{'title':'Synthetic replacement'}})
+            ipc('refresh')
+            wait_for(ready)
             key('n')
             wait_for(lambda: current()['editor'] == 'edit')
             assert not any(current()['sections'].values()), current()

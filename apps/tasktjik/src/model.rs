@@ -258,11 +258,14 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
     } else {
         period(&t, today())?
     };
-    if ["edit", "status", "verify", "toggle"].contains(&op) {
+    if ["edit", "status", "verify", "toggle", "purge"].contains(&op) {
         ensure!(
             r["revision"] == t["revision"],
             "Task changed; refresh before updating"
         );
+    }
+    if op == "purge" {
+        return Ok(json!({"id":t["id"],"deleted":true}));
     }
     match op {
         "create" | "edit" => {

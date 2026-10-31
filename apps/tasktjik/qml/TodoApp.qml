@@ -55,6 +55,7 @@ Pane {
         background: Rectangle {radius:8;color:theme.surface;border.color:control.activeFocus?theme.accent:theme.border}
     }
     Shortcut {sequence:'?';onActivated:help.open()}
+    Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !purgeDialog.visible && !!selected;onActivated:{purgeDialog.target=JSON.parse(JSON.stringify(selected));purgeDialog.open();}}
     Shortcut {sequence:'Alt+G';enabled:editor==='edit';onActivated:reveal('group')}
     Shortcut {sequence:'Alt+T';enabled:editor==='edit';onActivated:reveal('tags')}
     Shortcut {sequence:'Alt+D';enabled:editor==='edit';onActivated:reveal('due')}
@@ -73,9 +74,31 @@ Pane {
             Label {text:'Keyboard shortcuts';font.pixelSize:20;color:theme.text}
             Label {Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted;lineHeight:1.6;text:editor==='edit'?
                 'Alt+G   Group\nAlt+T   Tags\nAlt+D   Due date\nAlt+R   Repeat\nAlt+L   Reference / note\nAlt+M   Reminder\nCtrl+Enter   Save\nEsc   Cancel':
-                'N   New item\nShift+N   Today\nW   This week\nL   Later\nD   Mark done\nT   Edit title\nG   Edit group\nS   Snooze\n/   Search\n↑ / ↓ or J / K   Select item\nEnter   Open reading reference\nEsc   Close window'}
+                'N   New item\nShift+N   Today\nW   This week\nL   Later\nD   Mark done\nP   Purge task\nT   Edit title\nG   Edit group\nS   Snooze\n/   Search\n↑ / ↓ or J / K   Select item\nEnter   Open reading reference\nEsc   Close window'}
             QuietButton {text:'Done';onClicked:help.close()}
         }
+    }
+    Dialog {
+        id: purgeDialog
+        property var target: null
+        anchors.centerIn: parent
+        width: Math.min(app.width-24, 440)
+        title: 'Purge task?'
+        modal: true
+        focus: true
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onOpened: standardButton(Dialog.Cancel).forceActiveFocus()
+        contentItem: Label {
+            text: 'Permanently delete “' + (purgeDialog.target ? purgeDialog.target.title : '') + '”?'
+            wrapMode: Text.Wrap
+        }
+        onAccepted: {
+            const task = target;
+            target = null;
+            request({action:'purge',id:task.id,revision:task.revision});
+            app.forceActiveFocus();
+        }
+        onRejected: { target = null; app.forceActiveFocus(); }
     }
     signal request(var request)
     signal exitApp()
@@ -116,6 +139,7 @@ Pane {
             (view==='all' || (t.period!=='once' && t.period <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now)));
     }
     Keys.onPressed: event=>{
+        if(purgeDialog.visible || help.visible)return;
         if(editor || searching){if(event.key===Qt.Key_Escape && editor){cancelEditor();event.accepted=true;}return;}
         if(event.key===Qt.Key_N){if(event.modifiers & Qt.ShiftModifier)view='today';else {selectedId='';openEditor();}}
         else if(event.key===Qt.Key_L)view='all';

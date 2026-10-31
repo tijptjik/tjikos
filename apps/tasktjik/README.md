@@ -14,6 +14,9 @@ Install the HTTPS authority on Si before updating clients. There is one writable
 authority; unavailable authorities fail visibly. SSH endpoints must run the native `tasktjik-api serve` command. No Python
 fallback is installed.
 
+In the task list, press `P` to purge the selected task after confirmation.
+`Esc` cancels; purge removes the entire task, including recurrence history.
+
 `tasktjik request` accepts one JSON request on stdin and returns JSON on stdout.
 `tasktjik state` returns UI state. `tasktjik serve` is the authority endpoint.
 Task IDs, recurrence completions, revision checks and reading capture request IDs

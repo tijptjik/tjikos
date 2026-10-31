@@ -70,7 +70,9 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
         return Ok(serde_json::from_str(&reply)?);
     }
     let result = model::mutate(&tasks(&tx)?, &r)?;
-    if result.is_object() {
+    if op == "purge" {
+        tx.execute("DELETE FROM tasks WHERE id=?", [result["id"].as_str()])?;
+    } else if result.is_object() {
         tx.execute(
             "INSERT INTO tasks VALUES (?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body",
             params![result["id"].as_str(), serde_json::to_string(&result)?],
@@ -161,4 +163,24 @@ pub fn import(path: &Path, source: &Path) -> Result<usize> {
     }
     tx.commit()?;
     Ok(count)
+}
+
+#[cfg(test)]
+mod purge_tests {
+    use super::*;
+
+    #[test]
+    fn purge_checks_revision_and_retries_without_recreating_task() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("tasks.db");
+        let created = request(&path, json!({"action":"create","request_id":Uuid::new_v4().to_string(),"fields":{"title":"Synthetic purge"}}), "test", "test").unwrap();
+        let mut purge = json!({"action":"purge","request_id":Uuid::new_v4().to_string(),"id":created["id"],"revision":0});
+        assert!(request(&path, purge.clone(), "test", "test").is_err());
+        assert_eq!(tasks(&connect(&path).unwrap()).unwrap().len(), 1);
+        purge["revision"] = created["revision"].clone();
+        let result = request(&path, purge.clone(), "test", "test").unwrap();
+        assert_eq!(result["deleted"], true);
+        assert_eq!(request(&path, purge, "test", "test").unwrap(), result);
+        assert!(tasks(&connect(&path).unwrap()).unwrap().is_empty());
+    }
 }
