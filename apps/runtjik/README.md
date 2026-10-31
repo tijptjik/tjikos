@@ -394,10 +394,11 @@ its current value. Enter again saves. You can also type a complete command:
 /config ui.width 800
 /config index.path_commands false
 /config history.enabled true
+/config stats.enabled false
 ```
 
 The featured settings are view, columns, width, height, icon size, font size,
-PATH commands and history recording. Other settings stay in the text file until
+PATH commands, history recording and stats tracking. Other settings stay in the text file until
 there is a reason to expose them. Values use TOML syntax (`true`, `false`, integers,
 or quoted strings); `grid` and `list` also work unquoted. Invalid values do not
 write the file. Saves preserve unrelated settings/comments, use a lock and atomic
@@ -451,8 +452,14 @@ a `counts` key/value table. An event records timestamp, entry ID, action and suc
 Successful launches, successful window switches, and explicit UI refreshes are
 recorded; failed launches are recorded without increasing launch counts. Search
 text, command arguments and window titles are not logged. Demo mode writes no
-history. Setting `history.enabled=false` stops new history records; existing
-counts remain available for ranking.
+history. Stats tracking defaults to enabled. Set `[stats] enabled = false` in
+`runtjik.conf`, or use `/config stats.enabled false`, to pause all new activity
+events and counts (including launcher opens, failed actions and index refreshes).
+Command history remains enabled independently. Existing statistics and ranking
+scores are preserved; `/stats` remains available and indicates that tracking is
+paused. Set it back to `true` to resume tracking. The broader
+`history.enabled=false` master switch stops both command history and stats.
+Changes made through `/config` apply immediately; file edits apply on reopening.
 
 An event and its cumulative count are committed in one SQLite transaction.
 WAL and a busy timeout support concurrent CLI access. `launch:<provider>:<id>`

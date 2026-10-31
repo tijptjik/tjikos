@@ -61,7 +61,7 @@ with private_compositor():
                 print('Stats UI state:', state(), ipc('status'))
                 raise
             # Narrow layouts retain seven rows and reduce week columns.
-            config.write_text('[ui]\nmonitor=' + json.dumps(monitor) + '\nwidth=480\nheight=500\n[theme]\nicon_theme="rose-punk"\n')
+            config.write_text('[ui]\nmonitor=' + json.dumps(monitor) + '\nwidth=480\nheight=500\n[stats]\nenabled=false\n[theme]\nicon_theme="rose-punk"\n')
             assert 'TypeError' not in (temp / 'launcher.log').read_text()
             assert 'ReferenceError' not in (temp / 'launcher.log').read_text()
             assert 'ERROR' not in (temp / 'launcher.log').read_text()

@@ -37,6 +37,9 @@
     "history": {
       "enabled": true
     },
+    "stats": {
+      "enabled": true
+    },
     "plugins": {
       "enabled": [
         "Words",
@@ -2661,7 +2664,11 @@
     ],
     [
       "history.enabled",
-      "Record new launch and switch events"
+      "Record command history and activity (master switch)"
+    ],
+    [
+      "stats.enabled",
+      "Track launcher opens and action statistics"
     ]
   ],
   "shortcuts": [

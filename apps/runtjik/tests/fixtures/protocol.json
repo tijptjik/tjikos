@@ -1113,7 +1113,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -2238,7 +2241,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -2573,7 +2579,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -3698,7 +3707,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -3822,7 +3834,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -3957,7 +3972,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -4092,7 +4110,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -4200,7 +4221,16 @@
             {
               "id": "/config history.enabled",
               "name": "history.enabled = true",
-              "subtitle": "Record new launch and switch events",
+              "subtitle": "Record command history and activity (master switch)",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
+              "id": "/config stats.enabled",
+              "name": "stats.enabled = true",
+              "subtitle": "Track launcher opens and action statistics",
               "disabled": false,
               "provider": "internal",
               "count": 0,
@@ -4550,7 +4580,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -4679,7 +4712,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -4907,7 +4943,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -5155,7 +5194,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -5446,7 +5488,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -5742,7 +5787,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -6038,7 +6086,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -6174,7 +6225,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -6299,7 +6353,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 264,
           "warnings": [],
@@ -6471,7 +6528,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -6612,7 +6672,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -6753,7 +6816,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -6936,7 +7002,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -7077,7 +7146,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -7218,7 +7290,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -7471,7 +7546,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -7682,7 +7760,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -7823,7 +7904,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -8076,7 +8160,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -8231,7 +8318,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -8386,7 +8476,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -8512,7 +8605,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -8631,7 +8727,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -8750,7 +8849,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -8869,7 +8971,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -8972,7 +9077,16 @@
             {
               "id": "/config history.enabled",
               "name": "history.enabled = true",
-              "subtitle": "Record new launch and switch events",
+              "subtitle": "Record command history and activity (master switch)",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
+              "id": "/config stats.enabled",
+              "name": "stats.enabled = true",
+              "subtitle": "Track launcher opens and action statistics",
               "disabled": false,
               "provider": "internal",
               "count": 0,
@@ -9322,7 +9436,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -9550,7 +9667,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -9680,7 +9800,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -9815,7 +9938,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -9950,7 +10076,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -10085,7 +10214,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -10338,7 +10470,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -10441,7 +10576,16 @@
             {
               "id": "/config history.enabled",
               "name": "history.enabled = true",
-              "subtitle": "Record new launch and switch events",
+              "subtitle": "Record command history and activity (master switch)",
+              "disabled": false,
+              "provider": "internal",
+              "count": 0,
+              "windows": 0
+            },
+            {
+              "id": "/config stats.enabled",
+              "name": "stats.enabled = true",
+              "subtitle": "Track launcher opens and action statistics",
               "disabled": false,
               "provider": "internal",
               "count": 0,
@@ -10791,7 +10935,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -10939,7 +11086,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -11065,7 +11215,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -11200,7 +11353,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -11335,7 +11491,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -11454,7 +11613,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -11573,7 +11735,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -11703,7 +11868,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],
@@ -11870,7 +12038,10 @@
                 "socket": ""
               }
             },
-            "overrides": {}
+            "overrides": {},
+            "stats": {
+              "enabled": true
+            }
           },
           "indexed": 15,
           "warnings": [],

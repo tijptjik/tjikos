@@ -146,7 +146,7 @@ Flickable {
         }
         Text {
             width: parent.width
-            text: (pane.demo ? 'Sample activity. ' : '') + (pane.settings.history?.enabled === false ? 'History is paused. ' : '')
+            text: (pane.demo ? 'Sample activity. ' : '') + (pane.settings.history?.enabled === false || pane.settings.stats?.enabled === false ? 'Stats tracking is paused. ' : '')
                 + (pane.statistics.opened_since ? 'Opens tracked since ' + pane.pretty(pane.statistics.opened_since) + '. ' : 'No launcher opens recorded yet. ')
                 + 'Daily averages include idle days.'
             color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10

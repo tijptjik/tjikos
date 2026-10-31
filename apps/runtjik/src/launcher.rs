@@ -88,8 +88,11 @@ impl Launcher {
             vec![]
         }))
     }
+    fn tracking_enabled(&self) -> bool {
+        self.settings["history"]["enabled"] == true && self.settings["stats"]["enabled"] == true
+    }
     pub fn initial(&mut self) -> Result<Value> {
-        if self.settings["history"]["enabled"] == true {
+        if self.tracking_enabled() {
             if let Some(store) = &self.store {
                 store.record("launcher", "open", true)?;
             }
@@ -435,7 +438,7 @@ impl Launcher {
         }
         if id == "/refresh" && mode != "close" {
             self.refresh(true)?;
-            if self.settings["history"]["enabled"] == true {
+            if self.tracking_enabled() {
                 if let Some(s) = &self.store {
                     s.record("index", "refresh", true)?;
                 }
@@ -617,7 +620,7 @@ impl Launcher {
             if !self.demo {
                 crate::windows::focus(target)?;
             }
-            if self.settings["history"]["enabled"] == true {
+            if self.tracking_enabled() {
                 if let Some(store) = &self.store {
                     store.record(id, "switch", true)?;
                 }
@@ -675,7 +678,7 @@ impl Launcher {
                 });
                 let result = dispatch(args, &self.settings);
                 if let Some(store) = &self.store {
-                    if self.settings["history"]["enabled"] == true {
+                    if self.tracking_enabled() {
                         store.record(id, mode, result.is_ok())?;
                     }
                 }

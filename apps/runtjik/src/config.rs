@@ -268,3 +268,17 @@ fn capture_directory(value: &str) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod stats_tests {
+    use super::*;
+
+    #[test]
+    fn tracking_defaults_on_and_accepts_only_booleans() {
+        assert_eq!(parse("").unwrap()["stats"]["enabled"], true);
+        let disabled = parse("[stats]\nenabled=false\n").unwrap();
+        assert_eq!(disabled["stats"]["enabled"], false);
+        assert_eq!(disabled["history"]["enabled"], true);
+        assert!(parse("[stats]\nenabled=\"false\"\n").is_err());
+    }
+}
