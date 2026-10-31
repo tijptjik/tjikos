@@ -47,5 +47,16 @@ ShellRoot {
         }
     }
     Timer { interval: 10000; running: true; repeat: true; onTriggered: { if (!view.editor && !backend.running) root.request({action:'list'}); } }
+    IpcHandler {
+        target: "tasktjik"
+        function status(): string {
+            return JSON.stringify({editor:view.editor, purgeMode:typeof view.purgeSelected==='function'?'immediate-undo-toast':'confirmation', taskCount:(view.stateData.tasks || []).length});
+        }
+        function reload(): bool {
+            if(view.editor || backend.running || root.pending.length)return false;
+            Quickshell.reload(false);
+            return true;
+        }
+    }
     Component.onCompleted: root.request({action:'list'})
 }

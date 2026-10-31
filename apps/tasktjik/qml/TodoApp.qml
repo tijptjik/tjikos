@@ -125,7 +125,7 @@ Pane {
         }
     }
     Shortcut {sequence:'?';onActivated:help.open()}
-    Shortcut {sequence:StandardKey.Undo;enabled:!editor && !searching && !help.visible;onActivated:app.undoLastAction()}
+    Shortcut {sequences:[StandardKey.Undo];enabled:!editor && !searching && !help.visible;onActivated:app.undoLastAction()}
     Shortcut {sequence:'U';enabled:!editor && !searching && !help.visible;onActivated:app.undoLastAction()}
     Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !!selected && !pendingPurge;onActivated:app.purgeSelected()}
     Shortcut {sequence:'Alt+G';enabled:editor==='edit';onActivated:reveal('group')}
@@ -262,8 +262,7 @@ Pane {
     function visibleCount() {return (stateData.groups || []).reduce((n,g)=>n+tasks(g).length,0);}
     function taskMeta(task) {
         const parts=[];
-        if(task.repeat && task.repeat.unit)parts.push('Repeats');
-        if(task.status && !['ready','inbox','done','cancelled'].includes(task.status))parts.push(task.status.replace('_',' '));
+        if(task.status && !['ready','inbox','done','cancelled','blocked'].includes(task.status))parts.push(task.status.replace('_',' '));
         if(task.assignee)parts.push(task.assignee);
         if(task.verification && task.verification.length)parts.push('Check: '+task.verification[task.verification.length-1].outcome);
         return parts.join(' · ');
@@ -337,7 +336,7 @@ Pane {
         selectVisibleTask();
     }
     ColumnLayout {
-        anchors.fill:parent;anchors.margins:8;spacing:16
+        anchors.fill:parent;anchors.margins:12;spacing:18
         RowLayout {
             Layout.fillWidth:true;spacing:12
             ColumnLayout {
@@ -387,7 +386,7 @@ Pane {
                 Row {
                     id: groupColumns
                     Layout.fillWidth:true
-                    spacing:24
+                    spacing:32
                     readonly property int columnCount: Math.max(1, Math.floor(taskScroll.availableWidth / 420))
                     readonly property var groups: (stateData.groups || []).filter(g=>app.tasks(g).length>0)
                     Repeater {
@@ -396,12 +395,12 @@ Pane {
                             id: groupColumn
                             required property int index
                             width:(groupColumns.width - groupColumns.spacing * (groupColumns.columnCount - 1)) / groupColumns.columnCount
-                            spacing:20
+                            spacing:28
                             Repeater {
                                 model:groupColumns.groups.filter((g,i)=>i % groupColumns.columnCount === groupColumn.index)
                                 ColumnLayout {
                                     required property string modelData
-                                    width:parent.width;spacing:8
+                                    width:parent.width;spacing:6
                                     RowLayout {
                                         Layout.fillWidth:true;spacing:8
                                         Label {text:modelData==='All'?'Inbox':modelData;font.pixelSize:12;font.weight:Font.DemiBold;color:theme.muted}
@@ -412,25 +411,28 @@ Pane {
                                         Rectangle {
                                             id:taskCard
                                             required property var modelData
-                                            Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+12;radius:4
+                                            Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+8;radius:4
                                             color:"transparent"
                                             border.color:"transparent"
                                             RowLayout {
                                                 id:cardBody
-                                                anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:6;spacing:10
+                                                anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:4;spacing:8
                                                 Label {
                                                     readonly property bool focusedTask: selectedId===modelData.id
                                                     text:focusedTask?'›':app.dueLabel(modelData)
                                                     color:focusedTask?theme.accent:app.isOverdue(modelData)?'#eb6f92':theme.muted
                                                     font.pixelSize:focusedTask?20:11;font.weight:Font.DemiBold
                                                     font.underline:!focusedTask && !!modelData.snoozedUntil
-                                                    Layout.preferredWidth:38;Layout.topMargin:focusedTask?0:3;Layout.alignment:Qt.AlignTop
+                                                    Layout.preferredWidth:30;Layout.topMargin:focusedTask?0:3;Layout.alignment:Qt.AlignTop
                                                 }
                                                 ColumnLayout {
                                                     Layout.fillWidth:true;spacing:3
                                                     Label {
                                                         id: taskTitle
                                                         Layout.fillWidth:true
+                                                        Layout.rightMargin:statusIcons.visible?statusIcons.implicitWidth+6:0
+                                                        property real lastLineWidth: 0
+                                                        property real lastLineTop: 0
                                                         text:modelData.title
                                                         textFormat:Text.PlainText
                                                         font.pixelSize:15
@@ -442,9 +444,29 @@ Pane {
                                                         onLineLaidOut: line => {
                                                             if(line.number===0) strikeLines=[];
                                                             strikeLines.push({x:line.x,y:line.y+line.height*0.52,width:Math.min(line.width,line.implicitWidth)});
+                                                            lastLineWidth=Math.min(line.width,line.implicitWidth);
+                                                            lastLineTop=line.y;
                                                             cancelledStrike.requestPaint();
                                                         }
                                                         onColorChanged: cancelledStrike.requestPaint()
+                                                        Row {
+                                                            id:statusIcons
+                                                            x:taskTitle.lastLineWidth+6;y:taskTitle.lastLineTop+2
+                                                            spacing:5
+                                                            visible:blockedIcon.visible || repeatIcon.visible
+                                                            Canvas {
+                                                                id:blockedIcon;width:14;height:14
+                                                                visible:modelData.status==='blocked'
+                                                                Accessible.name:'Blocked'
+                                                                onPaint:{const c=getContext('2d');c.reset();c.strokeStyle='#f6c177';c.lineWidth=1.5;c.beginPath();c.arc(7,7,5.3,0,Math.PI*2);c.moveTo(3.3,10.7);c.lineTo(10.7,3.3);c.stroke();}
+                                                            }
+                                                            Canvas {
+                                                                id:repeatIcon;width:14;height:14
+                                                                visible:!!modelData.repeat && !!modelData.repeat.unit
+                                                                Accessible.name:'Repeats'
+                                                                onPaint:{const c=getContext('2d');c.reset();c.strokeStyle=theme.muted;c.lineWidth=1.4;c.lineCap='round';c.beginPath();c.arc(7,7,4.6,Math.PI*1.1,Math.PI*1.9);c.moveTo(11.4,2.4);c.lineTo(11.4,5.4);c.lineTo(8.4,5.4);c.moveTo(2.6,11.6);c.lineTo(2.6,8.6);c.lineTo(5.6,8.6);c.moveTo(11.4,8.4);c.arc(7,7,4.6,Math.PI*0.1,Math.PI*0.9);c.stroke();}
+                                                            }
+                                                        }
                                                         Canvas {
                                                             id: cancelledStrike
                                                             anchors.fill:parent
