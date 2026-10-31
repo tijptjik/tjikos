@@ -295,37 +295,52 @@ Pane {
             ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
             ColumnLayout {
                 width:taskScroll.availableWidth;spacing:14
-                Repeater {
-                    model:(stateData.groups || []).filter(g=>app.tasks(g).length>0)
-                    ColumnLayout {
-                        required property string modelData
-                        Layout.fillWidth:true;spacing:8
-                        RowLayout {
-                            Layout.fillWidth:true;spacing:8
-                            Label {text:modelData==='All'?'Inbox':modelData;font.pixelSize:12;font.weight:Font.DemiBold;color:theme.muted}
-                            Label {text:app.tasks(modelData).length;font.pixelSize:11;color:theme.muted}
-                            Rectangle {Layout.fillWidth:true;implicitHeight:1;color:theme.border;opacity:0.6}
-                        }
-                        Repeater {
-                            model:app.tasks(modelData)
-                            Rectangle {
-                                id:taskCard
-                                required property var modelData
-                                Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+12;radius:4
-                                color:"transparent"
-                                border.color:"transparent"
-                                RowLayout {
-                                    id:cardBody
-                                    anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:6;spacing:10
-                                    Label {text:modelData.done?'✓':selectedId===modelData.id?'›':'·';color:modelData.done || selectedId===modelData.id?theme.accent:theme.muted;font.pixelSize:20;Layout.alignment:Qt.AlignTop}
-                                    ColumnLayout {
-                                        Layout.fillWidth:true;spacing:3
-                                        Label {Layout.fillWidth:true;text:modelData.title;font.pixelSize:15;font.weight:selectedId===modelData.id?Font.DemiBold:Font.Normal;font.strikeout:modelData.done;color:selectedId===modelData.id?theme.accent:theme.text;wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight}
-                                        Label {Layout.fillWidth:true;text:taskMeta(modelData);visible:text!=='';color:theme.muted;font.pixelSize:12;wrapMode:Text.Wrap}
-                                        Label {Layout.fillWidth:true;text:(modelData.tags || []).map(t=>'#'+t).join('   ');visible:text!=='';font.pixelSize:11;color:theme.accent;wrapMode:Text.Wrap}
+                Row {
+                    id: groupColumns
+                    Layout.fillWidth:true
+                    spacing:24
+                    readonly property int columnCount: Math.max(1, Math.floor(taskScroll.availableWidth / 420))
+                    readonly property var groups: (stateData.groups || []).filter(g=>app.tasks(g).length>0)
+                    Repeater {
+                        model:groupColumns.columnCount
+                        Column {
+                            id: groupColumn
+                            required property int index
+                            width:(groupColumns.width - groupColumns.spacing * (groupColumns.columnCount - 1)) / groupColumns.columnCount
+                            spacing:20
+                            Repeater {
+                                model:groupColumns.groups.filter((g,i)=>i % groupColumns.columnCount === groupColumn.index)
+                                ColumnLayout {
+                                    required property string modelData
+                                    width:parent.width;spacing:8
+                                    RowLayout {
+                                        Layout.fillWidth:true;spacing:8
+                                        Label {text:modelData==='All'?'Inbox':modelData;font.pixelSize:12;font.weight:Font.DemiBold;color:theme.muted}
+                                        Label {text:app.tasks(modelData).length;font.pixelSize:11;color:theme.muted}
+                                    }
+                                    Repeater {
+                                        model:app.tasks(modelData)
+                                        Rectangle {
+                                            id:taskCard
+                                            required property var modelData
+                                            Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+12;radius:4
+                                            color:"transparent"
+                                            border.color:"transparent"
+                                            RowLayout {
+                                                id:cardBody
+                                                anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:6;spacing:10
+                                                Label {text:modelData.done?'✓':selectedId===modelData.id?'›':'·';color:modelData.done || selectedId===modelData.id?theme.accent:theme.muted;font.pixelSize:20;Layout.alignment:Qt.AlignTop}
+                                                ColumnLayout {
+                                                    Layout.fillWidth:true;spacing:3
+                                                    Label {Layout.fillWidth:true;text:modelData.title;font.pixelSize:15;font.weight:selectedId===modelData.id?Font.DemiBold:Font.Normal;font.strikeout:modelData.done;color:selectedId===modelData.id?theme.accent:theme.text;wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight}
+                                                    Label {Layout.fillWidth:true;text:taskMeta(modelData);visible:text!=='';color:theme.muted;font.pixelSize:12;wrapMode:Text.Wrap}
+                                                    Label {Layout.fillWidth:true;text:(modelData.tags || []).map(t=>'#'+t).join('   ');visible:text!=='';font.pixelSize:11;color:theme.accent;wrapMode:Text.Wrap}
+                                                }
+                                            }
+                                            MouseArea {anchors.fill:parent;cursorShape:Qt.PointingHandCursor;onClicked:{selectedId=modelData.id;app.forceActiveFocus();}onDoubleClicked:app.action('toggle')}
+                                        }
                                     }
                                 }
-                                MouseArea {anchors.fill:parent;cursorShape:Qt.PointingHandCursor;onClicked:{selectedId=modelData.id;app.forceActiveFocus();}onDoubleClicked:app.action('toggle')}
                             }
                         }
                     }
