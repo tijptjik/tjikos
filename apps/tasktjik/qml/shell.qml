@@ -38,7 +38,9 @@ ShellRoot {
             id: view
             anchors.fill: parent; anchors.margins: 20
             focus: true
-            view: 'all'
+            view: Quickshell.env('TASKTJIK_VIEW') || 'all'
+            collection: Quickshell.env('TASKTJIK_COLLECTION') || 'todo'
+            selectedId: Quickshell.env('TASKTJIK_SELECTED') || ''
             theme: ({background:'#26233a',surface:'#39354b',text:'#f5f5f7',muted:'#aaa5ba',accent:'#a8c7a0',border:'#555169'})
             onRequest: value => root.request(value)
             onExitApp: Qt.quit()

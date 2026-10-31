@@ -446,6 +446,11 @@ ShellRoot {
                 anchors.fill: parent; anchors.margins: 20
                 visible: root.appMode === 'Todo'
                 stateData: root.appState; theme: root.theme; errorMessage: root.message
+                canOpenWindow: true
+                onOpenWindow: {
+                    Quickshell.execDetached(['env', 'TASKTJIK_VIEW='+todoApp.view, 'TASKTJIK_COLLECTION='+todoApp.collection, 'TASKTJIK_SELECTED='+todoApp.selectedId, 'tasktjik', 'show']);
+                    root.close();
+                }
                 onRequest: request => {if(root.busy)return;root.busy=true;root.send(Object.assign({op:'app-action',provider:root.appMode}, request));}
                 onExitApp: { root.appMode=''; searchBox.text=''; root.query=''; root.search(); root.focusInput(); }
                 onVisibleChanged: {if(visible) forceActiveFocus();else {editor='';draftId='';}}

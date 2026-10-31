@@ -7,7 +7,17 @@ else
     export TASKTJIK_HOME="${TASKTJIK_HOME:-$HOME/.local/lib/tasktjik}"
 fi
 case "${1:-show}" in
-    show) export QT_QUICK_CONTROLS_STYLE=Basic; exec quickshell --path "$TASKTJIK_HOME/qml" --no-duplicate ;;
+    show)
+        # Reuse a normal compositor window without tying its lifetime to Runtjik.
+        if command -v hyprctl >/dev/null && command -v jq >/dev/null; then
+            address=$(hyprctl -j clients 2>/dev/null | jq -r '.[] | select(.title == "Tasktjik") | .address' | head -n 1) || address=''
+            if [[ -n "$address" ]] && hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1; then
+                exit 0
+            fi
+        fi
+        export QT_QUICK_CONTROLS_STYLE=Basic
+        exec quickshell --path "$TASKTJIK_HOME/qml" --no-duplicate ;;
+
     api|connect|devices|import-json|snapshot|request|state|serve|notify|done|dismiss|snooze) exec "$TASKTJIK_HOME/tasktjik-api" "$@" ;;
     *) echo 'Usage: tasktjik [show|connect URL [--notifications]|devices|api|request|state|serve|notify|done|dismiss|snooze|import-json|snapshot]' >&2; exit 2 ;;
 esac

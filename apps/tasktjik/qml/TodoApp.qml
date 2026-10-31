@@ -167,6 +167,8 @@ Pane {
     }
     signal request(var request)
     signal exitApp()
+    signal openWindow()
+    property bool canOpenWindow: false
     function action(name, extra) {if(selected)request(Object.assign({action:name,id:selected.id,period:selected.period,revision:selected.revision},extra || {}));}
     function openEditor(draft) {
         editing=draft || (selected ? JSON.parse(JSON.stringify(selected)) : {title:'',kind:collection,group:'All',tags:[],due:'',repeat:{},reference:''});
@@ -260,6 +262,7 @@ Pane {
             }
             Item {Layout.fillWidth:true}
             Choice {model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectVisibleTask();}}
+            QuietButton {text:'Open window';visible:canOpenWindow;enabled:!editor;quiet:true;onClicked:app.openWindow()}
             QuietButton {text:'+ New';primary:true;enabled:!draftId && !editor;onClicked:{selectedId='';openEditor();}}
         }
         RowLayout {
@@ -308,16 +311,16 @@ Pane {
                             Rectangle {
                                 id:taskCard
                                 required property var modelData
-                                Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+24;radius:12
-                                color:selectedId===modelData.id?theme.surface:theme.background
-                                border.color:selectedId===modelData.id?theme.accent:theme.border
+                                Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+12;radius:4
+                                color:"transparent"
+                                border.color:"transparent"
                                 RowLayout {
                                     id:cardBody
-                                    anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:12;spacing:12
-                                    Label {text:modelData.done?'✓':'○';color:modelData.done?theme.accent:theme.muted;font.pixelSize:20;Layout.alignment:Qt.AlignTop}
+                                    anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:6;spacing:10
+                                    Label {text:modelData.done?'✓':selectedId===modelData.id?'›':'·';color:modelData.done || selectedId===modelData.id?theme.accent:theme.muted;font.pixelSize:20;Layout.alignment:Qt.AlignTop}
                                     ColumnLayout {
-                                        Layout.fillWidth:true;spacing:7
-                                        Label {Layout.fillWidth:true;text:modelData.title;font.pixelSize:15;font.weight:Font.Medium;font.strikeout:modelData.done;color:theme.text;wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight}
+                                        Layout.fillWidth:true;spacing:3
+                                        Label {Layout.fillWidth:true;text:modelData.title;font.pixelSize:15;font.weight:selectedId===modelData.id?Font.DemiBold:Font.Normal;font.strikeout:modelData.done;color:selectedId===modelData.id?theme.accent:theme.text;wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight}
                                         Label {Layout.fillWidth:true;text:taskMeta(modelData);visible:text!=='';color:theme.muted;font.pixelSize:12;wrapMode:Text.Wrap}
                                         Label {Layout.fillWidth:true;text:(modelData.tags || []).map(t=>'#'+t).join('   ');visible:text!=='';font.pixelSize:11;color:theme.accent;wrapMode:Text.Wrap}
                                     }
