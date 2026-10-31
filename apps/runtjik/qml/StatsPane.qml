@@ -22,16 +22,16 @@ Flickable {
     function month(date) { return Qt.formatDate(new Date(date + 'T12:00:00'), 'MMM'); }
     function pretty(date) { return Qt.formatDate(new Date(date + 'T12:00:00'), 'd MMM yyyy'); }
     clip: true
-    contentHeight: content.height + 32
+    contentHeight: content.height + 40
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
     Column {
         id: content
-        x: 18; y: 16; width: parent.width - 36
-        spacing: 12
+        x: 20; y: 20; width: parent.width - 40
+        spacing: 16
         Row {
-            width: parent.width; height: 30
+            width: parent.width; height: 28
             Text {
                 width: parent.width - indexLabel.width
                 text: 'Launcher activity'; color: pane.theme.text
@@ -46,7 +46,7 @@ Flickable {
             }
         }
         Column {
-            width: parent.width; spacing: 6
+            width: parent.width; spacing: 8
             Item {
                 width: parent.width; height: 16
                 Repeater {
@@ -62,14 +62,14 @@ Flickable {
             }
             Item {
                 id: calendar
-                width: parent.width; height: 7 * 18 - 3
+                width: parent.width; height: 7 * 20 - 4
                 readonly property real step: (width - 32) / pane.weeks
                 Repeater {
                     model: ['M', '', 'W', '', 'F', '', 'S']
                     Text {
                         required property int index
                         required property string modelData
-                        y: index * 18; height: 15; text: modelData
+                        y: index * 20; height: 16; text: modelData
                         color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10
                         verticalAlignment: Text.AlignVCenter
                     }
@@ -79,8 +79,8 @@ Flickable {
                     Rectangle {
                         required property int index
                         required property var modelData
-                        x: 32 + Math.floor(index / 7) * calendar.step; y: (index % 7) * 18
-                        width: calendar.step - 4; height: 15; radius: 3
+                        x: 32 + Math.floor(index / 7) * calendar.step; y: (index % 7) * 20
+                        width: calendar.step - 4; height: 16; radius: 3
                         color: modelData.tracked ? pane.shade(modelData.count) : 'transparent'
                         border.width: modelData.date === pane.statistics.today || !modelData.tracked ? 1 : 0
                         border.color: modelData.date === pane.statistics.today ? pane.theme.accent : pane.theme.border
@@ -95,7 +95,7 @@ Flickable {
                 }
             }
             Row {
-                width: parent.width; height: 20; spacing: 8
+                width: parent.width; height: 16; spacing: 8
                 Text {
                     width: parent.width - legend.width - parent.spacing; height: parent.height
                     text: pane.hoveredDay || 'Launcher opens · last ' + pane.weeks + ' weeks'
@@ -104,8 +104,8 @@ Flickable {
                 }
                 Row {
                     id: legend
-                    spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                    Text { text: 'Less'; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10 }
+                    spacing: 6; anchors.verticalCenter: parent.verticalCenter
+                    Text { height: 14; verticalAlignment: Text.AlignVCenter; text: 'Less'; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10 }
                     Repeater {
                         model: 5
                         Rectangle {
@@ -114,29 +114,29 @@ Flickable {
                             color: index === 0 ? pane.theme.surface : Qt.rgba(pane.accent.r, pane.accent.g, pane.accent.b, .28 + .72 * index / 4)
                         }
                     }
-                    Text { text: 'More'; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10 }
+                    Text { height: 14; verticalAlignment: Text.AlignVCenter; text: 'More'; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10 }
                 }
             }
         }
         Column {
             width: parent.width; spacing: 0
             Row {
-                width: parent.width; height: 26
-                Text { width: parent.width * .5; text: 'ACTIVITY'; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10; font.letterSpacing: 1 }
-                Text { width: parent.width * .25; text: 'DAILY AVG'; horizontalAlignment: Text.AlignRight; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10; font.letterSpacing: 1 }
-                Text { width: parent.width * .25; text: 'ALL TIME'; horizontalAlignment: Text.AlignRight; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10; font.letterSpacing: 1 }
+                width: parent.width; height: 24
+                Text { width: parent.width * .5; height: parent.height; verticalAlignment: Text.AlignVCenter; text: 'ACTIVITY'; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10; font.letterSpacing: 1 }
+                Text { width: parent.width * .25; height: parent.height; verticalAlignment: Text.AlignVCenter; text: 'DAILY AVG'; horizontalAlignment: Text.AlignRight; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10; font.letterSpacing: 1 }
+                Text { width: parent.width * .25; height: parent.height; verticalAlignment: Text.AlignVCenter; text: 'ALL TIME'; horizontalAlignment: Text.AlignRight; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 10; font.letterSpacing: 1 }
             }
             Repeater {
                 model: pane.statistics.metrics || []
                 Item {
                     required property var modelData
-                    width: parent.width; height: 30
+                    width: parent.width; height: 32
                     Rectangle { width: parent.width; height: 1; color: pane.theme.border; opacity: .45 }
                     Row {
                         anchors.fill: parent
                         Text { width: parent.width * .5; height: parent.height; text: modelData.label; color: pane.theme.text; font.family: pane.settings.ui.font; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter }
                         Text { width: parent.width * .25; height: parent.height; text: modelData.days ? Number(modelData.average).toLocaleString(Qt.locale(), 'f', 1) : '—'; horizontalAlignment: Text.AlignRight; color: pane.theme.muted; font.family: pane.settings.ui.font; font.pixelSize: 14; verticalAlignment: Text.AlignVCenter }
-                        Text { width: parent.width * .25; height: parent.height; text: Number(modelData.total).toLocaleString(Qt.locale(), 'f', 0); horizontalAlignment: Text.AlignRight; color: modelData.id === 'open' ? pane.theme.accent : pane.theme.text; font.family: pane.settings.ui.font; font.pixelSize: 16; verticalAlignment: Text.AlignVCenter }
+                        Text { width: parent.width * .25; height: parent.height; text: Number(modelData.total).toLocaleString(Qt.locale(), 'f', 0); horizontalAlignment: Text.AlignRight; color: modelData.id === 'open' ? pane.theme.accent : pane.theme.text; font.family: pane.settings.ui.font; font.pixelSize: 14; verticalAlignment: Text.AlignVCenter }
                     }
                     HoverHandler { id: metricHover }
                     ToolTip.visible: metricHover.hovered
