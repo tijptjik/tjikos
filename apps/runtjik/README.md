@@ -691,13 +691,18 @@ imv keys: Left/Right previous/next, Up/Down zoom, `r` reset, `a` actual size,
 `gg` first image, Shift+G last image, and `q` quit. `x` removes the current
 image from the viewing list; it does not delete the file.
 
-## Firefox / Zen browser plugin (development preview)
+## Firefox / Zen browser plugin
 
 The opt-in `Browser` provider supplies `/browser` (alias `/zen`) window cards in
 three configurable columns and `/tabs` title-filtered tab lists. Enter focuses
 Hyprland and activates the selected browser tab through a Firefox extension and
 private native-messaging bridge. See [setup and current limitations](browser-extension/README.md).
 Window cards currently use icons and titles, not live screenshot previews.
+The installer registers the native host automatically. A Mozilla-signed bridge
+loads on every browser start. `/history` also supports explicitly configured,
+read-only profile access while the browser is closed; opening a result starts
+the corresponding browser profile. See the bridge documentation for setup and
+the release instructions for signing (an unsigned build is not permanent).
 
 ## Todo app
 

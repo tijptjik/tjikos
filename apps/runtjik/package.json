@@ -6,9 +6,17 @@
     "build": "bash scripts/build.sh",
     "check": "bash scripts/check.sh",
     "test": "cargo test --release --locked && python3 -B tests/rust_parity.py && python3 -B tests/rust_migration.py && python3 -B tests/clipboard.py && python3 -B tests/stats.py",
-    "demo": "bin/runtjik --demo"
+    "demo": "bin/runtjik --demo",
+    "browser:dev": "bash scripts/browser-extension.sh dev",
+    "browser:lint": "bash scripts/browser-extension.sh lint",
+    "browser:build": "bash scripts/browser-extension.sh build",
+    "browser:sign:listed": "bash scripts/browser-extension.sh sign-listed",
+    "browser:sign:unlisted": "bash scripts/browser-extension.sh sign-unlisted"
   },
   "dependencies": {
     "@tjikos/tasktjik": "workspace:*"
+  },
+  "devDependencies": {
+    "web-ext": "10.2.0"
   }
 }

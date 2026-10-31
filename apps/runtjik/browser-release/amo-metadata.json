@@ -1,0 +1,32 @@
+{
+  "name": {
+    "en-US": "Runtjik Browser Bridge"
+  },
+  "summary": {
+    "en-US": "Search and control Firefox or Zen tabs and history from the Runtjik Linux launcher."
+  },
+  "description": {
+    "en-US": "Companion extension for the separately installed Runtjik desktop launcher. Requires native Firefox 142+ or a compatible Zen release on Linux; desktop window focusing currently requires Hyprland. Windows, macOS, Android and Flatpak/Snap integration are not supported. Search unpinned tabs and browser history, activate or close tabs, reopen visited pages, and explicitly remove URLs from history. Sends browsing metadata to Runtjik on the same computer via native messaging. Private windows are excluded. The extension does not send data to remote services. Install Runtjik and register its native host before using the bridge. See the project documentation for installation and privacy details."
+  },
+  "categories": {
+    "firefox": [
+      "tabs",
+      "search-tools"
+    ]
+  },
+  "homepage": {
+    "en-US": "https://github.com/tijptjik/tjikos"
+  },
+  "support_url": {
+    "en-US": "https://github.com/tijptjik/tjikos/issues"
+  },
+  "version": {
+    "license": "all-rights-reserved",
+    "compatibility": [
+      "firefox"
+    ],
+    "release_notes": {
+      "en-US": "Permanent-install release with Firefox built-in browsing activity consent. Requires Firefox 142+ or compatible Zen on Linux."
+    }
+  }
+}

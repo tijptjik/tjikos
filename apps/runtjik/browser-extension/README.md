@@ -1,31 +1,40 @@
-# Runtjik Browser bridge (development preview)
+# Runtjik Browser bridge
 
 Native Linux Firefox and Zen can expose their windows/tabs through this opt-in
-extension. No debugging port, HTTP server, separate systemd service, or browser
-profile scraping is needed. Firefox starts one native host per extension
+extension. No debugging port, HTTP server, or separate systemd service is
+needed. Firefox starts one native host per extension
 connection; each host owns a private Unix socket in
 `$XDG_RUNTIME_DIR/runtjik-browser`. Multiple browser profiles can coexist.
 
 ## Setup
 
 1. Build and install Runtjik using its normal install scripts.
-2. Run `bash ~/.local/lib/runtjik/browser-extension/install-host.sh`.
-   This registers the host in `~/.mozilla/native-messaging-hosts`, verified with
+2. The installer registers the host automatically. To repair registration, run
+   `bash ~/.local/lib/runtjik/browser-extension/install-host.sh`.
+   The host lives in `~/.mozilla/native-messaging-hosts`, verified with
    the native Zen installation on this machine. Do not infer this directory
    from the profile location (`~/.zen`) or packaging wrapper: they can differ.
    If your browser build uses a different native-host directory, pass
    `--manifest-dir PATH`.
    Flatpak/Snap sandbox integration is not implemented.
-3. In Zen/Firefox, open `about:debugging#/runtime/this-firefox`, choose **Load
-   Temporary Add-on**, and select this directory's `manifest.json`. Temporary
-   extensions disappear on browser restart. Permanent installation requires a
-   Mozilla-signed XPI; signing/distribution is not included in this preview.
+3. Install the Mozilla-signed release XPI using `about:addons` → gear →
+   **Install Add-on From File**, or use its AMO listing once published. Accept
+   the browsing-activity permissions. It loads automatically on every browser
+   start. Requires Firefox 142+ or a compatible Zen version. The ZIP produced
+   by the local build is unsigned and is not a permanent-install artifact.
+   Signing/publication requires the maintainer's AMO account; see
+   [release instructions](../browser-release/README.md). Do not disable browser
+   signature checks. Temporary loading is for extension development only.
 4. Add `"Browser"` to your existing `[plugins].enabled` array in
    `~/.config/runtjik/runtjik.conf` and reopen Runtjik. Preserve other providers.
 
 ```toml
 [plugin_settings.Browser]
 columns = 3 # 1–6
+# Optional: search history even when the browser is completely closed.
+# Use absolute paths from about:profiles; no automatic profile discovery.
+history_profiles = ["/home/YOU/.zen/YOUR-PROFILE"]
+history_browser = ["zen-browser"] # use ["firefox"] for Firefox profiles
 ```
 
 `/browser` (alias `/zen`) shows window cards. `/tabs` shows tabs in a list.
@@ -60,7 +69,8 @@ are unwrapped. Browsing metadata stays in memory, outside indexes and bridge
 logs, unless you explicitly save a reading item. The
 launcher may retain its last results while hidden. Existing command-history
 settings apply to filter text you type; disable `[history].enabled` if desired.
-Socket permissions restrict access to your user, not to a particular same-user
+See [privacy details](PRIVACY.md), including native offline history and favicon
+requests. Socket permissions restrict access to your user, not to a particular same-user
 process. Requests and native messages have size/time bounds. Browser restarts
 create new session IDs so old selections cannot target reused browser IDs.
 
@@ -99,4 +109,20 @@ history API. All connected profiles are searched, as with the tabs integration.
 After updating from bridge 0.1.0, reload the extension in Zen's
 `about:debugging#/runtime/this-firefox` and allow its new history permission.
 Reloading also reconnects the native host so it recognizes the new operations.
-The extension must remain connected for history search to work.
+When no extension session is connected, `/history` can read the explicitly
+configured `history_profiles` directly. This is an on-demand, read-only SQLite
+query, including committed WAL changes, with no database copy or persistent
+index. HTTP(S) visits only are returned, ordered newest first and capped at 100.
+Offline text matching is SQLite's case-insensitive substring search (ASCII case
+folding); it may differ from Firefox's history search. Results are marked
+`offline`. Enter revalidates the visit and launches `history_browser` with the
+exact profile and URL. Ctrl+Enter refuses deletion until the extension connects
+and the search is refreshed. One configured browser executable serves all
+offline profiles; do not mix Firefox and Zen profiles in that list.
+
+Closing or quitting Zen is supported: offline search needs no browser process,
+hidden window, autostart daemon, or headless copy of the profile. Active tab and
+window control still requires a running browser and connected extension. When
+any bridge session is connected, live history is authoritative; offline profiles
+are not merged into that response. Remove `history_profiles` to disable offline
+access independently of the browser extension.

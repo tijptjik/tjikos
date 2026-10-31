@@ -53,6 +53,11 @@ class NativeInstallTests(unittest.TestCase):
                 )
 
             install()
+            automatic_manifest = home / ".mozilla/native-messaging-hosts/org.tjikos.runtjik_browser.json"
+            self.assertEqual(
+                json.loads(automatic_manifest.read_text())["allowed_extensions"],
+                ["runtjik-browser@tjikos.local"],
+            )
             self.assertEqual(list(target.rglob("*.py")), [])
             self.assertEqual(list(task.rglob("*.py")), [])
             core = target / "runtjik-core"

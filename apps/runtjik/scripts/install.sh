@@ -16,7 +16,7 @@ if [[ "$install_home" == "$HOME" && -n "${WAYLAND_DISPLAY:-}" && -n "${XDG_RUNTI
     fi
 fi
 install -d -m 755 "$install_home/.local/bin" "$target" "$config_root/runtjik"
-for directory in qml examples docs browser-extension; do
+for directory in qml examples docs browser-extension browser-release; do
     staging="$(mktemp -d "$target/.install.XXXXXXXX")"
     cp -R "$root_dir/dist/$directory/." "$staging/"
     previous="$staging.previous"
@@ -32,9 +32,7 @@ new_binary="$(mktemp "$target/.runtjik-core.XXXXXXXX")"
 install -m 755 "$root_dir/dist/runtjik-core" "$new_binary"
 mv -f -- "$new_binary" "$target/runtjik-core"
 rm -f -- "$target"/{todo,browser,browser_host,image_viewer,runtjik,words,desktop_plugins,capture_worker,capture_countdown,capture_trash,control,compat_host}.py
-if [[ -f "$install_home/.mozilla/native-messaging-hosts/org.tjikos.runtjik_browser.json" ]]; then
-    "$target/runtjik-core" register-browser-host --runtjik-dir "$target" --manifest-dir "$install_home/.mozilla/native-messaging-hosts"
-fi
+"$target/runtjik-core" register-browser-host --runtjik-dir "$target" --manifest-dir "$install_home/.mozilla/native-messaging-hosts"
 rm -rf -- "$target/__pycache__"
 install -m 755 "$root_dir/dist/bin/runtjik" "$install_home/.local/bin/runtjik"
 bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" runtjik

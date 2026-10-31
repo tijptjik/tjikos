@@ -18,3 +18,4 @@ apps/runtjik/runtjik-core
 /apps/tasktjik/tasktjik-api
 
 /apps/notjik/target
+/apps/runtjik/browser-artifacts/
