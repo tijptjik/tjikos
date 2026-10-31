@@ -83,3 +83,17 @@ Si-local CLI clients use `socket = "/run/tasktjik/api.sock"`. This reaches the
 same API and database without looping through the server’s nginx listener.
 Socket access uses the tasktjik group, and UID 1000 maps to m@type.hk on Si.
 The database directory remains mode 0700, private to the service user.
+
+In the list, `/` or the search icon opens the text filter; Escape clears and
+hides it. The sort menu switches between due date and title, in either direction.
+Date badges use weekdays in weekly/today views and for this calendar week in
+All tasks. Other dates use D/W/M/Y intervals; a minus sign means overdue.
+Snoozed dates are underlined and drive filtering/sorting. Undated tasks sort last.
+
+`U`, Ctrl+Z, or the undo icon reverses the latest reversible action made by this
+device against the SQLite authority. Up to 100 actions are retained per device
+and owner, including creation, edits, completion, snooze, status, verification,
+and purge. Undo refuses to overwrite subsequent changes from another client or
+notification worker. History starts when the updated authority is installed;
+old actions and legacy flat-file storage do not have an undo journal.
+Text fields retain their normal Ctrl+Z text undo.

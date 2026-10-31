@@ -24,6 +24,7 @@ Pane {
     property bool showCompleted: true
     property bool showCancelled: true
     property bool showDetails: false
+    property int sortOrder: 0
     onShowCompletedChanged: selectVisibleTask()
     onShowCancelledChanged: selectVisibleTask()
     property string filter: ''
@@ -57,13 +58,10 @@ Pane {
         property string description
         implicitWidth:38;implicitHeight:38
         Accessible.name:description
-        ToolTip.visible:hovered
-        ToolTip.text:description
-        ToolTip.delay:400
         background:Rectangle {
             radius:8
             color:control.checked?theme.surface:control.hovered?theme.border:'transparent'
-            border.color:control.checked || control.activeFocus?theme.accent:'transparent'
+            border.color:'transparent'
         }
         contentItem:Canvas {
             id:iconCanvas
@@ -76,7 +74,11 @@ Pane {
                 c.translate((width-22)/2,(height-22)/2);
                 c.strokeStyle=control.checked?theme.accent:theme.text;c.fillStyle=c.strokeStyle;
                 c.lineWidth=1.5;c.lineCap='round';c.lineJoin='round';
-                if(control.symbol==='keyboard') {
+                if(control.symbol==='search') {
+                    c.beginPath();c.arc(9,9,6,0,Math.PI*2);c.moveTo(14,14);c.lineTo(20,20);c.stroke();
+                } else if(control.symbol==='undo') {
+                    c.beginPath();c.moveTo(3,9);c.lineTo(8,4);c.moveTo(3,9);c.lineTo(8,14);c.moveTo(3,9);c.lineTo(13,9);c.bezierCurveTo(22,9,22,19,13,19);c.stroke();
+                } else if(control.symbol==='keyboard') {
                     c.strokeRect(1,4,20,14);
                     for(let y=7;y<=10;y+=3)for(let x=4;x<=18;x+=3)c.fillRect(x,y,1,1);
                     c.beginPath();c.moveTo(6,14);c.lineTo(16,14);c.stroke();
@@ -123,6 +125,8 @@ Pane {
         }
     }
     Shortcut {sequence:'?';onActivated:help.open()}
+    Shortcut {sequence:StandardKey.Undo;enabled:!editor && !searching && !help.visible && !purgeDialog.visible;onActivated:app.request({action:'undo'})}
+    Shortcut {sequence:'U';enabled:!editor && !searching && !help.visible && !purgeDialog.visible;onActivated:app.request({action:'undo'})}
     Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !purgeDialog.visible && !!selected;onActivated:{purgeDialog.target=JSON.parse(JSON.stringify(selected));purgeDialog.open();}}
     Shortcut {sequence:'Alt+G';enabled:editor==='edit';onActivated:reveal('group')}
     Shortcut {sequence:'Alt+T';enabled:editor==='edit';onActivated:reveal('tags')}
@@ -160,7 +164,7 @@ Pane {
                         ]:[
                             ['N','New item'],['⇧ N','Today'],
                             ['W','This week'],['L','Later'],
-                            ['D','Mark done'],['P','Purge task'],
+                            ['D','Mark done'],['P','Purge task'],['U / Ctrl+Z','Undo'],
                             ['T','Edit title'],['G','Edit group'],
                             ['S','Snooze'],['/','Search'],
                             ['↑ ↓ / J K','Select item'],['↵','Open reading reference'],
@@ -253,21 +257,44 @@ Pane {
     function visibleCount() {return (stateData.groups || []).reduce((n,g)=>n+tasks(g).length,0);}
     function taskMeta(task) {
         const parts=[];
-        if(task.due)parts.push('Due '+Qt.formatDate(new Date(task.due+'T12:00:00'),'d MMM yyyy'));
-        else parts.push('No due date');
         if(task.repeat && task.repeat.unit)parts.push('Repeats');
-        if(task.snoozedUntil)parts.push('Snoozed');
-        if(task.status && !['ready','inbox'].includes(task.status))parts.push(task.status.replace('_',' '));
+        if(task.status && !['ready','inbox','done','cancelled'].includes(task.status))parts.push(task.status.replace('_',' '));
         if(task.assignee)parts.push(task.assignee);
         if(task.verification && task.verification.length)parts.push('Check: '+task.verification[task.verification.length-1].outcome);
         return parts.join(' · ');
+    }
+    function effectiveDue(task) {
+        if(task.snoozedUntil) return Qt.formatDate(new Date(task.snoozedUntil),'yyyy-MM-dd');
+        return task.period && task.period!=='once' ? task.period : task.due || '';
+    }
+    function dueLabel(task) {
+        const value=effectiveDue(task);
+        if(!value)return '·';
+        const date=new Date(value+'T12:00:00');
+        const today=new Date((stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd'))+'T12:00:00');
+        const delta=Math.round((date-today)/86400000);
+        const weekday=(today.getDay()+6)%7;
+        if(view!=='all' || (delta>=-weekday && delta<=6-weekday))return ['SUN','MON','TUE','WED','THU','FRI','SAT'][date.getDay()];
+        const days=Math.abs(delta),prefix=delta<0?'−':'';
+        if(days<10)return prefix+days+'D';
+        const start=delta<0?date:today,end=delta<0?today:date;
+        const months=(end.getFullYear()-start.getFullYear())*12+end.getMonth()-start.getMonth()-(end.getDate()<start.getDate()?1:0);
+        if(months<3)return prefix+Math.max(1,Math.floor(days/7))+'W';
+        if(months<12)return prefix+months+'M';
+        return prefix+Math.floor(months/12)+'Y';
+    }
+    function compareTasks(a,b) {
+        if(sortOrder>=2)return (sortOrder===3?-1:1)*a.title.localeCompare(b.title);
+        const ad=effectiveDue(a),bd=effectiveDue(b);
+        if(!ad || !bd)return ad?-1:bd?1:a.title.localeCompare(b.title);
+        return (sortOrder===1?-1:1)*ad.localeCompare(bd) || a.title.localeCompare(b.title);
     }
     function tasks(group) {
         const now=stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd');
         let end=new Date(now+'T12:00:00');end.setDate(end.getDate()+6-((end.getDay()+6)%7));
         const last=Qt.formatDate(end,'yyyy-MM-dd');
         return (stateData.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && (!filter || (t.title+' '+t.tags.join(' ')+' '+t.group+' '+(t.reference || '')).toLowerCase().includes(filter.toLowerCase())) &&
-            (view==='all' || (t.period!=='once' && t.period <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now)));
+            (view==='all' || (effectiveDue(t) && effectiveDue(t) <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now))).sort(compareTasks);
     }
     Keys.onPressed: event=>{
         if(purgeDialog.visible || help.visible)return;
@@ -323,11 +350,13 @@ Pane {
                 }
             }
             Item {Layout.fillWidth:true}
+            Choice {model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
+            IconButton {symbol:'search';description:'Filter tasks (/)';checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.forceActiveFocus();}}}
             IconButton {symbol:'completed';description:'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
             IconButton {symbol:'cancelled';description:'Show cancelled tasks';checkable:true;checked:app.showCancelled;onClicked:app.showCancelled=checked}
             IconButton {symbol:'details';description:'Show selected task details';checkable:true;checked:app.showDetails;onClicked:app.showDetails=checked}
         }
-        Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:!editor;Layout.fillWidth:true;onActiveFocusChanged:app.searching=activeFocus;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.forceActiveFocus();}}
+        Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:!editor && searching;Layout.fillWidth:true;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.forceActiveFocus();}}
         Label {
             visible:!editor && showDetails && !!selected && text!==''
             Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted
@@ -376,7 +405,8 @@ Pane {
                                             RowLayout {
                                                 id:cardBody
                                                 anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:6;spacing:10
-                                                Label {text:modelData.done?'✓':selectedId===modelData.id?'›':'·';color:modelData.done || selectedId===modelData.id?theme.accent:theme.muted;font.pixelSize:20;Layout.alignment:Qt.AlignTop}
+                                                Label {text:selectedId===modelData.id?'›':'';color:theme.accent;font.pixelSize:20;Layout.preferredWidth:10;Layout.alignment:Qt.AlignTop}
+                                                Label {text:app.dueLabel(modelData);color:theme.muted;font.pixelSize:11;font.weight:Font.DemiBold;font.underline:!!modelData.snoozedUntil;Layout.preferredWidth:38;Layout.topMargin:3;Layout.alignment:Qt.AlignTop}
                                                 ColumnLayout {
                                                     Layout.fillWidth:true;spacing:3
                                                     Label {
@@ -441,6 +471,7 @@ Pane {
             QuietButton {text:selected && selected.done?'Mark undone':'Mark done';enabled:!!selected;quiet:true;onClicked:action('toggle')}
             QuietButton {text:'Edit';enabled:!!selected;quiet:true;onClicked:openEditor()}
             Item {Layout.fillWidth:true}
+            IconButton {symbol:'undo';description:'Undo (U / Ctrl+Z)';onClicked:app.request({action:'undo'})}
             IconButton {symbol:'keyboard';description:'Keyboard shortcuts (?)';onClicked:help.open()}
         }
         ScrollView {
