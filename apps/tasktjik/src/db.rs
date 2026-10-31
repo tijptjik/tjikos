@@ -126,7 +126,7 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
     } else {
         let result = model::mutate(&before_tasks, &r)?;
         if [
-            "create", "edit", "toggle", "done", "status", "snooze", "verify", "purge",
+            "create", "edit", "toggle", "done", "status", "snooze", "verify", "purge", "move",
         ]
         .contains(&op)
             && result["id"].is_string()
@@ -332,5 +332,46 @@ mod undo_tests {
             .to_string()
             .contains("changed"));
         assert_eq!(tasks(&connect(&path).unwrap()).unwrap(), vec![edited]);
+    }
+}
+
+#[cfg(test)]
+mod manual_move_tests {
+    use super::*;
+    fn call(path: &Path, mut value: Value) -> Result<Value> {
+        value["request_id"] = json!(Uuid::new_v4().to_string());
+        value["actor"] = json!("owner");
+        request(path, value, "owner", "fi")
+    }
+    #[test]
+    fn moves_are_ordered_atomic_revision_checked_and_undoable() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("move.db");
+        let mut rows = Vec::new();
+        for title in ["First", "Second", "Third"] {
+            rows.push(
+                call(
+                    &path,
+                    json!({"action":"create","fields":{"title":title,"group":"Work"}}),
+                )
+                .unwrap(),
+            );
+        }
+        rows.sort_by_key(model::manual_key);
+        let moved=call(&path,json!({"action":"move","id":rows[2]["id"],"revision":rows[2]["revision"],"group":"Work","before_id":rows[0]["id"]})).unwrap();
+        assert!(model::manual_key(&moved) < model::manual_key(&rows[0]));
+        assert!(call(
+            &path,
+            json!({"action":"move","id":moved["id"],"revision":rows[2]["revision"],"group":"Tech"})
+        )
+        .is_err());
+        let cross=call(&path,json!({"action":"move","id":moved["id"],"revision":moved["revision"],"group":"Tech","before_id":""})).unwrap();
+        assert_eq!(cross["group"], "Tech");
+        assert!(call(&path,json!({"action":"move","id":rows[0]["id"],"revision":rows[0]["revision"],"group":"Work","before_id":cross["id"]})).is_err());
+        let undone = call(&path, json!({"action":"undo"})).unwrap();
+        assert_eq!(undone["group"], "Work");
+        assert_eq!(undone["manualOrder"], moved["manualOrder"]);
+        let restored = call(&path, json!({"action":"undo"})).unwrap();
+        assert_eq!(model::manual_key(&restored), model::manual_key(&rows[2]));
     }
 }

@@ -143,6 +143,18 @@ pub fn validate(t: &mut Value) -> Result<()> {
     if let Some(until) = t["snoozedUntil"].as_str() {
         chrono::DateTime::parse_from_rfc3339(until)?;
     }
+    if let Some(order) = t.get("manualOrder") {
+        let key = order.as_str().context("Invalid manual order")?;
+        ensure!(
+            !key.is_empty()
+                && key.len() <= 256
+                && key.ends_with('8')
+                && key
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+            "Invalid manual order"
+        );
+    }
     let title = field(t, "title").trim().to_owned();
     ensure!(
         !title.is_empty() && title.len() <= 4096,
@@ -238,6 +250,50 @@ pub fn validate(t: &mut Value) -> Result<()> {
     );
     Ok(())
 }
+// Hexadecimal fractional keys let a move update only the dragged task.
+// UUID-based defaults give pre-existing tasks a stable cross-device order.
+pub fn manual_key(task: &Value) -> String {
+    task["manualOrder"]
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("{}8", field(task, "id").replace('-', "")))
+}
+fn between_keys(lower: &str, upper: Option<&str>) -> Result<String> {
+    ensure!(
+        upper.is_none_or(|u| lower < u),
+        "Manual order changed; refresh before moving"
+    );
+    let mut result = String::new();
+    let mut bounded = upper.is_some();
+    for index in 0..250 {
+        let lo = lower
+            .as_bytes()
+            .get(index)
+            .and_then(|c| (*c as char).to_digit(16))
+            .unwrap_or(0);
+        let hi = if bounded {
+            upper
+                .unwrap()
+                .as_bytes()
+                .get(index)
+                .and_then(|c| (*c as char).to_digit(16))
+                .unwrap_or(15)
+        } else {
+            15
+        };
+        if hi > lo + 1 {
+            result.push(char::from_digit((lo + hi) / 2, 16).unwrap());
+            result.push('8');
+            return Ok(result);
+        }
+        result.push(char::from_digit(lo, 16).unwrap());
+        if hi > lo {
+            bounded = false;
+        }
+    }
+    bail!("Manual order is too dense at this position; choose another position")
+}
+
 pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
     let op = field(r, "action");
     let mut t = if op == "create" {
@@ -258,7 +314,7 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
     } else {
         period(&t, today())?
     };
-    if ["edit", "status", "verify", "toggle", "purge"].contains(&op) {
+    if ["edit", "status", "verify", "toggle", "purge", "move"].contains(&op) {
         ensure!(
             r["revision"] == t["revision"],
             "Task changed; refresh before updating"
@@ -268,6 +324,40 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
         return Ok(json!({"id":t["id"],"deleted":true}));
     }
     match op {
+        "move" => {
+            let group = field(r, "group");
+            ensure!(!group.is_empty(), "Choose a destination group");
+            let mut peers: Vec<_> = tasks
+                .iter()
+                .filter(|p| {
+                    p["id"] != t["id"]
+                        && field(p, "group") == group
+                        && field(p, "kind") == field(&t, "kind")
+                })
+                .collect();
+            peers.sort_by_key(|p| (manual_key(p), field(p, "id").to_owned()));
+            let before = field(r, "before_id");
+            let index = if before.is_empty() {
+                peers.len()
+            } else {
+                peers
+                    .iter()
+                    .position(|p| field(p, "id") == before)
+                    .context("Drop target changed; refresh before moving")?
+            };
+            let lower = if index == 0 {
+                String::new()
+            } else {
+                manual_key(peers[index - 1])
+            };
+            let upper = peers.get(index).map(|p| manual_key(p));
+            t["manualOrder"] = json!(between_keys(&lower, upper.as_deref())?);
+            t["group"] = json!(group);
+            if group == "Quick" {
+                t["due"] = json!(today().to_string());
+            }
+            validate(&mut t)?;
+        }
         "create" | "edit" => {
             let fields = r["fields"]
                 .as_object()
@@ -483,5 +573,23 @@ mod recurrence_tests {
         assert_eq!(next_period(&task, "2025-02-28").unwrap(), "2026-02-28");
         let task = json!({"due":"2024-01-01","repeat":{"unit":"days-of-the-month","value":"31"}});
         assert_eq!(next_period(&task, "2024-01-31").unwrap(), "2024-03-31");
+    }
+}
+
+#[cfg(test)]
+mod manual_rank_tests {
+    use super::*;
+    #[test]
+    fn fractional_keys_remain_strictly_between_neighbors() {
+        let mut lower = "08".to_owned();
+        let upper = "18";
+        for _ in 0..100 {
+            let key = between_keys(&lower, Some(upper)).unwrap();
+            assert!(key > lower && key.as_str() < upper && key.ends_with('8'));
+            lower = key;
+        }
+        assert!(between_keys("", Some("0008")).unwrap().as_str() < "0008");
+        assert!(between_keys("fff8", None).unwrap().as_str() > "fff8");
+        assert!(between_keys("18", Some("18")).is_err());
     }
 }
