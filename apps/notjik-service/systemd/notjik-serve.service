@@ -1,0 +1,11 @@
+[Unit]
+Description=Notjik private Tailscale HTTPS endpoint
+After=notjik-api.service tailscaled.service
+Requires=notjik-api.service tailscaled.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/tailscale serve --bg --https=443 --set-path=/notjik unix:/run/notjik/api.sock
+ExecStop=/usr/bin/tailscale serve --https=443 --set-path=/notjik off
+[Install]
+WantedBy=multi-user.target
