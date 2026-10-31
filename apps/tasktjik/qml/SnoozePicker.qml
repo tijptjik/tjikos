@@ -8,6 +8,12 @@ ColumnLayout {
     property color accent: '#ff53a6'
     property bool calendarOpen: false
     property date month: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    component SnoozeButton: Button {
+        id:control
+        implicitHeight:34;padding:8
+        contentItem:Text {text:control.text;color:picker.ink;font.pixelSize:13;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
+        background:Rectangle {radius:6;color:control.down?'#524f67':control.hovered || control.activeFocus?'#403d52':'transparent'}
+    }
     signal chosen(string until)
     function choose(label) {
         let d=new Date();
@@ -20,22 +26,22 @@ ColumnLayout {
         Layout.fillWidth:true; Layout.minimumWidth:0; Layout.preferredWidth:1; Layout.preferredHeight:childrenRect.height; spacing:4
         Repeater {
             model:['Afternoon','Evening','Night','Tomorrow','Weekend','Next Week','Later']
-            Button {required property string modelData;text:modelData;onClicked: modelData==='Later'?picker.calendarOpen=true:picker.choose(modelData)}
+            SnoozeButton {required property string modelData;text:modelData;onClicked: modelData==='Later'?picker.calendarOpen=true:picker.choose(modelData)}
         }
     }
     ColumnLayout {
         visible:picker.calendarOpen;Layout.fillWidth:true
         RowLayout {
-            Button {text:'‹';onClicked:picker.month=new Date(picker.month.getFullYear(),picker.month.getMonth()-1,1)}
+            SnoozeButton {text:'‹';onClicked:picker.month=new Date(picker.month.getFullYear(),picker.month.getMonth()-1,1)}
             Label {Layout.fillWidth:true;text:Qt.formatDate(picker.month,'MMMM yyyy');color:picker.ink;horizontalAlignment:Text.AlignHCenter}
-            Button {text:'›';onClicked:picker.month=new Date(picker.month.getFullYear(),picker.month.getMonth()+1,1)}
+            SnoozeButton {text:'›';onClicked:picker.month=new Date(picker.month.getFullYear(),picker.month.getMonth()+1,1)}
         }
         GridLayout {
             columns:7;Layout.fillWidth:true;columnSpacing:2;rowSpacing:2
             Repeater {model:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];Label {required property string modelData;required property int index;text:modelData;color:index>=5?picker.accent:picker.ink;Layout.fillWidth:true;horizontalAlignment:Text.AlignHCenter}}
             Repeater {
                 model:42
-                Button {
+                SnoozeButton {
                     required property int index
                     readonly property date dateValue:new Date(picker.month.getFullYear(),picker.month.getMonth(),index-((picker.month.getDay()+6)%7)+1,9)
                     Layout.fillWidth:true;Layout.minimumWidth:0;Layout.preferredWidth:32;implicitHeight:30

@@ -107,6 +107,29 @@ Pane {
     property string selectedId: ''
     property var editing: null
     property string editor: ''
+    property string snoozeTaskId: ''
+    onSelectedIdChanged: snoozeTaskId=''
+    function orderedGroups() {
+        return (listState?.groups || []).slice().sort((a,b)=>Number(b==='All' || b==='Inbox')-Number(a==='All' || a==='Inbox'));
+    }
+    function focusColumn(direction) {
+        const rows=[];
+        for(const group of dropGroups)for(let i=0;i<group.rows.count;i++) {
+            const row=group.rows.itemAt(i),p=row.mapToItem(taskScroll.contentItem,0,0);
+            rows.push({id:row.modelData.id,x:p.x,y:p.y,height:row.height});
+        }
+        const current=rows.find(r=>r.id===selectedId);
+        if(!current)return;
+        const candidates=rows.filter(r=>(r.x-current.x)*direction>1);
+        if(!candidates.length)return;
+        const distance=Math.min(...candidates.map(r=>Math.abs(r.x-current.x)));
+        const adjacent=candidates.filter(r=>Math.abs(Math.abs(r.x-current.x)-distance)<1);
+        adjacent.sort((a,b)=>Math.abs(a.y-current.y)-Math.abs(b.y-current.y));
+        const next=adjacent[0];selectedId=next.id;
+        const flick=taskScroll.contentItem;
+        if(next.y<flick.contentY)flick.contentY=next.y;
+        else if(next.y+next.height>flick.contentY+flick.height)flick.contentY=Math.max(0,Math.min(flick.contentHeight-flick.height,next.y+next.height-flick.height));
+    }
     property var selected: (stateData.tasks || []).find(t=>t.id===selectedId) || null
     property string errorMessage: ""
     property var plans: []
@@ -154,6 +177,9 @@ Pane {
                     c.beginPath();c.arc(9,9,6,0,Math.PI*2);c.moveTo(14,14);c.lineTo(20,20);c.stroke();
                 } else if(control.symbol==='undo') {
                     c.beginPath();c.moveTo(3,9);c.lineTo(8,4);c.moveTo(3,9);c.lineTo(8,14);c.moveTo(3,9);c.lineTo(13,9);c.bezierCurveTo(22,9,22,19,13,19);c.stroke();
+                } else if(control.symbol==='info') {
+                    c.beginPath();c.arc(11,11,8,0,Math.PI*2);c.stroke();
+                    c.fillRect(10,6,2,2);c.beginPath();c.moveTo(11,10);c.lineTo(11,16);c.stroke();
                 } else if(control.symbol==='keyboard') {
                     c.strokeRect(1,4,20,14);
                     for(let y=7;y<=10;y+=3)for(let x=4;x<=18;x+=3)c.fillRect(x,y,1,1);
@@ -202,9 +228,9 @@ Pane {
         }
     }
     Shortcut {sequence:'?';onActivated:help.open()}
-    Shortcut {sequences:[StandardKey.Undo];enabled:!editor && !searching && !help.visible;onActivated:app.undoLastAction()}
-    Shortcut {sequence:'U';enabled:!editor && !searching && !help.visible;onActivated:app.undoLastAction()}
-    Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !!selected && !pendingPurge;onActivated:app.purgeSelected()}
+    Shortcut {sequences:[StandardKey.Undo];enabled:!editor && !searching && !help.visible && !dateHelp.visible;onActivated:app.undoLastAction()}
+    Shortcut {sequence:'U';enabled:!editor && !searching && !help.visible && !dateHelp.visible;onActivated:app.undoLastAction()}
+    Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !dateHelp.visible && !!selected && !pendingPurge;onActivated:app.purgeSelected()}
     Shortcut {sequence:'Alt+G';enabled:editor==='edit';onActivated:reveal('group')}
     Shortcut {sequence:'Alt+T';enabled:editor==='edit';onActivated:reveal('tags')}
     Shortcut {sequence:'Alt+D';enabled:editor==='edit';onActivated:reveal('due')}
@@ -212,6 +238,22 @@ Pane {
     Shortcut {sequence:'Alt+L';enabled:editor==='edit';onActivated:reveal('reference')}
     Shortcut {sequence:'Alt+M';enabled:editor==='edit';onActivated:reveal('reminder')}
     Shortcut {sequence:'Ctrl+Return';enabled:editor==='edit' && titleInput.text.trim()!=='';onActivated:saveEditor()}
+    Popup {
+        id:dateHelp
+        width:Math.min(460,app.width-32);height:Math.min(implicitHeight,app.height-32)
+        anchors.centerIn:parent;padding:22;modal:true;focus:true
+        closePolicy:Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        background:Rectangle {color:theme.surface;radius:14}
+        contentItem:ColumnLayout {
+            spacing:16
+            Label {text:'Due dates & snoozing';font.pixelSize:20;color:theme.text}
+            Label {
+                Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.text
+                text:'MON–SUN  ·  Weekday in Today / Week views, or for dates this week in All tasks.\n\n7D  ·  Days, under 10 days\n2W  ·  Weeks, under 3 months\n4M  ·  Months, under 12 months\n1Y  ·  Years\n\n·  No due date\nRed  ·  Overdue\nUnderlined  ·  Snoozed until that date\n›  ·  Focused task; replaces its date label\n\nPress S to slide out snooze choices below a task. Later opens a calendar. The snoozed date takes the place of the due date in the list.'
+            }
+            QuietButton {text:'Done';quiet:true;onClicked:dateHelp.close()}
+        }
+    }
     Popup {
         id:help
         x:0;y:0;width:app.width;height:app.height
@@ -244,7 +286,7 @@ Pane {
                             ['D','Mark done'],['P','Purge task'],['U / Ctrl+Z','Undo'],
                             ['T','Edit title'],['G','Edit group'],
                             ['S','Snooze'],['/','Search'],
-                            ['↑ ↓ / J K','Select item'],['↵','Open reading reference'],
+                            ['← →','Nearest task in adjacent column'],['↑ ↓ / J K','Select item'],['↵','Open reading reference'],
                             ['⎋','Close window']
                         ]
                         delegate:RowLayout {
@@ -400,7 +442,7 @@ Pane {
     }
     Keys.onPressed: event=>{
         if(dragTask){if(event.key===Qt.Key_Escape && !pendingMove)cancelDrag();event.accepted=true;return;}
-        if(help.visible)return;
+        if(help.visible || dateHelp.visible)return;
         if(editor || searching){if(event.key===Qt.Key_Escape && editor){cancelEditor();event.accepted=true;}return;}
         if(event.key===Qt.Key_N){if(event.modifiers & Qt.ShiftModifier)view='today';else {selectedId='';openEditor();}}
         else if(event.key===Qt.Key_L)view='all';
@@ -410,7 +452,8 @@ Pane {
         else if(event.key===Qt.Key_T || event.key===Qt.Key_G){if(selected){openEditor();if(event.key===Qt.Key_G)reveal('group');}}
         else if(event.key===Qt.Key_S){if(selected)editor='snooze';}
         else if(event.key===Qt.Key_Slash){searching=true;filterInput.forceActiveFocus();}
-        else if(event.key===Qt.Key_Escape)exitApp();
+        else if(event.key===Qt.Key_Escape){if(snoozeTaskId)snoozeTaskId='';else exitApp();}
+        else if(event.key===Qt.Key_Left || event.key===Qt.Key_Right)focusColumn(event.key===Qt.Key_Left?-1:1);
         else if([Qt.Key_Down,Qt.Key_Up,Qt.Key_J,Qt.Key_K,Qt.Key_Tab].includes(event.key)) {
             const rows=(stateData.groups || []).reduce((rows,g)=>rows.concat(tasks(g)),[]);
             if(rows.length){let i=rows.findIndex(t=>t.id===selectedId);i=(i+([Qt.Key_Up,Qt.Key_K].includes(event.key)?-1:1)+rows.length)%rows.length;selectedId=rows[i].id;}
@@ -487,18 +530,18 @@ Pane {
                     Layout.fillWidth:true
                     spacing:32
                     readonly property int columnCount: Math.max(1, Math.floor(taskScroll.availableWidth / 420))
-                    readonly property var groups: (app.listState?.groups || []).filter(g=>app.tasks(g).length>0 || app.sortOrder===4)
+                    readonly property var groups: app.orderedGroups().filter(g=>app.tasks(g).length>0 || app.sortOrder===4)
                     property var measuredHeights: ({})
                     property var placements: ({})
                     function noteHeight(group,height) {
-                        if(app.dragTask || height<=0 || Math.abs((measuredHeights[group] || 0)-height)<0.5)return;
+                        if(app.dragTask || app.snoozeTaskId || height<=0 || Math.abs((measuredHeights[group] || 0)-height)<0.5)return;
                         measuredHeights[group]=height;balanceTimer.restart();
                     }
                     function balance() {
-                        if(app.dragTask)return;
+                        if(app.dragTask || app.snoozeTaskId)return;
                         const loads=Array(columnCount).fill(0),next={};
                         const ordered=groups.map((g,i)=>({group:g,index:i,height:measuredHeights[g] || 30+app.tasks(g).length*48}));
-                        ordered.sort((a,b)=>b.height-a.height || a.index-b.index);
+                        ordered.sort((a,b)=>Number(b.group==='All' || b.group==='Inbox')-Number(a.group==='All' || a.group==='Inbox') || b.height-a.height || a.index-b.index);
                         for(const item of ordered) {
                             const column=loads.indexOf(Math.min(...loads));
                             next[item.group]=column;loads[column]+=item.height+28;
@@ -541,9 +584,25 @@ Pane {
                                             property real gapHeight:app.dragTask && app.dropGroup===groupPanel.modelData && app.dropBefore===modelData.id ? app.dragHeight+6 : 0
                                             Behavior on gapHeight {NumberAnimation {duration:120}}
                                             opacity:app.dragTask && app.dragTask.id===modelData.id ? 0.5 : 1
-                                            Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+8+gapHeight;radius:4
+                                            Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+8+gapHeight+snoozeReveal.height;radius:4
                                             color:"transparent"
                                             border.color:"transparent"
+                                            Item {
+                                                id:snoozeReveal
+                                                anchors.top:cardBody.bottom;anchors.left:parent.left;anchors.right:parent.right
+                                                anchors.leftMargin:42;anchors.topMargin:8
+                                                height:app.snoozeTaskId===taskCard.modelData.id?snoozeContent.implicitHeight+12:0
+                                                visible:height>0;clip:true;z:3
+                                                Behavior on height {NumberAnimation {duration:180;easing.type:Easing.OutCubic}}
+                                                ColumnLayout {
+                                                    id:snoozeContent;width:parent.width;spacing:6
+                                                    SnoozePicker {
+                                                        Layout.fillWidth:true;ink:theme.text;accent:theme.accent
+                                                        onChosen:until=>{app.action('snooze',{until:until});app.snoozeTaskId='';app.forceActiveFocus();}
+                                                    }
+                                                    QuietButton {text:'Cancel';quiet:true;onClicked:{app.snoozeTaskId='';app.forceActiveFocus();}}
+                                                }
+                                            }
                                             RowLayout {
                                                 id:cardBody
                                                 z:1
@@ -686,6 +745,7 @@ Pane {
             QuietButton {text:'Edit';enabled:!!selected;quiet:true;onClicked:openEditor()}
             Item {Layout.fillWidth:true}
             IconButton {symbol:'undo';description:'Undo (U / Ctrl+Z)';onClicked:app.undoLastAction()}
+            IconButton {symbol:'info';description:'Due dates and snoozing';onClicked:dateHelp.open()}
             IconButton {symbol:'keyboard';description:'Keyboard shortcuts (?)';onClicked:help.open()}
         }
         ScrollView {
@@ -738,8 +798,6 @@ Pane {
                 }
             }
         }
-        SnoozePicker {visible:editor==='snooze';Layout.fillWidth:true;ink:theme.text;accent:theme.accent;onChosen:until=>{action('snooze',{until:until});}}
-        QuietButton {visible:editor==='snooze';text:'Cancel';onClicked:{editor='';app.forceActiveFocus();}}
         Label {visible:!!stateData.sync_message;text:stateData.sync_message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
         Label {visible:!!errorMessage || !!moveMessage || !!stateData.message;text:errorMessage || moveMessage || stateData.message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
     }
