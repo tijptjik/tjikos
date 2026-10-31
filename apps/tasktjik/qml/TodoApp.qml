@@ -112,12 +112,29 @@ Pane {
     function orderedGroups() {
         return (listState?.groups || []).slice().sort((a,b)=>Number(b==='All' || b==='Inbox')-Number(a==='All' || a==='Inbox'));
     }
-    function focusColumn(direction) {
+    function visualRows() {
         const rows=[];
         for(const group of dropGroups)for(let i=0;i<group.rows.count;i++) {
             const row=group.rows.itemAt(i),p=row.mapToItem(taskScroll.contentItem,0,0);
             rows.push({id:row.modelData.id,x:p.x,y:p.y,height:row.height});
         }
+        return rows.sort((a,b)=>Math.abs(a.x-b.x)>1?a.x-b.x:a.y-b.y);
+    }
+    function focusRow(next) {
+        if(!next)return;
+        selectedId=next.id;
+        const flick=taskScroll.contentItem;
+        if(next.y<flick.contentY)flick.contentY=next.y;
+        else if(next.y+next.height>flick.contentY+flick.height)flick.contentY=Math.max(0,Math.min(flick.contentHeight-flick.height,next.y+next.height-flick.height));
+    }
+    function focusVertical(direction) {
+        const rows=visualRows();
+        if(!rows.length)return;
+        const index=rows.findIndex(r=>r.id===selectedId);
+        focusRow(rows[index<0?(direction>0?0:rows.length-1):(index+direction+rows.length)%rows.length]);
+    }
+    function focusColumn(direction) {
+        const rows=visualRows();
         const current=rows.find(r=>r.id===selectedId);
         if(!current)return;
         const candidates=rows.filter(r=>(r.x-current.x)*direction>1);
@@ -125,10 +142,7 @@ Pane {
         const distance=Math.min(...candidates.map(r=>Math.abs(r.x-current.x)));
         const adjacent=candidates.filter(r=>Math.abs(Math.abs(r.x-current.x)-distance)<1);
         adjacent.sort((a,b)=>Math.abs(a.y-current.y)-Math.abs(b.y-current.y));
-        const next=adjacent[0];selectedId=next.id;
-        const flick=taskScroll.contentItem;
-        if(next.y<flick.contentY)flick.contentY=next.y;
-        else if(next.y+next.height>flick.contentY+flick.height)flick.contentY=Math.max(0,Math.min(flick.contentHeight-flick.height,next.y+next.height-flick.height));
+        focusRow(adjacent[0]);
     }
     property var selected: (stateData.tasks || []).find(t=>t.id===selectedId) || null
     property string errorMessage: ""
@@ -455,8 +469,7 @@ Pane {
         else if(event.key===Qt.Key_Escape){if(snoozeTaskId)snoozeTaskId='';else exitApp();}
         else if(event.key===Qt.Key_Left || event.key===Qt.Key_Right)focusColumn(event.key===Qt.Key_Left?-1:1);
         else if([Qt.Key_Down,Qt.Key_Up,Qt.Key_J,Qt.Key_K,Qt.Key_Tab].includes(event.key)) {
-            const rows=(stateData.groups || []).reduce((rows,g)=>rows.concat(tasks(g)),[]);
-            if(rows.length){let i=rows.findIndex(t=>t.id===selectedId);i=(i+([Qt.Key_Up,Qt.Key_K].includes(event.key)?-1:1)+rows.length)%rows.length;selectedId=rows[i].id;}
+            focusVertical([Qt.Key_Up,Qt.Key_K].includes(event.key)?-1:1);
         }
         event.accepted=true;
     }
