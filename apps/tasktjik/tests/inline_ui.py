@@ -34,10 +34,10 @@ for group,count in [('Work',10),('Tech',7),('Socials',7),('General',6),('Domesti
     for i in range(count):request({'action':'create','fields':{'title':group+' fixture '+str(i),'group':group}})
 component = home / 'qml/TodoApp.qml'
 picker=home/'qml/SnoozePicker.qml'
-picker.write_text(picker.read_text().replace('required property string modelData;text:modelData;', "required property string modelData;objectName:'snooze-'+modelData;text:modelData;"))
-component.write_text(component.read_text().replace('id:dateHelp', "id:dateHelp;objectName:'dateHelp'").replace("text:'#'+modelData;textFormat:Text.PlainText","objectName:'tag-'+modelData; text:'#'+modelData;textFormat:Text.PlainText"))
+picker.write_text(picker.read_text().replace('id: picker', "id: picker;objectName:'snooze-picker'"))
+component.write_text(component.read_text().replace('color:"transparent"', 'color:theme.background', 1).replace('id:dateHelp', "id:dateHelp;objectName:'dateHelp'").replace("text:'#'+modelData;textFormat:Text.PlainText","objectName:'tag-'+modelData; text:'#'+modelData;textFormat:Text.PlainText"))
 shell = home / 'qml/shell.qml'
-s = shell.read_text().replace('implicitWidth: 860','implicitWidth: 1400').replace('import QtQuick\n', 'import QtQuick\nimport QtTest\n')
+s = shell.read_text().replace('implicitWidth: 860','implicitWidth: 1400').replace('implicitHeight: 680','implicitHeight: 1000').replace('import QtQuick\n', 'import QtQuick\nimport QtQuick.Layouts\nimport QtTest\n')
 s = re.sub(r'view.stateData = JSON.parse\((text|output)\);', lambda m: "const state=JSON.parse("+m[1]+");state.groups=['Work','Tech','Socials','General','Domestic','All'];view.stateData=state;", s)
 s = s.replace('root.applyState(JSON.parse(output));', "const state=JSON.parse(output);state.groups=['Work','Tech','Socials','General','Domestic','All'];root.applyState(state);")
 s = s.replace('    Component.onCompleted:' , '''    TestCase {id:pointer;name:"LayoutInput";when:false}
@@ -51,6 +51,11 @@ s = s.replace('    Component.onCompleted:' , '''    TestCase {id:pointer;name:"L
             return JSON.stringify({rows:rows,selected:view.selectedId,editor:view.editor,snooze:view.snoozeTaskId});
         }
         function later():void {for(const g of view.dropGroups)for(let i=0;i<g.rows.count;i++){const row=g.rows.itemAt(i);if(row.modelData.id===view.selectedId){const b=pointer.findChild(row,'snooze-Later');pointer.mouseClick(b,b.width/2,b.height/2);}}}
+        function focused():string {for(const g of view.dropGroups)for(let i=0;i<g.rows.count;i++){const row=g.rows.itemAt(i);if(row.modelData.id===view.selectedId){const picker=pointer.findChild(row,'snooze-picker');const focused=picker.focusButtons().find(b=>b.activeFocus);return focused?focused.objectName || focused.Accessible.name:'';}}return '';}
+        function pickerWidth(width:int):void {for(const g of view.dropGroups)for(let i=0;i<g.rows.count;i++){const row=g.rows.itemAt(i);if(row.modelData.id===view.selectedId)pointer.findChild(row,'snooze-picker').Layout.maximumWidth=width;}}
+        function middleDate():void {for(const g of view.dropGroups)for(let i=0;i<g.rows.count;i++){const row=g.rows.itemAt(i);if(row.modelData.id===view.selectedId){const picker=pointer.findChild(row,'snooze-picker');picker.focusButtons().find(b=>b.dateValue && b.dateValue.getDay()===2 && b.dateValue.getDate()>=8 && b.dateValue.getDate()<=14).forceActiveFocus();}}}
+        function calendarDay():int {for(const g of view.dropGroups)for(let i=0;i<g.rows.count;i++){const row=g.rows.itemAt(i);if(row.modelData.id===view.selectedId){const b=pointer.findChild(row,'snooze-picker').focusButtons().find(b=>b.activeFocus);return b && b.dateValue?b.dateValue.getDate():-1;}}return -1;}
+        function backtab():void {pointer.keyClick(Qt.Key_Tab,Qt.ShiftModifier);}
         function help():void {pointer.findChild(view,'dateHelp').open();}
         function captureHelp(path:string):void {pointer.findChild(view,'dateHelp').contentItem.grabToImage(image=>image.saveToFile(path));}
         function helpState():bool {return pointer.findChild(view,'dateHelp').visible;}
@@ -102,17 +107,70 @@ with (root / 'qml.log').open('w') as log:
         row=next(r for r in opened['rows'] if r['id']==origin['id'])
         assert row['height']>origin['height']+60
         assert len(opened['rows'])==len(rows)
+        assert ipc('focused').strip()=='snooze-Afternoon'
+        for key, label in [(0x01000014,'Evening'),(0x01000015,'Weekend'),(0x01000015,'Later'),
+                           (0x01000013,'Weekend'),(0x01000014,'Next Week'),(0x01000013,'Night'),
+                           (0x01000014,'Night'),(0x01000012,'Evening'),(0x01000012,'Afternoon')]:
+            ipc('key',key)
+            assert ipc('focused').strip()=='snooze-'+label, (key, label, ipc('focused'))
+            assert json.loads(ipc('inspect'))['selected']==origin['id']
+        ipc('pickerWidth',260)
+        time.sleep(.15)
+        for key, label in [(0x01000014,'Evening'),(0x01000015,'Tomorrow'),(0x01000012,'Night'),
+                           (0x01000015,'Weekend'),(0x01000014,'Next Week'),(0x01000015,'Later'),
+                           (0x01000013,'Next Week')]:
+            ipc('key',key)
+            assert ipc('focused').strip()=='snooze-'+label, (key, label, ipc('focused'))
+            assert json.loads(ipc('inspect'))['selected']==origin['id']
+        for _ in range(5):ipc('backtab')
+        assert ipc('focused').strip()=='snooze-Afternoon'
+        ipc('pickerWidth',10000)
+        time.sleep(.15)
+        for label in ['Evening','Night','Tomorrow','Weekend','Next Week','Later','close','Afternoon']:
+            ipc('key',0x01000001)
+            assert ipc('focused').strip()=='snooze-'+label
+            assert json.loads(ipc('inspect'))['selected']==origin['id']
+        ipc('backtab')
+        assert ipc('focused').strip()=='snooze-close'
+        ipc('key',0x01000004)  # Return on × closes without changing the task.
+        assert json.loads(ipc('inspect'))['snooze']==''
+        assert not next(t for t in json.loads(ipc('state'))['tasks'] if t['id']==origin['id']).get('snoozedUntil')
+        ipc('key',ord('S'))
+        wait(lambda:ipc('focused').strip()=='snooze-Afternoon')
+        time.sleep(.35)
         ipc('capture',root/'inline-snooze.png');wait(lambda:(root/'inline-snooze.png').is_file())
-        ipc('later');time.sleep(.3)
+        for _ in range(6):ipc('key',0x01000001)
+        assert ipc('focused').strip()=='snooze-Later'
+        ipc('key',0x01000005)  # Keypad Enter opens the calendar.
+        time.sleep(.3)
+        assert ipc('focused').strip()=='Next month'
+        ipc('key',0x01000012)
+        assert ipc('focused').strip()=='Previous month'
+        ipc('key',0x01000014)
+        assert ipc('focused').strip()=='Next month'
+        ipc('key',0x01000004)  # Use a future month so every test date is enabled.
+        ipc('middleDate')
+        day=int(ipc('calendarDay'))
+        for key, expected_day in [(0x01000014,day+1),(0x01000012,day),(0x01000015,day+7),(0x01000013,day)]:
+            ipc('key',key)
+            assert int(ipc('calendarDay'))==expected_day
+        ipc('key',0x01000001)
+        assert '202' in ipc('focused'), 'Tab should reach an enabled calendar date'
         expanded=json.loads(ipc('inspect'))
         assert next(r for r in expanded['rows'] if r['id']==origin['id'])['height']>row['height']+120
         ipc('capture',root/'inline-calendar.png');wait(lambda:(root/'inline-calendar.png').is_file())
         ipc('select',origin['id']);ipc('key',0x01000000);time.sleep(.3)
         assert json.loads(ipc('inspect'))['snooze']==''
+        ipc('key',ord('S'))
+        wait(lambda:ipc('focused').strip()=='snooze-Afternoon')
+        for _ in range(3):ipc('key',0x01000001)
+        ipc('key',0x01000004)
+        wait(lambda:any(t['id']==origin['id'] and t.get('snoozedUntil') for t in json.loads(ipc('state'))['tasks']))
+        assert json.loads(ipc('inspect'))['snooze']==''
         ipc('help');wait(lambda:ipc('helpState').strip()=='true')
         time.sleep(.3);ipc('captureHelp',root/'date-help.png');wait(lambda:(root/'date-help.png').is_file())
         ipc('key',0x01000000);wait(lambda:ipc('helpState').strip()=='false')
         assert 'TypeError' not in (root/'qml.log').read_text()
-        print('PASS Inbox first, nearest-column arrows, inline snooze expansion and Escape:',root)
+        print('PASS spatial arrows in 2/3-column snooze grids and calendar, Tab/Shift+Tab, cancel, Return save and Escape:',root)
     finally:
         process.terminate();process.wait(timeout=5)

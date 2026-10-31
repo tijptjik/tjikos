@@ -39,9 +39,15 @@ Pane {
         dueSuggestionsDismissed=true;dueSuggestionIndex=-1;
         dueInput.forceActiveFocus();
     }
+    function projectedState() {
+        if(!pendingMove || !moveOperation)return stateData;
+        const tasks=(stateData.tasks || []).map(task=>task.id===moveOperation.id?
+            Object.assign({},task,{group:moveOperation.group},moveOperation.group==='Quick'?{due:stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd')}:{}) : task);
+        return Object.assign({},stateData,{tasks:tasks});
+    }
     property var dragTask: null
     property var dragSnapshot: ({})
-    readonly property var listState: dragTask ? dragSnapshot : stateData
+    readonly property var listState: dragTask ? dragSnapshot : projectedState()
     property var dragSource: null
     property point dragPoint: Qt.point(0,0)
     property real dragWidth: 300
@@ -51,14 +57,22 @@ Pane {
     property string dropBefore: ''
     property bool pendingMove: false
     property bool moveSent: false
+    property var moveOperation: null
     property string moveMessage: ''
     onSortOrderChanged: {if(dragTask && !pendingMove)cancelDrag();}
     function cancelDrag() {
-        moveTimeout.stop();pendingMove=false;moveSent=false;
         dropGroup='';dropBefore='';dragTask=null;dragSource=null;
     }
+    function clearMove() {
+        moveTimeout.stop();pendingMove=false;moveSent=false;moveOperation=null;
+    }
+    function rejectMove() {
+        const id=moveOperation.id;
+        clearMove();selectedId=id;selectVisibleTask();
+        moveMessage='Could not move task: '+errorMessage;
+    }
     function startDrag(task, source, width, height, point) {
-        if(sortOrder!==4 || pendingMove)return;
+        if(pendingMove || pendingPurge)return;
         dragSnapshot=stateData;dragSource=source;dragWidth=width;dragHeight=height;
         dragTask=JSON.parse(JSON.stringify(task));moveMessage='';selectedId=task.id;
         updateDrag(point);
@@ -83,15 +97,18 @@ Pane {
     function finishDrag() {
         if(!dragTask)return;
         if(!dropGroup){cancelDrag();return;}
-        pendingMove=true;moveTimeout.restart();sendMove();
+        moveOperation={id:dragTask.id,revision:dragTask.revision,group:dropGroup,before_id:sortOrder===4?dropBefore:''};
+        pendingMove=true;
+        cancelDrag();
+        moveTimeout.restart();sendMove();
     }
     function sendMove() {
         if(!pendingMove || moveSent || requestBusy)return;
         moveSent=true;
-        request({action:'move',id:dragTask.id,revision:dragTask.revision,group:dropGroup,before_id:dropBefore});
+        request(Object.assign({action:'move'},moveOperation));
     }
     Timer {interval:50;repeat:true;running:app.pendingMove && !app.moveSent;onTriggered:app.sendMove()}
-    Timer {id:moveTimeout;interval:15000;onTriggered:{app.cancelDrag();app.moveMessage='Move was not confirmed; refresh and try again.';}}
+    Timer {id:moveTimeout;interval:15000;onTriggered:{app.clearMove();app.moveMessage='Move was not confirmed; refreshing tasks.';app.request({action:'list'});}}
     Timer {
         interval:30;repeat:true;running:!!app.dragTask && !app.pendingMove
         onTriggered:{
@@ -340,17 +357,18 @@ Pane {
     property string undoToastTask: ''
     property string undoToastTitle: ''
     function purgeSelected() {
-        if(!selected || pendingPurge)return;
+        if(!selected || pendingPurge || pendingMove)return;
         pendingPurge={id:selected.id,title:selected.title};
         purgePendingTimer.restart();
         request({action:'purge',id:selected.id,revision:selected.revision});
     }
     function undoLastAction() {
+        if(pendingMove)return;
         const task=undoToastTask;
         undoToastTask='';toastTimer.stop();
         request(task?{action:'undo',id:task,undo_action:'purge'}:{action:'undo'});
     }
-    onErrorMessageChanged: {if(errorMessage){pendingPurge=null;purgePendingTimer.stop();if(dragTask)cancelDrag();}}
+    onErrorMessageChanged: {if(errorMessage){pendingPurge=null;purgePendingTimer.stop();if(pendingMove && moveSent)rejectMove();if(dragTask)cancelDrag();}}
     Timer {id:purgePendingTimer;interval:15000;onTriggered:app.pendingPurge=null;}
     Timer {id:toastTimer;interval:3000;onTriggered:app.undoToastTask='';}
     Rectangle {
@@ -371,8 +389,9 @@ Pane {
     signal exitApp()
     signal openWindow()
     property bool canOpenWindow: false
-    function action(name, extra) {if(selected)request(Object.assign({action:name,id:selected.id,period:selected.period,revision:selected.revision},extra || {}));}
+    function action(name, extra) {if(selected && !pendingMove)request(Object.assign({action:name,id:selected.id,period:selected.period,revision:selected.revision},extra || {}));}
     function openEditor(draft) {
+        if(pendingMove)return;
         dueToday=new Date();
         editing=draft || (selected ? JSON.parse(JSON.stringify(selected)) : {title:'',kind:collection,group:'All',tags:[],due:'',repeat:{},reference:''});
         titleInput.text=editing.title;groupInput.editText=editing.group || 'All';
@@ -468,8 +487,18 @@ Pane {
         const now=listState?.today || Qt.formatDate(new Date(),'yyyy-MM-dd');
         let end=new Date(now+'T12:00:00');end.setDate(end.getDate()+6-((end.getDay()+6)%7));
         const last=Qt.formatDate(end,'yyyy-MM-dd');
-        return (listState?.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && matchesFilter(t) &&
+        const rows=(listState?.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && matchesFilter(t) &&
             (view==='all' || (effectiveDue(t) && effectiveDue(t) <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now))).sort(compareTasks);
+        if(pendingMove && moveOperation && sortOrder===4 && group===moveOperation.group) {
+            const moved=rows.find(t=>t.id===moveOperation.id);
+            if(moved) {
+                const peers=rows.filter(t=>t.id!==moved.id);
+                const before=peers.findIndex(t=>t.id===moveOperation.before_id);
+                peers.splice(before<0?peers.length:before,0,moved);
+                return peers;
+            }
+        }
+        return rows;
     }
     Keys.onPressed: event=>{
         if(dragTask){if(event.key===Qt.Key_Escape && !pendingMove)cancelDrag();event.accepted=true;return;}
@@ -481,7 +510,7 @@ Pane {
         else if(event.key===Qt.Key_D)action('toggle');
         else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && collection==='reading')action('open-reference');
         else if(event.key===Qt.Key_T || event.key===Qt.Key_G){if(selected){openEditor();if(event.key===Qt.Key_G)reveal('group');}}
-        else if(event.key===Qt.Key_S){if(selected)editor='snooze';}
+        else if(event.key===Qt.Key_S){if(selected)snoozeTaskId=snoozeTaskId===selectedId?'':selectedId;}
         else if(event.key===Qt.Key_Slash){searching=true;filterInput.forceActiveFocus();}
         else if(event.key===Qt.Key_Escape){if(snoozeTaskId)snoozeTaskId='';else exitApp();}
         else if(event.key===Qt.Key_Left || event.key===Qt.Key_Right)focusColumn(event.key===Qt.Key_Left?-1:1);
@@ -491,9 +520,9 @@ Pane {
         event.accepted=true;
     }
     onStateDataChanged: {
-        if(pendingMove && dragTask) {
-            const moved=(stateData.tasks || []).find(t=>t.id===dragTask.id);
-            if(moved && moved.revision>dragTask.revision && moved.group===dropGroup && (moved.events || []).slice(-1).some(e=>e.action==='move'))cancelDrag();
+        if(pendingMove && moveOperation) {
+            const moved=(stateData.tasks || []).find(t=>t.id===moveOperation.id);
+            if(moved && moved.revision>moveOperation.revision && moved.group===moveOperation.group && (moved.events || []).slice(-1).some(e=>e.action==='move'))clearMove();
         }
         if(pendingPurge && Array.isArray(stateData.tasks) && !stateData.tasks.some(t=>t.id===pendingPurge.id)) {
             undoToastTask=pendingPurge.id;undoToastTitle=pendingPurge.title;pendingPurge=null;
@@ -534,7 +563,7 @@ Pane {
                 }
             }
             Item {Layout.fillWidth:true}
-            Choice {model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual · drag'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
+            Choice {model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
             IconButton {symbol:'search';description:'Filter tasks (/)';checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.forceActiveFocus();}}}
             IconButton {symbol:'completed';description:'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
             IconButton {symbol:'cancelled';description:'Show cancelled tasks';checkable:true;checked:app.showCancelled;onClicked:app.showCancelled=checked}
@@ -560,7 +589,7 @@ Pane {
                     Layout.fillWidth:true
                     spacing:32
                     readonly property int columnCount: Math.max(1, Math.floor(taskScroll.availableWidth / 420))
-                    readonly property var groups: app.orderedGroups().filter(g=>app.tasks(g).length>0 || app.sortOrder===4)
+                    readonly property var groups: app.orderedGroups()
                     property var measuredHeights: ({})
                     property var placements: ({})
                     function noteHeight(group,height) {
@@ -628,9 +657,10 @@ Pane {
                                                     id:snoozeContent;width:parent.width;spacing:6
                                                     SnoozePicker {
                                                         Layout.fillWidth:true;ink:theme.text;accent:theme.accent
+                                                        opened:app.snoozeTaskId===taskCard.modelData.id
                                                         onChosen:until=>{app.action('snooze',{until:until});app.snoozeTaskId='';app.forceActiveFocus();}
+                                                        onCancelled:{app.snoozeTaskId='';app.forceActiveFocus();}
                                                     }
-                                                    QuietButton {text:'Cancel';quiet:true;onClicked:{app.snoozeTaskId='';app.forceActiveFocus();}}
                                                 }
                                             }
                                             RowLayout {
@@ -733,13 +763,13 @@ Pane {
                                             }
                                             MouseArea {
                                                 anchors.fill:parent;acceptedButtons:Qt.LeftButton
-                                                cursorShape:app.sortOrder===4?Qt.OpenHandCursor:Qt.PointingHandCursor
-                                                preventStealing:app.sortOrder===4
+                                                cursorShape:pressed?Qt.ClosedHandCursor:Qt.OpenHandCursor
+                                                preventStealing:true
                                                 property point pressedPoint
                                                 property bool moved: false
                                                 onPressed: mouse=>{pressedPoint=mapToItem(app,mouse.x,mouse.y);moved=false;selectedId=modelData.id;app.forceActiveFocus();}
                                                 onPositionChanged: mouse=>{
-                                                    if(!pressed || app.sortOrder!==4 || app.pendingMove)return;
+                                                    if(!pressed || app.pendingMove)return;
                                                     const point=mapToItem(app,mouse.x,mouse.y);
                                                     if(!moved && Math.hypot(point.x-pressedPoint.x,point.y-pressedPoint.y)>10){moved=true;app.startDrag(modelData,cardBody,taskCard.width,cardBody.implicitHeight+8,point);}
                                                     if(moved && app.dragTask)app.updateDrag(point);

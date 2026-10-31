@@ -13,6 +13,7 @@ ShellRoot {
     function drain() {
         if (backend.running || !pending.length) return;
         backend.payload = JSON.stringify(pending.shift());
+        view.errorMessage = '';
         backend.running = true;
     }
     Process {
@@ -38,6 +39,7 @@ ShellRoot {
             id: view
             anchors.fill: parent; anchors.margins: 20
             focus: true
+            requestBusy: backend.running || root.pending.length>0
             view: Quickshell.env('TASKTJIK_VIEW') || 'all'
             collection: Quickshell.env('TASKTJIK_COLLECTION') || 'todo'
             selectedId: Quickshell.env('TASKTJIK_SELECTED') || ''
@@ -50,10 +52,10 @@ ShellRoot {
     IpcHandler {
         target: "tasktjik"
         function status(): string {
-            return JSON.stringify({editor:view.editor, purgeMode:typeof view.purgeSelected==='function'?'immediate-undo-toast':'confirmation', taskCount:(view.stateData.tasks || []).length});
+            return JSON.stringify({editor:view.editor, busy:backend.running || root.pending.length>0, sortOrder:view.sortOrder, dragging:!!view.dragTask, moving:view.pendingMove, purgeMode:typeof view.purgeSelected==='function'?'immediate-undo-toast':'confirmation', taskCount:(view.stateData.tasks || []).length});
         }
         function reload(): bool {
-            if(view.editor || backend.running || root.pending.length)return false;
+            if(view.editor || view.dragTask || view.pendingMove || backend.running || root.pending.length)return false;
             Quickshell.reload(false);
             return true;
         }
