@@ -4975,7 +4975,7 @@
             {
               "id": "/stats",
               "name": "/stats",
-              "subtitle": "Show cumulative launches and window switches",
+              "subtitle": "Daily launcher activity, averages and all-time totals",
               "provider": "internal",
               "count": 0,
               "windows": 0
@@ -10028,7 +10028,7 @@
             {
               "id": "/stats",
               "name": "/stats",
-              "subtitle": "Show cumulative launches and window switches",
+              "subtitle": "Daily launcher activity, averages and all-time totals",
               "provider": "internal",
               "count": 0,
               "windows": 0
@@ -11495,17 +11495,6 @@
         "response": {
           "kind": "message",
           "message": "Demo mode does not change your config",
-          "serial": 0
-        }
-      },
-      {
-        "request": {
-          "op": "activate",
-          "id": "/stats"
-        },
-        "response": {
-          "kind": "message",
-          "message": "0 launches · 0 window switches · 15 indexed entries",
           "serial": 0
         }
       },

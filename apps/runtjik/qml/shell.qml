@@ -35,6 +35,7 @@ ShellRoot {
     }
     property bool browserTabScope: false
     property string appMode: ""
+    property var statistics: null
     property var appState: ({})
     property var results: []
     property string runtimeVersion: ''
@@ -193,7 +194,7 @@ ShellRoot {
         if(opened)return;
         initialMonitor=Hyprland.focusedMonitor?.name || '';
         movedMonitor='';transferring=false;centering=true;
-        panel.pinned=false;panel.ownsKeyboard=true;appMode='';windowEntry='';query='';searchBox.text='';
+        panel.pinned=false;panel.ownsKeyboard=true;statistics=null;appMode='';windowEntry='';query='';searchBox.text='';
         message='';selected=0;pointerSelection=false;pendingAction=null;busy=false;
         loadingMore=false;hasMore=false;nextOffset=0;pendingSelection=-1;
         results=homeResults;resultQuery='';view=settings.ui.view;items.positionViewAtBeginning();
@@ -219,6 +220,7 @@ ShellRoot {
         if (msg.kind === 'results') {
             browserTabScope=!!msg.browser_tab_scope;
             appMode=msg.app_mode || '';
+            statistics=msg.statistics || null;
             if(msg.app_state)appState=msg.app_state;
             if(msg.command_history!==undefined){commandHistory=msg.command_history;historyCursor=-1;}
             providerPending=!!msg.pending;
@@ -320,7 +322,7 @@ ShellRoot {
         }
         function testState(): string {
             if(!root.demo)throw Error('Test state requires --demo');
-            return JSON.stringify({resultQuery:root.resultQuery,scrollY:items.contentY,rows:root.results});
+            return JSON.stringify({statistics:root.statistics,statsVisible:statsPane.visible,statsWeeks:statsPane.weeks,statsScrollY:statsPane.contentY,resultQuery:root.resultQuery,scrollY:items.contentY,rows:root.results});
         }
         function test(query: string): void {
             if(!root.demo)throw Error('Test control requires --demo');
@@ -485,6 +487,7 @@ ShellRoot {
                                 root.pointerSelection=false;
                                 if((event.modifiers & Qt.ControlModifier) && (event.key===Qt.Key_Up || event.key===Qt.Key_Down)){root.browseHistory(event.key===Qt.Key_Up?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Z && (event.modifiers & Qt.ControlModifier) && root.galleryMode){if(!root.busy){root.busy=true;root.send({op:'undo-trash',query:root.query});}event.accepted=true;}
+                                else if(root.statistics && [Qt.Key_Down,Qt.Key_Up,Qt.Key_PageDown,Qt.Key_PageUp].includes(event.key)){statsPane.scrollBy((event.key===Qt.Key_Up || event.key===Qt.Key_PageUp?-1:1)*(event.key===Qt.Key_PageDown || event.key===Qt.Key_PageUp?statsPane.height:30));event.accepted=true;}
                                 else if(event.key===Qt.Key_Tab || event.key===Qt.Key_Backtab){root.move((event.modifiers & Qt.ShiftModifier || event.key===Qt.Key_Backtab)?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Down){root.move(root.listMode?1:root.gridColumns);event.accepted=true;}
                                 else if(event.key===Qt.Key_Up){root.move(root.listMode?-1:-root.gridColumns);event.accepted=true;}
@@ -502,7 +505,7 @@ ShellRoot {
                     width:parent.width;height:visible?24:0;spacing:8
                     Text {
                         width:parent.width-(pinStatus.visible?pinStatus.width+parent.spacing:0);height:parent.height
-                        text:root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.commandQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.commandQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.query.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.query?'SEARCH RESULTS':'APPLICATIONS'))))
+                        text:root.statistics?'STATISTICS':root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.commandQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.commandQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.query.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.query?'SEARCH RESULTS':'APPLICATIONS'))))
                         font.family:root.settings.ui.font;font.pixelSize:11;font.letterSpacing:1.8
                         verticalAlignment:Text.AlignVCenter;color:root.theme.muted
                     }
@@ -520,9 +523,26 @@ ShellRoot {
                     Rectangle {
                         width:parent.width;height:parent.height-footer.height-4
                         radius:14;color:root.theme.background
+                        Text {
+                            id: paneMessage
+                            x: 16; y: 10; width: parent.width - 32
+                            visible: root.message !== ''
+                            text: root.message; wrapMode: Text.Wrap
+                            color: root.theme.accent; font.family: root.settings.ui.font; font.pixelSize: 11
+                        }
+                        StatsPane {
+                            id: statsPane
+                            anchors.fill: parent
+                            anchors.topMargin: paneMessage.visible ? paneMessage.height + 16 : 0
+                            visible: root.statistics !== null
+                            statistics: root.statistics || ({})
+                            theme: root.theme; settings: root.settings; indexed: root.indexed; demo: root.demo
+                        }
                         GridView {
                             id:items
+                            visible: root.statistics === null
                             anchors.fill:parent;anchors.margins:8
+                            anchors.topMargin:paneMessage.visible?paneMessage.height+18:8
                             clip:true;model:resultModel
                             remove: Transition {
                                 enabled:root.animateClosedRemoval
@@ -731,10 +751,9 @@ ShellRoot {
                     }
                     Item {
                         id:footer
-                        width:parent.width;height:footerMessage.visible?16:12
+                        width:parent.width;height:12
                         Item {
                             anchors.fill:parent
-                            visible:!footerMessage.visible
                             Row {
                                 anchors.centerIn:parent;spacing:2
                                 Repeater {
@@ -747,15 +766,6 @@ ShellRoot {
                                     }
                                 }
                             }
-                        }
-                        Text {
-                            id:footerMessage
-                            anchors.fill:parent
-                            visible:root.message!==''
-                            text:root.message
-                            color:root.message?root.theme.accent:root.theme.muted
-                            font.family:root.settings.ui.font;font.pixelSize:11;elide:Text.ElideRight
-                            verticalAlignment:Text.AlignVCenter
                         }
                     }
                 }

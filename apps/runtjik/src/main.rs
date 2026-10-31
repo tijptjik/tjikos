@@ -13,6 +13,7 @@ mod launcher;
 mod menus;
 mod paths;
 mod settings;
+mod stats;
 mod store;
 mod todo;
 mod trash;

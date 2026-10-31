@@ -37,7 +37,7 @@ pub fn commands(settings: &Value) -> Vec<Command> {
         ("/list", "Show applications as a list", "runtjik-list"),
         (
             "/stats",
-            "Show cumulative launches and window switches",
+            "Daily launcher activity, averages and all-time totals",
             "runtjik-stats",
         ),
         (

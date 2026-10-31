@@ -89,6 +89,11 @@ impl Launcher {
         }))
     }
     pub fn initial(&mut self) -> Result<Value> {
+        if self.settings["history"]["enabled"] == true {
+            if let Some(store) = &self.store {
+                store.record("launcher", "open", true)?;
+            }
+        }
         let mut v = self.query("", 0, None)?;
         v["command_history"] = self.history()?;
         Ok(v)
@@ -194,6 +199,17 @@ impl Launcher {
             display.into()
         };
         let q = normalized.as_str();
+        if q.trim() == "/stats" {
+            self.current.clear();
+            let mut v = self.payload(vec![]);
+            v["query"] = json!(display);
+            v["statistics"] = if self.demo {
+                crate::stats::demo()
+            } else {
+                self.store.as_ref().unwrap().statistics()?
+            };
+            return Ok(v);
+        }
         let run = q == "/run" || q.starts_with("/run ") || q.starts_with("!!");
         let running = q.starts_with('?') || q == "/processes" || q.starts_with("/processes ");
         let search = if let Some(s) = q.strip_prefix("!!") {
@@ -468,24 +484,9 @@ impl Launcher {
                 return Ok(v);
             }
             if id == "/stats" {
-                let counts = self
-                    .store
-                    .as_ref()
-                    .map(|s| s.counts())
-                    .transpose()?
-                    .unwrap_or(json!({}));
-                let total = |prefix: &str| {
-                    counts
-                        .as_object()
-                        .unwrap()
-                        .iter()
-                        .filter(|(k, _)| k.starts_with(prefix))
-                        .map(|(_, v)| v["count"].as_i64().unwrap_or(0))
-                        .sum::<i64>()
-                };
-                return Ok(
-                    json!({"kind":"message","message":format!("{} launches · {} window switches · {} indexed entries",total("launch:"),total("switch:"),self.entries.len())}),
-                );
+                let mut v = self.query("/stats", 0, None)?;
+                v["edit_query"] = json!("/stats");
+                return Ok(v);
             }
             if let Some(c) = crate::menus::commands(&self.settings).iter().find(|c| {
                 !c.provider.is_empty() && (c.id == id || c.aliases.iter().any(|a| a == id))

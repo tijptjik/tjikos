@@ -211,7 +211,7 @@ highlighted; keyboard scrolling preserves the keyboard selection.
 | `/run`, `/run name` | Browse/search previously used executable commands; clear the prefix to return to apps |
 | `/refresh` | Rebuild the application/command index |
 | `/grid`, `/list` | Select the current session view |
-| `/stats` | Show cumulative launches and window switches |
+| `/stats` | Open the activity graph and daily-average / all-time statistics in the main pane |
 | `/cliphist [text]` | Search mixed clipboard history; Enter copies, Ctrl+Enter deletes the selected item. |
 | `/cliphist images [text]` | Show only clipboard images, optionally filtered by preview text. |
 | `/rec`, `/screenrecord` | Recording targets, Stop recording, and previous recordings. |
@@ -219,6 +219,15 @@ highlighted; keyboard scrolling preserves the keyboard selection.
 | `/define word`, `/synonym word` | Look up definitions/examples or synonyms; Results appear inline after a typing pause; Enter opens a source while retaining results. |
 | `/config` | Browse and edit featured settings |
 | `/shortcuts`, `/bindings` | Show this shortcut guide inside the launcher |
+
+`/stats` shows up to 26 weeks of launcher opens in seven Monday–Sunday rows,
+with fewer week columns in narrower windows. Hover a day for its date and count.
+Launcher opens are recorded on startup and each reopen while history is enabled;
+older dates remain untracked. App launches, window switches, window closes, and
+index refreshes retain their existing successful-action history. Daily averages
+include idle calendar days since the first recorded activity (since the first
+open for launcher opens). Indexed entries are shown as a current count. Demo
+mode uses synthetic activity and never writes usage history.
 
 The launcher is a Wayland **top-layer surface**, not a normal or floating client.
 It never enters Hyprland's window layout or receives normal window borders,
