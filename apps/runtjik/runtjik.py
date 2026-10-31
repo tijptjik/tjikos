@@ -40,7 +40,7 @@ DEFAULTS = {
            "monitor": "focused", "max_results": 100, "keep_alive": True},
     "theme": {"background": "#191724", "surface": "#26233a", "tile": "#1f1d2e",
               "text": "#e0def4", "muted": "#908caa", "accent": "#ff53a6",
-              "border": "#403a52", "icon_theme": "rose-punk-illustrated"},
+              "border": "#403a52", "icon_theme": "rose-punk"},
     "index": {"desktop_apps": True, "path_commands": True, "refresh_seconds": 5},
     "launch": {"terminal": ["kitty", "--"], "isolate": True},
     "history": {"enabled": True},
