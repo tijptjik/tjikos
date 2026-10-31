@@ -88,19 +88,57 @@ Pane {
     Shortcut {sequence:'Ctrl+Return';enabled:editor==='edit' && titleInput.text.trim()!=='';onActivated:saveEditor()}
     Popup {
         id:help
-        anchors.centerIn:parent
-        width:Math.min(app.width-24,480);padding:24;modal:true;focus:true
-        closePolicy:Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        x:0;y:0;width:app.width;height:app.height
+        padding:24;modal:true;focus:true
+        closePolicy:Popup.CloseOnEscape
         background:Rectangle {color:theme.background;radius:14;border.color:theme.border}
         contentItem:ColumnLayout {
-            spacing:16
-            Label {text:'Keyboard shortcuts';font.pixelSize:20;color:theme.text}
-            Label {Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted;lineHeight:1.6;text:editor==='edit'?
-                'Alt+G   Group\nAlt+T   Tags\nAlt+D   Due date\nAlt+R   Repeat\nAlt+L   Reference / note\nAlt+M   Reminder\nCtrl+Enter   Save\nEsc   Cancel':
-                'N   New item\nShift+N   Today\nW   This week\nL   Later\nD   Mark done\nP   Purge task\nT   Edit title\nG   Edit group\nS   Snooze\n/   Search\n↑ / ↓ or J / K   Select item\nEnter   Open reading reference\nEsc   Close window'}
-            QuietButton {text:'Done';onClicked:help.close()}
+            spacing:20
+            RowLayout {
+                Layout.fillWidth:true
+                Label {text:'Keyboard shortcuts';font.pixelSize:20;color:theme.text;Layout.fillWidth:true}
+                QuietButton {text:'Done';onClicked:help.close()}
+            }
+            ScrollView {
+                Layout.fillWidth:true;Layout.fillHeight:true
+                contentWidth:availableWidth
+                clip:true
+                GridLayout {
+                    width:parent.width
+                    columns:2;columnSpacing:24;rowSpacing:12
+                    Repeater {
+                        model:editor==='edit'?[
+                            ['⌥ G','Group'],['⌥ T','Tags'],
+                            ['⌥ D','Due date'],['⌥ R','Repeat'],
+                            ['⌥ L','Reference / note'],['⌥ M','Reminder'],
+                            ['⌃ ↵','Save'],['⎋','Cancel']
+                        ]:[
+                            ['N','New item'],['⇧ N','Today'],
+                            ['W','This week'],['L','Later'],
+                            ['D','Mark done'],['P','Purge task'],
+                            ['T','Edit title'],['G','Edit group'],
+                            ['S','Snooze'],['/','Search'],
+                            ['↑ ↓ / J K','Select item'],['↵','Open reading reference'],
+                            ['⎋','Close window']
+                        ]
+                        delegate:RowLayout {
+                            required property var modelData
+                            Layout.fillWidth:true
+                            Layout.preferredWidth:1
+                            spacing:12
+                            Rectangle {
+                                Layout.preferredWidth:80;Layout.preferredHeight:36
+                                radius:8;color:theme.surface;border.color:theme.border
+                                Text {anchors.centerIn:parent;text:modelData[0];color:theme.text;font.pixelSize:15}
+                            }
+                            Label {text:modelData[1];color:theme.text;font.pixelSize:13;wrapMode:Text.Wrap;Layout.fillWidth:true}
+                        }
+                    }
+                }
+            }
         }
     }
+
     Dialog {
         id: purgeDialog
         property var target: null
