@@ -129,6 +129,42 @@ These directed demos simulate sends and recording. They do not send Telegram mes
 
 ## Controls and scripting
 
+### Clipboard formats
+
+**Shift+left-click** anywhere on a card copies Markdown text to the regular
+clipboard and shows “Copied as Markdown”. This works on popups, detached cards,
+and history. Shift takes priority over Ctrl, dismissal, selection and action
+buttons. Ordinary clicks and drags retain their usual behaviour.
+
+The export includes the full body even when the card truncates it. It omits the
+title unless there is no body or structured content, when the title is the
+fallback. Body text retains its original line breaks and any authored Markdown;
+generated labels and table cells escape Markdown punctuation.
+
+| Card | Clipboard output |
+| --- | --- |
+| Standard, artwork, urgency or action variants | Body text. Artwork, urgency decoration and buttons add nothing. |
+| Status / error | Body, then `**Status:** state`, then the detail paragraph. |
+| Progress / update | Body, then `**label:** 75%` using the current rounded percentage; label defaults to “Progress”. |
+| Countdown | Body, then `**label:** MM:SS` at click time. Finished timers use the done label and `00:00`. |
+| Results table | Body, then a Markdown Field/Value table; ingredient rows have a `↳` prefix, followed by status and optional duration. |
+| Parsed key/value view | Heading and a Markdown Field/Value table, replacing the raw body as on the card. |
+| Task / todo | Body, then `**Group:** group` and `**Due:** due`. |
+| Telegram text | Original message text, without display-only HTML. |
+| Telegram photo, sticker, emoji, animation or voice | Body or caption, a `**Media:**` description with duration/emoji when supplied, and any available transcript. Media files are not copied. |
+| Custom component | Body text, or the title when empty. Arbitrary component data is not exported. |
+| Grouped card | Only the displayed notice; open history to copy individual messages. |
+
+Table cell line breaks become `<br>`. Clipboard content excludes action commands,
+internal IDs, cached media paths, reply drafts and artwork. History exports its
+stored message content; countdowns are calculated at click time.
+
+For the screen-recording card, for example, the clipboard contains
+`Saved /tmp/runtjik-native-migration-4431gucv/synthetic.mp4`. The backup warning
+copies the complete log-check instructions without its title.
+
+### CLI controls
+
 ```sh
 notjikctl list                   # active cards and their IDs
 notjikctl status                 # server, queue and privacy state

@@ -6,6 +6,7 @@ import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
 import "Logic.js" as Logic
+import "Clipboard.js" as Clipboard
 
 Rectangle {
     id: card
@@ -178,6 +179,24 @@ Rectangle {
         onHoveredChanged: card.controller.setHover(card.monitorName, card.notice.id, hovered)
     }
     Component.onDestruction: controller.setHover(monitorName, notice.id, false)
+    // Claim Shift presses before child controls or the background dismissal handler.
+    // Ordinary presses pass through, retaining native button/editor/drag behaviour.
+    MouseArea {
+        id: copyArea
+        objectName: "notification-copy"
+        anchors.fill: parent
+        z: 100
+        acceptedButtons: Qt.LeftButton
+        preventStealing: true
+        onPressed: mouse => { mouse.accepted = !!(mouse.modifiers & Qt.ShiftModifier); }
+        onClicked: {
+            Quickshell.clipboardText = Clipboard.markdown(card.notice, card.controller.now,
+                card.structuredReady ? card.presentation : null);
+            copyFeedback.restart();
+        }
+    }
+    Timer { id: copyFeedback; interval: 1500 }
+    ToolTip { visible: copyFeedback.running; text: "Copied as Markdown" }
     Item {
         id: dragArea
         anchors.fill: parent
@@ -186,7 +205,7 @@ Rectangle {
                 // This item is behind the content; inspect the card's other branches.
                 if (point.x < 0 || point.y < 0 || point.x >= card.width || point.y >= card.height) return false;
                 for (const child of card.children) {
-                    if (child === dragArea || !child.visible || !child.enabled) continue;
+                    if (child === dragArea || child === copyArea || !child.visible || !child.enabled) continue;
                     const local = child.mapFromItem(card, point.x, point.y);
                     if (child.contains(local) && card.interactiveAt(child, local)) return false;
                 }

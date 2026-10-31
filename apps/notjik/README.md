@@ -165,6 +165,10 @@ Clicking any non-interactive part of a popup dismisses it. **Ctrl+click** that a
 on a Telegram bridge card to dismiss that card and attempt a safe Telegram read
 (earlier unread messages are protected). On other notifications, Ctrl+click
 dismisses all outstanding notifications, including grouped and queued notices.
+**Shift+click** anywhere on a card copies its full body and structured details as
+Markdown, including in history and detached windows. It keeps the card open and
+takes priority over buttons and Ctrl+click. See [clipboard formats](docs/cards.md#clipboard-formats)
+for each card type.
 Drag that area instead
 to detach the notice as a regular floating window on the current Hyprland
 workspace. It stays on that workspace when you switch away; focus it to use the
