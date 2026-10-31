@@ -99,3 +99,11 @@ and purge. Undo refuses to overwrite subsequent changes from another client or
 notification worker. History starts when the updated authority is installed;
 old actions and legacy flat-file storage do not have an undo journal.
 Text fields retain their normal Ctrl+Z text undo.
+
+Choose **Manual** sorting to drag tasks within or between groups. The original
+row stays at half opacity, a compact title preview follows the pointer, and a
+gap opens at the destination. Empty groups remain available in this mode.
+Release to save the new group and position; Escape cancels. Lists auto-scroll
+near their edges. Automatic sort modes disable dragging and retain their sort
+criteria. Manual positions are saved on the authority, synchronize across
+clients, and can be undone with U/Ctrl+Z. Revision checks protect newer edits.

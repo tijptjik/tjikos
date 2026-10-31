@@ -447,6 +447,7 @@ ShellRoot {
                 visible: root.appMode === 'Todo'
                 stateData: root.appState; theme: root.theme; errorMessage: root.message
                 canOpenWindow: true
+                requestBusy: root.busy
                 onOpenWindow: {
                     Quickshell.execDetached(['env', 'TASKTJIK_VIEW='+todoApp.view, 'TASKTJIK_COLLECTION='+todoApp.collection, 'TASKTJIK_SELECTED='+todoApp.selectedId, 'tasktjik', 'show']);
                     root.close();

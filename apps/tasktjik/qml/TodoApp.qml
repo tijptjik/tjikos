@@ -25,6 +25,82 @@ Pane {
     property bool showCancelled: true
     property bool showDetails: false
     property int sortOrder: 0
+    property bool requestBusy: false
+    property var dragTask: null
+    property var dragSnapshot: ({})
+    readonly property var listState: dragTask ? dragSnapshot : stateData
+    property var dragSource: null
+    property point dragPoint: Qt.point(0,0)
+    property real dragWidth: 300
+    property real dragHeight: 40
+    property var dropGroups: []
+    property string dropGroup: ''
+    property string dropBefore: ''
+    property bool pendingMove: false
+    property bool moveSent: false
+    property string moveMessage: ''
+    onSortOrderChanged: {if(dragTask && !pendingMove)cancelDrag();}
+    function cancelDrag() {
+        moveTimeout.stop();pendingMove=false;moveSent=false;
+        dropGroup='';dropBefore='';dragTask=null;dragSource=null;
+    }
+    function startDrag(task, source, width, height, point) {
+        if(sortOrder!==4 || pendingMove)return;
+        dragSnapshot=stateData;dragSource=source;dragWidth=width;dragHeight=height;
+        dragTask=JSON.parse(JSON.stringify(task));moveMessage='';selectedId=task.id;
+        updateDrag(point);
+    }
+    function updateDrag(point) {
+        dragPoint=point;
+        const viewport=taskScroll.mapFromItem(app,point.x,point.y);
+        if(viewport.x<0 || viewport.y<0 || viewport.x>taskScroll.width || viewport.y>taskScroll.height){dropGroup='';dropBefore='';return;}
+        for(const group of dropGroups) {
+            const local=group.mapFromItem(app,point.x,point.y);
+            if(local.x<0 || local.x>group.width || local.y<0 || local.y>group.height)continue;
+            let before='';
+            for(let i=0;i<group.rows.count;i++) {
+                const row=group.rows.itemAt(i);
+                if(row.modelData.id===dragTask.id)continue;
+                if(local.y<row.y+row.gapHeight+(row.height-row.gapHeight)/2){before=row.modelData.id;break;}
+            }
+            dropGroup=group.modelData;dropBefore=before;return;
+        }
+        dropGroup='';dropBefore='';
+    }
+    function finishDrag() {
+        if(!dragTask)return;
+        if(!dropGroup){cancelDrag();return;}
+        pendingMove=true;moveTimeout.restart();sendMove();
+    }
+    function sendMove() {
+        if(!pendingMove || moveSent || requestBusy)return;
+        moveSent=true;
+        request({action:'move',id:dragTask.id,revision:dragTask.revision,group:dropGroup,before_id:dropBefore});
+    }
+    Timer {interval:50;repeat:true;running:app.pendingMove && !app.moveSent;onTriggered:app.sendMove()}
+    Timer {id:moveTimeout;interval:15000;onTriggered:{app.cancelDrag();app.moveMessage='Move was not confirmed; refresh and try again.';}}
+    Timer {
+        interval:30;repeat:true;running:!!app.dragTask && !app.pendingMove
+        onTriggered:{
+            const p=taskScroll.mapFromItem(app,app.dragPoint.x,app.dragPoint.y);
+            const flick=taskScroll.contentItem;
+            if(p.x<0 || p.x>taskScroll.width || !flick || flick.contentY===undefined)return;
+            const delta=p.y<36?-10:p.y>taskScroll.height-36?10:0;
+            if(delta){flick.contentY=Math.max(0,Math.min(flick.contentY+delta,flick.contentHeight-flick.height));app.updateDrag(app.dragPoint);}
+        }
+    }
+    Rectangle {
+        z:200;visible:!!app.dragTask && !app.pendingMove
+        x:app.dragPoint.x+14;y:app.dragPoint.y+14
+        width:Math.min(app.dragWidth,360);height:dragPreviewTitle.implicitHeight+20;radius:6;color:theme.surface
+        Label {
+            id:dragPreviewTitle
+            anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:10
+            text:app.dragTask?app.dragTask.title:'';color:theme.text;font.pixelSize:15
+            font.strikeout:!!app.dragTask && app.dragTask.done
+            wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight
+        }
+    }
     onShowCompletedChanged: selectVisibleTask()
     onShowCancelledChanged: selectVisibleTask()
     property string filter: ''
@@ -202,7 +278,7 @@ Pane {
         undoToastTask='';toastTimer.stop();
         request(task?{action:'undo',id:task,undo_action:'purge'}:{action:'undo'});
     }
-    onErrorMessageChanged: {if(errorMessage){pendingPurge=null;purgePendingTimer.stop();}}
+    onErrorMessageChanged: {if(errorMessage){pendingPurge=null;purgePendingTimer.stop();if(dragTask)cancelDrag();}}
     Timer {id:purgePendingTimer;interval:15000;onTriggered:app.pendingPurge=null;}
     Timer {id:toastTimer;interval:3000;onTriggered:app.undoToastTask='';}
     Rectangle {
@@ -253,13 +329,13 @@ Pane {
                 notifyBeforeDueLeadValue:Number(leadValue.text),notifyBeforeDueLeadUnit:leadUnit.currentText}});
     }
     function selectVisibleTask() {
-        const rows=(stateData.groups || []).reduce((items,g)=>items.concat(tasks(g)),[]);
+        const rows=(listState?.groups || []).reduce((items,g)=>items.concat(tasks(g)),[]);
         if(!rows.some(t=>t.id===selectedId))selectedId=rows.length?rows[0].id:'';
     }
     onViewChanged: selectVisibleTask()
     onFilterChanged: selectVisibleTask()
     onCollectionChanged: selectVisibleTask()
-    function visibleCount() {return (stateData.groups || []).reduce((n,g)=>n+tasks(g).length,0);}
+    function visibleCount() {return (listState?.groups || []).reduce((n,g)=>n+tasks(g).length,0);}
     function taskMeta(task) {
         const parts=[];
         if(task.status && !['ready','inbox','done','cancelled','blocked'].includes(task.status))parts.push(task.status.replace('_',' '));
@@ -273,13 +349,13 @@ Pane {
     }
     function isOverdue(task) {
         const due=effectiveDue(task);
-        return !!due && !task.done && task.status!=='cancelled' && due < (stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd'));
+        return !!due && !task.done && task.status!=='cancelled' && due < (listState?.today || Qt.formatDate(new Date(),'yyyy-MM-dd'));
     }
     function dueLabel(task) {
         const value=effectiveDue(task);
         if(!value)return '·';
         const date=new Date(value+'T12:00:00');
-        const today=new Date((stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd'))+'T12:00:00');
+        const today=new Date((listState?.today || Qt.formatDate(new Date(),'yyyy-MM-dd'))+'T12:00:00');
         const delta=Math.round((date-today)/86400000);
         const weekday=(today.getDay()+6)%7;
         if(view!=='all' || (delta>=-weekday && delta<=6-weekday))return ['SUN','MON','TUE','WED','THU','FRI','SAT'][date.getDay()];
@@ -292,19 +368,21 @@ Pane {
         return Math.floor(months/12)+'Y';
     }
     function compareTasks(a,b) {
+        if(sortOrder===4)return String(a.manualOrder || a.id.replace(/-/g,'')+'8').localeCompare(String(b.manualOrder || b.id.replace(/-/g,'')+'8')) || a.id.localeCompare(b.id);
         if(sortOrder>=2)return (sortOrder===3?-1:1)*a.title.localeCompare(b.title);
         const ad=effectiveDue(a),bd=effectiveDue(b);
         if(!ad || !bd)return ad?-1:bd?1:a.title.localeCompare(b.title);
         return (sortOrder===1?-1:1)*ad.localeCompare(bd) || a.title.localeCompare(b.title);
     }
     function tasks(group) {
-        const now=stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd');
+        const now=listState?.today || Qt.formatDate(new Date(),'yyyy-MM-dd');
         let end=new Date(now+'T12:00:00');end.setDate(end.getDate()+6-((end.getDay()+6)%7));
         const last=Qt.formatDate(end,'yyyy-MM-dd');
-        return (stateData.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && (!filter || (t.title+' '+t.tags.join(' ')+' '+t.group+' '+(t.reference || '')).toLowerCase().includes(filter.toLowerCase())) &&
+        return (listState?.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && (!filter || (t.title+' '+t.tags.join(' ')+' '+t.group+' '+(t.reference || '')).toLowerCase().includes(filter.toLowerCase())) &&
             (view==='all' || (effectiveDue(t) && effectiveDue(t) <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now))).sort(compareTasks);
     }
     Keys.onPressed: event=>{
+        if(dragTask){if(event.key===Qt.Key_Escape && !pendingMove)cancelDrag();event.accepted=true;return;}
         if(help.visible)return;
         if(editor || searching){if(event.key===Qt.Key_Escape && editor){cancelEditor();event.accepted=true;}return;}
         if(event.key===Qt.Key_N){if(event.modifiers & Qt.ShiftModifier)view='today';else {selectedId='';openEditor();}}
@@ -323,6 +401,10 @@ Pane {
         event.accepted=true;
     }
     onStateDataChanged: {
+        if(pendingMove && dragTask) {
+            const moved=(stateData.tasks || []).find(t=>t.id===dragTask.id);
+            if(moved && moved.revision>dragTask.revision && moved.group===dropGroup && (moved.events || []).slice(-1).some(e=>e.action==='move'))cancelDrag();
+        }
         if(pendingPurge && Array.isArray(stateData.tasks) && !stateData.tasks.some(t=>t.id===pendingPurge.id)) {
             undoToastTask=pendingPurge.id;undoToastTitle=pendingPurge.title;pendingPurge=null;
             purgePendingTimer.stop();toastTimer.restart();
@@ -362,7 +444,7 @@ Pane {
                 }
             }
             Item {Layout.fillWidth:true}
-            Choice {model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
+            Choice {model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
             IconButton {symbol:'search';description:'Filter tasks (/)';checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.forceActiveFocus();}}}
             IconButton {symbol:'completed';description:'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
             IconButton {symbol:'cancelled';description:'Show cancelled tasks';checkable:true;checked:app.showCancelled;onClicked:app.showCancelled=checked}
@@ -388,7 +470,7 @@ Pane {
                     Layout.fillWidth:true
                     spacing:32
                     readonly property int columnCount: Math.max(1, Math.floor(taskScroll.availableWidth / 420))
-                    readonly property var groups: (stateData.groups || []).filter(g=>app.tasks(g).length>0)
+                    readonly property var groups: (app.listState?.groups || []).filter(g=>app.tasks(g).length>0 || app.sortOrder===4)
                     Repeater {
                         model:groupColumns.columnCount
                         Column {
@@ -399,24 +481,32 @@ Pane {
                             Repeater {
                                 model:groupColumns.groups.filter((g,i)=>i % groupColumns.columnCount === groupColumn.index)
                                 ColumnLayout {
+                                    id:groupPanel
                                     required property string modelData
+                                    property alias rows:groupRows
                                     width:parent.width;spacing:6
+                                    Component.onCompleted:app.dropGroups=app.dropGroups.concat([groupPanel])
+                                    Component.onDestruction:app.dropGroups=app.dropGroups.filter(g=>g!==groupPanel)
                                     RowLayout {
                                         Layout.fillWidth:true;spacing:8
                                         Label {text:modelData==='All'?'Inbox':modelData;font.pixelSize:12;font.weight:Font.DemiBold;color:theme.muted}
                                         Label {text:app.tasks(modelData).length;font.pixelSize:11;color:theme.muted}
                                     }
                                     Repeater {
-                                        model:app.tasks(modelData)
+                                        id:groupRows
+                                        model:app.tasks(groupPanel.modelData)
                                         Rectangle {
                                             id:taskCard
                                             required property var modelData
-                                            Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+8;radius:4
+                                            property real gapHeight:app.dragTask && app.dropGroup===groupPanel.modelData && app.dropBefore===modelData.id ? app.dragHeight+6 : 0
+                                            Behavior on gapHeight {NumberAnimation {duration:120}}
+                                            opacity:app.dragTask && app.dragTask.id===modelData.id ? 0.5 : 1
+                                            Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+8+gapHeight;radius:4
                                             color:"transparent"
                                             border.color:"transparent"
                                             RowLayout {
                                                 id:cardBody
-                                                anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:4;spacing:8
+                                                anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:4;anchors.topMargin:4+taskCard.gapHeight;spacing:8
                                                 Label {
                                                     readonly property bool focusedTask: selectedId===modelData.id
                                                     text:focusedTask?'›':app.dueLabel(modelData)
@@ -492,8 +582,31 @@ Pane {
                                                     Label {Layout.fillWidth:true;text:(modelData.tags || []).map(t=>'#'+t).join('   ');visible:text!=='';font.pixelSize:11;color:theme.accent;wrapMode:Text.Wrap}
                                                 }
                                             }
-                                            MouseArea {anchors.fill:parent;cursorShape:Qt.PointingHandCursor;onClicked:{selectedId=modelData.id;app.forceActiveFocus();}onDoubleClicked:app.action('toggle')}
+                                            MouseArea {
+                                                anchors.fill:parent;acceptedButtons:Qt.LeftButton
+                                                cursorShape:app.sortOrder===4?Qt.OpenHandCursor:Qt.PointingHandCursor
+                                                preventStealing:app.sortOrder===4
+                                                property point pressedPoint
+                                                property bool moved: false
+                                                onPressed: mouse=>{pressedPoint=mapToItem(app,mouse.x,mouse.y);moved=false;selectedId=modelData.id;app.forceActiveFocus();}
+                                                onPositionChanged: mouse=>{
+                                                    if(!pressed || app.sortOrder!==4 || app.pendingMove)return;
+                                                    const point=mapToItem(app,mouse.x,mouse.y);
+                                                    if(!moved && Math.hypot(point.x-pressedPoint.x,point.y-pressedPoint.y)>10){moved=true;app.startDrag(modelData,cardBody,taskCard.width,cardBody.implicitHeight+8,point);}
+                                                    if(moved && app.dragTask)app.updateDrag(point);
+                                                }
+                                                onReleased: {if(moved)app.finishDrag();}
+                                                onCanceled: {if(moved && !app.pendingMove)app.cancelDrag();}
+                                                onClicked:{if(!moved){selectedId=modelData.id;app.forceActiveFocus();}}
+                                                onDoubleClicked:{if(!moved)app.action('toggle');}
+                                            }
                                         }
+                                    }
+                                    Item {
+                                        Layout.fillWidth:true
+                                        implicitHeight:app.dragTask && app.dropGroup===groupPanel.modelData && app.dropBefore===''?app.dragHeight+6:groupRows.count===0?30:0
+                                        Behavior on implicitHeight {NumberAnimation {duration:120}}
+                                        Label {visible:groupRows.count===0;anchors.centerIn:parent;text:'Drop tasks here';color:theme.muted;font.pixelSize:11}
                                     }
                                 }
                             }
@@ -568,7 +681,7 @@ Pane {
         SnoozePicker {visible:editor==='snooze';Layout.fillWidth:true;ink:theme.text;accent:theme.accent;onChosen:until=>{action('snooze',{until:until});}}
         QuietButton {visible:editor==='snooze';text:'Cancel';onClicked:{editor='';app.forceActiveFocus();}}
         Label {visible:!!stateData.sync_message;text:stateData.sync_message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
-        Label {visible:!!errorMessage || !!stateData.message;text:errorMessage || stateData.message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
+        Label {visible:!!errorMessage || !!moveMessage || !!stateData.message;text:errorMessage || moveMessage || stateData.message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
     }
     function accepted() {draftId='';editor='';app.forceActiveFocus();}
 }
