@@ -196,7 +196,9 @@ impl Launcher {
         {
             self.refresh(false)?;
         }
-        let normalized = if display.starts_with('!') && !display.starts_with("!!") {
+        let normalized = if display.trim() == "-" {
+            "/todo".to_owned()
+        } else if display.starts_with('!') && !display.starts_with("!!") {
             format!("/{}", display[1..].trim_start())
         } else {
             display.into()

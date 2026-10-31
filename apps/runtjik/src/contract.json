@@ -2857,7 +2857,7 @@
           "Reading list"
         ]
       ],
-      "aliases": [],
+      "aliases": [["-", "/todo"]],
       "icon": "view-task",
       "mode": "app"
     },
