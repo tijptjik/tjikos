@@ -23,7 +23,7 @@ def wait_for(fn, timeout=12):
 
 
 @contextmanager
-def private_compositor():
+def private_compositor(isolate_pointer=False):
     """Isolate capture geometry and input from desktop monitor automation."""
     directory=Path(tempfile.mkdtemp(prefix="bc-"))
     runtime=directory/"r"
@@ -32,7 +32,8 @@ def private_compositor():
     if fontconfig.exists():shutil.copytree(fontconfig,directory/"config/fontconfig")
     config=directory/"hyprland.lua"
     config.write_text('hl.monitor({output="",mode="1000x680@60",position="0x0",scale=1})\n'
-                      'hl.config({general={border_size=0},decoration={rounding=12,shadow={enabled=false}}})\n')
+                      'hl.config({general={border_size=0},decoration={rounding=12,shadow={enabled=false}}})\n'
+                      + ('hl.device({name="wl_pointer",enabled=false})\n' if isolate_pointer else ''))
     keys=("XDG_RUNTIME_DIR","WAYLAND_DISPLAY","HYPRLAND_INSTANCE_SIGNATURE","XDG_CONFIG_HOME","XDG_CACHE_HOME","XDG_DATA_HOME","TASKTJIK_HOME")
     previous={key:os.environ.get(key) for key in keys}
     env={**os.environ,"TASKTJIK_HOME":str(Path(__file__).resolve().parents[2]/"tasktjik"),"XDG_RUNTIME_DIR":str(runtime),"XDG_CONFIG_HOME":str(directory/"config"),"XDG_CACHE_HOME":str(directory/"cache"),"XDG_DATA_HOME":str(directory/"data")}

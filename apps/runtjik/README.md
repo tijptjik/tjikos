@@ -494,6 +494,18 @@ max_results_per_source = 12
 timeout_seconds = 5
 ```
 
+`/define` presents an entry by source, etymology and part of speech, with compact
+language tags beside section headings.
+Numbered senses retain nested meanings, examples and sense-specific synonyms.
+The fixed provider bar shows icons and full result counts; click a provider to
+show or hide its rows. Hidden sources are skipped by keyboard navigation.
+Definition-row clicks select; linked terms start a lookup. Enter selects the
+entry's related words; Left/Right chooses a word and Enter looks it up. A single
+available word opens immediately on Enter. Escape
+returns to the entry, and Up/Down moves between entries. The explicit source
+arrow opens the source quietly, without a status banner. Loading is
+centered and muted. Later sources preserve the reading position.
+
 `languages` contains the English Wiktionary's language heading names, for example
 `["English", "French", "Dutch"]`. English is the default. Languages appear in the
 configured order. Urban Dictionary and the legacy adapters only cover English.
@@ -538,7 +550,8 @@ or environment variables.
 Commercial dictionaries such as Merriam-Webster, Oxford and Collins are candidates
 for future licensed adapters when credentials and usage rights are available.
 Examples and coverage vary; none of these sources guarantees an example for every
-sense. Results retain source attribution and links to the original entry.
+sense. Results retain source attribution; the heading's source arrow opens the
+original page. Definitions and examples wrap in full within the entry.
 
 After a 350 ms typing pause, the term is sent to the selected sources concurrently.
 Results appear inline as each source responds, with a per-request timeout and 2 MB

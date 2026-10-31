@@ -2866,7 +2866,12 @@
           "Reading list"
         ]
       ],
-      "aliases": [["-", "/todo"]],
+      "aliases": [
+        [
+          "-",
+          "/todo"
+        ]
+      ],
       "icon": "view-task",
       "mode": "app"
     },
