@@ -216,7 +216,7 @@ ShellRoot {
         if (msg.serial && msg.serial < serial) return;
         if(msg.kind==='results' && ready && (msg.query || '')!==query && !msg.reset_query && msg.edit_query===undefined)return;
         if (msg.kind !== 'results' || msg.serial === serial) busy = false;
-        if (msg.kind === 'app-state') {message=msg.app_state.message || '';appState=Object.assign({},appState,msg.app_state);if(msg.app_state.tasks)todoApp.accepted();return;}
+        if (msg.kind === 'app-state') {message=msg.app_state.message || '';appState=Object.assign({},appState,msg.app_state);if(msg.app_state.mutation_accepted)todoApp.accepted();return;}
         if (msg.kind === 'results') {
             browserTabScope=!!msg.browser_tab_scope;
             appMode=msg.app_mode || '';
@@ -299,6 +299,7 @@ ShellRoot {
     Timer {id:actionDelay;interval:80;onTriggered:{const request=root.queuedRequest;root.queuedRequest=null;root.send(request);}}
     Timer {id:closePoll;interval:180;repeat:true;running:root.opened && root.closingIds.length>0;onTriggered:root.search()}
     Timer {interval:150;repeat:true;running:root.opened && root.providerPending && !debounce.running && !root.busy;onTriggered:root.search()}
+    Timer {interval:1000;repeat:true;running:root.ready && root.opened && root.appMode==='Todo' && !root.busy;onTriggered:{root.busy=true;root.send({op:'app-action',provider:'Todo',action:'refresh'});}}
     Timer {id:debounce;interval:root.wordMode?350:60;onTriggered:root.search()}
     Timer {interval:root.settings.index.refresh_seconds*1000;running:root.ready && root.opened && !root.appMode;repeat:true;onTriggered:root.search()}
     IpcHandler {

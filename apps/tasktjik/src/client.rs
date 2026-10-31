@@ -20,7 +20,7 @@ pub fn expand(value: &str) -> PathBuf {
         PathBuf::from(value)
     }
 }
-fn lock(path: &Path) -> Result<fs::File> {
+pub(crate) fn lock(path: &Path) -> Result<fs::File> {
     let f = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -58,7 +58,7 @@ pub fn options(settings: &Value) -> Result<Value> {
     }
     Ok(result)
 }
-fn device() -> Result<String> {
+pub(crate) fn device() -> Result<String> {
     let root = xdg("state").parent().unwrap().join("tasktjik");
     private_dir(&root)?;
     let _lock = lock(&root.join(".device.lock"))?;
@@ -106,7 +106,7 @@ fn response(text: &str) -> Result<Value> {
         .cloned()
         .context("Invalid Tasktjik response")
 }
-fn api(options: &Value, mut request: Value) -> Result<Value> {
+pub(crate) fn api(options: &Value, mut request: Value) -> Result<Value> {
     if !["list", "capabilities"].contains(&request["action"].as_str().unwrap_or("list"))
         && request.get("request_id").is_none()
     {
@@ -390,52 +390,58 @@ impl Todo {
         if action != "list" && action != "open-reference" {
             self.request(request.clone(), settings, demo)?;
         }
-        let mut rows = self.request(json!({"action":"list"}), settings, demo)?;
-        let rows = rows.as_array_mut().context("Invalid Tasktjik task list")?;
-        if action == "open-reference" {
-            let t = rows
-                .iter()
-                .find(|t| t["id"] == request["id"] && t["kind"] == "reading")
-                .context("Select a reading item")?;
-            let url = url::Url::parse(s(&t["reference"]))?;
-            ensure!(
-                ["http", "https"].contains(&url.scheme()) && url.host_str().is_some(),
-                "Reading items need an HTTP or HTTPS reference"
-            );
-            if !demo {
-                dispatch(vec!["xdg-open".into(), url.into()], &json!({}))?;
-            }
-            return Ok(json!({"message":"Opened reading reference"}));
-        }
-        let mut groups: Vec<String> = [
-            "All", "Quick", "General", "Work", "Socials", "Domestic", "Finances", "Tech",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
-        let mut extra = Vec::new();
-        for t in rows.iter_mut() {
-            let mut recurrence = t.clone();
-            if !s(&recurrence["repeat"]["unit"]).is_empty()
-                && recurrence["repeat"].get("value").is_none()
-            {
-                recurrence["repeat"]["value"] = json!(1);
-            }
-            let period = model::period(&recurrence, model::today())?;
-            t["done"] = json!(t["completions"]
-                .get(&period)
-                .is_some_and(|v| !v.is_null() && v != false && v != ""));
-            t["period"] = json!(period);
-            extra.push(s(&t["group"]).to_owned());
-        }
-        extra.sort_by_key(|s| s.to_lowercase().replace('ß', "ss"));
-        for g in extra {
-            if !groups.contains(&g) {
-                groups.push(g);
-            }
-        }
-        Ok(json!({"tasks":rows,"groups":groups,"today":model::today().to_string()}))
+        let rows = self.request(json!({"action":"list"}), settings, demo)?;
+        render_state(rows, &request, demo)
     }
+}
+
+/// Derive UI fields from a complete snapshot without contacting the authority.
+pub fn render_state(mut rows: Value, request: &Value, demo: bool) -> Result<Value> {
+    let action = request["action"].as_str().unwrap_or("list");
+    let rows = rows.as_array_mut().context("Invalid Tasktjik task list")?;
+    if action == "open-reference" {
+        let t = rows
+            .iter()
+            .find(|t| t["id"] == request["id"] && t["kind"] == "reading")
+            .context("Select a reading item")?;
+        let url = url::Url::parse(s(&t["reference"]))?;
+        ensure!(
+            ["http", "https"].contains(&url.scheme()) && url.host_str().is_some(),
+            "Reading items need an HTTP or HTTPS reference"
+        );
+        if !demo {
+            dispatch(vec!["xdg-open".into(), url.into()], &json!({}))?;
+        }
+        return Ok(json!({"message":"Opened reading reference"}));
+    }
+    let mut groups: Vec<String> = [
+        "All", "Quick", "General", "Work", "Socials", "Domestic", "Finances", "Tech",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    let mut extra = Vec::new();
+    for t in rows.iter_mut() {
+        let mut recurrence = t.clone();
+        if !s(&recurrence["repeat"]["unit"]).is_empty()
+            && recurrence["repeat"].get("value").is_none()
+        {
+            recurrence["repeat"]["value"] = json!(1);
+        }
+        let period = model::period(&recurrence, model::today())?;
+        t["done"] = json!(t["completions"]
+            .get(&period)
+            .is_some_and(|v| !v.is_null() && v != false && v != ""));
+        t["period"] = json!(period);
+        extra.push(s(&t["group"]).to_owned());
+    }
+    extra.sort_by_key(|s| s.to_lowercase().replace('ß', "ss"));
+    for g in extra {
+        if !groups.contains(&g) {
+            groups.push(g);
+        }
+    }
+    Ok(json!({"tasks":rows,"groups":groups,"today":model::today().to_string()}))
 }
 
 #[cfg(test)]

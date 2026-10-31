@@ -393,6 +393,7 @@ Pane {
         }
         SnoozePicker {visible:editor==='snooze';Layout.fillWidth:true;ink:theme.text;accent:theme.accent;onChosen:until=>{action('snooze',{until:until});}}
         QuietButton {visible:editor==='snooze';text:'Cancel';onClicked:{editor='';app.forceActiveFocus();}}
+        Label {visible:!!stateData.sync_message;text:stateData.sync_message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
         Label {visible:!!errorMessage || !!stateData.message;text:errorMessage || stateData.message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
     }
     function accepted() {draftId='';editor='';app.forceActiveFocus();}

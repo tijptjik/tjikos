@@ -29,6 +29,16 @@ class NativeMigrationTests(unittest.TestCase):
         self.addCleanup(backend.close)
         return backend
 
+    def wait_for_sync(self, native):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            reply = native.request(op='app-action', provider='Todo', action='refresh')
+            state = reply.get('app_state', {})
+            if state.get('sync', {}).get('refreshing') is False:
+                return state
+            time.sleep(.02)
+        self.fail(f'Task synchronization did not finish: {reply}')
+
     def test_tasktjik_demo_and_local_state_without_host(self):
         Path(self.env['RUNTJIK_CONFIG']).write_text('[plugins]\nenabled=["Todo"]\n[plugin_settings.Todo]\nauthority=""\ndirectory=' + json.dumps(str(self.root / 'tasks')) + '\n')
         for demo in [True, False]:
@@ -99,7 +109,9 @@ class NativeMigrationTests(unittest.TestCase):
         config.write_text('[tasktjik]\nsocket=' + json.dumps(str(path)) + '\n')
         native = self.backend()
         self.assertEqual(native.request(op='query', query='/todo')['app_mode'], 'Todo')
+        self.wait_for_sync(native)
         native.request(op='app-action', provider='Todo', action='create', fields={'title':'Synthetic'})
+        self.wait_for_sync(native)
         self.assertEqual(len(records), 3)
         import uuid
         identities = []
@@ -129,6 +141,7 @@ class NativeMigrationTests(unittest.TestCase):
         reply = native.request(op='query', query='/todo')
         self.assertIn('app_state', reply, reply.get('message'))
         self.assertEqual(reply['app_state']['tasks'], [])
+        self.wait_for_sync(native)
         argv = [json.loads(line) for line in calls.read_text().splitlines()]
         self.assertEqual(len(argv), 2)
         self.assertIn('si.synthetic.ts.net:443:100.64.0.1', argv[1])
@@ -137,9 +150,11 @@ class NativeMigrationTests(unittest.TestCase):
         self.assertIn('--noproxy', argv[1])
         self.assertNotIn('--location', argv[1])
         curl.write_text('#!/usr/bin/python3\nimport sys\nsys.stdin.read()\nprint("{}")\nsys.stdout.write("302")\n')
+        native = self.backend()
         reply = native.request(op='query', query='/todo')
         self.assertEqual(reply['app_mode'], 'Todo')
-        self.assertIn('HTTP status 302', reply['message'])
+        state = self.wait_for_sync(native)
+        self.assertIn('HTTP status 302', state['sync_message'])
         self.assertEqual(children(native), [])
 
 

@@ -2,3 +2,5 @@
 pub mod client;
 mod client_util;
 pub mod model;
+
+pub mod cache;
