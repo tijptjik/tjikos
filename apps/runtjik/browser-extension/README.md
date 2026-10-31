@@ -8,6 +8,9 @@ connection; each host owns a private Unix socket in
 
 ## Setup
 
+For the signed-release walkthrough, closed-browser history setup and common
+errors, see [installation and troubleshooting](../docs/browser-install.md).
+
 1. Build and install Runtjik using its normal install scripts.
 2. The installer registers the host automatically. To repair registration, run
    `bash ~/.local/lib/runtjik/browser-extension/install-host.sh`.
