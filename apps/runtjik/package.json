@@ -5,7 +5,8 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "check": "bash scripts/check.sh",
-    "test": "cargo test --release --locked && python3 -B tests/rust_parity.py && python3 -B tests/rust_migration.py && python3 -B tests/clipboard.py && python3 -B tests/stats.py",
+    "test": "cargo test --release --locked && python3 -B tests/rust_parity.py && python3 -B tests/rust_migration.py && python3 -B tests/clipboard.py && python3 -B tests/stats.py && bun run test:browser",
+    "test:browser": "node tests/browser_extension.cjs && node tests/browser_reconnect.cjs && python3 -B tests/offline_history.py && python3 -B tests/browser_reconnect.py",
     "demo": "bin/runtjik --demo",
     "browser:dev": "bash scripts/browser-extension.sh dev",
     "browser:lint": "bash scripts/browser-extension.sh lint",
