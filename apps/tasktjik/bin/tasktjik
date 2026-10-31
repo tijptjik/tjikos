@@ -11,7 +11,10 @@ case "${1:-show}" in
         # Reuse a normal compositor window without tying its lifetime to Runtjik.
         if command -v hyprctl >/dev/null && command -v jq >/dev/null; then
             address=$(hyprctl -j clients 2>/dev/null | jq -r '.[] | select(.title == "Tasktjik") | .address' | head -n 1) || address=''
-            if [[ -n "$address" ]] && hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1; then
+            if [[ "$address" =~ ^0x[[:xdigit:]]+$ ]] && {
+                hyprctl dispatch "hl.dsp.focus({window=\"address:$address\"})" >/dev/null 2>&1 ||
+                hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1
+            }; then
                 exit 0
             fi
         fi
