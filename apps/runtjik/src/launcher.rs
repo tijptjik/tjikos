@@ -527,12 +527,18 @@ impl Launcher {
                 return Ok(action);
             }
             if e.provider == "Clipboard" {
+                let action = crate::clipboard::Clipboard::activate(e, mode, self.demo)?;
                 if mode == "close" {
-                    return Ok(
-                        json!({"kind":"message", "message":"Ctrl+Enter is available for applications and commands with matching windows"}),
-                    );
+                    let q = if self.last_query.is_empty() {
+                        "/cliphist".into()
+                    } else {
+                        self.last_query.clone()
+                    };
+                    let mut value = self.query(&q, 0, None)?;
+                    value["message"] = action["message"].clone();
+                    return Ok(value);
                 }
-                return crate::clipboard::Clipboard::activate(e, self.demo);
+                return Ok(action);
             }
             if e.provider == "Words" {
                 if mode == "close" {

@@ -212,7 +212,8 @@ highlighted; keyboard scrolling preserves the keyboard selection.
 | `/refresh` | Rebuild the application/command index |
 | `/grid`, `/list` | Select the current session view |
 | `/stats` | Show cumulative launches and window switches |
-| `/cliphist [text]` | Search existing clipboard history; Enter copies text or image data. |
+| `/cliphist [text]` | Search mixed clipboard history; Enter copies, Ctrl+Enter deletes the selected item. |
+| `/cliphist images [text]` | Show only clipboard images, optionally filtered by preview text. |
 | `/rec`, `/screenrecord` | Recording targets, Stop recording, and previous recordings. |
 | `/grab`, `/shot`, `/screenshot`, `/ss`, `/snap` | Screenshot targets and previous screenshots. |
 | `/define word`, `/synonym word` | Look up definitions/examples or synonyms; Results appear inline after a typing pause; Enter opens a source while retaining results. |
@@ -519,7 +520,9 @@ Bundled desktop plugins:
   previews locally, then decodes only the selected item into `wl-copy`. It supports
   text and images without auto-pasting. Requires `cliphist` and `wl-copy`, plus your
   existing `wl-paste --watch cliphist store` service to populate history. Runtjik
-  does not start a second watcher, delete entries, or log clipboard selections.
+  does not start a second watcher or log clipboard selections. `/cliphist images`
+  shows only images; Ctrl+Enter deletes the selected history item and refreshes
+  the current search without closing the launcher.
 - **Recorder** registers `/rec`, with `/screenrecord` as an alias. Screen selects a
   monitor; region uses `slurp`; window uses the desktop portal picker through
   `gpu-screen-recorder`, following the selected window. Screen/region/workspace

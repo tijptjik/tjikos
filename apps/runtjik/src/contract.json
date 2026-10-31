@@ -2685,7 +2685,7 @@
     ],
     [
       "Ctrl+Enter",
-      "Close a browser tab; trash a capture; otherwise close the selected app"
+      "Delete a clipboard item; close a browser tab; trash a capture; otherwise close the selected app"
     ],
     [
       "Ctrl+Z",
@@ -2781,7 +2781,7 @@
       "commands": [
         [
           "/cliphist",
-          "Search clipboard history \u00b7 Enter copies an item"
+          "Search clipboard history \u00b7 /cliphist images filters images"
         ]
       ],
       "aliases": [],

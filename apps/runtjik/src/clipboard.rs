@@ -112,7 +112,12 @@ impl Clipboard {
             let value = self.workers.remove(&id).unwrap().join().unwrap_or_default();
             self.previews.insert(id, value);
         }
-        let term = folded(query.split_once(' ').map(|(_, t)| t).unwrap_or(""));
+        let argument = folded(query.split_once(' ').map(|(_, t)| t).unwrap_or("").trim());
+        let (filter, rest) = argument
+            .split_once(char::is_whitespace)
+            .unwrap_or((&argument, ""));
+        let images_only = filter == "images";
+        let term = if images_only { rest.trim() } else { &argument };
         let list = if demo {
             "1\tSynthetic clipboard note\n2\thttps://example.com\n3\t[[ binary data 1200 bytes png 32x32 ]]".into()
         } else {
@@ -127,28 +132,33 @@ impl Clipboard {
             };
             if id.is_empty()
                 || !id.bytes().all(|b| b.is_ascii_digit())
-                || !folded(preview).contains(&term)
+                || !folded(preview).contains(term)
             {
                 continue;
             }
             let mut name = preview.to_owned();
             let mut thumbnail = String::new();
-            if preview.starts_with("[[ binary data ") {
-                if let Some(kind) = image.find(preview) {
-                    name = format!(
-                        "{} image{}",
-                        kind.as_str().to_uppercase(),
-                        size.find(preview)
-                            .map(|m| format!(" · {}", m.as_str().replace('x', "×")))
-                            .unwrap_or_default()
-                    );
-                    thumbnail = self.preview(id, demo)?;
-                }
+            let image_kind = preview
+                .starts_with("[[ binary data ")
+                .then(|| image.find(preview))
+                .flatten();
+            if images_only && image_kind.is_none() {
+                continue;
+            }
+            if let Some(kind) = image_kind {
+                name = format!(
+                    "{} image{}",
+                    kind.as_str().to_uppercase(),
+                    size.find(preview)
+                        .map(|m| format!(" · {}", m.as_str().replace('x', "×")))
+                        .unwrap_or_default()
+                );
+                thumbnail = self.preview(id, demo)?;
             }
             rows.push(row(
                 id,
                 &name,
-                "Enter copies to clipboard",
+                "",
                 json!({"clip_id":id,"thumbnail":thumbnail}),
             ));
             if rows.len()
@@ -162,22 +172,40 @@ impl Clipboard {
         if rows.is_empty() {
             rows.push(row(
                 "empty",
-                "No matching clipboard items",
+                if images_only {
+                    "No matching clipboard images"
+                } else {
+                    "No matching clipboard items"
+                },
                 "History comes from cliphist; its wl-paste watcher must be running",
                 json!({}),
             ));
         }
         Ok(rows)
     }
-    pub fn activate(entry: &Entry, demo: bool) -> Result<Value> {
+    pub fn activate(entry: &Entry, mode: &str, demo: bool) -> Result<Value> {
+        let Some(id) = entry.data["clip_id"].as_str() else {
+            return Ok(json!({"kind":"message","message":"No clipboard item selected"}));
+        };
+        if mode == "close" {
+            if demo {
+                return Ok(
+                    json!({"kind":"message","message":"Demo clipboard deletion; history unchanged"}),
+                );
+            }
+            binary(
+                &["cliphist".into(), "delete".into()],
+                id.as_bytes().to_vec(),
+                5,
+                true,
+            )?;
+            return Ok(json!({"kind":"message","message":"Deleted clipboard item"}));
+        }
         if demo {
             return Ok(
                 json!({"kind":"message","message":"Demo clipboard item selected; clipboard unchanged"}),
             );
         }
-        let Some(id) = entry.data["clip_id"].as_str() else {
-            return Ok(json!({"kind":"message","message":"No clipboard item selected"}));
-        };
         let data = binary(
             &["cliphist".into(), "decode".into()],
             id.as_bytes().to_vec(),

@@ -4692,7 +4692,7 @@
             {
               "id": "/shortcuts/5",
               "name": "Ctrl+Enter",
-              "subtitle": "Close a browser tab; trash a capture; otherwise close the selected app",
+              "subtitle": "Delete a clipboard item; close a browser tab; trash a capture; otherwise close the selected app",
               "provider": "internal",
               "count": 0,
               "windows": 0,
@@ -4879,7 +4879,7 @@
             {
               "id": "/cliphist",
               "name": "/cliphist",
-              "subtitle": "Search clipboard history · Enter copies an item",
+              "subtitle": "Search clipboard history · /cliphist images filters images",
               "provider": "internal",
               "count": 0,
               "windows": 0
@@ -6249,7 +6249,7 @@
             {
               "id": "Clipboard:1",
               "name": "Synthetic clipboard note",
-              "subtitle": "Enter copies to clipboard",
+              "subtitle": "",
               "provider": "Clipboard",
               "favicon": "",
               "hide_launcher": false,
@@ -6263,7 +6263,7 @@
             {
               "id": "Clipboard:2",
               "name": "https://example.com",
-              "subtitle": "Enter copies to clipboard",
+              "subtitle": "",
               "provider": "Clipboard",
               "favicon": "",
               "hide_launcher": false,
@@ -6277,7 +6277,7 @@
             {
               "id": "Clipboard:3",
               "name": "PNG image · 32×32",
-              "subtitle": "Enter copies to clipboard",
+              "subtitle": "",
               "provider": "Clipboard",
               "favicon": "",
               "hide_launcher": false,
@@ -6414,7 +6414,7 @@
             {
               "id": "Clipboard:2",
               "name": "https://example.com",
-              "subtitle": "Enter copies to clipboard",
+              "subtitle": "",
               "provider": "Clipboard",
               "favicon": "",
               "hide_launcher": false,
@@ -9221,7 +9221,7 @@
             {
               "id": "/shortcuts/5",
               "name": "Ctrl+Enter",
-              "subtitle": "Close a browser tab; trash a capture; otherwise close the selected app",
+              "subtitle": "Delete a clipboard item; close a browser tab; trash a capture; otherwise close the selected app",
               "provider": "internal",
               "count": 0,
               "windows": 0,
@@ -9662,7 +9662,7 @@
             {
               "id": "/cliphist",
               "name": "/cliphist",
-              "subtitle": "Search clipboard history · Enter copies an item",
+              "subtitle": "Search clipboard history · /cliphist images filters images",
               "provider": "internal",
               "favicon": "",
               "keep_open": false,
@@ -9932,7 +9932,7 @@
             {
               "id": "/cliphist",
               "name": "/cliphist",
-              "subtitle": "Search clipboard history · Enter copies an item",
+              "subtitle": "Search clipboard history · /cliphist images filters images",
               "provider": "internal",
               "count": 0,
               "windows": 0

@@ -37,6 +37,16 @@ with private_compositor():
             query('!ss history')
             key('-M','ctrl','-k','z','-m','ctrl')
             wait_for(lambda:'Trash unchanged' in json.loads(ipc('status'))['message'])
+            query('/cliphist images')
+            wait_for(lambda:len(state().get('rows', []))==1)
+            assert state()['rows'][0]['id']=='Clipboard:3'
+            key('-M','ctrl','-k','Return','-m','ctrl')
+            wait_for(lambda:'Demo clipboard deletion; history unchanged' in json.loads(ipc('status'))['message'])
+            assert json.loads(ipc('status'))['visible']
+            assert state()['resultQuery']=='/cliphist images'
+            query('/cliphist')
+            wait_for(lambda:len(state().get('rows', []))==3)
+            print('PASS: clipboard image filter and Ctrl+Enter deletion binding',flush=True)
             print('PASS: !ss / !snap, Ctrl+Up/Down history/draft restoration, gallery Ctrl+Z',temp,flush=True)
         finally:
             process.terminate();process.wait(timeout=5)
