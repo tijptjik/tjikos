@@ -21,8 +21,8 @@ Pane {
     property string lastDraftId: ''
     property string view: 'week'
     property bool searching: false
-    property bool showCompleted: true
-    property bool showCancelled: true
+    property bool showCompleted: false
+    property bool showCancelled: false
     property bool showDetails: false
     property int sortOrder: 0
     property bool requestBusy: false
@@ -461,7 +461,7 @@ Pane {
                 }
             }
             Item {Layout.fillWidth:true}
-            Choice {model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
+            Choice {model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual · drag'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
             IconButton {symbol:'search';description:'Filter tasks (/)';checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.forceActiveFocus();}}}
             IconButton {symbol:'completed';description:'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
             IconButton {symbol:'cancelled';description:'Show cancelled tasks';checkable:true;checked:app.showCancelled;onClicked:app.showCancelled=checked}
@@ -552,7 +552,7 @@ Pane {
                                                     readonly property bool focusedTask: selectedId===modelData.id
                                                     text:focusedTask?'›':app.dueLabel(modelData)
                                                     color:focusedTask?theme.accent:app.isOverdue(modelData)?'#eb6f92':theme.muted
-                                                    font.pixelSize:focusedTask?20:11;font.weight:Font.DemiBold
+                                                    font.family:'monospace';font.pixelSize:focusedTask?20:11;font.weight:Font.DemiBold
                                                     font.underline:!focusedTask && !!modelData.snoozedUntil
                                                     Layout.preferredWidth:30;Layout.topMargin:focusedTask?0:3;Layout.alignment:Qt.AlignTop
                                                 }
