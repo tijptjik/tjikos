@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Desktop sessions may omit user-installed application commands.
+export PATH="$HOME/.local/bin:$PATH"
 source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ -x "$source_root/runtjik-core" ]]; then
     export RUNTJIK_HOME="$source_root"
