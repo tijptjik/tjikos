@@ -1,7 +1,6 @@
 """Isolated Wayland environment for Runtjik UI checks and benchmarks."""
 from contextlib import contextmanager
 import ctypes
-import errno
 import os
 from pathlib import Path
 import select
@@ -36,8 +35,8 @@ def _runtime_clients(runtime, compositor_pid):
                 continue
             fd = _pidfd_call("pidfd_open", int(path.name), 0)
             if marker in (path / "environ").read_bytes().split(b"\0"):
-                yield int(path.name), fd
-                fd = None  # The caller now owns this handle.
+                handle, fd = fd, None  # The caller now owns this handle.
+                yield int(path.name), handle
         except (FileNotFoundError, ProcessLookupError, PermissionError):
             pass
         finally:
@@ -62,11 +61,14 @@ def stop_runtime_clients(runtime, compositor_pid, grace=2):
                     _pidfd_call("pidfd_send_signal", fd, signal.SIGTERM, None, 0)
                 except ProcessLookupError:
                     pass
-            for fd, _ in poll.poll(0):
+            exited = poll.poll(0)
+            for fd, _ in exited:
                 poll.unregister(fd)
                 os.close(fd)
                 clients = {pid: handle for pid, handle in clients.items() if handle != fd}
             if not clients:
+                if exited:
+                    continue  # Catch descendants spawned just before exit.
                 return
             if time.monotonic() >= deadline:
                 for fd in clients.values():
