@@ -24,7 +24,11 @@ ShellRoot {
         }
         animateClosedRemoval=opened && runningMode && resultQuery===query && windowEntry===''
             && removed.length>0 && removed.every(row=>row.provider==='apps' && row.windows>0);
-        for(let i=resultModel.count-1;i>=0;--i)
+        // A different menu needs a model reset, not a chain of delegate removals
+        // while GridView is also changing its cell geometry.
+        if(!animateClosedRemoval && removed.length>0 && removed.length===resultModel.count)
+            resultModel.clear();
+        else for(let i=resultModel.count-1;i>=0;--i)
             if(!wanted.has(resultModel.get(i).row.id))resultModel.remove(i);
         for(let i=0;i<results.length;++i){
             let found=i;
@@ -71,17 +75,20 @@ ShellRoot {
     property int nextOffset: 0
     property int pendingSelection: -1
     readonly property string commandQuery: query.startsWith('!') && !query.startsWith('!!') ? '/' + query.slice(1).replace(/^\s+/, '') : query
-    readonly property bool runMode: commandQuery === '/run' || commandQuery.startsWith('/run ') || query.startsWith('!!')
-    readonly property bool runningMode: query.startsWith('?') || query==='/processes' || query.startsWith('/processes ')
+    // Render the last complete result set in its own layout until its replacement
+    // arrives. Typing must not hide tiles or reflow them into the next menu early.
+    readonly property string displayQuery: resultQuery.startsWith('!') && !resultQuery.startsWith('!!') ? '/' + resultQuery.slice(1).replace(/^\s+/, '') : resultQuery
+    readonly property bool runMode: displayQuery === '/run' || displayQuery.startsWith('/run ') || resultQuery.startsWith('!!')
+    readonly property bool runningMode: resultQuery.startsWith('?') || resultQuery==='/processes' || resultQuery.startsWith('/processes ')
     readonly property var activeItems: wordMode ? wordPane.view : items
-    readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(commandQuery)
-    readonly property bool browserWindows: /^\/(browser|zen)( |$)/.test(commandQuery)
-    readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(commandQuery)
-    readonly property bool captureMenu: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord)$/.test(commandQuery.trim())
-    readonly property bool captureRecording: /^\/(rec|screenrecord)( |$)/.test(commandQuery)
+    readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(displayQuery)
+    readonly property bool browserWindows: /^\/(browser|zen)( |$)/.test(displayQuery)
+    readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(displayQuery)
+    readonly property bool captureMenu: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord)$/.test(displayQuery.trim())
+    readonly property bool captureRecording: /^\/(rec|screenrecord)( |$)/.test(displayQuery)
     readonly property int captureChoices: captureRecording ? 4 : 3
     readonly property bool galleryEmpty: galleryMode && results.length === 1 && !!results[0].empty_state
-    readonly property string galleryProvider: /^\/(rec|screenrecord) /.test(commandQuery) ? 'Recorder' : 'Screenshots'
+    readonly property string galleryProvider: /^\/(rec|screenrecord) /.test(displayQuery) ? 'Recorder' : 'Screenshots'
     readonly property int gridColumns: browserWindows ? (settings.plugin_settings?.Browser?.columns || 3) : captureMenu ? (captureRecording ? 2 : 3) : galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
     readonly property int galleryRows: settings.plugin_settings?.[galleryProvider]?.gallery_rows || 3
     property bool providerPending: false
@@ -105,7 +112,7 @@ ShellRoot {
         searchBox.cursorPosition=searchBox.text.length;
         navigatingHistory=false;
     }
-    readonly property bool listMode: !browserWindows && !captureMenu && !galleryMode && (view === 'list' || windowEntry !== '' || (commandQuery.startsWith('/') && !runMode && !runningMode))
+    readonly property bool listMode: !browserWindows && !captureMenu && !galleryMode && (view === 'list' || windowEntry !== '' || (displayQuery.startsWith('/') && !runMode && !runningMode))
     // Capture the focused screen once; keyboard navigation must not move the panel.
     property string movedMonitor: ''
     property string initialMonitor: ''
@@ -261,6 +268,7 @@ ShellRoot {
             loadingMore=false;hasMore=!!msg.has_more;nextOffset=msg.next_offset ?? results.length;
             indexed=msg.indexed;total=msg.total ?? results.length;
             resultQuery=msg.query || '';
+            if(!wordMode)items.forceLayout();
             if(resultQuery==='')homeResults=msg.results;
             const previousIndex=sameQuery && (!wordMode || wordSelectionEngaged)?results.findIndex(row=>row.id===previousId):-1;
             selected=wordMode && !wordSelectionEngaged?0:previousIndex>=0?previousIndex:Math.min(selected,Math.max(0,results.length-1));
@@ -332,7 +340,7 @@ ShellRoot {
     Timer {id:closePoll;interval:180;repeat:true;running:root.opened && root.closingIds.length>0;onTriggered:root.search()}
     Timer {interval:150;repeat:true;running:root.opened && root.providerPending && !debounce.running && !root.busy;onTriggered:root.search()}
     Timer {interval:1000;repeat:true;running:root.ready && root.opened && root.appMode==='Todo' && !root.busy;onTriggered:{root.busy=true;root.send({op:'app-action',provider:'Todo',action:'refresh'});}}
-    Timer {id:debounce;interval:root.wordMode?350:60;onTriggered:root.search()}
+    Timer {id:debounce;interval:/^\/(define|synonym)( |$)/.test(root.commandQuery)?350:60;onTriggered:root.search()}
     Timer {interval:root.settings.index.refresh_seconds*1000;running:root.ready && root.opened && !root.appMode;repeat:true;onTriggered:root.search()}
     IpcHandler {
         target: 'runtjik'
@@ -554,12 +562,12 @@ ShellRoot {
                 }
                 Row {
                     id:resultsHeading
-                    visible:panel.pinned || root.galleryMode || root.wordMode || !!root.windowEntry || root.runningMode || root.runMode || root.commandQuery.startsWith('/config') || ['/shortcuts','/bindings'].includes(root.query.trim())
+                    visible:panel.pinned || root.galleryMode || root.wordMode || !!root.windowEntry || root.runningMode || root.runMode || root.displayQuery.startsWith('/config') || ['/shortcuts','/bindings'].includes(root.resultQuery.trim())
                     width:parent.width;height:visible?(root.wordMode?34:24):0;spacing:12
                     Text {
                         id: resultsLabel
                         width:root.wordMode?headingMetrics.advanceWidth:parent.width-(pinStatus.visible?pinStatus.width+parent.spacing:0);height:parent.height
-                        text:root.statistics?'STATISTICS':root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.commandQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.commandQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.query.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.query?'SEARCH RESULTS':'APPLICATIONS'))))
+                        text:root.statistics?'STATISTICS':root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.displayQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.displayQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.resultQuery.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.resultQuery?'SEARCH RESULTS':'APPLICATIONS'))))
                         font.family:root.settings.ui.font;font.pixelSize:11;font.letterSpacing:1.8
                         verticalAlignment:Text.AlignVCenter;color:root.theme.muted
                         TextMetrics {id: headingMetrics; font: resultsLabel.font; text: resultsLabel.text}
@@ -606,9 +614,9 @@ ShellRoot {
                             visible: root.wordMode && root.statistics === null
                             theme: root.theme; settings: root.settings
                             headerHost: wordProviderHeader
-                            sourceCounts: root.resultQuery === root.query ? root.wordSourceCounts : ({})
+                            sourceCounts: root.wordSourceCounts
                             rowModel: resultModel
-                            query: root.commandQuery; rows: root.resultQuery === root.query ? root.results : []
+                            query: root.displayQuery; rows: root.results
                             selected: root.selected; pointerSelection: root.pointerSelection
                             onSelectRow: (index, pointer) => {if(index!==root.selected)wordPane.leaveTerms();root.wordSelectionEngaged=true;root.pointerSelection=pointer;root.selected=index;}
                             onActivateRow: (index, alternate) => {root.wordSelectionEngaged=true;root.selected=index;root.activate(alternate);}
@@ -708,7 +716,7 @@ ShellRoot {
                                     width:root.captureMenu?40:root.galleryMode?parent.width-12:modelData.thumbnail?100:root.wordMode?28:root.listMode?40:root.settings.ui.icon_size
                                     height:root.galleryMode?parent.height-38:modelData.thumbnail?54:width
                                     source:parent.iconSource;sourceSize.width:width*2;sourceSize.height:height*2
-                                    fillMode:Image.PreserveAspectFit;asynchronous:true
+                                    fillMode:Image.PreserveAspectFit;asynchronous:root.galleryMode
                                 }
                                 Text {
                                     visible:art.status===Image.Error || art.source.toString()===''
