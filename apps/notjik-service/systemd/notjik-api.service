@@ -1,0 +1,27 @@
+[Unit]
+Description=Notjik private notification authority
+After=network-online.target
+[Service]
+User=notjik
+Group=notjik
+ExecStart=/usr/local/lib/notjik/notjik-api --config /etc/notjik/api.toml
+StateDirectory=notjik
+StateDirectoryMode=0700
+RuntimeDirectory=notjik
+RuntimeDirectoryMode=0750
+UMask=0077
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=yes
+LockPersonality=yes
+[Install]
+WantedBy=multi-user.target
