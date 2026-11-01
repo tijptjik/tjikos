@@ -945,6 +945,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
+name = "notjik-sync"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "libc",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1532,6 +1547,7 @@ dependencies = [
  "axum",
  "chrono",
  "libc",
+ "notjik-sync",
  "percent-encoding",
  "rusqlite",
  "serde",
