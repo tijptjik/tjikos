@@ -700,9 +700,10 @@ Screenshots load directly at thumbnail size; video previews are generated with
 FFmpeg in the private Runtjik thumbnail cache outside the repository.
 
 `plugin_settings.Recorder.countdown_seconds` defaults to 3 (0–10 supported).
-After selecting a region/screen/workspace, a visible countdown appears on that
-monitor. Escape cancels before any recorder is started; the overlay disappears
-before capture begins. Window recording counts down before opening the portal
+After selecting a region/screen/workspace, white countdown numerals appear in the
+center of that monitor, without a panel or labels. Escape cancels before any
+recorder is started; the overlay disappears before capture begins. Window
+recording counts down before opening the portal
 picker. The countdown is a native Quickshell/QML overlay.
 
 `!ss` and `!snap` also open the screenshot plugin. Screen and window choices are

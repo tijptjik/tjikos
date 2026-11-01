@@ -23,15 +23,15 @@ ShellRoot {
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "runtjik-countdown"
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-        Rectangle {
-            anchors.fill: parent; radius: 20; color: "#26233a"; border.color: "#ff53a6"; border.width: 2
+        Item {
+            anchors.fill: parent
             focus: true
             Keys.onEscapePressed: Qt.quit()
-            Column {
-                anchors.centerIn: parent; spacing: 4
-                Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Recording starts in"; color: "#e0def4" }
-                Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.remaining; font.pixelSize: 80; color: "#ff53a6" }
-                Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Esc to cancel"; color: "#e0def4" }
+            Text {
+                anchors.centerIn: parent
+                text: root.remaining
+                font.pixelSize: 80
+                color: "white"
             }
         }
     }
