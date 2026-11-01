@@ -48,6 +48,9 @@ fn execute() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("serve");
     match cmd {
+        "stop-recording" => {
+            crate::capture_worker::request("stop")?;
+        }
         "image" => crate::image_viewer::cli(&args[1..])?,
         "image-viewer" => crate::image_viewer::open(&serde_json::from_str(
             args.get(1)

@@ -586,6 +586,11 @@ Bundled desktop plugins:
   transition can appear before recording stops; this is not background capture of
   a hidden workspace. A Stop row controls only Runtjik's recorder, never another
   recording tool or the existing `screen-record.service`.
+  Tap either Super key by itself to stop an active recording; other Super
+  shortcuts keep working. The temporary key bindings are removed when recording
+  finishes. `/rec` shows immediate stopping/saving feedback, then removes Stop
+  when the file is finalized. `runtjik stop-recording` also stops the owned
+  recording directly and does nothing when none is active.
 - **Screenshots** registers `/grab`, with `/shot` and `/screenshot` as aliases.
   Screen selects a monitor. Window focuses the selected
   window and captures its visible rectangle; region uses `slurp` (Escape cancels).

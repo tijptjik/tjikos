@@ -395,15 +395,25 @@ impl Captures {
                 capture_worker::request("status")?
             };
             if let Some(status) = status {
+                let stopping = status["stopping"] == true;
+                self.pending = stopping;
                 rows.push(row(
                     name,
                     "stop",
-                    "Stop recording",
+                    if stopping {
+                        "Saving recording…"
+                    } else {
+                        "Stop recording"
+                    },
                     Path::new(s(&status["file"]))
                         .file_name()
                         .and_then(|s| s.to_str())
                         .unwrap_or(""),
-                    json!({"stop":true}),
+                    if stopping {
+                        json!({"stop":true,"disabled":true})
+                    } else {
+                        json!({"stop":true})
+                    },
                 ));
             }
         }
@@ -562,11 +572,11 @@ impl Captures {
             return Ok(json!({"kind":"activated"}));
         }
         if data["stop"] == true {
-            return Ok(message(if capture_worker::request("stop")?.is_some() {
-                "Stopping recording; the file will appear in history when finalized"
-            } else {
-                "No Runtjik recording is active"
-            }));
+            let stopping = capture_worker::request("stop")?.is_some();
+            return Ok(json!({"kind":"message", "recording_stopping":true,
+                "message":if stopping {
+                    "Stopping recording; the file will appear in history when finalized"
+                } else { "No Runtjik recording is active" }}));
         }
         if data.get("capture").is_none() {
             return Ok(message("Choose a capture type or previous file"));

@@ -55,6 +55,7 @@ ShellRoot {
     property int serial: 0
     property bool ready: false
     property bool busy: false
+    property bool stopRequested: false
     property bool quitting: false
     property bool opened: true
     property var homeResults: []
@@ -183,6 +184,12 @@ ShellRoot {
         }
         rememberCommand(query);
         busy = true;
+        if(results[selected].id==='Recorder:stop'){
+            stopRequested=true;
+            message='Stopping recording…';
+            // Do not queue stop behind indexing or another provider request.
+            if(!demo){recordingStop.running=true;return;}
+        }
         const appResult=['apps','commands'].includes(results[selected].provider);
         const mode=closeWindow?'close':appResult?(switchWindow?'launch':'switch'):(switchWindow?'switch':'launch');
         const request=windowEntry?{op:'activate',id:windowEntry,mode:closeWindow?'close':'switch',address:results[selected].id}
@@ -240,6 +247,7 @@ ShellRoot {
         if (msg.kind !== 'results' || msg.serial === serial) busy = false;
         if (msg.kind === 'app-state') {message=msg.app_state.message || '';appState=Object.assign({},appState,msg.app_state);if(msg.app_state.mutation_accepted)todoApp.accepted();return;}
         if (msg.kind === 'results') {
+            stopRequested=false;
             browserTabScope=!!msg.browser_tab_scope;
             appMode=msg.app_mode || '';
             statistics=msg.statistics || null;
@@ -321,9 +329,18 @@ ShellRoot {
                 panel.visible=true;
                 search();
             } else close();
-        } else if(msg.kind==='message') {loadingMore=false;message=msg.message || '';}
-        else {loadingMore=false;message=msg.message || 'Unable to complete action';if(!root.ready)console.error(message);}
+        } else if(msg.kind==='message') {loadingMore=false;message=msg.message || '';if(msg.recording_stopping)search();else stopRequested=false;}
+        else {stopRequested=false;loadingMore=false;message=msg.message || 'Unable to complete action';if(!root.ready)console.error(message);}
         if (msg.kind!=='activated' && msg.kind!=='launch' && !root.quitting && root.opened && root.initialCaptured) {panel.visible=true;if(panel.ownsKeyboard){if(root.appMode)todoApp.forceActiveFocus();else root.focusInput();}}
+    }
+    Process {
+        id: recordingStop
+        command: [Quickshell.env('RUNTJIK_HOME')+'/runtjik-core','stop-recording']
+        onExited: (code,status) => {
+            root.busy=false;
+            if(code===0)root.search();
+            else {root.stopRequested=false;root.message='Could not stop recording';}
+        }
     }
     Process {
         id: backend
@@ -338,7 +355,7 @@ ShellRoot {
     }
     Timer {id:actionDelay;interval:80;onTriggered:{const request=root.queuedRequest;root.queuedRequest=null;root.send(request);}}
     Timer {id:closePoll;interval:180;repeat:true;running:root.opened && root.closingIds.length>0;onTriggered:root.search()}
-    Timer {interval:150;repeat:true;running:root.opened && root.providerPending && !debounce.running && !root.busy;onTriggered:root.search()}
+    Timer {interval:150;repeat:true;running:root.opened && (root.providerPending || (!root.demo && root.captureMenu && root.results.some(row=>row.id==='Recorder:stop'))) && !debounce.running && !root.busy;onTriggered:root.search()}
     Timer {interval:1000;repeat:true;running:root.ready && root.opened && root.appMode==='Todo' && !root.busy;onTriggered:{root.busy=true;root.send({op:'app-action',provider:'Todo',action:'refresh'});}}
     Timer {id:debounce;interval:/^\/(define|synonym)( |$)/.test(root.commandQuery)?350:60;onTriggered:root.search()}
     Timer {interval:root.settings.index.refresh_seconds*1000;running:root.ready && root.opened && !root.appMode;repeat:true;onTriggered:root.search()}
@@ -748,7 +765,7 @@ ShellRoot {
                                         Text {
                                             id:label
                                             width:titleRow.width-(runningDot.visible?13:0)
-                                            text:modelData.name;color:root.theme.text;font.family:root.settings.ui.font
+                                            text:modelData.id==='Recorder:stop' && root.stopRequested?'Stopping recording…':modelData.name;color:root.theme.text;font.family:root.settings.ui.font
                                             font.pixelSize:root.settings.ui.font_size-1
                                             horizontalAlignment:root.listMode?Text.AlignLeft:Text.AlignHCenter
                                             textFormat:Text.PlainText

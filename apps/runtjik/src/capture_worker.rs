@@ -11,7 +11,7 @@ use std::{
             net::{UnixListener, UnixStream},
         },
     },
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
@@ -19,6 +19,47 @@ use std::{
 static STOP: AtomicBool = AtomicBool::new(false);
 extern "C" fn stop(_: libc::c_int) {
     STOP.store(true, Ordering::Relaxed);
+}
+fn lua_string(value: &str) -> String {
+    let mut equals = String::new();
+    while value.contains(&format!("]{equals}]")) {
+        equals.push('=');
+    }
+    format!("[{equals}[{value}]{equals}]")
+}
+struct StopShortcut(u32);
+impl StopShortcut {
+    fn install() -> Result<Option<Self>> {
+        if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none() {
+            return Ok(None);
+        }
+        let executable = std::env::current_exe()?;
+        let command = format!(
+            "'{}' stop-recording",
+            executable.to_string_lossy().replace('\'', "'\\''")
+        );
+        let token = std::process::id();
+        let script = format!(
+            "local stop_command = {}; local stop_token = {token};\n{}",
+            lua_string(&command),
+            include_str!("recording_stop.lua")
+        );
+        command_eval(&script)?;
+        Ok(Some(Self(token)))
+    }
+}
+fn command_eval(script: &str) -> Result<String> {
+    run(&["hyprctl".into(), "eval".into(), script.into()], None, 2)
+}
+impl Drop for StopShortcut {
+    fn drop(&mut self) {
+        let _ = command_eval(&format!(
+            "if _G.runtjikRecordingStop and _G.runtjikRecordingStop.token == {} then \
+             for _, binding in ipairs(_G.runtjikRecordingStop.bindings) do binding:remove() end; \
+             _G.runtjikRecordingStop = nil end",
+            self.0
+        ));
+    }
 }
 pub fn socket() -> Result<PathBuf> {
     let root = PathBuf::from(
@@ -30,7 +71,10 @@ pub fn socket() -> Result<PathBuf> {
     Ok(root.join("recorder.sock"))
 }
 pub fn request(action: &str) -> Result<Option<Value>> {
-    let mut stream = match UnixStream::connect(socket()?) {
+    request_at(&socket()?, action)
+}
+fn request_at(path: &Path, action: &str) -> Result<Option<Value>> {
+    let mut stream = match UnixStream::connect(path) {
         Ok(s) => s,
         Err(e)
             if [
@@ -45,11 +89,58 @@ pub fn request(action: &str) -> Result<Option<Value>> {
     };
     stream.set_read_timeout(Some(Duration::from_millis(500)))?;
     stream.set_write_timeout(Some(Duration::from_millis(500)))?;
-    writeln!(stream, "{action}")?;
+    if let Err(error) = writeln!(stream, "{action}") {
+        if recorder_disconnected(&error) {
+            return Ok(None);
+        }
+        return Err(error.into());
+    }
     let mut data = Vec::new();
-    stream.take(8193).read_to_end(&mut data)?;
+    if let Err(error) = stream.take(8193).read_to_end(&mut data) {
+        if recorder_disconnected(&error) {
+            return Ok(None);
+        }
+        return Err(error.into());
+    }
+    // The encoder can finish after connect but before the worker accepts us.
+    if data.is_empty() {
+        return Ok(None);
+    }
     ensure!(data.len() <= 8192, "Invalid recorder response");
     Ok(Some(serde_json::from_slice(&data)?))
+}
+
+#[cfg(test)]
+mod request_tests {
+    use super::*;
+
+    #[test]
+    fn worker_finishing_during_a_request_is_no_longer_active() {
+        for read_request in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let path = temp.path().join("recorder.sock");
+            let listener = UnixListener::bind(&path).unwrap();
+            let worker = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                if read_request {
+                    let mut bytes = [0; 64];
+                    stream.read(&mut bytes).unwrap();
+                }
+                // Exit without replying, as when the encoder finishes between
+                // a client's connect and the worker's next loop iteration.
+            });
+            assert!(request_at(&path, "status").unwrap().is_none());
+            worker.join().unwrap();
+        }
+    }
+}
+fn recorder_disconnected(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::UnexpectedEof
+    )
 }
 fn argv(spec: &Value) -> Result<Vec<String>> {
     if spec["mode"] == "window" {
@@ -131,6 +222,7 @@ pub fn serve(spec: Value) -> Result<()> {
             .mode(0o600)
             .open(logdir.join("capture.log"))?;
         let a = argv(&spec)?;
+        let _shortcut = StopShortcut::install()?;
         let mut child = Command::new(&a[0])
             .args(&a[1..])
             .stdin(Stdio::null())
@@ -138,6 +230,7 @@ pub fn serve(spec: Value) -> Result<()> {
             .stderr(log)
             .spawn()?;
         let mut stopping = None;
+        let mut workspace_check = Instant::now();
         let outcome = (|| -> Result<()> {
             std::thread::sleep(Duration::from_millis(300));
             ensure!(
@@ -160,7 +253,11 @@ pub fn serve(spec: Value) -> Result<()> {
                         let _ = connection.write_all(response.as_bytes());
                     }
                 }
-                if spec["mode"] == "workspace" && !STOP.load(Ordering::Relaxed) {
+                if spec["mode"] == "workspace"
+                    && !STOP.load(Ordering::Relaxed)
+                    && workspace_check.elapsed() >= Duration::from_millis(100)
+                {
+                    workspace_check = Instant::now();
                     let same = capture::hypr("monitors")
                         .ok()
                         .and_then(|ms| ms.into_iter().find(|m| m["name"] == spec["output"]))
@@ -180,9 +277,21 @@ pub fn serve(spec: Value) -> Result<()> {
                     child.wait()?;
                     bail!("Recorder did not finalize within 20 seconds; output may be incomplete");
                 }
-                std::thread::sleep(Duration::from_millis(100));
+                // Wake immediately for Stop/status requests instead of making
+                // every caller wait for the workspace polling interval.
+                let mut event = libc::pollfd {
+                    fd: server.as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                };
+                unsafe {
+                    libc::poll(&mut event, 1, 100);
+                }
             }
             let status = child.wait()?;
+            // Finalization is complete. Do not leave a socket that cannot answer
+            // status requests while the notification command is running.
+            let _ = fs::remove_file(&path);
             use std::os::unix::process::ExitStatusExt;
             let success = (status.success()
                 || status.code() == Some(130)
