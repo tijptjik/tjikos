@@ -30,6 +30,7 @@ class Store(context: Context, name: String = "notifications.db") : SQLiteOpenHel
             merged
         } finally { db.endTransaction() }
     }
+    fun card(id: String): JSONObject? = synchronized(lock) { find(readableDatabase, id) }
     fun cards(): List<JSONObject> = synchronized(lock) {
         readableDatabase.rawQuery("SELECT payload FROM cards ORDER BY received DESC,id", null).use { c ->
             buildList { while(c.moveToNext()) add(JSONObject(c.getString(0))) }

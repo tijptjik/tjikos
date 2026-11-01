@@ -55,3 +55,8 @@ own expedited reconciliation instead of waiting behind an older retry chain.
 The application keeps saved history available offline and queues user
 mutations durably. Force-stopping the app disables Android background delivery
 until it is opened again.
+
+Authentication cards show **Copy code** as the first native notification action.
+It briefly opens a foreground activity to copy on this phone, marks the clipboard
+sensitive, and dismisses the local notification. It does not invoke a command on
+the originating desktop. Unlock is required before copying from the lock screen.
