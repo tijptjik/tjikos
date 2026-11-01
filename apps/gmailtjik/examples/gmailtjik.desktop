@@ -2,9 +2,10 @@
 Type=Application
 Name=Gmailtjik
 Comment=Gmail inbox, contacts and email composer
-Exec=gmailtjik
+Exec=gmailtjik --open %u
 Icon=gmailtjik
 StartupWMClass=gmailtjik
 Terminal=false
 Categories=Network;Email;
+MimeType=x-scheme-handler/gmailtjik;
 Keywords=Gmail;Mail;Email;Inbox;

@@ -123,6 +123,21 @@ notifications durably for the active device; without configured sync, local
 `notjikctl receive` is used. Gmail sync never marks mail read. Closing the GUI
 does not stop an installed sync service.
 
+Notifications prefer a matching cached Google contact photo, then the sender
+domain's favicon, with the `gmailtjik` app icon as fallback. Favicon lookup sends
+only the sender domain to Google's favicon service. Artwork is bounded to a
+64-pixel PNG and cached privately for a day, including failed lookups; embedded
+artwork travels with Notjik sync and renders in desktop Notjik.
+
+Both email and authentication-code cards include **Open email**; code cards
+also retain **Copy code**. Open email launches a new Gmailtjik window on the
+originating desktop through Notjik's existing command-action routing, including
+when invoked remotely. It selects the exact message and checks the account
+before fetching the thread. It does not mark the email read. The native URI is
+`gmailtjik://mail/open?account=…&message=…&thread=…`, accepted by
+`gmailtjik --open URI`. Installing the updated desktop entry registers the
+`gmailtjik:` scheme. This is a desktop app link, not an Android Gmail app link.
+
 ### Gmail push
 
 Enable the Gmail API in the OAuth client project and connect the Gmail account

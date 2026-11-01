@@ -6,6 +6,7 @@ mod contacts;
 mod google;
 mod html;
 mod labels;
+mod links;
 mod model;
 mod notifications;
 mod push;
@@ -19,13 +20,16 @@ use anyhow::{Context, Result, bail};
 use gpui_kit::*;
 
 fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if args == ["--open"] {
+        args.clear();
+    }
     if args == ["--sync"] || args == ["--sync-once"] {
         return background::run(store::data_dir()?, args == ["--sync-once"]);
     }
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
-            "gmailtjik — a native Gmail client\n\n  gmailtjik\n  gmailtjik --demo\n  gmailtjik --sync (headless background polling)\n  gmailtjik --sync-once\n  gmailtjik --connect /private/path/google-desktop-client.json [--contacts]\n\nPrivate state: $GMAILTJIK_DATA_DIR or $XDG_DATA_HOME/gmailtjik\nEnable Gmail API, and optionally People API, in your Google Cloud project."
+            "gmailtjik — a native Gmail client\n\n  gmailtjik\n  gmailtjik --demo\n  gmailtjik --open gmailtjik://mail/open?...\n  gmailtjik --sync (headless background polling)\n  gmailtjik --sync-once\n  gmailtjik --connect /private/path/google-desktop-client.json [--contacts]\n\nPrivate state: $GMAILTJIK_DATA_DIR or $XDG_DATA_HOME/gmailtjik\nEnable Gmail API, and optionally People API, in your Google Cloud project."
         );
         return Ok(());
     }
@@ -39,8 +43,13 @@ fn main() -> Result<()> {
             args.iter().any(|a| a == "--contacts"),
         );
     }
+    let open = if args.len() == 2 && args[0] == "--open" {
+        Some(links::MailLink::parse(&args[1])?)
+    } else {
+        None
+    };
     let demo = args == ["--demo"];
-    if !args.is_empty() && !demo {
+    if !args.is_empty() && !demo && open.is_none() {
         bail!("Unknown argument. Use gmailtjik --help");
     }
     let dir = if demo { None } else { Some(store::data_dir()?) };
@@ -64,7 +73,7 @@ fn main() -> Result<()> {
             ..Default::default()
         };
         open_window(options, cx, move |window, cx| {
-            cx.new(|cx| ui::MailApp::new(demo, dir, window, cx))
+            cx.new(|cx| ui::MailApp::new(demo, dir, open, window, cx))
         })
         .expect("Could not open Gmailtjik window");
         cx.activate(true);

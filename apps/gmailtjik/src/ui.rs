@@ -173,6 +173,7 @@ impl MailApp {
     pub fn new(
         demo: bool,
         dir: Option<PathBuf>,
+        open: Option<crate::links::MailLink>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -465,6 +466,9 @@ impl MailApp {
         this.migrate_contact_defaults();
         if !demo {
             this.load(cx);
+            if let Some(link) = open {
+                this.dispatch(Command::OpenMail(link));
+            }
         } else {
             this.refresh_reader();
         }
@@ -917,6 +921,22 @@ impl MailApp {
                         Ok(count) => self.status = format!("Marked {count} messages read"),
                         Err(error) => self.error = error,
                     }
+                }
+                Event::OpenMail(message) => {
+                    self.ticket += 1;
+                    self.loading = false;
+                    self.label.clear();
+                    self.query.clear();
+                    self.unread_only = false;
+                    self.page_token.clear();
+                    self.page = Page {
+                        messages: vec![message.clone()],
+                        ..Default::default()
+                    };
+                    self.selected = Some(message);
+                    self.zone = 1;
+                    self.refresh_reader();
+                    window.activate_window();
                 }
                 Event::Connected => {
                     self.connecting = false;

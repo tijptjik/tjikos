@@ -7,6 +7,7 @@ use anyhow::Result;
 use std::{path::PathBuf, sync::mpsc};
 
 pub enum Command {
+    OpenMail(crate::links::MailLink),
     Connect(PathBuf),
     Sync,
     PushSync(mpsc::Sender<bool>),
@@ -41,6 +42,7 @@ pub enum Command {
 }
 pub enum Event {
     AllRead(std::result::Result<usize, String>),
+    OpenMail(Message),
     SyncComplete,
     ContactBook(Vec<Contact>),
     ContactPhoto {
@@ -230,7 +232,15 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                                         &store,
                                         message,
                                         baseline,
-                                        |_| crate::notifications::send(notice),
+                                        |_| {
+                                            let mut notice = notice;
+                                            crate::notifications::sender_image(
+                                                &store,
+                                                message,
+                                                &mut notice,
+                                            );
+                                            crate::notifications::send(notice)
+                                        },
                                     ) {
                                         notifications_ok = false;
                                         let _ = events
@@ -299,6 +309,11 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                                 cached: false,
                                 page,
                             });
+                        }
+                        Command::OpenMail(link) => {
+                            link.check_account(email)?;
+                            let messages = google.thread(&store, &link.thread)?;
+                            let _ = events.send(Event::OpenMail(link.select(messages)?));
                         }
                         Command::Thread(id) => {
                             if let Some(messages) =
