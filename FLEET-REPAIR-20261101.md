@@ -7,7 +7,8 @@
 - Removed notification installer's private source-worktree override and producer
   reinstalls. Notification installation no longer replaces archive runtimes.
 - Added exact-list SnapRAID review and one-use approval. The live review contains
-  2,062 missing files. No removal approval or parity sync was executed.
+  2,062 missing files. The user subsequently approved that exact list; parity
+  sync is queued behind maintenance and configuration convergence.
 - Delivered the incident to Fi through Notjik with **Review removals** and
   **APPROVE & SYNC**. Review fetches the current report through pinned SSH and
   opens a private, mode-0400 copy in Zed Preview. Native Zed SSH connections stalled
@@ -44,15 +45,19 @@
   exit 75 while the maintenance lock was held; no lock was bypassed.
 - The queued configuration run supersedes the failed historical cutover script;
   retain that old failure as evidence until the replacement actually succeeds.
-- Si's canonical Synctjik runtime still needs the reviewed code after maintenance.
-  Automatic approval review rejected even a queued, lock-protected replacement
-  because it would replace the pinned worker path. No replacement job was created.
-  Separate explicit approval is required before retrying that action.
-- The user must inspect the removal report and choose APPROVE & SYNC if correct.
-  Approval applies only to the exact removal-list/layout digest, expires after
-  24 hours, and is consumed before parity changes. Mount, scrub and other safety
-  gates remain enabled. It accepts missing files into parity, not deletion of
-  existing source files.
+- The user explicitly authorized the canonical Synctjik replacement after the
+  previous automatic-review rejection. `synctjik-si-runtime-converge-20261101`
+  is queued after scrub/application backup, acquires both protection locks, and
+  installs atomically before the queued configuration run. The active scrub
+  binary remains untouched until then.
+- The exact 2,062-file review was approved at 03:26:38 UTC. The reviewed sync is
+  queued after runtime and configuration convergence. Approval expires after
+  24 hours and is consumed before parity changes; all other safety gates remain.
+- The requested media follow-up verified 11 replacement movies and 17 replacement
+  episodes against manager records and actual file sizes. Replacements are not
+  fully equivalent: an edition/resolution change and missing subtitle language
+  were identified. The detailed private report is outside Git at
+  `~/.local/state/synctjik/media-review-20261101/report.md` on Si.
 - Si's old weekly failure remains outstanding until maintenance ends and a new
   complete weekly run succeeds.
 
@@ -63,5 +68,5 @@ rendering. Synctjik, Notjik transport and authority tests passed. Tasktjik's eig
 library tests passed; its release build succeeded. The workspace
 `bun run check` passed all 12 tasks and frozen Bun installation succeeded.
 Runtjik check succeeded after its lockfile repair. The actual notification reached Fi with both actions, and
-Zed opened the SSH-fetched report. The approval action was deliberately not
-invoked against production parity.
+Zed opened the SSH-fetched report. The approval action was invoked only after the user explicitly accepted the
+reviewed removals; execution remains queued behind the active scrub.
