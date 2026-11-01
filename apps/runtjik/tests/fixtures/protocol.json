@@ -1109,6 +1109,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -2246,6 +2256,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -2593,6 +2613,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -3730,6 +3760,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -3866,6 +3906,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -4013,6 +4063,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -4160,6 +4220,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -4525,6 +4595,16 @@
               "windows": 0
             },
             {
+              "count": 0,
+              "disabled": false,
+              "icon": "/home/io/code/tjikos/apps/runtjik/qml/icons/commands/runtjik-config.svg",
+              "id": "/config plugin_settings.Browser.favicon_overrides",
+              "name": "plugin_settings.Browser.favicon_overrides = [{\"domain_regex\":\"(^|\\\\.)overturemaps\\\\.org$\",\"icon\":\"bundled:overture.png\"}, {\"domain_regex\":\"(^|\\\\.)csdi\\\\.gov\\\\.hk$\",\"icon\":\"bundled:hkgov.png\"}]",
+              "provider": "internal",
+              "subtitle": "Browser plugin · favicon overrides",
+              "windows": 0
+            },
+            {
               "id": "/config plugin_settings.Todo.authority",
               "name": "plugin_settings.Todo.authority = \"si\"",
               "subtitle": "Todo plugin · authority",
@@ -4675,6 +4755,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -4816,6 +4906,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -5056,6 +5156,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -5316,6 +5426,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -5619,6 +5739,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -5927,6 +6057,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -6235,6 +6375,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -6383,6 +6533,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -6520,6 +6680,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -6704,6 +6874,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -6857,6 +7037,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -7010,6 +7200,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -7205,6 +7405,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -7358,6 +7568,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -7511,6 +7731,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -7776,6 +8006,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -7999,6 +8239,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -8152,6 +8402,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -8417,6 +8677,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -8594,6 +8864,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -8774,6 +9054,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -8915,6 +9205,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -9046,6 +9346,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -9177,6 +9487,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -9308,6 +9628,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -9668,6 +9998,16 @@
               "windows": 0
             },
             {
+              "count": 0,
+              "disabled": false,
+              "icon": "/home/io/code/tjikos/apps/runtjik/qml/icons/commands/runtjik-config.svg",
+              "id": "/config plugin_settings.Browser.favicon_overrides",
+              "name": "plugin_settings.Browser.favicon_overrides = [{\"domain_regex\":\"(^|\\\\.)overturemaps\\\\.org$\",\"icon\":\"bundled:overture.png\"}, {\"domain_regex\":\"(^|\\\\.)csdi\\\\.gov\\\\.hk$\",\"icon\":\"bundled:hkgov.png\"}]",
+              "provider": "internal",
+              "subtitle": "Browser plugin · favicon overrides",
+              "windows": 0
+            },
+            {
               "id": "/config plugin_settings.Todo.authority",
               "name": "plugin_settings.Todo.authority = \"si\"",
               "subtitle": "Todo plugin · authority",
@@ -9818,6 +10158,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -10058,6 +10408,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -10200,6 +10560,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -10347,6 +10717,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -10494,6 +10874,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -10641,6 +11031,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -10906,6 +11306,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -11416,6 +11826,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -11586,6 +12006,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -11727,6 +12157,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -11874,6 +12314,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -12021,6 +12471,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -12152,6 +12612,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -12283,6 +12753,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -12425,6 +12905,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {
@@ -12604,6 +13094,16 @@
                 "history_profiles": [],
                 "history_browser": [
                   "zen-browser"
+                ],
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$",
+                    "icon": "bundled:overture.png"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
+                    "icon": "bundled:hkgov.png"
+                  }
                 ]
               },
               "Todo": {

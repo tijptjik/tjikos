@@ -96,7 +96,11 @@
       "Browser": {
         "columns": 3,
         "history_profiles": [],
-        "history_browser": ["zen-browser"]
+        "history_browser": ["zen-browser"],
+        "favicon_overrides": [
+          {"domain_regex": "(^|\\.)overturemaps\\.org$", "icon": "bundled:overture.png"},
+          {"domain_regex": "(^|\\.)csdi\\.gov\\.hk$", "icon": "bundled:hkgov.png"}
+        ]
       },
       "Todo": {
         "authority": "si",

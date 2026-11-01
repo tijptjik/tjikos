@@ -374,6 +374,29 @@ The Markdown-only Obsidian profile is **Markdown Viewer**, and the image editor 
 `uuctl.desktop` and `rygel-preferences.desktop` remain excluded from app results;
 normal scrcpy remains available. uuctl's parent package uwsm is retained.
 
+Browser tab favicons can be overridden in `runtjik.conf`:
+
+```toml
+[plugin_settings.Browser]
+favicon_overrides = [
+    { domain_regex = '(^|\.)overturemaps\.org$', icon = 'bundled:overture.png' },
+    { domain_regex = '(^|\.)csdi\.gov\.hk$', icon = 'bundled:hkgov.png' },
+    # { domain_regex = '^docs\.example\.org$', icon = '~/Pictures/example.png' },
+]
+```
+
+These two rules are enabled by default and use the publisher images from
+SaanSeoi. Rules match the tab URL's hostname only (case-insensitive, ignoring a
+trailing dot), never its path or query. The first matching rule wins, including
+for unloaded tabs and tabs shown in combined search. Use anchors as above to
+avoid matching unrelated domains. `icon` accepts the bundled names shown above,
+an absolute file path, a `~/` path, or an HTTPS image URL. Local paths with spaces
+are supported. Invalid rules are rejected when loading configuration.
+
+A configured array replaces the defaults; include the default rules to retain
+them, or use `favicon_overrides = []` to disable all overrides. Unmatched tabs
+keep the browser favicon. Reopen Runtjik after changing configuration.
+
 `$XDG_CACHE_HOME/runtjik/index.json` caches the index. Source signatures detect
 additions, removals, edits and executable-permission changes each time the launcher
 opens and at the configured interval while it remains open. `/refresh` forces a

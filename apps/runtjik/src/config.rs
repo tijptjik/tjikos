@@ -169,6 +169,7 @@ pub fn parse(source: &str) -> Result<Value> {
             range(&values["timeout_seconds"], 1, 15, "timeout_seconds")?;
         } else if name == "Browser" {
             range(&values["columns"], 1, 6, "Browser.columns")?;
+            crate::browser::favicon_overrides(&values["favicon_overrides"])?;
             argv(&values["history_browser"])?;
             for profile in values["history_profiles"].as_array().unwrap() {
                 if !profile

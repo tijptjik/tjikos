@@ -315,7 +315,7 @@ impl Launcher {
         if enabled.iter().any(|s| s == "Browser")
             && ["/browser", "/zen", "/tabs", "/history"].contains(&command)
         {
-            return match self.browser.query(q, self.demo) {
+            return match self.browser.query(q, &self.settings, self.demo) {
                 Ok(rows) => Ok(self.provider_payload(rows, display, offset, limit, false, true)),
                 Err(e) => {
                     let mut v = self.payload(vec![]);
@@ -347,7 +347,7 @@ impl Launcher {
             candidates.extend(crate::menus::entries(&self.settings));
         }
         if enabled.iter().any(|s| s == "Browser") && !run && !running {
-            match self.browser.query(q, self.demo) {
+            match self.browser.query(q, &self.settings, self.demo) {
                 Ok(rows) => candidates.extend(rows),
                 Err(e) => {
                     let warning = format!("Browser: {e}");

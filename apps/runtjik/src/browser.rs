@@ -37,12 +37,58 @@ pub fn request(path: &std::path::Path, message: &Value) -> Result<Value> {
     }
     Ok(value)
 }
+// Compile once per query, not once per tab. Configuration is reloaded on opening.
+pub fn favicon_overrides(value: &Value) -> Result<Vec<(regex::Regex, String)>> {
+    let rules = value
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("Browser.favicon_overrides must be an array"))?;
+    rules.iter().enumerate().map(|(index, rule)| {
+        let invalid = || anyhow::anyhow!("Invalid Browser.favicon_overrides rule {}: expected domain_regex and icon strings", index + 1);
+        let fields = rule.as_object().ok_or_else(invalid)?;
+        let pattern = rule["domain_regex"].as_str().filter(|s| !s.is_empty()).ok_or_else(invalid)?;
+        let icon = rule["icon"].as_str().filter(|s| !s.is_empty()).ok_or_else(invalid)?;
+        if fields.len() != 2 { return Err(invalid()); }
+        let regex = regex::RegexBuilder::new(pattern).case_insensitive(true).build()
+            .map_err(|e| anyhow::anyhow!("Invalid Browser.favicon_overrides rule {} regex: {e}", index + 1))?;
+        let path = if let Some(name) = icon.strip_prefix("bundled:") {
+            if !["overture.png", "hkgov.png"].contains(&name) {
+                bail!("Unknown bundled favicon: {name}");
+            }
+            Some(crate::paths::root().join("qml/icons/sites").join(name))
+        } else if let Some(rest) = icon.strip_prefix("~/") {
+            Some(home().join(rest))
+        } else if std::path::Path::new(icon).is_absolute() {
+            Some(PathBuf::from(icon))
+        } else {
+            None
+        };
+        let source = if let Some(path) = path {
+            url::Url::from_file_path(path).map_err(|_| anyhow::anyhow!("Invalid favicon path"))?.to_string()
+        } else if url::Url::parse(icon).is_ok_and(|u| u.scheme() == "https" && u.host_str().is_some()) {
+            icon.to_owned()
+        } else {
+            bail!("Browser.favicon_overrides icon must be bundled:, an absolute path, ~/ path, or HTTPS URL");
+        };
+        Ok((regex, source))
+    }).collect()
+}
+fn matching_favicon<'a>(rules: &'a [(regex::Regex, String)], domain: &str) -> Option<&'a str> {
+    if domain.is_empty() {
+        return None;
+    }
+    let domain = domain.trim_end_matches('.');
+    rules
+        .iter()
+        .find(|(regex, _)| regex.is_match(domain))
+        .map(|(_, icon)| icon.as_str())
+}
+
 #[derive(Default)]
 pub struct Browser {
     pub scope: Option<(String, Value, String)>,
 }
 impl Browser {
-    pub fn query(&self, q: &str, demo: bool) -> Result<Vec<Entry>> {
+    pub fn query(&self, q: &str, settings: &Value, demo: bool) -> Result<Vec<Entry>> {
         let (command, mut term) = q.split_once(' ').unwrap_or((q, ""));
         let history_mode = command == "/history";
         if history_mode && term.len() > 512 {
@@ -109,6 +155,8 @@ impl Browser {
             }
             sessions
         };
+        let favicon_overrides =
+            favicon_overrides(&settings["plugin_settings"]["Browser"]["favicon_overrides"])?;
         let mut rows = vec![];
         for (session, state) in sessions {
             if history_mode {
@@ -184,7 +232,7 @@ impl Browser {
                         .unwrap_or_default();
                     let mut status = vec![];
                     if !domain.is_empty() {
-                        status.push(domain);
+                        status.push(domain.clone());
                     }
                     if item["muted"] == true {
                         status.push("Muted".into());
@@ -209,6 +257,9 @@ impl Browser {
                         || favicon.len() > 131072
                     {
                         favicon.clear();
+                    }
+                    if let Some(icon) = matching_favicon(&favicon_overrides, &domain) {
+                        favicon = icon.to_owned();
                     }
                     rows.push(Entry{id:format!("Browser:{session}:{}:{}",if tabs_mode{"tab"}else{"window"},item["id"]),name:if s(&item["title"]).is_empty(){"Untitled".into()}else{s(&item["title"]).into()},subtitle:if tabs_mode{status.join(" · ")}else{format!("{} tabs",tabs.len())},icon:"zen-browser".into(),provider:"Browser".into(),keywords:String::new(),data:json!({"session":session,"window":window["id"],"url":url,"favicon":favicon,"keep_open":true,"tab":if tabs_mode{item["id"].clone()}else{Value::Null}})});
                 }
@@ -296,9 +347,18 @@ mod tests {
     #[test]
     fn history_is_separate_from_tab_scope_and_deletes_on_close() {
         let mut b = Browser::default();
-        let window = b.query("/browser", true).unwrap().remove(0);
+        let window = b
+            .query("/browser", &crate::config::contract()["DEFAULTS"], true)
+            .unwrap()
+            .remove(0);
         b.activate(&window, "switch", true).unwrap();
-        let rows = b.query("/history example.org", true).unwrap();
+        let rows = b
+            .query(
+                "/history example.org",
+                &crate::config::contract()["DEFAULTS"],
+                true,
+            )
+            .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].data["history"], true);
         assert_eq!(
@@ -309,19 +369,156 @@ mod tests {
             b.activate(&rows[0], "normal", true).unwrap()["kind"],
             "activated"
         );
-        assert!(b.query("/history nonexistent", true).unwrap().is_empty());
+        assert!(b
+            .query(
+                "/history nonexistent",
+                &crate::config::contract()["DEFAULTS"],
+                true
+            )
+            .unwrap()
+            .is_empty());
     }
     #[test]
     fn demo_scope_and_filter() {
         let mut b = Browser::default();
-        let windows = b.query("/browser", true).unwrap();
+        let windows = b
+            .query("/browser", &crate::config::contract()["DEFAULTS"], true)
+            .unwrap();
         assert_eq!(windows.len(), 2);
-        assert_eq!(b.query("/tabs", true).unwrap().len(), 3);
-        b.activate(&windows[0], "switch", true).unwrap();
-        assert_eq!(b.query("/tabs", true).unwrap().len(), 2);
         assert_eq!(
-            b.query("/tabs Hyprland", true).unwrap()[0].name,
+            b.query("/tabs", &crate::config::contract()["DEFAULTS"], true)
+                .unwrap()
+                .len(),
+            3
+        );
+        b.activate(&windows[0], "switch", true).unwrap();
+        assert_eq!(
+            b.query("/tabs", &crate::config::contract()["DEFAULTS"], true)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            b.query(
+                "/tabs Hyprland",
+                &crate::config::contract()["DEFAULTS"],
+                true
+            )
+            .unwrap()[0]
+                .name,
             "Hyprland window management"
         );
+    }
+}
+
+#[cfg(test)]
+mod favicon_tests {
+    use super::*;
+
+    #[test]
+    fn defaults_match_domains_and_subdomains_only() {
+        let settings = crate::config::parse("").unwrap();
+        let rules = favicon_overrides(&settings["plugin_settings"]["Browser"]["favicon_overrides"])
+            .unwrap();
+        for domain in [
+            "overturemaps.org",
+            "docs.overturemaps.org",
+            "DOCS.OVERTUREMAPS.ORG.",
+        ] {
+            assert!(matching_favicon(&rules, domain)
+                .unwrap()
+                .ends_with("/overture.png"));
+        }
+        assert!(matching_favicon(&rules, "portal.csdi.gov.hk")
+            .unwrap()
+            .ends_with("/hkgov.png"));
+        for domain in [
+            "",
+            "example.org",
+            "notoverturemaps.org",
+            "overturemaps.org.example.org",
+            "csdi.gov.hk.evil.org",
+        ] {
+            assert!(matching_favicon(&rules, domain).is_none());
+        }
+    }
+
+    #[test]
+    fn custom_rules_replace_defaults_and_first_match_wins() {
+        let settings = crate::config::parse(
+            r#"
+[plugin_settings.Browser]
+favicon_overrides = [
+  { domain_regex = '^docs\.example\.org$', icon = '/tmp/icon with spaces.png' },
+  { domain_regex = '(^|\.)example\.org$', icon = 'https://example.org/icon.png' }
+]
+"#,
+        )
+        .unwrap();
+        let rules = favicon_overrides(&settings["plugin_settings"]["Browser"]["favicon_overrides"])
+            .unwrap();
+        assert_eq!(
+            matching_favicon(&rules, "docs.example.org"),
+            Some("file:///tmp/icon%20with%20spaces.png")
+        );
+        assert_eq!(
+            matching_favicon(&rules, "example.org"),
+            Some("https://example.org/icon.png")
+        );
+        assert!(matching_favicon(&rules, "docs.overturemaps.org").is_none());
+        assert!(favicon_overrides(&json!([])).unwrap().is_empty());
+    }
+
+    #[test]
+    fn tab_queries_use_overrides_but_windows_and_history_do_not() {
+        let settings = crate::config::parse(
+            r#"
+[plugin_settings.Browser]
+favicon_overrides = [{ domain_regex = '^example\.org$', icon = 'bundled:hkgov.png' }]
+"#,
+        )
+        .unwrap();
+        let browser = Browser::default();
+        for query in ["/tabs", "Firefox"] {
+            let rows = browser.query(query, &settings, true).unwrap();
+            assert!(!rows.is_empty());
+            assert!(rows
+                .iter()
+                .all(|row| s(&row.data["favicon"]).ends_with("/hkgov.png")));
+        }
+        for query in ["/browser", "/history"] {
+            assert!(browser
+                .query(query, &settings, true)
+                .unwrap()
+                .iter()
+                .all(|row| s(&row.data["favicon"]).is_empty()));
+        }
+        let defaults = crate::config::parse("").unwrap();
+        assert!(browser
+            .query("/tabs", &defaults, true)
+            .unwrap()
+            .iter()
+            .all(|row| s(&row.data["favicon"]).is_empty()));
+    }
+
+    #[test]
+    fn invalid_rules_fail_configuration_validation() {
+        for rule in [
+            "{domain_regex='[', icon='bundled:overture.png'}",
+            "{domain_regex='', icon='bundled:overture.png'}",
+            "{domain_regex='.*', icon='relative.png'}",
+            "{domain_regex='.*', icon='bundled:../other.png'}",
+            "{domain_regex='.*', icon='http://example.org/icon.png'}",
+            "{domain_regex='.*', icon=12}",
+            "{domain_regex='.*', icon='bundled:overture.png', typo=true}",
+        ] {
+            assert!(
+                crate::config::parse(&format!(
+                    "[plugin_settings.Browser]\nfavicon_overrides=[{rule}]\n"
+                ))
+                .is_err(),
+                "{rule}"
+            );
+        }
     }
 }
