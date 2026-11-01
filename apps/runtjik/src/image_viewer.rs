@@ -31,6 +31,28 @@ fn monitors() -> Result<Vec<Value>> {
 pub fn open(spec: &Value) -> Result<()> {
     let viewer = strings(&spec["viewer"]);
     let paths = strings(&spec["paths"]);
+    let temporary = if spec["temporary"] == true {
+        Some(tempfile::TempPath::try_from_path(
+            paths.first().context("Image path required")?,
+        )?)
+    } else {
+        None
+    };
+    if temporary.is_some()
+        && !std::path::Path::new(viewer.first().context("Viewer required")?)
+            .file_name()
+            .is_some_and(|name| name == "imv")
+    {
+        anyhow::ensure!(
+            Command::new(&viewer[0])
+                .args(&viewer[1..])
+                .args(&paths)
+                .status()?
+                .success(),
+            "Image viewer failed"
+        );
+        return Ok(());
+    }
     if paths.is_empty() {
         anyhow::ensure!(
             Command::new(viewer.first().context("Viewer required")?)
@@ -44,7 +66,7 @@ pub fn open(spec: &Value) -> Result<()> {
     let first = paths.first().context("Image path required")?;
     let mut args = viewer.clone();
     args.extend(["-n".into(), first.clone()]);
-    if paths.len() > 1 {
+    if paths.len() > 1 || temporary.is_some() {
         args.extend(paths.clone());
     } else {
         args.push(
