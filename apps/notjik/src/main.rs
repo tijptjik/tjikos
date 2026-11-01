@@ -33,6 +33,8 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Op {
+    /// Receive a validated local display payload without submitting it again.
+    Receive,
     Pause,
     Resume,
     Toggle,
@@ -71,6 +73,10 @@ enum Op {
         resident: bool,
         #[arg(long)]
         transient: bool,
+        #[arg(long, default_value="local", value_parser=["local","active"])]
+        delivery: String,
+        #[arg(long, default_value="local", value_parser=["local","global"])]
+        history: String,
     },
     Dismiss {
         id: String,
@@ -86,7 +92,7 @@ enum Op {
     HistoryData,
     HistoryAction {
         key: String,
-        #[arg(value_parser=["invoke","dismiss"])]
+        #[arg(value_parser=["invoke","dismiss","read"])]
         action: String,
         #[arg(long, default_value_t = 0)]
         index: i64,
@@ -296,6 +302,8 @@ fn cli(root: &Path, op: Op) -> Result<()> {
             actions,
             resident,
             transient,
+            delivery,
+            history,
         } => {
             let mut n = json!({"title":title,"body":body,"app":app,"type":kind,"urgency":urgency,"icon":icon,"image":image,"replace":replace,"id":id,"group":group,"data":serde_json::from_str::<Value>(&data)?,"actions":serde_json::from_str::<Value>(&actions)?,"resident":resident,"transient":transient});
             if let Some(t) = timeout {
@@ -316,6 +324,23 @@ fn cli(root: &Path, op: Op) -> Result<()> {
                     n[k] = json!(uri(&p)?);
                 }
             }
+            if delivery == "active" || history == "global" {
+                println!(
+                    "{}",
+                    notjik_sync::client::publish(n, &delivery, history == "global")?
+                );
+                return Ok(());
+            }
+            let v = ipc(root, &json!({"op":"send","notice":n}))?;
+            println!("{}", v["id"].as_str().unwrap_or(""));
+            return Ok(());
+        }
+        Op::Receive => {
+            use std::io::Read;
+            let mut bytes = Vec::new();
+            std::io::stdin().take(131073).read_to_end(&mut bytes)?;
+            ensure!(bytes.len() <= 131072, "Notification too large");
+            let n: Value = serde_json::from_slice(&bytes)?;
             let v = ipc(root, &json!({"op":"send","notice":n}))?;
             println!("{}", v["id"].as_str().unwrap_or(""));
             return Ok(());

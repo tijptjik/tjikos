@@ -81,8 +81,15 @@ Item {
                     Layout.fillWidth:true
                     Text {
                         Layout.fillWidth:true
-                        text:(drawer.controller.historyFiltering?drawer.controller.filteredHistoryItems.length+' / ':'')+drawer.controller.historyItems.length+' notifications'
+                        text:(drawer.controller.historyFiltering?drawer.controller.filteredHistoryItems.length+' / ':'')+drawer.controller.historyItems.length+' notifications'+(drawer.controller.liveDeviceName ? ' · Live: '+drawer.controller.liveDeviceName : '')
                         color:drawer.theme.muted;font.family:drawer.theme.font;font.pixelSize:12
+                    }
+                    Button {
+                        visible: drawer.controller.globalHistoryMore === true
+                        text: "More history"
+                        onClicked: drawer.controller.loadGlobalHistory(true)
+                        background: Rectangle { radius: 8; color: drawer.theme.surface }
+                        contentItem: Text { text: parent.text; color: drawer.theme.text; padding: 8 }
                     }
                     Button {
                         text:drawer.searchOpen?'Clear':'Search';Accessible.name:drawer.searchOpen?'Clear history filter':'Search notification history'

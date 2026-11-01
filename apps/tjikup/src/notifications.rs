@@ -273,6 +273,13 @@ pub fn completion(receipt: &Receipt, focus: Option<&Vec<String>>) {
             ],
         },
     };
+    if notjik_sync::client::configured() {
+        let notice = json!({"title":card.title,"body":card.body,"app":"Tjikup","type":"results-table","data":card.data,"actions":focus.map(|argv|vec![json!({"label":"Show window","command":argv})]).unwrap_or_default(),"urgency":if card.data.tone=="critical"{"critical"}else{"normal"}});
+        if let Err(error) = notjik_sync::client::publish(notice, "active", true) {
+            eprintln!("Notification could not be queued: {error}");
+        }
+        return;
+    }
     if std::env::var_os("SSH_CONNECTION").is_some() || std::env::var_os("SSH_TTY").is_some() {
         if std::env::var("TERM").as_deref() != Ok("xterm-kitty") || !std::io::stdout().is_terminal()
         {

@@ -409,5 +409,15 @@ pub fn main(args: &[String], r: &Runner) -> Result<()> {
     let _lock = Lock::take(&p.lock, true, r)?;
     let result = p.backup(r);
     record_error(&p.state, &result)?;
+    if notjik_sync::client::configured() {
+        let ok = result.is_ok();
+        if let Err(e) = notjik_sync::client::publish(
+            serde_json::json!({"title":if ok{"Application backup completed"}else{"Application backup failed"},"body":"Inspect the private backup receipt and service journal for details.","app":"Synctjik","type":"status","data":{"state":if ok{"Complete"}else{"Failed"},"tone":if ok{"success"}else{"critical"}},"urgency":if ok{"normal"}else{"critical"},"actions":[]}),
+            "active",
+            true,
+        ) {
+            eprintln!("Backup notification queue failed: {e}");
+        }
+    }
     result
 }

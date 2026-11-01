@@ -179,6 +179,16 @@ impl<'a> App<'a> {
         ))
     }
     fn notify(&self, message: &str) {
+        if notjik_sync::client::configured() {
+            if let Err(e) = notjik_sync::client::publish(
+                serde_json::json!({"title":"Private assets","body":message,"app":"Synctjik","actions":[]}),
+                "active",
+                true,
+            ) {
+                eprintln!("Notification queue failed: {e}");
+            }
+            return;
+        }
         if available("notify-send") {
             let _ = self.run(&strings(&[
                 "notify-send",

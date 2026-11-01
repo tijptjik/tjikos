@@ -1,4 +1,4 @@
-//! Unattended workflow entry point with a durable, pinned Telegram status.
+//! Unattended workflow entry point with durable Notjik results and legacy relay support.
 use crate::{actions::State, scheduler::Receipt};
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
@@ -213,11 +213,14 @@ fn resolve_destination(config: Value) -> Result<Destination> {
     }
 }
 
-fn relay_report(argv: &[String], text: &str) -> Result<()> {
+fn relay_report(argv: &[String], text: &str, run_id: &str) -> Result<()> {
     use std::process::{Command, Stdio};
     let host = fs::read_to_string("/proc/sys/kernel/hostname")?;
     let mut payload = tempfile::tempfile()?;
-    serde_json::to_writer(&mut payload, &json!({"host":host.trim(), "text":text}))?;
+    serde_json::to_writer(
+        &mut payload,
+        &json!({"host":host.trim(), "text":text, "run_id":run_id}),
+    )?;
     use std::io::Seek;
     payload.rewind()?;
     let result = crate::command_io::capture_input(
@@ -237,7 +240,7 @@ fn relay_report(argv: &[String], text: &str) -> Result<()> {
 
 pub fn run(args: Vec<String>) -> Result<i32> {
     if args == ["--help"] {
-        println!("tjikup scheduled [workflow flags]\nRuns the normal workflow and updates a pinned Telegram status.\nCredentials: TJIKUP_TELEGRAM_CONFIG or ~/.config/tjikup/telegram.json\nUse --notify-only to retry delivery without rerunning maintenance.");
+        println!("tjikup scheduled [workflow flags]\nRuns the normal workflow and retains results in Notjik when enrolled.\nLegacy Telegram credentials: TJIKUP_TELEGRAM_CONFIG or ~/.config/tjikup/telegram.json\nUse --notify-only to retry delivery without rerunning maintenance.");
         return Ok(0);
     }
     let root = crate::scheduler::state_root().join("scheduled");
@@ -246,7 +249,6 @@ pub fn run(args: Vec<String>) -> Result<i32> {
         .mode(0o700)
         .create(&root)?;
     if args == ["--report-stdin"] {
-        let destination = destination()?;
         let mut input = Vec::new();
         std::io::stdin().take(16385).read_to_end(&mut input)?;
         ensure!(input.len() <= 16384, "Status payload too large");
@@ -261,6 +263,20 @@ pub fn run(args: Vec<String>) -> Result<i32> {
         let _lock = crate::process::Lock::acquire(&root.join(format!("report-{host}.lock")))?;
         let text = report["text"].as_str().context("Missing report text")?;
         ensure!(text.chars().count() <= 3500, "Status text too large");
+        if notjik_sync::client::configured() {
+            // Older relays lack run IDs; repeated delivery of the same report
+            // must still update one retained card rather than create duplicates.
+            let fallback = notjik_sync::hash(text);
+            let run = report["run_id"].as_str().unwrap_or(&fallback);
+            ensure!(run.len() <= 128 && !run.is_empty(), "Invalid report run ID");
+            notjik_sync::client::publish(
+                json!({"title":format!("Tjikup scheduled result · {host}"),"body":text,"app":"Tjikup","run":format!("{host}:{run}"),"type":"status","actions":[]}),
+                "active",
+                true,
+            )?;
+            return Ok(0);
+        }
+        let destination = destination()?;
         deliver(
             &destination,
             &root.join(format!("message-{host}.json")),
@@ -278,12 +294,22 @@ pub fn run(args: Vec<String>) -> Result<i32> {
             Ok(argv)
         })
         .transpose()?;
-    let direct = if relay.is_none() {
+    let sync = notjik_sync::client::configured();
+    let direct = if relay.is_none() && !sync {
         Some(destination()?)
     } else {
         None
     };
     let pending = root.join("latest.json");
+    let run_id = if args == ["--notify-only"] {
+        let saved: Value = serde_json::from_slice(&fs::read(&pending)?)?;
+        saved["run_id"]
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(notjik_sync::id)
+    } else {
+        notjik_sync::id()
+    };
     let (text, code) = if args == ["--notify-test"] {
         let host = fs::read_to_string("/proc/sys/kernel/hostname")?;
         (format!("Tjikup · {}\nWeekly status delivery verified.\nScheduled: Sunday 09:00 Asia/Hong_Kong.\nThis is a notification test; no maintenance run was performed.", host.trim()), 0)
@@ -311,7 +337,7 @@ pub fn run(args: Vec<String>) -> Result<i32> {
             fs::read_to_string("/proc/sys/kernel/hostname").unwrap_or_else(|_| "unknown".into());
         save(
             &pending,
-            &json!({"text":format!("Tjikup · {}\nINCOMPLETE · started {}\nNo completion recorded; inspect tjikup-weekly.service.",host.trim(),chrono::Utc::now().to_rfc3339()),"delivered":false}),
+            &json!({"text":format!("Tjikup · {}\nINCOMPLETE · started {}\nNo completion recorded; inspect tjikup-weekly.service.",host.trim(),chrono::Utc::now().to_rfc3339()),"delivered":false,"run_id":run_id}),
         )?;
         let mut receipt = None;
         let code = match crate::cli(args, &mut receipt) {
@@ -325,10 +351,12 @@ pub fn run(args: Vec<String>) -> Result<i32> {
     };
     save(
         &pending,
-        &json!({"text":text,"exit_code":code,"delivered":false}),
+        &json!({"text":text,"exit_code":code,"delivered":false,"run_id":run_id}),
     )?;
-    let delivery = if let Some(argv) = relay {
-        relay_report(&argv, &text)
+    let delivery = if sync {
+        notjik_sync::client::publish(json!({"title":"Tjikup scheduled result","body":text,"app":"Tjikup","run":run_id,"type":"status","data":{"state":if code==0{"Complete"}else{"Failed"},"tone":if code==0{"success"}else{"critical"}},"actions":[]}),"active",true).map(|_|())
+    } else if let Some(argv) = relay {
+        relay_report(&argv, &text, &run_id)
     } else {
         deliver(
             direct.as_ref().context("Missing destination")?,
@@ -343,7 +371,7 @@ pub fn run(args: Vec<String>) -> Result<i32> {
     }
     save(
         &pending,
-        &json!({"text":text,"exit_code":code,"delivered":true}),
+        &json!({"text":text,"exit_code":code,"delivered":true,"run_id":run_id}),
     )?;
     Ok(code)
 }
@@ -484,6 +512,7 @@ mod tests {
         relay_report(
             &["tee".into(), path.to_string_lossy().into_owned()],
             "synthetic status",
+            "synthetic-run",
         )
         .unwrap();
         let value: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();

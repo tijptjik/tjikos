@@ -16,6 +16,53 @@ ShellRoot {
     readonly property bool conceal: locked && config.privacy?.lockScreen !== "show"
     property bool drawerOpen: false
     property string drawerMonitor: ""
+    property bool globalEnabled: false
+    property string liveDeviceName: ""
+    property string globalHistoryStatus: ""
+    property double lastInput: Date.now()
+    IdleMonitor { id: inputIdle; timeout: 1; respectInhibitors: false; onIsIdleChanged: { if (!isIdle) root.lastInput = Date.now(); } }
+    property var localHistoryItems: []
+    property var globalHistoryItems: []
+    property var liveDevice: null
+    property bool globalHistoryMore: false
+    property int globalHistoryOffset: 0
+    function mergeHistory() {
+        const ids = new Set(globalHistoryItems.map(n => n.globalId));
+        historyItems = localHistoryItems.filter(n => !n.globalId || !ids.has(n.globalId)).concat(globalHistoryItems).sort((a,b) => (b.received || 0)-(a.received || 0));
+    }
+    function loadGlobalHistory(more) {
+        if (!globalEnabled || globalHistoryProcess.running || locked) return;
+        globalHistoryOffset = more ? globalHistoryItems.length : 0;
+        globalHistoryProcess.command = [Quickshell.env("HOME") + "/.local/bin/notjik-sync", "history", historyQuery, String(globalHistoryOffset)];
+        globalHistoryProcess.running = true;
+        if (!globalPresenceProcess.running) globalPresenceProcess.running = true;
+    }
+    Process {
+        id: globalPresenceProcess
+        command: [Quickshell.env("HOME") + "/.local/bin/notjik-sync", "devices"]
+        stdout: StdioCollector { onStreamFinished: { try { const r = JSON.parse(text); root.liveDeviceName = (r.devices || []).find(d => d.id === r.live)?.name || "waiting"; } catch (error) {} } }
+    }
+    onHistoryQueryChanged: globalSearchDelay.restart()
+    Timer { id: globalSearchDelay; interval: 350; onTriggered: root.loadGlobalHistory(false) }
+    Timer { interval: 10000; repeat: true; running: root.drawerOpen && !root.locked; onTriggered: root.loadGlobalHistory(false) }
+    Process {
+        id: globalHistoryProcess
+        stdout: StdioCollector { onStreamFinished: {
+            try {
+                const response = JSON.parse(text);
+                const items = (response.notices || []).map(n => Object.assign({}, n, {
+                    globalId: n.id, historyKey: "global/" + n.id, session: "global", received: n.created * 1000,
+                    loggedAt: new Date(n.updated*1000).toISOString(), lastEvent: (n.device || "") + " · " + (n.dismissed ? "dismissed" : n.read ? "read" : "unread"),
+                    globalActions: n.actions || [], actions: (n.actions || []).map(a => ({label: a.label + ((n.actionJobs || []).find(j => j.action === a.id) ? " · " + n.actionJobs.find(j => j.action === a.id).state : "")})),
+                    group: (n.device || "") + "/" + (n.run || n.app), remaining: 0
+                }));
+                root.globalHistoryItems = root.globalHistoryOffset ? Array.from(new Map(root.globalHistoryItems.concat(items).map(n => [n.globalId, n])).values()) : items;
+                root.globalHistoryMore = response.next !== null;
+                root.globalHistoryStatus = response.offline ? "Offline · saved global history" : "Global history";
+                root.mergeHistory();
+            } catch (error) { console.warn("Global history unavailable"); }
+        } }
+    }
     property var avatarCache: ({byChat: {}, byTitle: {}})
     HistoryModel {id:historyModel;grouping:root.config.grouping?.enabled!==false}
     property alias historyItems:historyModel.items
@@ -113,7 +160,7 @@ ShellRoot {
     readonly property var visibleNotices: ready && !paused && !conceal && !drawerOpen ? (draggingId ? dragStack : Logic.visibleGroups(notices.filter(n => !isFloating(n.id)), config, telegramRecording.holdsNotice ? telegramRecording.noticeId : (keyboardMode ? selectedId : ""))) : []
 
     function snapshot(n) {
-        return {id: n.id, senderId: n.senderId || "", updatedAt: n.updatedAt || n.received, title: n.title, body: n.body, app: n.app, urgency: n.urgency, type: n.type,
+        return {id: n.id, globalId: n.globalId || "", senderId: n.senderId || "", updatedAt: n.updatedAt || n.received, title: n.title, body: n.body, app: n.app, urgency: n.urgency, type: n.type,
             icon: n.icon, image: n.image, robotIndex: n.robotIndex, fishIndex: n.fishIndex, fishName: n.fishName, data: n.data, transient: n.transient, group: n.group || "", desktopEntry: n.desktopEntry || "",
             actions: Logic.actionsFor(n, config).map(a => ({label: a.label})), received: n.received};
     }
@@ -292,13 +339,22 @@ ShellRoot {
         const urgency = n.urgency || "normal";
         const accepted = put({id: id, title: n.title, body: n.body || "", app: app, senderId: senderId, urgency: urgency,
             type: kind, data: n.data || {}, icon: n.icon || "", image: n.image || "",
-            actions: n.actions || [], resident: !!n.resident, transient: !!n.transient, group: n.group || "",
+            globalId: n.globalId || "", actions: n.actions || [], resident: !!n.resident, transient: !!n.transient, group: n.group || "",
             received: existing ? existing.received : timestamp, updatedAt: timestamp, remaining: Logic.timeout(lifetime, urgency, config)});
         if (!accepted) throw Error("Queue is full of persistent notices; dismiss one before sending");
         return id;
     }
 
     function invoke(id, index) {
+        const global = historyItems.find(n => n.globalId && n.id === id);
+        if (global && !find(id)) {
+            if (locked || Logic.callerBlocked(global, config)) throw Error("Actions unavailable");
+            const action = global.globalActions?.[index];
+            if (!action) throw Error("Unknown action");
+            if (action.url) Quickshell.execDetached(["xdg-open", action.url]);
+            else Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/notjik-sync", "invoke", global.globalId, action.id]);
+            return;
+        }
         if (locked) throw Error("Notification actions are disabled while locked");
         const notice = find(id);
         if (!notice || !Number.isInteger(index) || index < 0 || index >= notice.actions.length) throw Error("Action not found");
@@ -358,12 +414,16 @@ ShellRoot {
 
     function historyGroupExpanded(key) {return historyModel.isExpanded(key);}
     function toggleGroup(key) {historyModel.toggle(key);}
-    function selectHistory(key) {historyModel.select(key);}
+    function selectHistory(key) {
+        historyModel.select(key);
+        const n = historyItems.find(n => n.historyKey === key);
+        if (n?.globalId && !n.read && !locked) Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/notjik-sync", "read", n.globalId]);
+    }
 
     function historyCard(snapshot) {
         const active = snapshot.session === session ? find(snapshot.id) : null;
         return Object.assign({data: {}, actions: [], icon: "", image: "", type: "standard", urgency: "normal", remaining: 0},
-            snapshot, active || {}, {archived: !active, historyKey: snapshot.historyKey, loggedAt: snapshot.loggedAt,
+            snapshot, active || {}, {archived: !active && !snapshot.globalId, historyKey: snapshot.historyKey, loggedAt: snapshot.loggedAt,
                 lastEvent: active ? "active" : snapshot.lastEvent});
     }
 
@@ -373,6 +433,7 @@ ShellRoot {
         keyboardMode = false;
         selectedId = "";
         if (opened) {
+            loadGlobalHistory(false);
             historyQuery = "";
             drawerMonitor = targetMonitor();
             if (backend.running) backend.write(JSON.stringify({op: "history"}) + "\n");
@@ -410,7 +471,8 @@ ShellRoot {
 
     function dismissSelected() {
         const active = drawerOpen ? historyCard(historyItems.find(n => n.historyKey === historySelectedKey) || {}) : find(selectedId);
-        if (active && !active.archived && find(active.id)) dismissNotice(active.id);
+        if (active?.globalId) { Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/notjik-sync", "dismiss", active.globalId]); loadGlobalHistory(false); }
+        else if (active && !active.archived && find(active.id)) dismissNotice(active.id);
     }
 
     function setPaused(value) {
@@ -435,6 +497,12 @@ ShellRoot {
         case "history-action": {
             if(locked)throw Error("Notification actions are disabled while locked");
             const notice=historyItems.find(n=>n.historyKey===request.key);
+            if (notice?.globalId) {
+                if (request.action === "dismiss" || request.action === "read") Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/notjik-sync", request.action, notice.globalId]);
+                else if (request.action === "invoke") invoke(notice.id, request.index);
+                else throw Error("Unknown global action");
+                break;
+            }
             if(!notice || notice.session!==session || !find(notice.id))throw Error("Notification is no longer active");
             if(request.action==='dismiss')close(notice.id,false);
             else if(request.action==='invoke')invoke(notice.id,request.index);
@@ -451,6 +519,7 @@ ShellRoot {
         case "telegramBridge":
             telegramBridgeUntil = request.active === true ? Date.now() + 12000 : 0;
             break;
+        case "global-remove": remove(request.id, "global-dismissed"); break;
         case "send": return {ok: true, id: send(request.notice)};
         case "pause": setPaused(true); break;
         case "resume": setPaused(false); break;
@@ -474,7 +543,7 @@ ShellRoot {
         case "status": break;
         default: throw Error("Unknown operation");
         }
-        return {ok: true, paused: paused, queued: notices.length, visible: visibleNotices.length, floating: floatingIds.length, pinned: floatingIds.length,
+        return {ok: true, idle: inputIdle.isIdle && Date.now()-lastInput >= 120000, idleSeconds: inputIdle.isIdle ? Math.floor((Date.now()-lastInput)/1000) : 0, paused: paused, queued: notices.length, visible: visibleNotices.length, floating: floatingIds.length, pinned: floatingIds.length,
             telegramDelivery: telegramDelivery, telegramBridgeActive: telegramBridgeActive, focusedAppId: focusedAppId, groupingEnabled: config.grouping.enabled, theme: config.theme, lockState: lockState, drawerOpen: drawerOpen, historyCount: historyItems.length, selectedId: selectedId, historySelectedKey: historySelectedKey, keyboardMode: keyboardMode, historyError: backendError, monitors: screens.map(s => s.name)};
     }
 
@@ -512,7 +581,8 @@ ShellRoot {
             onRead: line => {
                 try {
                     const response = JSON.parse(line);
-                    if (typeof response.paused === "boolean") {
+                    if (typeof response.syncEnabled === "boolean") { root.globalEnabled = response.syncEnabled; }
+                    else if (typeof response.paused === "boolean") {
                         root.paused = response.paused;
                     } else if (response.config) {
                         root.config = response.config;
@@ -525,7 +595,8 @@ ShellRoot {
                         root.lockState = response.lockState;
                     } else if (response.history) {
                         root.avatarCache = response.avatars || {byChat: {}, byTitle: {}};
-                        root.historyItems = response.history;
+                        root.localHistoryItems = response.history;
+                        root.mergeHistory();
                         if (root.historySelectedKey && !root.historyItems.some(n => n.historyKey === root.historySelectedKey))
                             root.historySelectedKey = "";
                     } else if (response.error) { root.backendError = response.error; console.warn(response.error); }

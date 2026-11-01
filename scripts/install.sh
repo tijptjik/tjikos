@@ -46,6 +46,8 @@ for app in "$@"; do
             install -d -m 755 "$HOME/.local/bin" "$target_dir" "$HOME/.config/systemd/user"
             cp -R "$source_dir"/qml "$source_dir"/themes "$source_dir"/examples "$target_dir/"
             install -d -m 755 "$target_dir/bin"
+            install -m 755 "$source_dir/bin/notjik-sync" "$HOME/.local/bin/.notjik-sync.pending"
+            mv -f "$HOME/.local/bin/.notjik-sync.pending" "$HOME/.local/bin/notjik-sync"
             install -m 755 "$source_dir/bin/notjik-core" "$target_dir/bin/.notjik-core.pending"
             mv -f "$target_dir/bin/.notjik-core.pending" "$target_dir/bin/notjik-core"
             install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$target_dir/bin/"
@@ -55,6 +57,7 @@ for app in "$@"; do
             install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$HOME/.local/bin/"
             bash "$root_dir/scripts/install-completions.sh" "$HOME/.local" notjik
             if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
+                install -m 644 "$source_dir/systemd/notjik-sync.service" "$HOME/.config/systemd/user/notjik-sync.service"
                 install -m 644 "$source_dir/systemd/notjik.service" "$HOME/.config/systemd/user/notjik.service"
                 install -m 644 "$source_dir/systemd/notjik-telegram.service" "$HOME/.config/systemd/user/notjik-telegram.service"
                 activation_dir="${XDG_DATA_HOME:-$HOME/.local/share}/dbus-1/services"

@@ -291,7 +291,7 @@ fn run() -> Result<()> {
         Some(Cmd::MigrateSchedules { retire }) => return schedule_migration::run(*retire),
         Some(Cmd::Capabilities) => {
             return print(
-                &json!({"cloudflare_backup":true,"private_assets":true,"native_backends":1,"protection_backends":1,"drive":true,"app_backup":true,"app_pull":true,"app_restore":true,"snapraid":true,"snapraid_notify":true,"dependencies":["rclone","restic"]}),
+                &json!({"notification_service":1,"cloudflare_backup":true,"private_assets":true,"native_backends":1,"protection_backends":1,"drive":true,"app_backup":true,"app_pull":true,"app_restore":true,"snapraid":true,"snapraid_notify":true,"dependencies":["rclone","restic"]}),
             )
         }
         Some(Cmd::Cloudflare { args }) | Some(Cmd::PrivateAssets { args }) => {

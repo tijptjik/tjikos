@@ -2,7 +2,10 @@
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 cargo build --release --locked
+cargo build --release --locked --manifest-path ../../packages/notjik-sync/Cargo.toml
 mkdir -p dist/bin
+install -m755 ../../packages/notjik-sync/target/release/notjik-sync dist/bin/
+cp ../notjik-service/systemd/notjik-sync.service systemd/
 cp -uRL --reflink=auto qml dist/
 cp -uR --reflink=auto themes examples systemd dist/
 cp bin/notjik bin/notjikctl dist/bin/

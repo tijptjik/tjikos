@@ -9,6 +9,7 @@
     "demo": "cargo run --locked -- --demo"
   },
   "dependencies": {
-    "@tjikos/tjik-ui": "workspace:*"
+    "@tjikos/tjik-ui": "workspace:*",
+    "@tjikos/notjik-sync": "workspace:*"
   }
 }
