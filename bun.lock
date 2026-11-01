@@ -24,7 +24,15 @@
       "name": "@tjikos/notjik",
       "version": "0.1.0",
       "dependencies": {
+        "@tjikos/notjik-sync": "workspace:*",
         "@tjikos/tasktjik": "workspace:*",
+      },
+    },
+    "apps/notjik-service": {
+      "name": "@tjikos/notjik-service",
+      "version": "0.1.0",
+      "dependencies": {
+        "@tjikos/notjik-sync": "workspace:*",
       },
     },
     "apps/runtjik": {
@@ -41,12 +49,16 @@
       "name": "@tjikos/synctjik",
       "version": "0.1.0",
       "dependencies": {
+        "@tjikos/notjik-sync": "workspace:*",
         "@tjikos/tjik-ui": "workspace:*",
       },
     },
     "apps/tasktjik": {
       "name": "@tjikos/tasktjik",
       "version": "0.1.0",
+      "dependencies": {
+        "@tjikos/notjik-sync": "workspace:*",
+      },
     },
     "apps/tjikos-sh": {
       "name": "@tjikos/sh",
@@ -59,11 +71,16 @@
       "name": "@tjikos/tjikup",
       "version": "0.2.0",
       "dependencies": {
+        "@tjikos/notjik-sync": "workspace:*",
         "@tjikos/tjik-ui": "workspace:*",
       },
     },
     "packages/notification-history": {
       "name": "@tjikos/notification-history",
+      "version": "0.1.0",
+    },
+    "packages/notjik-sync": {
+      "name": "@tjikos/notjik-sync",
       "version": "0.1.0",
     },
     "packages/tjik-ui": {
@@ -275,6 +292,10 @@
     "@tjikos/notification-history": ["@tjikos/notification-history@workspace:packages/notification-history"],
 
     "@tjikos/notjik": ["@tjikos/notjik@workspace:apps/notjik"],
+
+    "@tjikos/notjik-service": ["@tjikos/notjik-service@workspace:apps/notjik-service"],
+
+    "@tjikos/notjik-sync": ["@tjikos/notjik-sync@workspace:packages/notjik-sync"],
 
     "@tjikos/runtjik": ["@tjikos/runtjik@workspace:apps/runtjik"],
 
