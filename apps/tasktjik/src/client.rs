@@ -650,9 +650,6 @@ pub fn command_line(args: &[String]) -> Result<bool> {
     let mut todo = Todo::default();
     let settings = json!({});
     let result = match cmd {
-        "state" if args.iter().any(|a| a == "--incremental") => {
-            todo.state_delta(read()?, &settings, args.iter().any(|a| a == "--demo"))?
-        }
         "state" => todo.state(read()?, &settings, args.iter().any(|a| a == "--demo"))?,
         "request" => todo.request(read()?, &settings, args.iter().any(|a| a == "--demo"))?,
         "serve" => {
