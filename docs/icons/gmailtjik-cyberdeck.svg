@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Gmailtjik</title>
+  <desc>Cyberdeck colourwave variant: electric rose, violet and ice-blue frame with a red folded-envelope monogram.</desc>
+  <defs>
+    <linearGradient id="frame" x1="0" y1="0" x2=".75" y2="1">
+      <stop stop-color="#ff9abf"/>
+      <stop offset=".30" stop-color="#ff53a6"/>
+      <stop offset=".66" stop-color="#b28ce5"/>
+      <stop offset="1" stop-color="#9ccfd8"/>
+    </linearGradient>
+    <linearGradient id="envelope" x1="0" y1="0" x2=".3" y2="1">
+      <stop stop-color="#ff8589"/>
+      <stop offset=".32" stop-color="#ed555f"/>
+      <stop offset="1" stop-color="#c73d53"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="2" width="58" height="58" rx="17" fill="#26233a" stroke="#555169" stroke-opacity=".45" stroke-width=".65"/>
+  <rect x="12" y="12" width="40" height="40" rx="9" fill="#26233a" stroke="url(#frame)" stroke-width="4"/>
+  <!-- Lower folds stay subdued; the red M-shaped flap is the primary mark. -->
+  <path d="M21 27 32 35 43 27V39H21Z" fill="#a83b50" fill-opacity=".3"/>
+  <path d="M22 39 29 33M42 39 35 33" fill="none" stroke="#d75062" stroke-opacity=".5" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M21 39V25L32 33L43 25V39" fill="none" stroke="url(#envelope)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
