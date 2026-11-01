@@ -44,10 +44,14 @@ from an active desktop. Opening or interacting with the drawer updates Pi's
 activity time; periodic history refreshes do not. A newer interaction on a desktop
 takes priority even while the phone drawer remains open.
 
-Build with JDK 21, Android SDK platform/build-tools 35, and Gradle 8.13:
+Build with JDK 21, Android SDK platform/build-tools 35, and Gradle 8.13.
+Dotjik installs `temurin-21-jdk` on Fi and Li through Tjikup's RPM package
+workflow using the signed Adoptium repository. Fedora 45 no longer packages
+OpenJDK 21. Select the JDK explicitly without changing the system Java default:
 
 ```sh
-./gradlew :app:assembleDebug
+export JAVA_HOME=/usr/lib/jvm/temurin-21-jdk
+./gradlew :app:testDebugUnitTest :app:assembleDebug
 ```
 
 For a persistent signed sideload build, provide these environment variables from
