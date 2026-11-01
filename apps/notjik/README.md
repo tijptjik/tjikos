@@ -215,6 +215,28 @@ On Hyprland, disable compositor animations for the `notjik-floating` layer names
 so drag previews follow the pointer immediately. The managed Tijpfiles layer rules
 include this setting (`no_anim = true`).
 
+## Global history and active-device delivery
+
+Notjik remains local-first. Enrolled devices can send script results to the
+[notification service on Si](../notjik-service/README.md), independently choosing
+where a card appears and whether its history is retained:
+
+```sh
+notjikctl send 'Build finished' 'All checks passed' --app build --id run-123 \
+  --delivery active --history global
+```
+
+`--delivery local` and `--history local` remain the defaults. The private
+`~/.config/notjik/sync.json` configures the service and `history_exclude`, which
+excludes Telegram by default. A durable outbox handles disconnection; managed
+results are searchable in the drawer with device/run context, read state and
+synchronized dismissal. The drawer shows the selected live device. DND stays local.
+
+The most recently used unlocked desktop is eligible for two minutes after input;
+Pi is the fallback. Opening Pi's [Android drawer](../notjik-android/README.md) also
+makes it active. Cross-device buttons invoke a registered command on its original
+device; command arguments never travel through Si or Firebase.
+
 ## Configuration
 
 The file is `$XDG_CONFIG_HOME/notjik/config.json` (normally
