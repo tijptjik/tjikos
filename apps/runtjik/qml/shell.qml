@@ -97,6 +97,7 @@ ShellRoot {
     property int historyCursor: -1
     property string historyDraft: ''
     property bool navigatingHistory: false
+    property bool autoCommandPending: false
     function rememberCommand(text) {
         if(!settings.history?.enabled || !text.trim() || !/^[!/?]/.test(text))return;
         if(commandHistory[commandHistory.length-1]===text)return;
@@ -174,6 +175,21 @@ ShellRoot {
         if(!opened || quitting)return;
         panel.acquireKeyboard();
         root.focusInput();
+    }
+    function autoEnterCommand() {
+        if(!autoCommandPending || busy || providerPending || hasMore || windowEntry
+            || pendingAction!==null || results.length!==1 || total!==1 || resultQuery!==query)return;
+        const row=results[0];
+        const menus=['/tabs','/browser','/history','/todo','/reading','/define','/synonym',
+            '/cliphist','/rec','/grab','/processes','/run','/stats','/config','/bindings'];
+        if(row.provider!=='internal' || !menus.includes(row.id) || row.disabled
+            || !query.trim() || /\s/.test(query.trim()) || query.trim()===row.id)return;
+        const requested=query;
+        autoCommandPending=false;
+        Qt.callLater(()=>{
+            if(root.query!==requested || root.busy || root.results.length!==1 || root.results[0].id!==row.id)return;
+            root.selected=0;root.activate(false);
+        });
     }
     function activate(switchWindow, closeWindow=false) {
         if (busy || !results[selected]) return;
@@ -298,6 +314,7 @@ ShellRoot {
             ready=true;captureInitialMonitor();
             applyingResults=false;
             if (pendingAction!==null) {const action=pendingAction;pendingAction=null;Qt.callLater(()=>root.activate(action.switchWindow,action.closeWindow));}
+            else autoEnterCommand();
         } else if (msg.kind === 'edit') {
             searchBox.text=msg.text;
             debounce.stop();root.search();
@@ -544,6 +561,8 @@ ShellRoot {
                                 if(!root.navigatingHistory)root.historyCursor=-1;
                                 root.pointerSelection=false;root.wordSelectionEngaged=false;root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;
                                 const previous=root.commandQuery.split(/\s+/)[0];
+                                // Deleting/backtracking must not immediately put the user back into a menu.
+                                root.autoCommandPending=!root.applyingResults && !root.navigatingHistory && text.length>root.query.length;
                                 root.query=text;root.selected=0;
                                 if(!root.windowEntry && !root.applyingResults){
                                     const command=root.commandQuery.split(/\s+/)[0];
