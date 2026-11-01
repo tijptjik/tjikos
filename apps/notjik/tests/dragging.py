@@ -183,7 +183,20 @@ def run():
                 initial_geometry=client(ident)
                 expected=state()["positions"][ident]
                 assert all(abs(a-b)<2 for a,b in zip(initial_geometry["at"],[expected["x"],expected["y"]])),(initial_geometry,expected)
+                pointer("hover", -20, -20, True, ident=ident)
+                time.sleep(.25)
+                collapsed_height = card(ident, True)["height"]
                 c = reveal(ident,True); assert any(b["text"]=="Run" for b in c["buttons"]), c
+                assert c["height"] > collapsed_height + 20, (collapsed_height, c)
+                # Footer motion belongs to QML; the compositor surface stays still.
+                assert client(ident)["size"] == initial_geometry["size"], (initial_geometry, client(ident))
+                pointer("hover", -20, -20, True, ident=ident)
+                for _ in range(12):
+                    geometry = client(ident)
+                    assert geometry["size"] == initial_geometry["size"] and geometry["at"] == initial_geometry["at"], geometry
+                    time.sleep(.02)
+                assert abs(card(ident, True)["height"] - collapsed_height) < 1
+                c = reveal(ident, True)
                 b=next(b for b in c["buttons"] if b["text"]=="Run")
                 first = state()["positions"][ident]
                 gesture(ident,floating=True,point=(b["x"],b["y"]))
@@ -206,7 +219,7 @@ def run():
                 # Exercise the same Hyprland dispatcher as the workspace shortcuts,
                 # targeting only the synthetic window and keeping desktop focus in place.
                 first_client=client(ident)
-                # Hover has resized the native window since its initial placement.
+                # Hover has revealed the footer inside the same native window.
                 assert first_client and first_client["floating"] and not first_client["pinned"], first_client
                 target="name:notjik-acceptance-"+str(os.getpid())
                 address=first_client["address"]

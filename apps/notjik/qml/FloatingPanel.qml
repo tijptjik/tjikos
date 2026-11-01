@@ -20,11 +20,13 @@ FloatingWindow {
     title: placed ? (controller.locked ? "Notification" : notice.title) + " — Notjik" : initialTitle
     visible: controller.ready && controller.draggingId !== noticeId
     implicitWidth: position.width
-    implicitHeight: card.implicitHeight
-    // The compositor owns position and width; content owns height as media and
-    // reply controls open or close. implicitHeight alone is only an initial hint.
-    minimumSize: Qt.size(180, Math.ceil(card.implicitHeight))
-    maximumSize: Qt.size(16777215, Math.ceil(card.implicitHeight))
+    // Reserve the action footer so its reveal never resizes the native window.
+    // Otherwise the compositor animates each intermediate QML size as well,
+    // making the card bounce. The mask keeps the unused area click-through.
+    readonly property int surfaceHeight: Math.ceil(card.admissionHeight)
+    implicitHeight: surfaceHeight
+    minimumSize: Qt.size(180, surfaceHeight)
+    maximumSize: Qt.size(16777215, surfaceHeight)
     color: "transparent"
     mask: Region { item: card; radius: card.radius }
     onWindowConnected: contentItem.Window.window.flags = Qt.Window | Qt.FramelessWindowHint
@@ -73,7 +75,7 @@ FloatingWindow {
                     panel.address = client.address;
                     const target = JSON.stringify("address:" + client.address);
                     const x = Math.round(panel.position.x), y = Math.round(panel.position.y);
-                    const width = Math.round(panel.position.width), height = Math.ceil(card.implicitHeight);
+                    const width = Math.round(panel.position.width), height = panel.surfaceHeight;
                     const workspace = panel.position.workspace;
                     if (Hyprland.usingLua) {
                         const moveWorkspace = workspace ? "hl.dispatch(hl.dsp.window.move({workspace=" + JSON.stringify(workspace)
@@ -105,7 +107,8 @@ FloatingWindow {
     }
     NotificationCard {
         id: card
-        anchors.fill: parent
+        anchors { left: parent.left; right: parent.right; top: parent.top }
+        height: implicitHeight
         opacity: panel.placed && !panel.controller.locked ? 1 : 0
         enabled: panel.placed && !panel.controller.locked
         notice: panel.notice
