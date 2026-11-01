@@ -6,6 +6,6 @@ cargo build --release --locked
 rm -rf dist
 mkdir -p dist
 cp -R bin qml web systemd examples README.md dist/
-cp ../../docs/icons/tasktjik.svg dist/
+cp ../../docs/icons/tasktjik-app.svg dist/tasktjik.svg
 cp "${CARGO_TARGET_DIR:-target}/release/tasktjik-api" tasktjik-api
 cp tasktjik-api dist/

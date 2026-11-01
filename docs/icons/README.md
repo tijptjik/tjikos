@@ -25,3 +25,9 @@ Regenerate an export with `magick -background none -density 192 NAME.svg -resize
 
 Tasktjik is authored in `docs/icons/tasktjik.svg`: sage rounded-square frame,
 dark inset and warm-white rounded checkmark. Its export is installed by Tasktjik.
+
+Gmailtjik is authored in `docs/icons/gmailtjik.svg`: the same rounded tile and
+40-unit inset frame, with a rose frame and an abstract red M-shaped envelope
+flap. Its transparent 96 px PNG export is `docs/icons/gmailtjik.png`.
+
+Gmailtjik and Tasktjik launcher installations use the unpadded `*-app.svg` variants: shared optical sizing, with no outer dark tile. The original SVGs remain the framed presentation artwork.

@@ -17,3 +17,11 @@ if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
 fi
 install -m 644 "$root/dist/examples/tasktjik.desktop" "$install_home/.local/share/applications/"
 install -m 644 "$root/dist/tasktjik.svg" "$install_home/.local/share/icons/hicolor/scalable/apps/"
+
+# Use the unpadded app artwork even when an older icon theme is selected.
+python3 - "$install_home/.local/share/applications/tasktjik.desktop" "$install_home/.local/share/icons/hicolor/scalable/apps/tasktjik.svg" <<'PYICON'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+path.write_text(path.read_text().replace("Icon=tasktjik", "Icon=" + sys.argv[2]))
+PYICON
