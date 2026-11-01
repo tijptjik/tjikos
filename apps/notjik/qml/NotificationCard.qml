@@ -398,7 +398,7 @@ Rectangle {
             visible: source.toString().length > 0 && status === Loader.Ready && !!item
                 && (item.hasContent !== undefined ? item.hasContent : item.implicitHeight > 0)
             Layout.preferredHeight: item ? item.implicitHeight : 0
-            readonly property var builtins: ({todo: "components/Todo.qml", progress: "components/Progress.qml", status: "components/Status.qml", timer: "components/Countdown.qml", telegram: "components/Telegram.qml", "results-table": "components/ResultsTable.qml"})
+            readonly property var builtins: ({"auth-code": "components/AuthCode.qml", todo: "components/Todo.qml", progress: "components/Progress.qml", status: "components/Status.qml", timer: "components/Countdown.qml", telegram: "components/Telegram.qml", "results-table": "components/ResultsTable.qml"})
             function loadComponent() {
                 const custom = card.controller.config.components[card.notice.type];
                 const builtin = builtins[card.notice.type];

@@ -206,6 +206,13 @@ def main():
     with tempfile.TemporaryDirectory(prefix="notjik-render-") as temp:
         root = Path(temp)
         copy_runtime(root)
+        if "--auth-code" in sys.argv[2:]:
+            shim = root / "copy-bin"
+            shim.mkdir()
+            capture = root / "copied-code"
+            (shim / "wl-copy").write_text("#!/usr/bin/env python3\nimport pathlib,sys\npathlib.Path(" + repr(str(capture)) + ").write_text(sys.argv[2])\n")
+            (shim / "wl-copy").chmod(0o700)
+            os.environ["PATH"] = str(shim) + os.pathsep + os.environ["PATH"]
         if "--covers" in sys.argv[2:]:
             # Keep geometry screenshots deterministic while testing the shared cover layout.
             logic = root / "qml/Logic.js"
@@ -338,6 +345,21 @@ def main():
             process = subprocess.Popen(["quickshell", "--path", str(root / "qml"), "--no-color"], stdout=log, stderr=log, start_new_session=True)
             try:
                 wait_for(lambda: ipc(root, {"op": "status"})["ok"])
+                if "--auth-code" in sys.argv[2:]:
+                    ipc(root, {"op":"send", "notice":{"id":"synthetic-auth", "app":"Synthetic mail", "type":"auth-code", "title":"Authentication code", "body":"Example service", "data":{"code":"004281"}, "timeout":0, "actions":[{"label":"Copy code", "copy":"004281"}]}})
+                    wait_for(lambda: len(ipc(root, {"op":"metrics"})["metrics"]["cards"]) == 1 and ipc(root, {"op":"metrics"})["metrics"]["cards"][0]["extent"] == 1)
+                    ipc(root, {"op":"revealControls"})
+                    time.sleep(.4)
+                    image = destination / "auth-code.png"
+                    ipc(root, {"op":"capture", "path":str(image)})
+                    wait_for(lambda: readable_image(image))
+                    errors = (destination / "render.log").read_text()
+                    assert not any(word in errors for word in ("ReferenceError", "TypeError", "Unable to assign", "Binding loop", "ERROR:")), errors
+                    ipc(root, {"op":"action", "id":"named-Synthetic%20mail/synthetic-auth", "index":0})
+                    wait_for(lambda: capture.exists())
+                    assert capture.read_text() == "004281"
+                    print("PASS: synthetic authentication card rendered and primary copy action invoked: " + str(image))
+                    return
                 if "--telegram-formatting" in sys.argv[2:]:
                     from telegram_bridge import describe
                     text = "Bold · italic · underline · strike\nCode: a  b <literal>\nNested bold + strike · 🙂 custom emoji"
@@ -948,7 +970,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-    if any(flag in sys.argv[2:] for flag in ("--groups", "--height-limit", "--telegram-formatting")):
+    if any(flag in sys.argv[2:] for flag in ("--groups", "--height-limit", "--telegram-formatting", "--auth-code")):
         pass
     elif "--motion" in sys.argv[2:]:
         print("Synthetic motion previews captured")

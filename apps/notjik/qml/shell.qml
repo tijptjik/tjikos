@@ -328,7 +328,7 @@ ShellRoot {
     function send(n) {
         Logic.validateNotice(n);
         const kind = n.type || "standard";
-        if (!["standard", "progress", "status", "timer", "telegram", "results-table", "todo"].includes(kind) && !config.components[kind]) throw Error("Unknown component: " + kind);
+        if (!["standard", "progress", "status", "timer", "telegram", "results-table", "todo", "auth-code"].includes(kind) && !config.components[kind]) throw Error("Unknown component: " + kind);
         if (n.replace && (!find(n.replace) || nativeNotices[n.replace])) throw Error("--replace requires an existing local notification ID");
         const app = n.app || "notjikctl";
         const senderId = n.id || "";
@@ -351,7 +351,9 @@ ShellRoot {
             if (locked || Logic.callerBlocked(global, config)) throw Error("Actions unavailable");
             const action = global.globalActions?.[index];
             if (!action) throw Error("Unknown action");
-            if (action.url) Quickshell.execDetached(["xdg-open", action.url]);
+            if (action.copy) Quickshell.execDetached(["wl-copy", "--", action.copy]);
+            else if (action.open) Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/notjik-sync", "open", JSON.stringify(action.open)]);
+            else if (action.url) Quickshell.execDetached(["xdg-open", action.url]);
             else Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/notjik-sync", "invoke", global.globalId, action.id]);
             return;
         }
@@ -370,7 +372,8 @@ ShellRoot {
             if (Logic.telegramChatAction(notice) === index) finishTelegramOpen(id);
             for (const command of hooks) Quickshell.execDetached(command);
         } else {
-            Quickshell.execDetached(action.command);
+            if(action.copy)Quickshell.execDetached(["wl-copy", "--", action.copy]);
+            else Quickshell.execDetached(action.command);
             if (!notice.resident) close(id, false);
         }
     }

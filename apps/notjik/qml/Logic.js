@@ -44,6 +44,10 @@ function validateNotice(n) {
     if (n.actions !== undefined && (!Array.isArray(n.actions) || n.actions.length > 16)) throw Error("actions must be an array of at most 16 actions");
     for (var action of (n.actions || [])) {
         if (!action || typeof action.label !== "string" || !action.label.length || action.label.length > 120) throw Error("each action needs a label (1–120 characters)");
+        if (action.copy !== undefined) {
+            if (typeof action.copy !== "string" || !/^[A-Za-z0-9 -]{4,32}$/.test(action.copy) || action.command)throw Error("Invalid copy code action");
+            continue;
+        }
         if (!Array.isArray(action.command) || !action.command.length || action.command.length > 64 ||
             action.command.some(arg => typeof arg !== "string" || arg.indexOf("\0") >= 0 || arg.length > 8192) || !action.command[0])
             throw Error("action.command must be a nonempty array of command arguments");

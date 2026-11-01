@@ -9,6 +9,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @unittest.skipUnless(shutil.which("bun"), "Bun required for pure QML JavaScript checks")
 class LogicTests(unittest.TestCase):
+    def test_copy_actions_preserve_codes_and_reject_commands(self):
+        source = (ROOT / "qml/Logic.js").read_text()
+        assertions = r'''
+const assert = require("node:assert/strict");
+const notice = {title:"Synthetic code",type:"auth-code",actions:[{label:"Copy code",copy:"004281"}]};
+validateNotice(notice);
+assert.equal(notice.actions[0].copy,"004281");
+for(const action of [{label:"Copy code",copy:"$(id)"},{label:"Copy code",copy:"004281",command:["true"]},{label:"Copy code",copy:4281}]) {
+    assert.throws(()=>validateNotice({...notice,actions:[action]}));
+}
+'''
+        subprocess.run(["bun", "-e", source + assertions], check=True)
+
     def test_cached_avatar_selection(self):
         source = (ROOT / "qml/Logic.js").read_text()
         assertions = r'''
