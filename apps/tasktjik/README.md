@@ -125,3 +125,13 @@ Rejected moves restore the server state and show an error. Lists auto-scroll
 near their edges, and empty groups remain available as destinations in every mode.
 Manual positions are saved on the authority, synchronize across
 clients, and can be undone with U/Ctrl+Z. Revision checks protect newer edits.
+
+## Managed reminder delivery
+
+With Notjik sync enrolled, reminder claims publish durable global cards instead of
+requiring a local graphical session. Si runs the reminder timer so Pi can receive
+reminders while both desktops are offline. `tasktjik enroll --notifications`
+registers the current device using its existing HTTPS or Unix-socket transport.
+Desktop and Android cards can mark a task done or dismiss its reminder through
+registered actions on the originating device. Tasktjik remains the task authority;
+Notjik owns notification routing/history.

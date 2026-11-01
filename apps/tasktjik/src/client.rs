@@ -531,6 +531,17 @@ fn send_notice(task: &Value) -> Result<()> {
         "id":task["id"],"icon":"","image":"","resident":false,"transient":false,"actions":[],
         "data":{"group":task["group"],"due":task["period"],"taskId":task["id"],"period":task["period"]}
     }});
+    if notjik_sync::client::configured() {
+        let mut notice = payload["notice"].clone();
+        notice["run"] = json!(format!("{}:{}", s(&task["id"]), s(&task["period"])));
+        let executable = home().join(".local/bin/tasktjik");
+        notice["actions"] = json!([
+            {"label":"Mark done","command":[executable,"done",task["id"],task["period"]]},
+            {"label":"Dismiss reminder","command":[executable,"dismiss",task["id"],task["period"]]}
+        ]);
+        notjik_sync::client::publish(notice, "active", true)?;
+        return Ok(());
+    }
     let bytes = serde_json::to_vec(&payload)?;
     ensure!(bytes.len() <= 131072, "Notification exceeds 128 KiB");
     let directory = tempfile::Builder::new()
