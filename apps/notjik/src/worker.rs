@@ -34,6 +34,10 @@ pub fn run(root: &Path) -> Result<()> {
         libc::umask(0o077);
     }
     emit(&json!({"paused":history::paused()?}));
+    let sync_enabled = notjik_sync::client::configured()
+        && (std::env::var_os("NOTJIK_STATE_DIR").is_none()
+            || std::env::var_os("NOTJIK_SYNC_CONFIG").is_some());
+    emit(&json!({"syncEnabled":sync_enabled}));
     let (input_tx, input) = mpsc::sync_channel(100);
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
@@ -147,6 +151,17 @@ pub fn run(root: &Path) -> Result<()> {
                 let result = (|| -> Result<()> {
                     let e = input.map_err(anyhow::Error::msg)?;
                     ensure!(e.is_object(), "Worker event must be an object");
+                    if e["event"] == "dismissed"
+                        && e["notice"]["globalId"]
+                            .as_str()
+                            .is_some_and(|s| !s.is_empty())
+                        && sync_enabled
+                    {
+                        // Durable enqueue only; network work belongs to the sync service.
+                        notjik_sync::client::enqueue(
+                            json!({"op":"dismiss","id":e["notice"]["globalId"]}),
+                        )?;
+                    }
                     if e["op"] == "pausePreference" {
                         history::save_paused(&e["paused"])?;
                     } else if e["op"] == "history" {

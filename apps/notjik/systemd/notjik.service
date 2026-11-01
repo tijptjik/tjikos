@@ -4,6 +4,7 @@ After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 Type=dbus
 BusName=org.freedesktop.Notifications
 ExecStart=%h/.local/bin/notjik

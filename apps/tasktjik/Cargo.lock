@@ -619,6 +619,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "notjik-sync"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "libc",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -910,6 +925,7 @@ dependencies = [
  "chrono",
  "http-body-util",
  "libc",
+ "notjik-sync",
  "percent-encoding",
  "rusqlite",
  "serde",

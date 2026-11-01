@@ -10,6 +10,7 @@
     "demo": "bin/notjikctl demo"
   },
   "dependencies": {
-    "@tjikos/tasktjik": "workspace:*"
+    "@tjikos/tasktjik": "workspace:*",
+    "@tjikos/notjik-sync": "workspace:*"
   }
 }

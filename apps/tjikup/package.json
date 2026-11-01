@@ -9,6 +9,7 @@
     "install:local": "bash scripts/install.sh"
   },
   "dependencies": {
-    "@tjikos/tjik-ui": "workspace:*"
+    "@tjikos/tjik-ui": "workspace:*",
+    "@tjikos/notjik-sync": "workspace:*"
   }
 }

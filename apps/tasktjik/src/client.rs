@@ -650,6 +650,9 @@ pub fn command_line(args: &[String]) -> Result<bool> {
     let mut todo = Todo::default();
     let settings = json!({});
     let result = match cmd {
+        "state" if args.iter().any(|a| a == "--incremental") => {
+            todo.state_delta(read()?, &settings, args.iter().any(|a| a == "--demo"))?
+        }
         "state" => todo.state(read()?, &settings, args.iter().any(|a| a == "--demo"))?,
         "request" => todo.request(read()?, &settings, args.iter().any(|a| a == "--demo"))?,
         "serve" => {
@@ -672,6 +675,11 @@ pub fn command_line(args: &[String]) -> Result<bool> {
                 .context("Usage: tasktjik connect URL [--notifications]")?,
             args.iter().any(|s| s == "--notifications"),
         )?,
+        "enroll" => {
+            let id = device()?;
+            let record = json!({"id":id,"name":fs::read_to_string("/etc/hostname").unwrap_or_else(|_|"device".into()).trim(),"notifications":args.iter().any(|s|s=="--notifications")});
+            http(&options(&settings)?, "devices", Some(&record))?
+        }
         "devices" => http(&options(&settings)?, "devices", None)?,
         "notify" => notify()?,
         "done" | "dismiss" | "snooze" => {

@@ -41,9 +41,11 @@ struct Policy {
     host: String,
     state: PathBuf,
     receipts: PathBuf,
+    #[serde(default)]
     credentials: PathBuf,
     jobs: BTreeMap<String, Job>,
     reminder_seconds: i64,
+    #[serde(default)]
     telegram_base_url: String,
 }
 fn escape(s: &str) -> String {
@@ -89,7 +91,10 @@ fn unit_status(r: &Runner, unit: &str) -> Result<BTreeMap<String, String>> {
 }
 impl Policy {
     fn validate(&self) -> Result<()> {
-        paths(&[&self.state, &self.receipts, &self.credentials])?;
+        paths(&[&self.state, &self.receipts])?;
+        if !notjik_sync::client::configured() {
+            paths(&[&self.credentials])?;
+        }
         ensure!(
             !self.jobs.is_empty() && self.reminder_seconds > 0,
             "Invalid notification policy"
@@ -104,6 +109,9 @@ impl Policy {
                     "Missing job freshness limit"
                 );
             }
+        }
+        if notjik_sync::client::configured() {
+            return Ok(());
         }
         let url = reqwest::Url::parse(&self.telegram_base_url)?;
         ensure!(
@@ -143,6 +151,14 @@ impl Policy {
         }
     }
     fn send(&self, message: &str) -> Result<Value> {
+        if notjik_sync::client::configured() {
+            let id = notjik_sync::client::publish(
+                json!({"title":"Storage maintenance","body":message,"app":"Synctjik","type":"standard","actions":[],"urgency":"critical"}),
+                "active",
+                true,
+            )?;
+            return Ok(json!({"message_id":id,"queued":true}));
+        }
         let credentials: Value = serde_json::from_str(&secret(&self.credentials)?)?;
         let token = credentials["bot_token"]
             .as_str()

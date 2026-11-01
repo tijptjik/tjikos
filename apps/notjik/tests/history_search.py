@@ -25,7 +25,7 @@ def run():
         root = Path(temp)
         copy_runtime(root)
         shell = root / "qml/shell.qml"
-        shell.write_text(shell.read_text().replace("HistoryDrawer { controller: root }", "HistoryDrawer { id: historyDrawer; controller: root }").replace('case "status": break;', '''case "searchState": return {ok:true, query:historyQuery, editing:historyDrawer.searchEditing(),
+        shell.write_text(shell.read_text().replace('ToplevelManager.activeToplevel?.appId || ""', '""').replace("HistoryDrawer { controller: root }", "HistoryDrawer { id: historyDrawer; controller: root }").replace('case "status": break;', '''case "searchState": return {ok:true, query:historyQuery, editing:historyDrawer.searchEditing(),
             open:drawerOpen, rows:historyRows, matches:filteredHistoryItems.map(n=>n.historyKey),
             selected:historySelectedKey, live:notices.length, groups:expandedGroups};
         case "searchKey": historyDrawer.searchKey(request.key, request.control || false); return {ok:true};

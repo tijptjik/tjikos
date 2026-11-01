@@ -132,7 +132,7 @@ function filterHistory(notices, query) {
     const terms = String(query || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (!terms.length) return notices;
     return notices.filter(notice => {
-        const text = [notice.title, notice.body, notice.app, notice.desktopEntry, notice.group]
+        const text = [notice.device, notice.run, notice.title, notice.body, notice.app, notice.desktopEntry, notice.group]
             .map(value => String(value || "")).join("\n").toLowerCase();
         return terms.every(term => text.includes(term));
     });

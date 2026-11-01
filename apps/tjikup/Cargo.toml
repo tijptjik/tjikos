@@ -6,6 +6,7 @@ license = "GPL-3.0-or-later"
 description = "Declarative, resource-aware task runner"
 
 [dependencies]
+notjik-sync = { path = "../../packages/notjik-sync" }
 tjik-ui = { path = "../../packages/tjik-ui" }
 anyhow = "1"
 chacha20poly1305 = "0.10"
