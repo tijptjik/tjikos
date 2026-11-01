@@ -553,8 +553,24 @@ ShellRoot {
         printErrors: false
     }
 
+    FileView {
+        id: ipcResponseFile
+        blockWrites: true
+        printErrors: false
+    }
+
     IpcHandler {
         target: "notjik"
+        function requestFileResponse(path: string): string {
+            try {
+                const response = requestFile(path);
+                ipcResponseFile.path = path.slice(0, path.lastIndexOf('/') + 1) + "response.json";
+                ipcResponseFile.setText(response);
+                ipcResponseFile.waitForJob();
+                return JSON.stringify({ok: true});
+            } catch (error) { return JSON.stringify({ok: false, error: "Cannot write private IPC response"}); }
+            finally { ipcResponseFile.path = ""; }
+        }
         function requestFile(path: string): string {
             try {
                 ipcRequestFile.path = path;

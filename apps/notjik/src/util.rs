@@ -145,16 +145,33 @@ pub fn ipc(root: &Path, request: &Value) -> Result<Value> {
     };
     let p = dir.path().join("request.json");
     private_write(&p, &bytes)?;
+    let response_path = dir.path().join("response.json");
+    let file_response = request["op"] == "history-data";
+    if file_response {
+        private_write(&response_path, b"")?;
+    }
     let out = run(
         Command::new("quickshell")
             .args(["ipc", "--path"])
             .arg(root.join("qml"))
-            .args(["call", "notjik", "requestFile"])
+            .args([
+                "call",
+                "notjik",
+                if file_response {
+                    "requestFileResponse"
+                } else {
+                    "requestFile"
+                },
+            ])
             .arg(&p),
         Duration::from_secs(5),
     )?;
-    let response: Value =
+    let mut response: Value =
         serde_json::from_slice(&out).context("Unexpected Quickshell IPC response")?;
+    if file_response && response["ok"] == true {
+        response = serde_json::from_slice(&fs::read(&response_path)?)
+            .context("Invalid private IPC response")?;
+    }
     if response["ok"] != true {
         bail!("{}", response["error"].as_str().unwrap_or("request failed"))
     }
