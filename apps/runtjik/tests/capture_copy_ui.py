@@ -1,4 +1,4 @@
-"""Real Ctrl+C, clipboard bytes, animated acknowledgement and dismissal in private Wayland."""
+"""Real copy shortcuts, clipboard bytes, acknowledgement and dismissal in private Wayland."""
 import json
 import os
 from pathlib import Path
@@ -28,6 +28,7 @@ with private_compositor(isolate_pointer=True):
             const badge=tile?.children.find(item=>item.objectName==='copySuccessBadge');
             return JSON.stringify({query:root.resultQuery,copied:root.copiedId,
                 visible:root.opened && panel.visible,busy:root.busy,message:root.message,
+                pending:root.providerPending || debounce.running || root.resultQuery!==root.query,
                 focus:searchBox.activeFocus,selection:searchBox.selectedText,input:searchBox.text,
                 rows:root.results,opacity:badge?.opacity || 0,scale:badge?.scale || 0});
         }
@@ -75,8 +76,14 @@ with private_compositor(isolate_pointer=True):
         try:
             wait_for(lambda: state().get('visible') and state().get('rows'), timeout=20)
             wait_for(lambda: json.loads(ipc('status')).get('ready'), timeout=20)
-            for query, path, mime in [('/grab history', png, 'image/png'),
-                                      ('/rec history', video, 'text/uri-list')]:
+            for query, path, mime, modifier, copy_key in [
+                ('/grab history', png, 'image/png', 'ctrl', 'c'),
+                ('/rec history', video, 'text/uri-list', 'ctrl', 'c'),
+                ('/grab history', png, 'image/png', 'shift', 'Return'),
+                ('/rec history', video, 'text/uri-list', 'shift', 'Return'),
+                ('/grab history', png, 'image/png', 'shift', 'KP_Enter'),
+                ('/rec history', video, 'text/uri-list', 'shift', 'KP_Enter'),
+            ]:
                 ipc('reopen')
                 wait_for(lambda: state().get('visible'))
                 ipc('copyQuery', query)
@@ -89,10 +96,13 @@ with private_compositor(isolate_pointer=True):
                 except ValueError:
                     raise AssertionError(state())
                 assert state()['visible'] and not state()['copied']
-                key('-k', 'End')
-                wait_for(lambda: state().get('focus') and state().get('selection') == '')
+                if modifier == 'ctrl':
+                    key('-k', 'End')
+                    wait_for(lambda: state().get('focus') and state().get('selection') == '')
+                # Shift+Enter copies the capture even when search text is selected.
+                wait_for(lambda: state().get('focus') and not state().get('busy') and not state().get('pending'))
                 started = time.monotonic()
-                key('-M', 'ctrl', '-k', 'c', '-m', 'ctrl')
+                key('-M', modifier, '-k', copy_key, '-m', modifier)
                 try:
                     feedback = wait_for(lambda: state() if state().get('copied') else None)
                 except ValueError:
@@ -106,7 +116,7 @@ with private_compositor(isolate_pointer=True):
                 assert .45 < time.monotonic() - started < 2
                 expected = png.read_bytes() if mime == 'image/png' else (path.as_uri() + '\r\n').encode()
                 assert subprocess.check_output(['wl-paste', '--no-newline', '--type', mime]) == expected
-                print(f'PASS: {query} copies {mime}, animates success, closes, and clipboard survives', flush=True)
+                print(f'PASS: {modifier}+{copy_key} in {query} copies {mime}, animates success, closes, and clipboard survives', flush=True)
             # A file removed after querying reports failure and leaves the gallery open.
             ipc('reopen')
             wait_for(lambda: state().get('visible'))
@@ -115,7 +125,7 @@ with private_compositor(isolate_pointer=True):
             ipc('focusSearch')
             time.sleep(.15)
             png.unlink()
-            key('-M', 'ctrl', '-k', 'c', '-m', 'ctrl')
+            key('-M', 'shift', '-k', 'Return', '-m', 'shift')
             wait_for(lambda: 'Capture is no longer available' in state().get('message', ''))
             time.sleep(.65)
             assert state()['visible'] and not state()['copied']

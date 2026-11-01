@@ -601,6 +601,7 @@ ShellRoot {
                             Keys.onPressed:event=>{
                                 root.pointerSelection=false;
                                 if(event.key===Qt.Key_C && event.modifiers===Qt.ControlModifier && root.galleryMode && !searchBox.selectedText){if(!event.isAutoRepeat)root.copyCapture();event.accepted=true;}
+                                else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && (event.modifiers & ~Qt.KeypadModifier)===Qt.ShiftModifier && root.galleryMode){if(!event.isAutoRepeat)root.copyCapture();event.accepted=true;}
                                 else if((event.modifiers & Qt.ControlModifier) && (event.key===Qt.Key_Up || event.key===Qt.Key_Down)){root.browseHistory(event.key===Qt.Key_Up?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Z && (event.modifiers & Qt.ControlModifier) && root.galleryMode){if(!root.busy){root.busy=true;root.send({op:'undo-trash',query:root.query});}event.accepted=true;}
                                 else if(root.statistics && [Qt.Key_Down,Qt.Key_Up,Qt.Key_PageDown,Qt.Key_PageUp].includes(event.key)){statsPane.scrollBy((event.key===Qt.Key_Up || event.key===Qt.Key_PageUp?-1:1)*(event.key===Qt.Key_PageDown || event.key===Qt.Key_PageUp?statsPane.height:30));event.accepted=true;}

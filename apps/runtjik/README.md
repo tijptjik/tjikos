@@ -766,11 +766,11 @@ sorted by name. Ctrl+Up / Ctrl+Down browse previously used launcher commands and
 restore the draft when moving past the newest entry. History is private, bounded
 to 100 distinct entries, and obeys `history.enabled`.
 
-In screenshot/recording history, Ctrl+C copies the selected image or video,
+In screenshot/recording history, Shift+Enter or Ctrl+C copies the selected image or video,
 briefly draws a checkmark over its tile, then closes the gallery.
 Images copy as image data; videos copy as file links for
-pasting into apps that accept files. Selected search text takes priority over
-copying a capture. Ctrl+Enter moves the selected file to the desktop
+pasting into apps that accept files. For Ctrl+C, selected search text takes priority over
+copying a capture. Enter opens the selected capture. Ctrl+Enter moves the selected file to the desktop
 Trash. Ctrl+Z restores the most recent Runtjik trash action (including after a
 launcher restart), without overwriting an existing file. The private undo stack
 lives in `$XDG_STATE_HOME/runtjik/trash-undo.json`. This requires the desktop GIO/GVfs
@@ -792,7 +792,7 @@ opener for image MIME types too. Navigating images keeps the window size stable.
 
 imv keys: Left/Right previous/next, Up/Down zoom, `r` reset, `a` actual size,
 `f` fullscreen, `d` information overlay, `h/j/k/l` pan, Ctrl+R rotate,
-`gg` first image, Shift+G last image, and `q` quit. `x` removes the current
+`gg` first image, Shift+G last image, and `Esc`/`q` quit. `x` removes the current
 image from the viewing list; it does not delete the file.
 
 ## Firefox / Zen browser plugin
