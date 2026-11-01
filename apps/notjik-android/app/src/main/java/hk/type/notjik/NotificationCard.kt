@@ -57,7 +57,7 @@ private val Muted = Color(0xFFB3AABB)
     DismissibleCard(enabled = canDismiss, onDismiss = dismiss, modifier = modifier) { offset ->
         Card(modifier = Modifier.fillMaxWidth().graphicsLayer {
             val lift = (abs(offset) / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
-            rotationZ = -4f * lift
+            rotationZ = 4f * (offset / size.width.coerceAtLeast(1f)).coerceIn(-1f, 1f)
             translationY = -8.dp.toPx() * lift
             scaleX = 1f + 0.015f * lift
             scaleY = scaleX

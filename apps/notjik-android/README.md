@@ -22,8 +22,10 @@ system-wide Do Not Disturb and channel settings; there is no separate app pause.
 **Mark read** removes the unread indicator and the
 phone's system notification; the card stays in Inbox. **Dismiss** removes the card
 from Inbox and Unread, keeping it in **History**. These are separate states.
-Drag deliberately left past half the card width to dismiss it. Short fast flicks
-return to rest, and vertical or diagonal gestures remain list scrolling. Tap a card to reveal or hide its full body,
+Cards follow freely after a horizontal drag starts. On release, position and flick
+velocity project where the card will land: outside either edge clears it; otherwise
+it springs back. Vertical or diagonal gestures initially remain list scrolling;
+turning clearly sideways picks up the card during the same touch, without a jump. Tap a card to reveal or hide its full body,
 run identifiers and actions, including Copy code and the optional Mark read and
 Dismiss buttons. A thin centered bar at the bottom matches the desktop's
 interaction indicator; action buttons stay hidden until expanded. Scrolling a
