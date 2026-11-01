@@ -35,6 +35,9 @@ former Python orchestration scripts.
   Kinds are `copy`, `host-text`, `template-json` and `jsonc-scalars`. All rules
   are prepared before writes. JSONC comments, template expressions and control
   regions are retained; structural changes require a manual merge.
+  `template-json` captures live key order, whitespace and unchanged scalar
+  spelling while preserving template values, so rendering matches the captured
+  file for native adoption even when an application only reformats its JSON.
 
 `files apply --adopt-identical` adopts unowned regular files only when bytes
 match rendered desired bytes and the invoking user owns them. This happens

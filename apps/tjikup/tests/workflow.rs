@@ -81,6 +81,66 @@ fn capture_preserves_other_hosts_preferences_before_reading_sources() {
     );
 }
 #[test]
+fn template_json_capture_round_trips_live_bytes_for_file_adoption() {
+    let dir = fixture();
+    let home = dir.path().join("home");
+    fs::create_dir(&home).unwrap();
+    let source = dir.path().join("session.j2");
+    fs::write(&source, r#"{"cwd":"{{ user.home }}/code","active":0}"#).unwrap();
+    fs::write(
+        dir.path().join("tjikup/capture.json"),
+        r#"[{"name":"session","source":"session.j2","target":"session.json","kind":"template-json"}]"#,
+    ).unwrap();
+    let manifest = dir.path().join("manifest.json");
+    fs::write(
+        &manifest,
+        serde_json::to_vec(&json!({
+            "version":1,"id":"capture","context":{"user":{"home":home}},
+            "entries":[{"kind":"file","path":home.join("session.json"),
+                "source":"session.j2","template":true,"mode":"0644"}]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    // First change only order/formatting; then change structure and values too.
+    for fields in [
+        r#""active": 0"#,
+        r#""active": 2, "tabs": [{"name":"\u732b"}]"#,
+    ] {
+        let live = format!(
+            "{{\n  {fields},\n  \"cwd\": \"{}/code\"\n}}\n",
+            home.display()
+        );
+        fs::write(home.join("session.json"), &live).unwrap();
+        for _ in 0..2 {
+            let captured = binary()
+                .args(["workflow", "--repo"])
+                .arg(dir.path())
+                .arg("capture")
+                .env("HOME", &home)
+                .output()
+                .unwrap();
+            assert!(captured.status.success(), "{:?}", captured);
+            let template = fs::read_to_string(&source).unwrap();
+            assert!(template.contains("{{ user.home }}"));
+            assert_eq!(
+                template.replace("{{ user.home }}", home.to_str().unwrap()),
+                live
+            );
+            let applied = binary()
+                .args(["files", "apply", "--adopt-identical", "--manifest"])
+                .arg(&manifest)
+                .arg("--state-dir")
+                .arg(dir.path().join("state"))
+                .output()
+                .unwrap();
+            assert!(applied.status.success(), "{:?}", applied);
+            assert_eq!(fs::read_to_string(home.join("session.json")).unwrap(), live);
+        }
+    }
+}
+
+#[test]
 fn capture_preflights_every_rule_before_writing() {
     let dir = fixture();
     let home = dir.path().join("home");

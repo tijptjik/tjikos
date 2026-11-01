@@ -355,12 +355,37 @@ fn transform(rule: &Rule, source: &str, target: &str, home: &str, host: &str) ->
                 }
             }
             let updated = preserve(&live, &source_value, home, expression);
-            if updated == source_value {
-                return Ok(source.to_owned());
+            // Capture the application's serialization too: native file adoption
+            // compares bytes, so reordering keys must not leave a false conflict.
+            // Replace only templated scalar values, retaining all other spelling,
+            // whitespace and escapes from the live document.
+            let mut parser = Parser {
+                bytes: target.as_bytes(),
+                at: 0,
+                spans: BTreeMap::new(),
+            };
+            parser.value(Vec::new())?;
+            let mut replacements = Vec::new();
+            for (path, (start, end)) in parser.spans {
+                let mut value = &updated;
+                for key in path {
+                    value = match value {
+                        Value::Array(items) => &items[key.parse::<usize>()?],
+                        _ => &value[&key],
+                    };
+                }
+                if value.is_array() || value.is_object() {
+                    continue;
+                }
+                let current: Value = serde_json::from_str(&target[start..end])?;
+                if value != &current {
+                    replacements.push((start, end, serde_json::to_string(value)?));
+                }
             }
-            let mut text = serde_json::to_string_pretty(&updated)?;
-            if target.ends_with('\n') {
-                text.push('\n');
+            replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
+            let mut text = target.to_owned();
+            for (start, end, value) in replacements {
+                text.replace_range(start..end, &value);
             }
             Ok(text)
         }
