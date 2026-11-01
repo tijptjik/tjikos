@@ -19,6 +19,8 @@ class NotjikApp : Application() {
 }
 class Transport(val context: Context) {
     val prefs = context.getSharedPreferences("device",Context.MODE_PRIVATE)
+    // The removed app-specific pause must not strand an upgraded device.
+    init { if (prefs.contains("paused")) prefs.edit().remove("paused").apply() }
     val store = Store(context)
     private val http = OkHttpClient.Builder().callTimeout(15,TimeUnit.SECONDS).followRedirects(false).build()
     val connected get() = prefs.getBoolean("enrolled",false)
@@ -69,7 +71,7 @@ class Transport(val context: Context) {
         val unlocked=!context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
         val activity=DrawerPresence.current.snapshot(android.os.SystemClock.elapsedRealtime(),interactive && unlocked)
         request(JSONObject().put("op","presence").put("ready",activity.ready).put("active",activity.active).put("idle_seconds",activity.idleSeconds)
-            .put("paused",prefs.getBoolean("paused",false)||!allowed).put("push_token",if(allowed) prefs.getString("push","") else ""))
+            .put("paused",!allowed).put("push_token",if(allowed) prefs.getString("push","") else ""))
     }
     fun flush() { for(v in store.pending()) { request(v);store.sent(v.getString("request_id")) } }
     fun history(query: String="", offset: Int=0): JSONObject {
@@ -86,7 +88,7 @@ class Transport(val context: Context) {
             val poll=request(JSONObject().put("op","poll").put("visible",ids))
             prefs.edit().putString("live",poll.optString("live")).apply()
             val notices=poll.getJSONArray("notices")
-            if(!prefs.getBoolean("paused",false)) for(i in 0 until notices.length()) {
+            for(i in 0 until notices.length()) {
                 val n=store.save(notices.getJSONObject(i));val id=n.getString("id");val rev=n.optInt("revision",1)
                 if(!n.optBoolean("dismissed") && store.revision(id)<rev) { Cards.show(context,n);store.displayed(id,rev) }
                 request(JSONObject().put("op","ack").put("id",id).put("revision",rev))
@@ -99,6 +101,13 @@ class Transport(val context: Context) {
         val v=JSONObject().put("op",op).put("id",id);action?.let{v.put("action",it)}
         store.enqueue(v)
         if(op=="dismiss"||op=="read")Cards.cancel(context,id)
+        SyncWorker.once(context)
+    }
+    fun markRead(ids: Set<String>) {
+        for (id in ids) {
+            store.enqueue(JSONObject().put("op", "read").put("id", id))
+            Cards.cancel(context, id)
+        }
         SyncWorker.once(context)
     }
     companion object { private val syncLock=Any() }

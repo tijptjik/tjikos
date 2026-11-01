@@ -1,14 +1,37 @@
 # Notjik for Android
 
 A native Kotlin/Compose notification drawer for Pi: global history, device/app/run
-search, expandable result cards, read/dismiss synchronization, per-device pause,
+search, expandable result cards, read/dismiss synchronization, pull-to-refresh,
 Android system notifications and cross-device card actions.
 
-The drawer opens in **Inbox**. **Mark read** removes the unread indicator and the
+Status cards show their state, tone and source detail; results cards keep their
+label/value rows and duration visible even when collapsed. Android's notification
+shade uses native styled text with the same status, results and body in its
+expanded view. The system controls that layout. Producers should send plain body
+text plus structured `data`, rather than embedding Telegram HTML. Historical
+SnapRAID HTML bodies remain readable in both Android views. Progress, countdown,
+task and key/value cards also render their structured metadata in the drawer.
+
+The drawer opens in **Inbox**. The search field’s filter icon slides out the
+Inbox, Unread and History choices with their counts. Selecting a filter closes
+the choices; the icon stays highlighted for Unread or History. Pull down on the
+notification list to refresh, including an empty inbox. Background updates stay
+automatic. Notification sound and interruption are controlled by Android’s
+system-wide Do Not Disturb and channel settings; there is no separate app pause.
+
+**Mark read** removes the unread indicator and the
 phone's system notification; the card stays in Inbox. **Dismiss** removes the card
 from Inbox and Unread, keeping it in **History**. These are separate states.
-Controls are visible on each active card; details reveal run identifiers, full
-results, and source-device actions. Search and the selected filter stay in place
+Drag deliberately left past half the card width to dismiss it. Short fast flicks
+return to rest, and vertical or diagonal gestures remain list scrolling. Tap a card to reveal or hide its full body,
+run identifiers and actions, including Copy code and the optional Mark read and
+Dismiss buttons. A thin centered bar at the bottom matches the desktop's
+interaction indicator; action buttons stay hidden until expanded. Scrolling a
+card's top edge beneath the fixed toolbar marks it read silently.
+The list leaves enough space below the last card to cross that edge even with one
+card. Expanding or dragging sideways does not mark it read. Swiping lifts and
+tilts the card; expansion uses one height animation without a card-wide ripple.
+Search and the selected filter stay in place
 after changes. Offline actions are saved atomically and shown as waiting to sync;
 stale history responses cannot reverse a local read or dismissal.
 
