@@ -606,6 +606,23 @@ listed newest first from the configured directory; Enter opens the selected file
 `/rec history text` and `/grab history text` filter filenames. Active recordings
 are excluded until finalized. Aliases share one command-menu row.
 
+Screenshot history also includes images retained by `cliphist`, including captures
+from clipboard-only Hyprshot shortcuts. These cards are labelled **Clipboard**;
+cliphist cannot distinguish screenshots from other copied images or identify their
+capture app. Saved files appear newest first, followed by clipboard images newest
+first (`max_results` applies to each source). Search also matches clipboard image
+format and dimensions. Enter opens the original image, Ctrl+C copies it, and
+Ctrl+Enter deletes that clipboard entry (clipboard deletion cannot be undone).
+Clipboard previews and viewer files stay in private temporary storage outside
+the repository. The cliphist watcher must already have retained the image; past
+clipboard-only captures absent from its history cannot be recovered.
+
+Set `include_clipboard = false` to show saved files only. Add other tools' save
+folders to `history_directories`; paths use the same syntax as `directory`,
+repeated directories are deduplicated, and symlinked files are skipped. These
+folders are read directly, without moving captures or changing the save location.
+An unavailable cliphist does not prevent browsing saved screenshots.
+
 ```toml
 [plugins]
 enabled = ["Words", "Clipboard", "Recorder", "Screenshots"]
@@ -621,6 +638,8 @@ max_results = 40
 
 [plugin_settings.Screenshots]
 directory = "xdg:PICTURES/screenshots"
+history_directories = [] # Additional screenshot folders, e.g. "~/Pictures/Screenshots"
+include_clipboard = true
 copy_to_clipboard = true
 max_results = 40
 ```

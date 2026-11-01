@@ -455,6 +455,18 @@ impl Launcher {
     fn activate(&mut self, req: Value) -> Result<Value> {
         let id = s(&req["id"]);
         let mode = req["mode"].as_str().unwrap_or("launch");
+        if mode == "copy" {
+            let entry = self
+                .current
+                .get(id)
+                .filter(|entry| {
+                    entry.provider == "Screenshots" && entry.data["clip_id"].is_string()
+                })
+                .ok_or_else(|| anyhow::anyhow!("Select a clipboard image to copy"))?;
+            return self
+                .captures
+                .activate(entry, &self.settings, mode, self.demo);
+        }
         if !["launch", "switch", "close"].contains(&mode) {
             bail!("Unknown action");
         }
@@ -534,13 +546,15 @@ impl Launcher {
             .cloned();
         if let Some(e) = &entry {
             if ["Screenshots", "Recorder"].contains(&e.provider.as_str()) {
-                if mode == "close" && e.data.get("file").is_none() {
+                if mode == "close"
+                    && e.data.get("file").is_none()
+                    && e.data.get("clip_id").is_none()
+                {
                     return Ok(
                         json!({"kind":"message", "message":"Ctrl+Enter is available for applications and commands with matching windows"}),
                     );
                 }
-                let action =
-                    crate::capture::Captures::activate(e, &self.settings, mode, self.demo)?;
+                let action = self.captures.activate(e, &self.settings, mode, self.demo)?;
                 if mode == "close" {
                     let q = if self.last_query.is_empty() {
                         s(&action["refresh_query"]).to_owned()

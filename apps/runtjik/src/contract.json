@@ -74,6 +74,8 @@
       },
       "Screenshots": {
         "directory": "xdg:PICTURES/screenshots",
+        "history_directories": [],
+        "include_clipboard": true,
         "copy_to_clipboard": true,
         "viewer": [
           "imv"
@@ -2750,6 +2752,8 @@
     ],
     "Screenshots": [
       "directory",
+      "history_directories",
+      "include_clipboard",
       "copy_to_clipboard",
       "viewer",
       "max_results",

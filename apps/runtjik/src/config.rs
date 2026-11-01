@@ -189,6 +189,11 @@ pub fn parse(source: &str) -> Result<Value> {
         }
         if name == "Screenshots" {
             argv(&values["viewer"])?;
+            for value in values["history_directories"].as_array().unwrap() {
+                capture_directory(value.as_str().ok_or_else(|| {
+                    anyhow::anyhow!("Screenshots.history_directories must contain paths")
+                })?)?;
+            }
         }
         if name == "Recorder" {
             range(&values["fps"], 1, 120, "fps")?;

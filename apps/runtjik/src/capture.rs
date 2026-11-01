@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     os::unix::{
         fs::{MetadataExt, PermissionsExt},
         process::CommandExt,
@@ -138,9 +138,22 @@ mod directory_tests {
 }
 #[derive(Default)]
 pub struct Captures {
+    clipboard: crate::clipboard::Clipboard,
     workers: HashMap<String, JoinHandle<()>>,
     failed: HashSet<String>,
     pub pending: bool,
+}
+fn history_directories(options: &Value, rec: bool) -> Result<Vec<PathBuf>> {
+    let mut dirs = vec![directory(s(&options["directory"]))?];
+    if !rec {
+        for value in strings(&options["history_directories"]) {
+            let dir = directory(&value)?;
+            if !dirs.contains(&dir) {
+                dirs.push(dir);
+            }
+        }
+    }
+    Ok(dirs)
 }
 fn row(name: &str, key: &str, title: &str, subtitle: &str, mut data: Value) -> Entry {
     data["keep_open"] = json!(data.get("capture").is_none() && data.get("file").is_none());
@@ -449,26 +462,27 @@ impl Captures {
             return Ok(rows);
         }
         let options = &settings["plugin_settings"][name];
-        let dir = directory(s(&options["directory"]))?;
         let mut files = vec![];
-        if dir.exists() {
-            for e in fs::read_dir(&dir)? {
-                let p = e?.path();
-                let ext = p
-                    .extension()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                if (if rec {
-                    ["mp4", "mkv", "webm"].contains(&ext.as_str())
-                } else {
-                    ["png", "jpg", "jpeg", "webp"].contains(&ext.as_str())
-                }) && p.is_file()
-                    && !p.is_symlink()
-                    && folded(&p.file_name().unwrap().to_string_lossy()).contains(&folded(term))
-                {
-                    if let Ok(meta) = p.metadata() {
-                        files.push((meta.modified()?, p));
+        for dir in history_directories(options, rec)? {
+            if dir.exists() {
+                for e in fs::read_dir(&dir)? {
+                    let p = e?.path();
+                    let ext = p
+                        .extension()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if (if rec {
+                        ["mp4", "mkv", "webm"].contains(&ext.as_str())
+                    } else {
+                        ["png", "jpg", "jpeg", "webp"].contains(&ext.as_str())
+                    }) && p.is_file()
+                        && !p.is_symlink()
+                        && folded(&p.file_name().unwrap().to_string_lossy()).contains(&folded(term))
+                    {
+                        if let Ok(meta) = p.metadata() {
+                            files.push((meta.modified()?, p));
+                        }
                     }
                 }
             }
@@ -496,9 +510,38 @@ impl Captures {
                 name,
                 &p.to_string_lossy(),
                 &p.file_name().unwrap().to_string_lossy(),
-                &format!("{} · {}", date.format("%Y-%m-%d %H:%M"), dir.display()),
+                &format!(
+                    "{} · {}",
+                    date.format("%Y-%m-%d %H:%M"),
+                    p.parent().unwrap().display()
+                ),
                 json!({"file":p.to_string_lossy(),"thumbnail":thumb}),
             ));
+        }
+        if !rec && options["include_clipboard"].as_bool().unwrap_or(true) {
+            // cliphist has ordering but no capture timestamps or source app metadata.
+            // Keep its newest-first images after the dated saved captures.
+            let mut clipboard_settings = settings.clone();
+            clipboard_settings["plugin_settings"]["Clipboard"]["max_results"] =
+                options["max_results"].clone();
+            if let Ok(clips) = self.clipboard.query(
+                &format!("/cliphist images {term}"),
+                &clipboard_settings,
+                false,
+            ) {
+                self.pending |= self.clipboard.pending;
+                for mut clip in clips
+                    .into_iter()
+                    .filter(|clip| clip.data["clip_id"].is_string())
+                {
+                    clip.id = format!("Screenshots:clipboard:{}", s(&clip.data["clip_id"]));
+                    clip.provider = name.into();
+                    clip.name = format!("Clipboard · {}", clip.name);
+                    clip.subtitle = "Clipboard history · image source unknown".into();
+                    clip.data["keep_open"] = json!(false);
+                    rows.push(clip);
+                }
+            }
         }
         if rows.is_empty() {
             rows.push(row(
@@ -523,7 +566,13 @@ impl Captures {
         }
         Ok(rows)
     }
-    pub fn activate(entry: &Entry, settings: &Value, mode: &str, demo: bool) -> Result<Value> {
+    pub fn activate(
+        &mut self,
+        entry: &Entry,
+        settings: &Value,
+        mode: &str,
+        demo: bool,
+    ) -> Result<Value> {
         let data = &entry.data;
         let rec = entry.provider == "Recorder";
         let options = &settings["plugin_settings"][&entry.provider];
@@ -535,10 +584,42 @@ impl Captures {
                 "Synthetic capture action; no files or recording created",
             ));
         }
+        if let Some(id) = data["clip_id"].as_str() {
+            ensure!(
+                !rec && !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()),
+                "Invalid clipboard image"
+            );
+            if mode == "copy" || mode == "close" {
+                let mut reply = crate::clipboard::Clipboard::activate(entry, mode, false)?;
+                if mode == "copy" {
+                    reply = json!({"kind":"copied", "entry":entry.id, "message":"Copied image to clipboard"});
+                }
+                return Ok(reply);
+            }
+            let bytes = binary(
+                &["cliphist".into(), "decode".into()],
+                id.as_bytes().to_vec(),
+                5,
+                false,
+            )?;
+            let mut file = tempfile::Builder::new()
+                .prefix("runtjik-capture-image-")
+                .tempfile()?;
+            file.write_all(&bytes)?;
+            // The viewer owns cleanup so it survives launcher shutdown/restart.
+            let path = file.into_temp_path().keep()?;
+            let result = open_image(&path, options, false, true);
+            if result.is_err() {
+                let _ = fs::remove_file(&path);
+            }
+            return result;
+        }
         if let Some(file) = data["file"].as_str() {
             let path = Path::new(file);
             ensure!(
-                path.parent() == Some(directory(s(&options["directory"]))?.as_path())
+                history_directories(options, rec)?
+                    .iter()
+                    .any(|dir| path.parent() == Some(dir.as_path()))
                     && path.is_file()
                     && !path.is_symlink(),
                 "Capture is no longer available"
@@ -554,22 +635,7 @@ impl Captures {
                 reply["refresh_query"] = json!(if rec { "/rec history" } else { "/grab history" });
                 return Ok(reply);
             }
-            let mut argv = if rec {
-                vec!["xdg-open".into()]
-            } else {
-                strings(&options["viewer"])
-            };
-            if !rec && Path::new(&argv[0]).file_name().is_some_and(|s| s == "imv") {
-                argv = vec![
-                    std::env::current_exe()?.to_string_lossy().into_owned(),
-                    "image-viewer".into(),
-                    json!({"viewer":argv,"paths":[file]}).to_string(),
-                ];
-            } else {
-                argv.push(file.into());
-            }
-            dispatch(argv, &json!({}))?;
-            return Ok(json!({"kind":"activated"}));
+            return open_image(path, options, rec, false);
         }
         if data["stop"] == true {
             let stopping = capture_worker::request("stop")?.is_some();
@@ -583,6 +649,25 @@ impl Captures {
         }
         capture(data, options, rec)
     }
+}
+fn open_image(path: &Path, options: &Value, rec: bool, temporary: bool) -> Result<Value> {
+    let file = path.to_string_lossy();
+    let mut argv = if rec {
+        vec!["xdg-open".into()]
+    } else {
+        strings(&options["viewer"])
+    };
+    if temporary || (!rec && Path::new(&argv[0]).file_name().is_some_and(|s| s == "imv")) {
+        argv = vec![
+            std::env::current_exe()?.to_string_lossy().into_owned(),
+            "image-viewer".into(),
+            json!({"viewer":argv,"paths":[file],"temporary":temporary}).to_string(),
+        ];
+    } else {
+        argv.push(file.into_owned());
+    }
+    dispatch(argv, &json!({}))?;
+    Ok(json!({"kind":"activated"}))
 }
 fn countdown(spec: &Value) -> Result<bool> {
     let seconds = spec["countdown_seconds"].as_u64().unwrap_or(0);
