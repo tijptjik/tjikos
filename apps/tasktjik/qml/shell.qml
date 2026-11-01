@@ -6,6 +6,14 @@ import Quickshell.Io
 ShellRoot {
     id: root
     property var pending: []
+    function applyState(state) {
+        if(state.incremental) {
+            const changed=new Set((state.tasks || []).map(t=>t.id).concat(state.removed || []));
+            const tasks=(view.stateData.tasks || []).filter(t=>!changed.has(t.id)).concat(state.tasks || []);
+            const groups=Array.from(new Set((view.stateData.groups || []).concat(state.groups || [])));
+            view.stateData=Object.assign({},view.stateData,state,{tasks:tasks,groups:groups});
+        } else view.stateData=Object.assign({},view.stateData,state);
+    }
     function request(value) {
         pending.push(value);
         drain();
@@ -13,23 +21,38 @@ ShellRoot {
     function drain() {
         if (backend.running || !pending.length) return;
         backend.payload = JSON.stringify(pending.shift());
+        backend.output = '';
+        backend.failure = '';
         view.errorMessage = '';
         backend.running = true;
     }
     Process {
         id: backend
         property string payload
-        command: [Quickshell.env('TASKTJIK_HOME') + '/tasktjik-api', 'state'].concat(Quickshell.env('TASKTJIK_DEMO') === '1' ? ['--demo'] : [])
+        property string output
+        property string failure
+        command: [Quickshell.env('TASKTJIK_HOME') + '/tasktjik-api', 'state', '--incremental'].concat(Quickshell.env('TASKTJIK_DEMO') === '1' ? ['--demo'] : [])
         stdinEnabled: true
         onStarted: { write(payload); stdinEnabled = false; }
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try { view.stateData = JSON.parse(text); view.errorMessage = ''; }
+        stdout: StdioCollector { onStreamFinished: backend.output = text }
+        stderr: StdioCollector { onStreamFinished: backend.failure = text.trim() }
+        onExited: (exitCode, exitStatus) => {
+            if(exitCode===0) {
+                try {
+                    root.applyState(JSON.parse(output));
+                    view.errorMessage = '';
+                    // Reconcile the optimistic row only after the server confirms it.
+                    const action = JSON.parse(backend.payload).action;
+                    if (['create', 'edit', 'snooze'].includes(action)) {
+                        view.accepted();
+                        Qt.callLater(() => view.forceActiveFocus());
+                    }
+                }
                 catch (e) { view.errorMessage = 'Could not load tasks. Check Tasktjik authority configuration.'; }
-            }
+            } else view.errorMessage = failure || 'Could not save or load tasks. Please try again.';
+            stdinEnabled = true;
+            Qt.callLater(root.drain);
         }
-        stderr: StdioCollector { onStreamFinished: { if (text.trim()) view.errorMessage = text.trim(); } }
-        onExited: { stdinEnabled = true; Qt.callLater(root.drain); }
     }
     FloatingWindow {
         title: 'Tasktjik'
@@ -52,10 +75,10 @@ ShellRoot {
     IpcHandler {
         target: "tasktjik"
         function status(): string {
-            return JSON.stringify({editor:view.editor, busy:backend.running || root.pending.length>0, sortOrder:view.sortOrder, dragging:!!view.dragTask, moving:view.pendingMove, purgeMode:typeof view.purgeSelected==='function'?'immediate-undo-toast':'confirmation', taskCount:(view.stateData.tasks || []).length});
+            return JSON.stringify({editor:view.editor, saving:!!view.pendingSave, deleting:!!view.pendingPurge, queuedDeletes:view.queuedPurges.length, busy:backend.running || root.pending.length>0, sortOrder:view.sortOrder, dragging:!!view.dragTask, moving:view.pendingMove, purgeMode:'optimistic-undo-queue', taskCount:(view.stateData.tasks || []).length});
         }
         function reload(): bool {
-            if(view.editor || view.dragTask || view.pendingMove || backend.running || root.pending.length)return false;
+            if(view.editor || view.pendingSave || view.pendingPurge || view.dragTask || view.pendingMove || backend.running || root.pending.length)return false;
             Quickshell.reload(false);
             return true;
         }

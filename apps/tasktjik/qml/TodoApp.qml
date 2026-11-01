@@ -30,6 +30,8 @@ Pane {
     property int readingSort: 0
     property int sortOrder: 0
     property bool requestBusy: false
+    property var pendingSave: null
+    property var retrySave: null
     property var dueToday: new Date()
     readonly property var parsedDue: DueDate.parse(dueInput.text, dueToday)
     readonly property var dueSuggestions: DueDate.suggestions(dueInput.text, dueToday)
@@ -42,11 +44,25 @@ Pane {
         dueSuggestionsDismissed=true;dueSuggestionIndex=-1;
         dueInput.forceActiveFocus();
     }
+    function savingState() {
+        const task=Object.assign({done:false,status:'ready',period:'once',completions:{}},pendingSave.draft,
+            {id:pendingSave.request.id || pendingSave.request.request_id,saving:true});
+        const rows=(stateData.tasks || []).filter(t=>t.id!==task.id).concat([task]);
+        const groups=(stateData.groups || []).slice();
+        if(!groups.includes(task.group))groups.push(task.group);
+        return Object.assign({},stateData,{tasks:rows,groups:groups});
+    }
     function projectedState() {
-        if(!pendingMove || !moveOperation)return stateData;
-        const tasks=(stateData.tasks || []).map(task=>task.id===moveOperation.id?
-            Object.assign({},task,{group:moveOperation.group},moveOperation.group==='Quick'?{due:stateData.today || Qt.formatDate(new Date(),'yyyy-MM-dd')}:{}) : task);
-        return Object.assign({},stateData,{tasks:tasks});
+        const state=pendingSave && !pendingSave.request.draft_id ? savingState() : stateData;
+        let tasks=(state.tasks || []).slice();
+        if(pendingMove && moveOperation)tasks=tasks.map(task=>task.id===moveOperation.id?
+            Object.assign({},task,{group:moveOperation.group},moveOperation.group==='Quick'?{due:state.today || Qt.formatDate(new Date(),'yyyy-MM-dd')}:{}) : task);
+        for(const operation of (pendingPurge?[pendingPurge]:[]).concat(queuedPurges)) {
+            if(operation.undoRequested) {
+                if(!tasks.some(t=>t.id===operation.id))tasks.push(operation.task);
+            } else tasks=tasks.filter(t=>t.id!==operation.id);
+        }
+        return Object.assign({},state,{tasks:tasks});
     }
     property var dragTask: null
     property var dragSnapshot: ({})
@@ -75,7 +91,7 @@ Pane {
         moveMessage='Could not move task: '+errorMessage;
     }
     function startDrag(task, source, width, height, point) {
-        if(pendingMove || pendingPurge)return;
+        if(pendingMove || pendingSave || pendingPurge)return;
         dragSnapshot=stateData;dragSource=source;dragWidth=width;dragHeight=height;
         dragTask=JSON.parse(JSON.stringify(task));moveMessage='';selectedId=task.id;
         updateDrag(point);
@@ -286,7 +302,7 @@ Pane {
     Shortcut {sequence:'?';onActivated:help.open()}
     Shortcut {sequences:[StandardKey.Undo];enabled:!editor && !searching && !help.visible && !dateHelp.visible;onActivated:app.undoLastAction()}
     Shortcut {sequence:'U';enabled:!editor && !searching && !help.visible && !dateHelp.visible;onActivated:app.undoLastAction()}
-    Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !dateHelp.visible && !!selected && !pendingPurge;onActivated:app.purgeSelected()}
+    Shortcut {sequence:'P';autoRepeat:false;enabled:!editor && !searching && !help.visible && !dateHelp.visible && !!selected;onActivated:app.purgeSelected()}
     Shortcut {sequence:'Alt+G';enabled:editor==='edit';onActivated:reveal('group')}
     Shortcut {sequence:'Alt+T';enabled:editor==='edit';onActivated:reveal('tags')}
     Shortcut {sequence:'Alt+D';enabled:editor==='edit';onActivated:reveal('due')}
@@ -370,45 +386,131 @@ Pane {
     }
 
     property var pendingPurge: null
+    property var queuedPurges: []
+    property var purgeHistory: []
     property string undoToastTask: ''
     property string undoToastTitle: ''
     function purgeSelected() {
-        if(!selected || pendingPurge || pendingMove)return;
-        pendingPurge={id:selected.id,title:selected.title};
-        purgePendingTimer.restart();
-        request({action:'purge',id:selected.id,revision:selected.revision});
+        if(!selected || pendingSave || pendingMove)return;
+        if([pendingPurge].concat(queuedPurges).some(p=>p && p.id===selected.id))return;
+        const operation={id:selected.id,title:selected.title,revision:selected.revision,
+            task:JSON.parse(JSON.stringify(selected)),sent:false,confirmed:false,
+            undoRequested:false,undoSent:false,requestId:newRequestId(),undoId:newRequestId()};
+        if(pendingPurge)queuedPurges=queuedPurges.concat([operation]);
+        else pendingPurge=operation;
+        moveMessage='';
+        undoToastTask=operation.id;undoToastTitle=operation.title;toastTimer.restart();
+        selectVisibleTask();
+        sendPurge();
     }
+    function sendPurge() {
+        if(!pendingPurge || requestBusy)return;
+        if(!pendingPurge.sent) {
+            pendingPurge=Object.assign({},pendingPurge,{sent:true});
+            request({action:'purge',id:pendingPurge.id,revision:pendingPurge.revision,request_id:pendingPurge.requestId});
+        } else if(pendingPurge.confirmed && pendingPurge.undoRequested && !pendingPurge.undoSent) {
+            pendingPurge=Object.assign({},pendingPurge,{undoSent:true});
+            request({action:'undo',id:pendingPurge.id,undo_action:'purge',request_id:pendingPurge.undoId});
+        }
+    }
+    function advancePurge() {
+        pendingPurge=queuedPurges.length?queuedPurges[0]:null;
+        queuedPurges=queuedPurges.slice(1);
+    }
+    function rejectPurge() {
+        if(!pendingPurge)return;
+        const operation=pendingPurge;
+        if(operation.undoSent) {
+            // A failed restore leaves the server's undo stack unchanged. Later
+            // restores depend on it, so roll them back and retain their order.
+            const restores=queuedPurges.filter(p=>p.undoRequested).reverse();
+            purgeHistory=purgeHistory.concat(restores,[operation]).slice(-100);
+            queuedPurges=queuedPurges.filter(p=>!p.undoRequested);
+        }
+        if(undoToastTask===operation.id){undoToastTask='';toastTimer.stop();}
+        moveMessage=(operation.undoSent?'Could not restore “':'Could not delete “')+operation.title+'”: '+errorMessage;
+        advancePurge();
+        if(!operation.undoSent)selectedId=operation.id;
+        selectVisibleTask();
+    }
+    Timer {interval:25;repeat:true;running:!!app.pendingPurge && (!app.pendingPurge.sent || (app.pendingPurge.confirmed && app.pendingPurge.undoRequested && !app.pendingPurge.undoSent));onTriggered:app.sendPurge()}
     function undoLastAction() {
-        if(pendingMove)return;
+        if(pendingSave || pendingMove)return;
+        // Newest queued deletion can be cancelled without ever reaching the server.
+        const waiting=queuedPurges.map(p=>p.id).lastIndexOf(undoToastTask);
+        let index=waiting;
+        if(index<0)for(let i=queuedPurges.length-1;i>=0;i--)if(!queuedPurges[i].undoRequested){index=i;break;}
+        let operation=index>=0?queuedPurges[index]:pendingPurge && !pendingPurge.undoRequested?pendingPurge:null;
+        if(operation) {
+            if(index>=0)queuedPurges=queuedPurges.filter((p,i)=>i!==index);
+            else if(!operation.sent)advancePurge();
+            else pendingPurge=Object.assign({},operation,{undoRequested:true});
+        } else if(purgeHistory.length) {
+            operation=purgeHistory[purgeHistory.length-1];
+            purgeHistory=purgeHistory.slice(0,-1);
+            const restore=Object.assign({},operation,{sent:true,confirmed:true,undoRequested:true,undoSent:false});
+            if(pendingPurge)queuedPurges=queuedPurges.concat([restore]);
+            else pendingPurge=restore;
+        }
         const task=undoToastTask;
         undoToastTask='';toastTimer.stop();
-        request(task?{action:'undo',id:task,undo_action:'purge'}:{action:'undo'});
+        if(operation) {
+            selectedId=operation.id;moveMessage='';app.forceActiveFocus();
+            sendPurge();
+        } else if(!pendingPurge)request(task?{action:'undo',id:task,undo_action:'purge'}:{action:'undo'});
     }
-    onErrorMessageChanged: {if(errorMessage){pendingPurge=null;purgePendingTimer.stop();if(pendingMove && moveSent)rejectMove();if(dragTask)cancelDrag();}}
-    Timer {id:purgePendingTimer;interval:15000;onTriggered:app.pendingPurge=null;}
+    onErrorMessageChanged: {if(errorMessage){if(pendingPurge && (pendingPurge.undoSent || (pendingPurge.sent && !pendingPurge.confirmed)))rejectPurge();if(pendingMove && moveSent)rejectMove();if(dragTask)cancelDrag();if(pendingSave && pendingSave.sent)rejectSave();}}
     Timer {id:toastTimer;interval:3000;onTriggered:app.undoToastTask='';}
     Rectangle {
         id:purgeToast
         z:100
         anchors.horizontalCenter:parent.horizontalCenter
         anchors.bottom:parent.bottom;anchors.bottomMargin:8
-        width:Math.min(app.width-16,440);height:54;radius:10
+        width:Math.min(app.width-16,440);height:56;radius:12
         color:theme.surface
+        border.color:theme.border
         visible:app.undoToastTask!==''
         RowLayout {
-            anchors.fill:parent;anchors.margins:8;spacing:12
-            Label {Layout.fillWidth:true;text:'Deleted “'+app.undoToastTitle+'”';elide:Text.ElideRight;color:theme.text}
-            QuietButton {text:'Undo';quiet:true;onClicked:app.undoLastAction()}
+            anchors.fill:parent;anchors.margins:8;anchors.leftMargin:16;spacing:6
+            Label {
+                text:'Deleted';color:theme.muted
+                font.pixelSize:14;renderType:Text.NativeRendering
+            }
+            Label {
+                Layout.fillWidth:true;Layout.minimumWidth:0
+                text:'“'+app.undoToastTitle+'”';textFormat:Text.PlainText
+                elide:Text.ElideRight;color:theme.text
+                font.pixelSize:14;font.weight:Font.DemiBold;renderType:Text.NativeRendering
+            }
+            Button {
+                id:toastUndo
+                text:'Undo';Layout.leftMargin:8
+                implicitWidth:68;implicitHeight:38
+                Accessible.name:'Undo deletion'
+                contentItem:Text {
+                    text:toastUndo.text;color:theme.accent
+                    font.pixelSize:14;font.weight:Font.DemiBold;renderType:Text.NativeRendering
+                    horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter
+                }
+                background:Rectangle {
+                    radius:8
+                    color:Qt.alpha(theme.accent,toastUndo.down?0.22:toastUndo.hovered?0.16:0.08)
+                    border.color:toastUndo.visualFocus?theme.accent:'transparent'
+                }
+                onClicked:app.undoLastAction()
+            }
         }
     }
     signal request(var request)
+    onRequest: value=>{if(!['list','refresh','plans','open-reference','purge','undo'].includes(value.action))purgeHistory=[];}
     signal exitApp()
     signal openWindow()
     property bool canOpenWindow: false
-    function action(name, extra) {if(selected && !pendingMove)request(Object.assign({action:name,id:selected.id,period:selected.period,revision:selected.revision},extra || {}));}
+    function action(name, extra) {if(selected && !pendingSave && !pendingPurge && !pendingMove)request(Object.assign({action:name,id:selected.id,period:selected.period,revision:selected.revision},extra || {}));}
     function openEditor(draft) {
-        if(pendingMove)return;
+        if(pendingSave || pendingPurge || pendingMove)return;
         dueToday=new Date();
+        retrySave=null;
         editing=draft || (selected ? JSON.parse(JSON.stringify(selected)) : {title:'',kind:collection,group:'All',tags:[],due:'',repeat:{},reference:''});
         titleInput.text=editing.title;groupInput.editText=editing.group || 'All';
         tagsInput.text=editing.tags.join(', ');dueInput.text=editing.due;
@@ -424,18 +526,50 @@ Pane {
         editor='edit';titleInput.forceActiveFocus();
     }
     function cancelEditor() {
+        if(pendingSave)return;
+        retrySave=null;
         if(draftId)request({action:'reading-cancel',draft_id:draftId});
         else {editor='';app.forceActiveFocus();}
     }
     function saveEditor() {
+        if(editor!=='edit' || pendingSave || !titleInput.text.trim())return;
         if(parsedDue.error){errorMessage=parsedDue.error;dueInput.forceActiveFocus();return;}
-        request({action:draftId?'reading-save':editing.id?'edit':'create',draft_id:draftId,
+        const value={action:draftId?'reading-save':editing.id?'edit':'create',draft_id:draftId,
             id:editing.id || '',revision:editing.revision,
             fields:{kind:editing.kind || collection,title:titleInput.text,group:groupInput.editText.trim() || 'All',
                 tags:tagsInput.text.split(',').map(s=>s.trim()).filter(Boolean),due:parsedDue.value,
                 repeat:repeatUnit.currentText==='none'?{}:{unit:repeatUnit.currentText,value:repeatValue.text},
                 reference:planInput.text,notifyBeforeDue:notifyInput.checked,
-                notifyBeforeDueLeadValue:Number(leadValue.text),notifyBeforeDueLeadUnit:leadUnit.currentText}});
+                notifyBeforeDueLeadValue:Number(leadValue.text),notifyBeforeDueLeadUnit:leadUnit.currentText}};
+        const fingerprint=JSON.stringify(value);
+        if(!retrySave || retrySave.fingerprint!==fingerprint) {
+            // Keep the same id for an unchanged retry if a reply was lost.
+            const id=newRequestId();
+            retrySave={fingerprint:fingerprint,id:id};
+        }
+        value.request_id=draftId || retrySave.id;
+        pendingSave={request:value,draft:Object.assign({},editing,value.fields),sections:sections,sent:false};
+        if(!draftId){editor='';selectedId=value.id || value.request_id;app.forceActiveFocus();}
+        sendSave();
+    }
+    function newRequestId() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+            const n=Math.floor(Math.random()*16);return (c==='x'?n:(n&3)|8).toString(16);
+        });
+    }
+    function sendSave() {
+        if(!pendingSave || pendingSave.sent || requestBusy)return;
+        pendingSave=Object.assign({},pendingSave,{sent:true});
+        request(pendingSave.request);
+    }
+    Timer {interval:25;repeat:true;running:!!app.pendingSave && !app.pendingSave.sent;onTriggered:app.sendSave()}
+    function rejectSave() {
+        if(!pendingSave)return;
+        const saved=pendingSave,retry=retrySave;
+        pendingSave=null;
+        openEditor(saved.draft);
+        sections=saved.sections;
+        retrySave=retry;
     }
     function selectVisibleTask() {
         const rows=collection==='reading'?readingSites():(listState?.groups || []).reduce((items,g)=>items.concat(tasks(g)),[]);
@@ -450,6 +584,7 @@ Pane {
     function visibleCount() {if(collection==='reading')return readingSites().length;return (listState?.groups || []).reduce((n,g)=>n+tasks(g).length,0);}
     function taskMeta(task) {
         const parts=[];
+        if(task.saving)parts.push('Saving…');
         if(task.status && !['ready','inbox','done','cancelled','blocked'].includes(task.status))parts.push(task.status.replace('_',' '));
         if(task.assignee)parts.push(task.assignee);
         if(task.verification && task.verification.length)parts.push('Check: '+task.verification[task.verification.length-1].outcome);
@@ -529,7 +664,7 @@ Pane {
         else if(event.key===Qt.Key_D)action('toggle');
         else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && collection==='reading')action('open-reference');
         else if(event.key===Qt.Key_T || event.key===Qt.Key_G){if(selected){openEditor();if(event.key===Qt.Key_G)reveal('group');}}
-        else if(event.key===Qt.Key_S){if(selected)snoozeTaskId=snoozeTaskId===selectedId?'':selectedId;}
+        else if(event.key===Qt.Key_S){if(selected && !pendingSave)snoozeTaskId=snoozeTaskId===selectedId?'':selectedId;}
         else if(event.key===Qt.Key_Slash){searching=true;filterInput.forceActiveFocus();}
         else if(event.key===Qt.Key_Escape){if(snoozeTaskId)snoozeTaskId='';else exitApp();}
         else if(event.key===Qt.Key_Left || event.key===Qt.Key_Right)focusColumn(event.key===Qt.Key_Left?-1:1);
@@ -543,9 +678,15 @@ Pane {
             const moved=(stateData.tasks || []).find(t=>t.id===moveOperation.id);
             if(moved && moved.revision>moveOperation.revision && moved.group===moveOperation.group && (moved.events || []).slice(-1).some(e=>e.action==='move'))clearMove();
         }
-        if(pendingPurge && Array.isArray(stateData.tasks) && !stateData.tasks.some(t=>t.id===pendingPurge.id)) {
-            undoToastTask=pendingPurge.id;undoToastTitle=pendingPurge.title;pendingPurge=null;
-            purgePendingTimer.stop();toastTimer.restart();
+        if(pendingPurge && pendingPurge.sent && Array.isArray(stateData.tasks)) {
+            const present=stateData.tasks.some(t=>t.id===pendingPurge.id);
+            if(!pendingPurge.confirmed && !present) {
+                pendingPurge=Object.assign({},pendingPurge,{confirmed:true});
+                if(!pendingPurge.undoRequested) {
+                    purgeHistory=purgeHistory.concat([pendingPurge]).slice(-100);
+                    advancePurge();
+                }
+            } else if(pendingPurge.undoSent && present)advancePurge();
         }
         if(stateData.plans)plans=stateData.plans;
         if(stateData.collection && collection!==stateData.collection){collection=stateData.collection;view=collection==='reading'?'all':'week';}
@@ -566,8 +707,8 @@ Pane {
             }
             Item {Layout.fillWidth:true}
             Choice {visible:!editor;model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectVisibleTask();}}
-            QuietButton {text:'Open window';visible:canOpenWindow && !editor;quiet:true;onClicked:app.openWindow()}
-            QuietButton {text:collection==='reading'?'+ Save page':'+ New';visible:!editor;primary:true;enabled:!draftId;onClicked:{selectedId='';openEditor();}}
+            QuietButton {text:'Open window';visible:canOpenWindow && !editor;enabled:!pendingSave;quiet:true;onClicked:app.openWindow()}
+            QuietButton {text:collection==='reading'?'+ Save page':'+ New';visible:!editor;primary:true;enabled:!draftId && !pendingSave;onClicked:{selectedId='';openEditor();}}
         }
         RowLayout {
             visible:!editor;Layout.fillWidth:true;spacing:4
@@ -954,13 +1095,23 @@ Pane {
                 RowLayout {
                     id:editorActions
                     Layout.topMargin:6;spacing:8
-                    QuietButton {primary:true;text:draftId?'Save and close tab':'Save';enabled:titleInput.text.trim()!=='';onClicked:saveEditor()}
-                    QuietButton {text:'Cancel';onClicked:cancelEditor()}
+                    QuietButton {primary:true;text:pendingSave?'Saving…':draftId?'Save and close tab':'Save';enabled:!pendingSave && titleInput.text.trim()!=='';onClicked:saveEditor()}
+                    QuietButton {text:'Cancel';enabled:!pendingSave;onClicked:cancelEditor()}
                 }
             }
         }
+        Label {visible:!!pendingSave;text:'Saving “'+(pendingSave?pendingSave.draft.title:'')+'”…';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
         Label {visible:!!stateData.sync_message;text:stateData.sync_message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
         Label {visible:!!errorMessage || !!moveMessage || !!stateData.message;text:errorMessage || moveMessage || stateData.message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
     }
-    function accepted() {draftId='';editor='';app.forceActiveFocus();}
+    function accepted() {
+        if(pendingSave) {
+            if(!pendingSave.sent)return;
+            const value=pendingSave.request;
+            const saved=(stateData.tasks || []).find(t=>value.id?t.id===value.id:t.createKey===value.request_id);
+            if(saved)selectedId=saved.id;
+            pendingSave=null;retrySave=null;
+        }
+        draftId='';editor='';app.forceActiveFocus();
+    }
 }

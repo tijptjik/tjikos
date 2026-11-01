@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'runtjik/tests'))
 from private_compositor import private_compositor, wait_for
 
 app = Path(__file__).resolve().parents[1]
-with private_compositor():
+with private_compositor(isolate_pointer=True):
     temp = Path(os.environ['XDG_RUNTIME_DIR']).parent
     config = Path(os.environ['XDG_CONFIG_HOME']) / 'tasktjik'
     config.mkdir(parents=True)
@@ -27,7 +27,9 @@ with private_compositor():
     shell = home/'qml/shell.qml'
     shell.write_text(shell.read_text().replace('    Component.onCompleted:', '''    IpcHandler {
         target: "tasktjik-test"
-        function state(): string { return JSON.stringify({tasks:view.stateData.tasks,error:view.errorMessage,editor:view.editor,sections:view.sections,help:view.testHelpVisible,purge:view.testPurgeVisible,selected:view.selectedId}); }
+        function state(): string { return JSON.stringify({tasks:view.stateData.tasks,error:view.errorMessage,editor:view.editor,sections:view.sections,help:view.testHelpVisible,purge:view.testPurgeVisible,selected:view.selectedId,saving:!!view.pendingSave}); }
+        function editSelected(): void { view.openEditor(); }
+        function newItem(): void { view.selectedId=''; view.openEditor(); }
         function refresh(): void { root.request({action:'list'}); }
         function capture(path:string): void { if(view.testHelpVisible) view.captureHelp(path); else view.grabToImage(image=>image.saveToFile(path)); }
     }
@@ -43,6 +45,7 @@ with private_compositor():
         process = subprocess.Popen(['quickshell','--path',str(home/'qml'),'--no-duplicate'],stdout=log,stderr=log)
         try:
             wait_for(ready, timeout=20)
+            subprocess.run(['hyprctl', 'eval', 'hl.dispatch(hl.dsp.focus({window="title:Tasktjik"}))'], check=True, stdout=subprocess.DEVNULL)
             assert not json.loads(ipc('state'))['error']
             ipc('refresh')
             wait_for(ready)
@@ -62,7 +65,7 @@ with private_compositor():
             request({'action':'create','fields':{'title':'Synthetic replacement'}})
             ipc('refresh')
             wait_for(ready)
-            key('n')
+            key('-k', 'n')
             wait_for(lambda: current()['editor'] == 'edit')
             assert not any(current()['sections'].values()), current()
             ipc('capture', str(temp/'editor.png'))
@@ -80,14 +83,45 @@ with private_compositor():
             wait_for(lambda: not current()['help'])
             key('-k', 'Escape')
             wait_for(lambda: current()['editor'] == '')
-            key('n')
+            key('-k', 'n')
             wait_for(lambda: current()['editor'] == 'edit')
             assert not any(current()['sections'].values()), current()
             key('Synthetic minimal item')
             key('-k', 'Return')
             wait_for(lambda: len(current()['tasks']) == 2)
+            wait_for(lambda: current()['editor'] == '' and not current()['saving'])
+            assert not current()['error'], current()
+            assert any(t['title'] == 'Synthetic minimal item' for t in request({'action':'list'}))
+            # Editing leaves the form immediately and reconciles the saved task.
+            ipc('editSelected')
+            wait_for(lambda: current()['editor'] == 'edit')
+            key('-M', 'ctrl', 'a', '-m', 'ctrl')
+            key('Synthetic edited item')
+            key('-M', 'ctrl', '-k', 'Return', '-m', 'ctrl')
+            wait_for(lambda: current()['editor'] == '' and not current()['saving'])
+            assert any(t['title'] == 'Synthetic edited item' for t in request({'action':'list'}))
+            # Validation failures retain the draft so it can be corrected.
+            ipc('newItem')
+            wait_for(lambda: current()['editor'] == 'edit')
+            key('Synthetic invalid date')
+            key('-M', 'alt', 'd', '-m', 'alt')
+            key('invalid-date')
+            key('-M', 'ctrl', '-k', 'Return', '-m', 'ctrl')
+            wait_for(lambda: bool(current()['error']))
+            assert current()['editor'] == 'edit', current()
+            assert len(request({'action':'list'})) == 2
+            key('-M', 'alt', 'd', '-m', 'alt')
+            key('-M', 'ctrl', 'a', '-m', 'ctrl')
+            key('2026-11-03')
+            key('-M', 'ctrl', '-k', 'Return', '-m', 'ctrl')
+            wait_for(lambda: current()['editor'] == '' and not current()['saving'])
+            assert not current()['error'], current()
+            assert len(request({'action':'list'})) == 3
             assert 'ERROR' not in (temp/'tasktjik.log').read_text()
             print('PASS standalone Tasktjik:',temp/'tasktjik.png')
+        except Exception:
+            print('Tasktjik UI failure:', ipc('state'), flush=True)
+            raise
         finally:
             process.terminate()
             process.wait(timeout=5)

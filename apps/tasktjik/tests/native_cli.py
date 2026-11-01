@@ -80,6 +80,32 @@ class NativeClientTests(unittest.TestCase):
         self.assertFalse(any("python" in arg for arg in args))
         self.assertIn("-oStrictHostKeyChecking=yes", args)
 
+    def test_incremental_actions_return_only_the_acknowledged_change(self):
+        saved = self.call("state", "--incremental", body={"action": "create", "fields": {"title": "Synthetic delta"}})
+        self.assertTrue(saved["incremental"])
+        task = saved["tasks"][0]
+        done = self.call("state", "--incremental", body={"action": "toggle", "id": task["id"], "revision": task["revision"], "period": task["period"]})
+        self.assertTrue(done["tasks"][0]["done"])
+        removed = self.call("state", "--incremental", body={"action": "purge", "id": task["id"], "revision": done["tasks"][0]["revision"]})
+        self.assertEqual(removed["tasks"], [])
+        self.assertEqual(removed["removed"], [task["id"]])
+        self.assertEqual(self.call("state", "--incremental", body={"action": "list"})["tasks"], [])
+
+    def test_incremental_remote_action_does_not_refetch_the_list(self):
+        task = self.call("request", body={"action": "create", "fields": {"title": "Synthetic remote reply"}})
+        log = self.root / "http-requests.jsonl"
+        response = self.root / "reply.json"
+        response.write_text(json.dumps({"result": task}))
+        self.config.write_text('[tasktjik]\nurl="https://si.synthetic.ts.net/tasktjik"\n')
+        self.script("curl", "import sys,json,pathlib\nrequest=json.load(sys.stdin)\n"
+            + "assert request['action'] != 'list', 'Unexpected post-write fetch'\n"
+            + "with pathlib.Path(" + repr(str(log)) + ").open('a') as f:f.write(json.dumps(request)+'\\n')\n"
+            + "sys.stdout.write(pathlib.Path(" + repr(str(response)) + ").read_text()+'\\n200')\n")
+        state = self.call("state", "--incremental", body={"action": "edit", "id": task["id"], "revision": task["revision"], "fields": {"title": task["title"]}})
+        self.assertEqual(state["tasks"][0]["id"], task["id"])
+        self.assertTrue(state["mutation_accepted"])
+        self.assertEqual(len(log.read_text().splitlines()), 1)
+
     def test_enrollment_preserves_configuration_and_registers_device(self):
         self.config.write_text(
             '# preserved\n[tasktjik]\nvault="Synthetic vault"\nsocket="/old/socket"\n'

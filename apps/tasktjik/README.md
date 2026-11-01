@@ -33,12 +33,26 @@ cache entries are refreshed automatically. Rendering requires Chrome or Chromium
 without it, site-provided images remain available.
 Run `python3 -B tests/reading_ui.py` for the isolated synthetic renderer check.
 
-In the task list, press `P` to purge the selected task immediately. A three-second
-Undo toast appears after deletion succeeds. `U` and Ctrl+Z remain available after
-the toast disappears. Purge removes the entire task, including recurrence history.
+In the task list, press `P` to remove the selected task from the list immediately
+while deletion is sent to the authority. A rejected deletion restores the row
+and its selection. A three-second Undo toast appears immediately. Undo restores
+the row immediately too: it cancels an unsent deletion, or queues a restore after
+the in-flight deletion completes. Rapid deletions and restores run in order;
+failed restores roll back dependent queued restores and retain their retry order.
+`U` and Ctrl+Z remain available after the toast disappears. Purge removes the
+entire task, including recurrence history. The UI queue is held in memory.
 
 `tasktjik request` accepts one JSON request on stdin and returns JSON on stdout.
 `tasktjik state` returns UI state. `tasktjik serve` is the authority endpoint.
+The standalone window uses `state --incremental`: mutations return just the
+acknowledged task or deleted ID, which is merged into the displayed list. Regular
+polls fetch the full list to reconcile other devices. A mutation does not wait
+for an additional full-list request before the UI confirms it.
+Enter or Save returns to the list immediately and shows the task as **Saving…**
+until the authority confirms it. Repeated submissions are ignored while that
+save is pending. A failed save restores the draft; retrying it unchanged keeps
+the same request ID, so a lost reply cannot create a second task. Pending saves
+are held in memory, not a durable offline queue.
 The desktop due-date field accepts `today`, `tomorrow`, `next Friday`,
 `in two weeks`, `3 days from now`, `next month`, `15 December`, and ISO dates.
 It previews the resolved date and saves `YYYY-MM-DD`; blank or `no due date`

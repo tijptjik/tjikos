@@ -393,6 +393,45 @@ impl Todo {
         let rows = self.request(json!({"action":"list"}), settings, demo)?;
         render_state(rows, &request, demo)
     }
+    /// UI clients already have a list. Reconcile a mutation from its acknowledged
+    /// task instead of making a second network request for the entire list.
+    pub fn state_delta(&mut self, request: Value, settings: &Value, demo: bool) -> Result<Value> {
+        let action = request["action"].as_str().unwrap_or("list");
+        if ![
+            "create",
+            "edit",
+            "toggle",
+            "done",
+            "status",
+            "snooze",
+            "verify",
+            "purge",
+            "move",
+            "undo",
+            "attach-image",
+        ]
+        .contains(&action)
+        {
+            return self.state(request, settings, demo);
+        }
+        let task = self.request(request.clone(), settings, demo)?;
+        ensure!(task["id"].is_string(), "Missing acknowledged task ID");
+        let removed = if task["deleted"] == true {
+            json!([task["id"]])
+        } else {
+            json!([])
+        };
+        let rows = if task["deleted"] == true {
+            json!([])
+        } else {
+            json!([task])
+        };
+        let mut state = render_state(rows, &request, demo)?;
+        state["incremental"] = json!(true);
+        state["removed"] = removed;
+        state["mutation_accepted"] = json!(true);
+        Ok(state)
+    }
 }
 
 /// Derive UI fields from a complete snapshot without contacting the authority.
@@ -661,6 +700,9 @@ pub fn command_line(args: &[String]) -> Result<bool> {
     let mut todo = Todo::default();
     let settings = json!({});
     let result = match cmd {
+        "state" if args.iter().any(|a| a == "--incremental") => {
+            todo.state_delta(read()?, &settings, args.iter().any(|a| a == "--demo"))?
+        }
         "state" => todo.state(read()?, &settings, args.iter().any(|a| a == "--demo"))?,
         "request" => todo.request(read()?, &settings, args.iter().any(|a| a == "--demo"))?,
         "serve" => {
