@@ -71,8 +71,8 @@
   },
   {
     "file": "qml/NotificationPanel.qml",
-    "old": "    readonly property var coordinates: Logic.geometry(placement, screen.width, screen.height, width, layoutHeight, screen.devicePixelRatio)\n    readonly property real layoutHeight: Math.max(1, (screen.height - 2 * placement.margin) * (controller.config.stack?.heightPercent || 75) / 100)\n",
-    "new": "    readonly property var coordinates: ({x: screen.width/2 + 20, y: (screen.height-layoutHeight)/2})\n    readonly property real layoutHeight: 460\n"
+    "old": "    readonly property var coordinates: Logic.geometry(placement, screen.width, screen.height, width, layoutHeight, screen.devicePixelRatio)\n    readonly property bool demoMix: controller.visibleNotices.some(n => n.app === \"notjik demo\" && n.data?.demoMix === true)\n    readonly property real layoutHeight: Math.max(1, (screen.height - 2 * placement.margin) * (demoMix ? 100 : (controller.config.stack?.heightPercent || 75)) / 100)\n",
+    "new": "    readonly property var coordinates: ({x: screen.width/2 + 20, y: (screen.height-layoutHeight)/2})\n    readonly property bool demoMix: false\n    readonly property real layoutHeight: 460\n"
   },
   {
     "file": "qml/NotificationPanel.qml",

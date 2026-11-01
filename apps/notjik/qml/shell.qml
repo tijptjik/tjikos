@@ -617,7 +617,9 @@ ShellRoot {
             root.now = time;
             root.lastTick = time;
             if (!root.ready || root.paused || root.locked || root.drawerOpen || root.screens.length === 0) return;
+            const demoMix = root.visibleNotices.some(n => n.app === "notjik demo" && n.data?.demoMix === true);
             for (const n of root.notices.slice()) {
+                if (demoMix && !(n.app === "notjik demo" && n.data?.demoMix === true)) continue;
                 if (root.isFloating(n.id)) continue;
                 if (telegramRecording.holdsNotice && telegramRecording.noticeId === n.id) continue;
                 if (telegramPlayback.noticeId === n.id && telegramPlayback.playing) continue;

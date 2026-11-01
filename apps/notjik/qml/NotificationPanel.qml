@@ -11,7 +11,8 @@ PanelWindow {
     readonly property var theme: controller.theme
     readonly property var placement: Logic.placement(controller.config, screen, Quickshell.screens.indexOf(screen))
     readonly property var coordinates: Logic.geometry(placement, screen.width, screen.height, width, layoutHeight, screen.devicePixelRatio)
-    readonly property real layoutHeight: Math.max(1, (screen.height - 2 * placement.margin) * (controller.config.stack?.heightPercent || 75) / 100)
+    readonly property bool demoMix: controller.visibleNotices.some(n => n.app === "notjik demo" && n.data?.demoMix === true)
+    readonly property real layoutHeight: Math.max(1, (screen.height - 2 * placement.margin) * (demoMix ? 100 : (controller.config.stack?.heightPercent || 75)) / 100)
     readonly property real outroPadding: Math.max(0, Math.min(32, screen.height - coordinates.y - layoutHeight))
     readonly property bool redacted: controller.ready && controller.locked && controller.config.privacy.lockScreen === "redact" && controller.notices.length > 0
     readonly property bool ownsKeyboard: !controller.isFloating(controller.selectedId) && controller.keyboardMode && controller.keyboardMonitor === screen.name && !controller.locked
@@ -110,7 +111,7 @@ PanelWindow {
         heightBlocked = false;
         for (const item of slots.filter(item => !item.started)) {
             const needed = item.admissionHeight + (count ? gapSize : 0);
-            if (reserved + needed > layoutHeight) { heightBlocked = true; break; }
+            if (!demoMix && reserved + needed > layoutHeight) { heightBlocked = true; break; }
             reserved += needed;
             count++;
             waiting.push(item);

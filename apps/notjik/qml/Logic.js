@@ -122,6 +122,10 @@ function visibleGroups(notices, config, selectedId) {
     // Admit the oldest groups first; new arrivals wait instead of displacing cards.
     // Use the group's first arrival so updates do not reorder an existing slot.
     var groups = grouped(notices, config, selectedId).sort((a, b) => a.groupReceived - b.groupReceived);
+    // The explicit showcase gets its own six-card view. Ordinary notices remain
+    // queued and reappear when the demo is cleared; saved limits stay unchanged.
+    var mix = groups.filter(group => group.app === "notjik demo" && group.data?.demoMix === true);
+    if (mix.length) return mix.slice(0, 6).reverse();
     var visible = groups.slice(0, Math.min(4, config.maxVisible)).reverse();
     var selected = groups.find(group => group.memberIds.includes(selectedId));
     if (selected && !visible.includes(selected)) visible[visible.length - 1] = selected;

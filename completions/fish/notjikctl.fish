@@ -72,6 +72,7 @@ complete -c notjikctl -n '__tjikos_context prefix demo' -l timeout -d Timeout -r
 complete -c notjikctl -n '__tjikos_context prefix demo' -l log -d Log
 complete -c notjikctl -n '__tjikos_context exact demo' -a list -d List
 complete -c notjikctl -n '__tjikos_context exact demo' -a overview -d Overview
+complete -c notjikctl -n '__tjikos_context exact demo' -a mix -d 'Six rich cards together'
 complete -c notjikctl -n '__tjikos_context exact demo' -a all -d All
 complete -c notjikctl -n '__tjikos_context exact demo' -a robots -d Robots
 complete -c notjikctl -n '__tjikos_context exact demo' -a next -d Next

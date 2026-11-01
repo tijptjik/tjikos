@@ -188,17 +188,30 @@ fn duration(v: &str) -> Result<f64> {
     Ok(n)
 }
 fn launch(root: &Path, args: &[String]) -> Result<()> {
+    #[derive(Subcommand)]
+    enum LaunchOp {
+        /// Show synthetic notification cards.
+        Demo {
+            #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+            args: Vec<String>,
+        },
+    }
     #[derive(Parser)]
     struct Launch {
         #[arg(long)]
         daemon: bool,
         #[arg(long)]
         config: Option<PathBuf>,
+        #[command(subcommand)]
+        op: Option<LaunchOp>,
     }
     let opts =
         Launch::parse_from(std::iter::once("notjik".to_string()).chain(args.iter().cloned()));
     if let Some(p) = opts.config {
         std::env::set_var("NOTJIK_CONFIG", p.canonicalize()?);
+    }
+    if let Some(LaunchOp::Demo { args }) = opts.op {
+        return demo::main(root, &args);
     }
     config::load(root)?;
     let out = run(

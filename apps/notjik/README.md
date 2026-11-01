@@ -485,6 +485,8 @@ Richer per-application routing remains a possible extension.
 ## Interactive demo types
 
 ```sh
+notjik demo mix                    # six rich cards together in the normal stack
+notjik demo clear --solo           # clear the mix and restore the normal stack
 notjikctl demo list
 notjikctl demo icon
 notjikctl demo telegram-grouped     # text, photo and voice from one chat
@@ -495,6 +497,14 @@ notjikctl demo all --interval 4s
 notjikctl demo actions --solo
 notjikctl demo clear
 ```
+
+`notjik demo` accepts the same demo arguments as `notjikctl demo`. `mix` shows
+Telegram photo, voice and animated custom emoji, nested preflight results, paged
+actions and a live countdown. It uses synthetic local fixtures and harmless actions.
+The six-card preview uses the screen's available height; scroll on smaller displays.
+Other notifications wait behind the preview and return when it is cleared. Saved
+stack limits and configuration are unchanged. Unlike the paired overview, `mix`
+always uses the normal Notjik service.
 
 `demo next` advances in `demo list` order and wraps after the final type. It starts
 with `standard` if nothing has been shown. Named demos and the overview update

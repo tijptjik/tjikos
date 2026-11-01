@@ -9,6 +9,31 @@ use std::{
 };
 pub const APP: &str = "notjik demo";
 pub fn fixtures(root: &Path, name: &str) -> Result<Vec<Value>> {
+    if name == "mix" {
+        let mut cards = vec![];
+        for kind in [
+            "telegram-photo",
+            "telegram-voice",
+            "telegram-custom-emoji",
+            "actions-wrapped",
+            "timer",
+        ] {
+            cards.push(fixtures(root, kind)?.remove(0));
+        }
+        cards.insert(3, json!({"title":"Preflight checks", "type":"results-table",
+            "data":{"results":[
+                {"label":"Navigation", "value":"Ready", "ingredients":[{"label":"Star charts", "value":"Updated"}]},
+                {"label":"Life support", "value":"Ready", "ingredients":[{"label":"Oxygen reserve", "value":"98%"}]}
+            ], "state":"ALL SYSTEMS GO", "tone":"success", "duration":"12.4s", "rainbow-text":true}}));
+        for card in &mut cards {
+            if !card["data"].is_object() {
+                card["data"] = json!({});
+            }
+            card["data"]["demo"] = json!(true);
+            card["data"]["demoMix"] = json!(true);
+        }
+        return Ok(cards);
+    }
     let data: Value = serde_json::from_str(include_str!("../examples/demo-fixtures.json"))?;
     let raw = serde_json::to_string(data[name].get("notices").context("Unknown demo type")?)?;
     let prefix = uri(root)?;
@@ -201,7 +226,7 @@ pub fn main(root: &Path, args: &[String]) -> Result<()> {
         o.types
     };
     let controls = [
-        "list", "types", "overview", "all", "robots", "next", "clear",
+        "list", "types", "overview", "mix", "all", "robots", "next", "clear",
     ];
     let names = names();
     ensure!(
@@ -230,12 +255,13 @@ pub fn main(root: &Path, args: &[String]) -> Result<()> {
     if ["list", "types"].contains(&selected[0].as_str()) {
         let f: Value = serde_json::from_str(include_str!("../examples/demo-fixtures.json"))?;
         println!("robots               Quickly preview every installed robot image");
+        println!("mix                  Six rich cards together in the Notjik stack");
         for n in names {
             println!("{n:20} {}", text(&f[&n]["description"]));
         }
         return Ok(());
     }
-    let session = if o.solo {
+    let session = if o.solo || selected[0] == "mix" {
         None
     } else {
         let _lock = cmp::control_lock()?;
@@ -384,6 +410,24 @@ fn reference_note(name: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mix_has_six_rich_synthetic_cards() {
+        let cards = fixtures(Path::new(env!("CARGO_MANIFEST_DIR")), "mix").unwrap();
+        assert_eq!(cards.len(), 6);
+        assert_eq!(cards[0]["data"]["kind"], "photo");
+        assert_eq!(cards[1]["data"]["kind"], "voice");
+        assert!(cards[2]["data"]["parts"].is_array());
+        assert_eq!(cards[3]["type"], "results-table");
+        assert_eq!(cards[4]["actions"].as_array().unwrap().len(), 4);
+        assert_eq!(cards[5]["type"], "timer");
+        for card in cards {
+            assert_eq!(card["data"]["demo"], true);
+            assert_eq!(card["data"]["demoMix"], true);
+            for action in card["actions"].as_array().into_iter().flatten() {
+                assert_eq!(action["command"], json!(["true"]));
+            }
+        }
+    }
     #[test]
     fn instrumentation_matches_current_qml() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
