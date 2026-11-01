@@ -775,6 +775,12 @@ Trash. Ctrl+Z restores the most recent Runtjik trash action (including after a
 launcher restart), without overwriting an existing file. The private undo stack
 lives in `$XDG_STATE_HOME/runtjik/trash-undo.json`. This requires the desktop GIO/GVfs
 Trash service; files on filesystems without Trash support are left untouched.
+Successful deletion in the screenshot/recording gallery derezzes the tile into
+pixel blocks, then animates the remaining tiles into their new positions using
+the grid's FLIP transition. It replaces the deletion success text; failures still
+show their error message. Clipboard-image deletion uses the same animation but
+retains its existing non-undoable behavior.
+The same derez and FLIP feedback applies to text and image entries in `/cliphist`.
 
 `plugin_settings.Screenshots.viewer` is an argv array, default `["imv"]`.
 imv opens the selected image and its directory for next/previous navigation.

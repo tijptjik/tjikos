@@ -571,6 +571,9 @@ impl Launcher {
                     };
                     let mut v = self.query(&q, 0, None)?;
                     v["message"] = action["message"].clone();
+                    if !self.demo {
+                        v["removed_entry"] = json!(e.id);
+                    }
                     return Ok(v);
                 }
                 return Ok(action);
@@ -585,6 +588,9 @@ impl Launcher {
                     };
                     let mut value = self.query(&q, 0, None)?;
                     value["message"] = action["message"].clone();
+                    if !self.demo && e.data["clip_id"].is_string() {
+                        value["removed_entry"] = json!(e.id);
+                    }
                     return Ok(value);
                 }
                 return Ok(action);

@@ -14,7 +14,12 @@ ShellRoot {
     property var closingIds: []
     ListModel {id: resultModel; dynamicRoles: true}
     property bool animateClosedRemoval: false
-    // Preserve delegates by identity; animate only closed apps leaving the same running query.
+    property string confirmedGalleryRemoval: ''
+    property bool animateGalleryRemoval: false
+    property int activeGalleryRemovals: 0
+    Timer {id:galleryMotion;interval:1000;onTriggered:root.animateGalleryRemoval=false}
+    Component {id:derezComponent;Derez {}}
+    // Preserve identities for closed apps and confirmed capture deletions.
     onResultsChanged: {
         const wanted=new Set(results.map(row=>row.id));
         const removed=[];
@@ -24,9 +29,12 @@ ShellRoot {
         }
         animateClosedRemoval=opened && runningMode && resultQuery===query && windowEntry===''
             && removed.length>0 && removed.every(row=>row.provider==='apps' && row.windows>0);
+        if(opened && deletionAnimationMode && resultQuery===query && removed.some(row=>row.id===confirmedGalleryRemoval)) {
+            animateGalleryRemoval=true;galleryMotion.restart();
+        }
         // A different menu needs a model reset, not a chain of delegate removals
         // while GridView is also changing its cell geometry.
-        if(!animateClosedRemoval && removed.length>0 && removed.length===resultModel.count)
+        if(!animateClosedRemoval && !animateGalleryRemoval && removed.length>0 && removed.length===resultModel.count)
             resultModel.clear();
         else for(let i=resultModel.count-1;i>=0;--i)
             if(!wanted.has(resultModel.get(i).row.id))resultModel.remove(i);
@@ -86,6 +94,7 @@ ShellRoot {
     readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(displayQuery)
     readonly property bool browserWindows: /^\/(browser|zen)( |$)/.test(displayQuery)
     readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(displayQuery)
+    readonly property bool deletionAnimationMode: galleryMode || /^\/cliphist( |$)/.test(displayQuery)
     readonly property bool captureMenu: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord)$/.test(displayQuery.trim())
     readonly property bool captureRecording: /^\/(rec|screenrecord)( |$)/.test(displayQuery)
     readonly property int captureChoices: captureRecording ? 4 : 3
@@ -286,6 +295,8 @@ ShellRoot {
             applyingResults=true;
             const appending=(msg.offset || 0)>0 && resultQuery===(msg.query || '');
             const sameQuery=resultQuery===(msg.query || '');
+            confirmedGalleryRemoval=sameQuery && deletionAnimationMode ? (msg.removed_entry || '') : '';
+            if(!sameQuery){animateGalleryRemoval=false;galleryMotion.stop();}
             const previousY=activeItems.contentY;
             const wordPosition=wordMode && sameQuery ? wordPane.readingPosition() : {top:true};
             const previousId=results[selected]?.id;
@@ -327,7 +338,7 @@ ShellRoot {
                 root.maybeLoadMore();
             });
             if(!sameQuery)activeItems.positionViewAtBeginning();
-            message=msg.message || (msg.warnings || []).join(' · ');
+            message=confirmedGalleryRemoval ? (msg.warnings || []).join(' · ') : msg.message || (msg.warnings || []).join(' · ');
             ready=true;captureInitialMonitor();
             applyingResults=false;
             if (pendingAction!==null) {const action=pendingAction;pendingAction=null;Qt.callLater(()=>root.activate(action.switchWindow,action.closeWindow));}
@@ -696,14 +707,23 @@ ShellRoot {
                                 }
                             }
                             removeDisplaced: Transition {
-                                enabled:root.animateClosedRemoval
-                                NumberAnimation {properties:'x,y';duration:220;easing.type:Easing.OutCubic}
+                                enabled:root.animateClosedRemoval || root.animateGalleryRemoval
+                                NumberAnimation {properties:'x,y';duration:260;easing.type:Easing.OutCubic}
                             }
                             cellWidth:root.listMode?width:width/root.gridColumns
                             cellHeight:root.browserWindows?142:root.captureMenu?height/(root.captureRecording?4:2):root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
                             currentIndex:root.selected
                             boundsBehavior:Flickable.StopAtBounds
+                            property real previousContentY: 0
                             onContentYChanged: {
+                                // Qt can shift the origin instead of delegate positions
+                                // when a whole row disappears. Invert that viewport jump,
+                                // then play the same FLIP motion on the surviving rows.
+                                const delta=contentY-previousContentY;previousContentY=contentY;
+                                if(root.animateGalleryRemoval && root.listMode && root.activeGalleryRemovals===0 && !dragging && !flicking && delta) {
+                                    for(const tile of contentItem.children)
+                                        if(tile.modelData && !tile.derezzing)tile.flipOrigin(delta);
+                                }
                                 root.maybeLoadMore();
                                 if(root.pointerSelection)Qt.callLater(()=>selectionPointer.select());
                             }
@@ -746,7 +766,7 @@ ShellRoot {
                             }
                             delegate:Rectangle {
                                 id:resultTile
-                                visible: !root.galleryEmpty
+                                visible: !root.galleryEmpty || derezzing
                                 required property var row
                                 readonly property var modelData: row
                                 readonly property bool browserTab: modelData.provider==='Browser' && (modelData.id || '').includes(':tab:')
@@ -755,6 +775,33 @@ ShellRoot {
                                     : modelData.windows>0
                                 readonly property bool closing: root.closingIds.includes(modelData.id)
                                 required property int index
+                                property var deleteEffect: null
+                                property bool derezzing: false
+                                property real originOffset: 0
+                                transform:Translate {y:resultTile.originOffset}
+                                NumberAnimation {id:originFlip;target:resultTile;property:'originOffset';to:0;duration:260;easing.type:Easing.OutCubic}
+                                function flipOrigin(delta) {originFlip.stop();originOffset+=delta;originFlip.start();}
+                                function finishDerez() {
+                                    derezTimeout.stop();
+                                    if(deleteEffect){deleteEffect.destroy();deleteEffect=null;}
+                                    if(derezzing){derezzing=false;root.activeGalleryRemovals--;}
+                                    GridView.delayRemove=false;
+                                }
+                                GridView.onRemove: {
+                                    if(!root.deletionAnimationMode || modelData.id!==root.confirmedGalleryRemoval)return;
+                                    GridView.delayRemove=true;derezzing=true;root.activeGalleryRemovals++;
+                                    derezTimeout.start();
+                                    const captured=grabToImage(snapshot=>{
+                                        if(!derezzing || !root.deletionAnimationMode || !root.opened){finishDerez();return;}
+                                        deleteEffect=derezComponent.createObject(items.contentItem,{x:resultTile.x-12,y:resultTile.y-12,width:resultTile.width+24,height:resultTile.height+24});
+                                        deleteEffect.prepared.connect(()=>{resultTile.opacity=0;});
+                                        deleteEffect.finished.connect(()=>resultTile.finishDerez());
+                                        deleteEffect.snapshot=snapshot;
+                                    },Qt.size(Math.ceil(width),Math.ceil(height)));
+                                    if(!captured)finishDerez();
+                                }
+                                Timer {id:derezTimeout;interval:900;onTriggered:resultTile.finishDerez()}
+                                Component.onDestruction: {if(deleteEffect)deleteEffect.destroy();if(derezzing)root.activeGalleryRemovals--;}
                                 Item {
                                     objectName: 'copySuccessBadge'
                                     anchors.centerIn: parent;z:10
@@ -879,6 +926,7 @@ ShellRoot {
                                 }
                                 MouseArea {
                                     id:hover;anchors.fill:parent;hoverEnabled:true;cursorShape:modelData.disabled?Qt.ArrowCursor:Qt.PointingHandCursor
+                                    enabled:!resultTile.derezzing
                                     onClicked:mouse=>{root.selected=index;root.activate(!!(mouse.modifiers & Qt.ShiftModifier));}
                                 }
                             }
@@ -887,7 +935,7 @@ ShellRoot {
                                 anchors.centerIn: parent
                                 width: Math.min(parent.width-48, 400)
                                 spacing: 14
-                                visible: root.galleryEmpty
+                                visible: root.galleryEmpty && root.activeGalleryRemovals===0
                                 Image {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     width: 160; height: 112

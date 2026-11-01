@@ -93,6 +93,7 @@ class CaptureHistoryTests(unittest.TestCase):
         self.assertEqual((self.root / 'copy').read_bytes(), self.png)
         reply = backend.request(op='activate', id=clip['id'], mode='close')
         self.assertEqual(reply['query'], '/grab history')
+        self.assertEqual(reply['removed_entry'], clip['id'])
         self.assertEqual(len(reply['results']), 2)
         self.assertIn(b'Synthetic text', self.clip('list'))
         self.assertTrue((self.saved / 'Runtjik.png').exists())
