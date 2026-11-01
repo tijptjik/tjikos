@@ -5,6 +5,7 @@ mod capture_worker;
 mod clipboard;
 mod close;
 mod config;
+mod content_identity;
 mod controller;
 mod discovery;
 mod icons;

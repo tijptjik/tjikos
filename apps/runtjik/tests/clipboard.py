@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 from rust_parity import Backend, fixture
@@ -48,6 +49,7 @@ class ClipboardTests(unittest.TestCase):
         self.assertEqual(result['kind'], 'results')
         self.assertEqual(result['query'], query)
         self.assertEqual(result['message'], 'Deleted clipboard item')
+        self.assertEqual(result['removed_entry'], images[0]['id'])
         self.assertEqual(result['results'][0]['name'], 'No matching clipboard images')
         remaining = self.clip('list')
         self.assertIn(b'Synthetic note about png images', remaining)
@@ -76,6 +78,36 @@ class ClipboardTests(unittest.TestCase):
         self.assertEqual(result['results'][0]['name'], 'No matching clipboard items')
         self.assertNotIn(b'https://example.com', self.clip('list'))
         self.assertIn(b'binary data', self.clip('list'))
+
+    def test_dedupe_uses_full_content_not_truncated_labels(self):
+        from PIL import Image, PngImagePlugin
+        import io
+        def png(color, note):
+            stream = io.BytesIO()
+            metadata = PngImagePlugin.PngInfo()
+            metadata.add_text('note', note)
+            Image.new('RGB', (12, 12), color).save(stream, format='PNG', pnginfo=metadata)
+            return base64.b64encode(stream.getvalue()).decode()
+        values = {'6': png('red', 'first'), '5': png('red', 'other encoding'), '4': png('blue', 'different pixels'),
+                  '3': base64.b64encode(b'same preview - one').decode(),
+                  '2': base64.b64encode(b'same preview - two').decode(),
+                  '1': base64.b64encode(b'same preview - one').decode()}
+        bindir = self.root / 'bin'
+        bindir.mkdir()
+        script = bindir / 'cliphist'
+        script.write_text('#!/usr/bin/python3\nimport sys,base64\nvalues=' + repr(values)
+            + "\nif sys.argv[1]=='list':\n for key in values: print(key+'\\t'+('[[ binary data 100 bytes png 12x12 ]]' if int(key)>3 else 'same preview'))\n"
+            + "elif sys.argv[1]=='decode': sys.stdout.buffer.write(base64.b64decode(values[sys.stdin.read().strip()]))\n")
+        script.chmod(0o700)
+        self.env['PATH'] = str(bindir) + ':' + os.environ['PATH']
+        backend = self.backend()
+        for _ in range(200):
+            result = backend.request(op='query', query='/cliphist')
+            if not result.get('pending'):
+                break
+            time.sleep(.02)
+        self.assertFalse(result.get('pending'))
+        self.assertEqual([r['id'] for r in result['results']], ['Clipboard:6', 'Clipboard:4', 'Clipboard:3', 'Clipboard:2'])
 
     def test_demo_filters_and_never_deletes(self):
         before = self.clip('list')

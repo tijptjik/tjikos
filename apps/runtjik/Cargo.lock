@@ -1310,6 +1310,7 @@ dependencies = [
  "chrono",
  "gdk-pixbuf",
  "gio",
+ "image",
  "libc",
  "regex",
  "rusqlite",

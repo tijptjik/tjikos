@@ -781,6 +781,13 @@ the grid's FLIP transition. It replaces the deletion success text; failures stil
 show their error message. Clipboard-image deletion uses the same animation but
 retains its existing non-undoable behavior.
 The same derez and FLIP feedback applies to text and image entries in `/cliphist`.
+History lists deduplicate full clipboard content and decoded PNG/JPEG/WebP pixels
+in the background. The newest matching clipboard entry is shown; the screenshot
+gallery prefers the newest saved file over matching clipboard images. Different
+images with identical labels or dimensions remain separate. This only filters
+the display: stored files and clipboard history are preserved, and deleting a
+representative can reveal another stored copy. Oversized or unreadable sources
+remain visible rather than being treated as duplicates.
 
 `plugin_settings.Screenshots.viewer` is an argv array, default `["imv"]`.
 imv opens the selected image and its directory for next/previous navigation.

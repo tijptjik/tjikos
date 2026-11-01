@@ -8,6 +8,7 @@ use std::{collections::HashMap, fs, sync::Arc, thread::JoinHandle};
 
 #[derive(Default)]
 pub struct Clipboard {
+    fingerprints: crate::content_identity::Fingerprints,
     directory: Option<Arc<tempfile::TempDir>>,
     previews: HashMap<String, String>,
     workers: HashMap<String, JoinHandle<String>>,
@@ -126,6 +127,7 @@ impl Clipboard {
         let image = regex::Regex::new(r"(?i)\b(png|jpeg|jpg|gif|webp|bmp|tiff)\b")?;
         let size = regex::Regex::new(r"\b\d+x\d+\b")?;
         let mut rows = Vec::new();
+        let mut seen = std::collections::HashSet::new();
         for line in list.lines() {
             let Some((id, preview)) = line.split_once('\t') else {
                 continue;
@@ -145,6 +147,18 @@ impl Clipboard {
             if images_only && image_kind.is_none() {
                 continue;
             }
+            let (digest, pending) = if demo {
+                (None, false)
+            } else {
+                self.fingerprints.clipboard(id)
+            };
+            self.pending |= pending;
+            if digest
+                .as_ref()
+                .is_some_and(|value| !seen.insert(value.clone()))
+            {
+                continue;
+            }
             if let Some(kind) = image_kind {
                 name = format!(
                     "{} image{}",
@@ -159,7 +173,7 @@ impl Clipboard {
                 id,
                 &name,
                 "",
-                json!({"clip_id":id,"thumbnail":thumbnail}),
+                json!({"clip_id":id,"thumbnail":thumbnail,"content_hash":digest}),
             ));
             if rows.len()
                 >= settings["plugin_settings"]["Clipboard"]["max_results"]

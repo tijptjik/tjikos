@@ -139,6 +139,7 @@ mod directory_tests {
 #[derive(Default)]
 pub struct Captures {
     clipboard: crate::clipboard::Clipboard,
+    fingerprints: crate::content_identity::Fingerprints,
     workers: HashMap<String, JoinHandle<()>>,
     failed: HashSet<String>,
     pub pending: bool,
@@ -494,10 +495,8 @@ impl Captures {
             None
         };
         let mut rows = vec![];
-        for (stamp, p) in files
-            .into_iter()
-            .take(options["max_results"].as_u64().unwrap_or(40) as usize)
-        {
+        let mut seen_content = std::collections::HashSet::new();
+        for (stamp, p) in files.into_iter() {
             if active
                 .as_ref()
                 .is_some_and(|s| s["file"] == p.to_string_lossy().as_ref())
@@ -505,6 +504,18 @@ impl Captures {
                 continue;
             }
             let date: chrono::DateTime<chrono::Local> = stamp.into();
+            let (digest, pending) = if rec {
+                (None, false)
+            } else {
+                self.fingerprints.file(&p)
+            };
+            self.pending |= pending;
+            if digest
+                .as_ref()
+                .is_some_and(|value| !seen_content.insert(value.clone()))
+            {
+                continue;
+            }
             let thumb = self.thumbnail(&p, rec)?;
             rows.push(row(
                 name,
@@ -517,6 +528,9 @@ impl Captures {
                 ),
                 json!({"file":p.to_string_lossy(),"thumbnail":thumb}),
             ));
+            if rows.len() >= options["max_results"].as_u64().unwrap_or(40) as usize {
+                break;
+            }
         }
         if !rec && options["include_clipboard"].as_bool().unwrap_or(true) {
             // cliphist has ordering but no capture timestamps or source app metadata.
@@ -534,6 +548,12 @@ impl Captures {
                     .into_iter()
                     .filter(|clip| clip.data["clip_id"].is_string())
                 {
+                    if clip.data["content_hash"]
+                        .as_str()
+                        .is_some_and(|value| !seen_content.insert(value.to_owned()))
+                    {
+                        continue;
+                    }
                     clip.id = format!("Screenshots:clipboard:{}", s(&clip.data["clip_id"]));
                     clip.provider = name.into();
                     clip.name = format!("Clipboard · {}", clip.name);

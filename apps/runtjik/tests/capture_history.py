@@ -29,8 +29,11 @@ class CaptureHistoryTests(unittest.TestCase):
             return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data))
         self.png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('!2I5B', 1, 1, 8, 2, 0, 0, 0))
                     + chunk(b'IDAT', zlib.compress(b'\0\x9c\xcf\xd8')) + chunk(b'IEND', b''))
-        (self.saved / 'Runtjik.png').write_bytes(self.png)
-        (self.other / 'Hyprshot.png').write_bytes(self.png)
+        def colored(rgb):
+            return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('!2I5B', 1, 1, 8, 2, 0, 0, 0))
+                    + chunk(b'IDAT', zlib.compress(b'\0' + rgb)) + chunk(b'IEND', b''))
+        (self.saved / 'Runtjik.png').write_bytes(colored(b'\xff\x00\x00'))
+        (self.other / 'Hyprshot.png').write_bytes(colored(b'\x00\xff\x00'))
         os.utime(self.saved / 'Runtjik.png', (100, 100))
         os.utime(self.other / 'Hyprshot.png', (200, 200))
         (self.other / 'linked.png').symlink_to(self.saved / 'Runtjik.png')
@@ -98,6 +101,26 @@ class CaptureHistoryTests(unittest.TestCase):
         self.assertIn(b'Synthetic text', self.clip('list'))
         self.assertTrue((self.saved / 'Runtjik.png').exists())
         self.assertEqual([row['name'] for row in backend.request(op='query', query='/ss history hyprshot')['results']], ['Hyprshot.png'])
+
+    def test_dedupe_saved_images_and_clipboard_preserves_sources(self):
+        original = self.saved / 'Runtjik.png'
+        newest = self.other / 'Hyprshot.png'
+        original.write_bytes(self.png)
+        newest.write_bytes(self.png)
+        os.utime(original, (100, 100))
+        os.utime(newest, (200, 200))
+        before = self.clip('list')
+        backend = self.backend()
+        for _ in range(200):
+            result = backend.request(op='query', query='/grab history')
+            if not result.get('pending'):
+                break
+            time.sleep(.02)
+        self.assertFalse(result.get('pending'))
+        self.assertEqual([r['name'] for r in result['results']], ['Hyprshot.png'])
+        self.assertEqual(original.read_bytes(), self.png)
+        self.assertEqual(newest.read_bytes(), self.png)
+        self.assertEqual(self.clip('list'), before)
 
     def test_opt_out_and_missing_cliphist_keep_files_available(self):
         self.config(include=False)
