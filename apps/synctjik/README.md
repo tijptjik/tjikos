@@ -187,6 +187,16 @@ pause ownership for interrupted-writer recovery. `status` returns 75 when busy.
 Sync/scrub are real maintenance operations: never use them against live storage
 as migration tests. Notification health checks can send configured alerts.
 
+Native SnapRAID incident alerts include **Investigate**, which opens Kitty on the
+receiving desktop and uses its pinned `tjikup ssh HOST` identity to show the last
+100 journal entries for the failed service. The terminal stays open for review.
+This action only reads logs; it never retries sync or changes deletion limits.
+It is also available from global notification history. Deploy the matching
+Notjik sync authority/client and Notjik UI with this producer: the action carries
+a validated host and service name, never a remote shell command. Recovery and
+test notifications have no investigation action. Telegram retains HTML formatting;
+native cards use plain text.
+
 Dotjik owns source selection, exclusions, host identities, mount expectations,
 retention and notification policy. `${HOME}` and `${XDG_RUNTIME_DIR}` expand in
 policy values. Existing credential/state paths and repository formats remain
@@ -227,3 +237,12 @@ The queued sync retains mount, scrub, changed-file and writer-lock checks. A sta
 list requires a new review. Install the helper separately at
 `/usr/local/lib/synctjik/review` when the canonical runtime is pinned by active
 maintenance; never replace a pinned worker to deliver notification changes.
+
+## Notification delivery
+
+An enrolled Notjik sync client sends private-assets results, application-backup
+outcomes and SnapRAID incidents/recoveries to Si for durable history and delivery
+to the active device. Root services use `/etc/notjik/system-client.json` and the
+private `/var/lib/notjik-system-client` outbox. Telegram credentials are not used
+in this mode; existing Telegram transport remains only for unenrolled deployments.
+See [notification service](../notjik-service/README.md).

@@ -150,14 +150,31 @@ impl Policy {
             Some(problem) => format!("⚠️ <b>SnapRAID · Action needed</b>\n{heading}\n\n{}\n\n<b>Review logs</b>\n<pre>journalctl -u {} -n 50</pre>", escape(problem), escape(unit.trim_end_matches(".service"))),
         }
     }
-    fn send(&self, unit: &str, problem: Option<&str>) -> Result<Value> {
-        let message = self.format(unit, problem);
-        let mut actions = Vec::new();
-        let mut body = problem
-            .unwrap_or("Maintenance completed successfully.")
-            .to_owned();
-        if self.host == "si"
-            && self.jobs[unit].mode.as_deref() == Some("sync")
+    fn notice(&self, unit: &str, problem: Option<&str>) -> Value {
+        let job = &self.jobs[unit];
+        let (title, mut body) = if job.test {
+            (
+                "SnapRAID · Notification check",
+                "This is a notification test. No storage job failed.".to_owned(),
+            )
+        } else if let Some(problem) = problem {
+            ("SnapRAID · Action needed", problem.to_owned())
+        } else {
+            (
+                "SnapRAID · Recovered",
+                "Maintenance completed successfully.".to_owned(),
+            )
+        };
+        let mut actions = if problem.is_some() && !job.test {
+            vec![json!({"label":"Investigate", "open":{
+                "kind":"service-logs", "host":self.host, "unit":unit
+            }})]
+        } else {
+            vec![]
+        };
+        if !job.test
+            && self.host == "si"
+            && job.mode.as_deref() == Some("sync")
             && problem.is_some_and(|p| p.contains("removals exceed limit"))
         {
             if let Ok(review) = read_json(&self.receipts.join("removal-review.json")) {
@@ -169,14 +186,27 @@ impl Policy {
                 }
             }
         }
+        json!({
+            "title": title,
+            "body": body,
+            "app": "Synctjik", "type": "status",
+            "data": {
+                "state": if job.test {
+                    if problem.is_some() { "Test alert" } else { "Test passed" }
+                } else if problem.is_some() { "Action needed" } else { "Recovered" },
+                "tone": if problem.is_some() && !job.test { "critical" } else if problem.is_some() { "warning" } else { "success" },
+                "detail": format!("{} · {}", self.host, job.task)
+            },
+            "actions": actions,
+            "urgency": if problem.is_some() && !job.test { "critical" } else { "normal" }
+        })
+    }
+    fn send(&self, unit: &str, problem: Option<&str>) -> Result<Value> {
         if notjik_sync::client::configured() {
-            let id = notjik_sync::client::publish(
-                json!({"title":if problem.is_some(){"SnapRAID · Action needed"}else{"SnapRAID · Recovered"},"body":format!("{} · {}\n\n{body}",self.host,self.jobs[unit].task),"app":"Synctjik","type":"standard","actions":actions,"urgency":if problem.is_some(){"critical"}else{"normal"}}),
-                "active",
-                true,
-            )?;
+            let id = notjik_sync::client::publish(self.notice(unit, problem), "active", true)?;
             return Ok(json!({"message_id":id,"queued":true}));
         }
+        let message = self.format(unit, problem);
         let credentials: Value = serde_json::from_str(&secret(&self.credentials)?)?;
         let token = credentials["bot_token"]
             .as_str()
@@ -368,5 +398,90 @@ pub fn main(args: &[String], r: &Runner) -> Result<()> {
         "failure" | "recovery" if recovered => p.recover(&unit),
         "recovery" => Ok(()),
         _ => bail!("Unknown notification action"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_incident_has_desktop_investigation_and_plain_text() {
+        let receipts = tempfile::tempdir().unwrap();
+        let mut p: Policy = serde_json::from_value(json!({
+            "host":"si", "state":"/tmp/state", "receipts":receipts.path(),
+            "reminder_seconds":86400,
+            "jobs":{"si-snapraid-sync.service":{"task":"Sync", "mode":"sync", "max_age":3600}}
+        }))
+        .unwrap();
+        let unit = "si-snapraid-sync.service";
+        let problem = "2062 removals exceed limit 200; review diff before any sync";
+        let notice = p.notice(unit, Some(problem));
+        assert_eq!(notice["body"], problem);
+        assert_eq!(notice["type"], "status");
+        assert_eq!(notice["data"]["state"], "Action needed");
+        assert_eq!(notice["data"]["detail"], "si · Sync");
+        assert_eq!(notice["actions"][0]["label"], "Investigate");
+        assert_eq!(notice["actions"][0]["open"]["host"], "si");
+        assert_eq!(notice["actions"][0]["open"]["unit"], unit);
+        notjik_sync::validate_service_logs(&notice["actions"][0]["open"]).unwrap();
+        assert_eq!(notice["urgency"], "critical");
+        assert!(p
+            .format(unit, Some("<unsafe & text>"))
+            .contains("&lt;unsafe &amp; text&gt;"));
+        let recovery = p.notice(unit, None);
+        assert_eq!(recovery["actions"], json!([]));
+        assert_eq!(recovery["urgency"], "normal");
+        assert_eq!(recovery["data"]["tone"], "success");
+        assert_eq!(recovery["data"]["state"], "Recovered");
+        p.jobs.get_mut(unit).unwrap().test = true;
+        assert_eq!(p.notice(unit, Some(problem))["actions"], json!([]));
+    }
+
+    #[test]
+    fn guarded_removal_notice_preserves_status_and_all_actions() {
+        let receipts = tempfile::tempdir().unwrap();
+        let mut p: Policy = serde_json::from_value(json!({
+            "host":"si", "state":"/tmp/state", "receipts":receipts.path(),
+            "reminder_seconds":86400,
+            "jobs":{"si-snapraid-sync.service":{"task":"Sync", "mode":"sync", "max_age":3600}}
+        }))
+        .unwrap();
+        let unit = "si-snapraid-sync.service";
+        let problem = "2062 removals exceed limit 200";
+        let review_id = "a".repeat(64);
+        let review_path = receipts.path().join("removal-review.json");
+        atomic_json(&review_path, &json!({"id":review_id})).unwrap();
+        let notice = p.notice(unit, Some(problem));
+        assert_eq!(notice["type"], "status");
+        assert_eq!(notice["data"]["state"], "Action needed");
+        assert_eq!(notice["actions"].as_array().unwrap().len(), 3);
+        assert_eq!(notice["actions"][0]["label"], "Investigate");
+        assert_eq!(notice["actions"][1]["label"], "Review removals");
+        notjik_sync::validate_snapraid_review(&notice["actions"][1]["open"]).unwrap();
+        assert_eq!(notice["actions"][1]["open"]["review"], review_id);
+        assert_eq!(notice["actions"][2]["label"], "APPROVE & SYNC");
+        assert_eq!(
+            notice["actions"][2]["command"],
+            json!([
+                "/usr/local/lib/synctjik/review",
+                "snapraid",
+                "approve-removals",
+                "--review-id",
+                review_id
+            ])
+        );
+        assert!(notice["body"]
+            .as_str()
+            .unwrap()
+            .contains("does not delete existing source files"));
+        assert_eq!(p.notice(unit, None)["actions"], json!([]));
+        p.jobs.get_mut(unit).unwrap().test = true;
+        assert_eq!(p.notice(unit, Some(problem))["actions"], json!([]));
+        p.jobs.get_mut(unit).unwrap().test = false;
+        atomic_json(&review_path, &json!({"id":"invalid"})).unwrap();
+        let invalid = p.notice(unit, Some(problem));
+        assert_eq!(invalid["actions"].as_array().unwrap().len(), 1);
+        assert_eq!(invalid["body"], problem);
     }
 }

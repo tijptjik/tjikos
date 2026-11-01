@@ -365,6 +365,9 @@ class Notifications(Fixtures):
     # Reuse only fixture construction, not the storage test methods.
     def setUp(self):
         super().setUp()
+        # Never inherit a real device enrollment while testing Telegram delivery.
+        self.env['NOTJIK_SYNC_CONFIG'] = str(self.root / 'no-sync-config.json')
+        self.env['NOTJIK_SYNC_STATE'] = str(self.root / 'sync-state')
         self.messages=[]; self.reject=False
         owner=self
         class Handler(http.server.BaseHTTPRequestHandler):
