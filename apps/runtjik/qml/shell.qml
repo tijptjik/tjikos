@@ -46,6 +46,7 @@ ShellRoot {
     property string view: 'grid'
     property string windowEntry: ''
     property string message: ''
+    property string copiedId: ''
     property int indexed: 0
     property int total: 0
     property int selected: 0
@@ -218,6 +219,14 @@ ShellRoot {
             actionDelay.restart();
         } else send(request);
     }
+    function copyCapture() {
+        const row=results[selected];
+        if(busy || !galleryMode || galleryEmpty || !row || row.disabled
+            || debounce.running || resultQuery!==query
+            || !['Screenshots','Recorder'].includes(row.provider))return;
+        busy=true;
+        send({op:'activate',id:row.id,mode:'copy'});
+    }
     function quit() {
         dragging=false;
         quitting = true;
@@ -226,6 +235,7 @@ ShellRoot {
         Qt.quit();
     }
     function close() {
+        copyDismiss.stop();copiedId='';
         rememberCommand(query);
         if(demo || !settings.ui.keep_alive){quit();return;}
         opened=false;
@@ -346,6 +356,9 @@ ShellRoot {
                 panel.visible=true;
                 search();
             } else close();
+        } else if(msg.kind==='copied') {
+            loadingMore=false;busy=true;message='';
+            copiedId=msg.entry;copyDismiss.restart();
         } else if(msg.kind==='message') {loadingMore=false;message=msg.message || '';if(msg.recording_stopping)search();else stopRequested=false;}
         else {stopRequested=false;loadingMore=false;message=msg.message || 'Unable to complete action';if(!root.ready)console.error(message);}
         if (msg.kind!=='activated' && msg.kind!=='launch' && !root.quitting && root.opened && root.initialCaptured) {panel.visible=true;if(panel.ownsKeyboard){if(root.appMode)todoApp.forceActiveFocus();else root.focusInput();}}
@@ -370,6 +383,7 @@ ShellRoot {
         }}
         onExited: (code,status) => {if(!root.quitting){console.error('Runtjik backend exited ('+code+'). Check runtjik.conf.');root.quit();}}
     }
+    Timer {id:copyDismiss;interval:550;onTriggered:root.close()}
     Timer {id:actionDelay;interval:80;onTriggered:{const request=root.queuedRequest;root.queuedRequest=null;root.send(request);}}
     Timer {id:closePoll;interval:180;repeat:true;running:root.opened && root.closingIds.length>0;onTriggered:root.search()}
     Timer {interval:150;repeat:true;running:root.opened && (root.providerPending || (!root.demo && root.captureMenu && root.results.some(row=>row.id==='Recorder:stop'))) && !debounce.running && !root.busy;onTriggered:root.search()}
@@ -579,7 +593,8 @@ ShellRoot {
                             }
                             Keys.onPressed:event=>{
                                 root.pointerSelection=false;
-                                if((event.modifiers & Qt.ControlModifier) && (event.key===Qt.Key_Up || event.key===Qt.Key_Down)){root.browseHistory(event.key===Qt.Key_Up?-1:1);event.accepted=true;}
+                                if(event.key===Qt.Key_C && event.modifiers===Qt.ControlModifier && root.galleryMode && !searchBox.selectedText){if(!event.isAutoRepeat)root.copyCapture();event.accepted=true;}
+                                else if((event.modifiers & Qt.ControlModifier) && (event.key===Qt.Key_Up || event.key===Qt.Key_Down)){root.browseHistory(event.key===Qt.Key_Up?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Z && (event.modifiers & Qt.ControlModifier) && root.galleryMode){if(!root.busy){root.busy=true;root.send({op:'undo-trash',query:root.query});}event.accepted=true;}
                                 else if(root.statistics && [Qt.Key_Down,Qt.Key_Up,Qt.Key_PageDown,Qt.Key_PageUp].includes(event.key)){statsPane.scrollBy((event.key===Qt.Key_Up || event.key===Qt.Key_PageUp?-1:1)*(event.key===Qt.Key_PageDown || event.key===Qt.Key_PageUp?statsPane.height:30));event.accepted=true;}
                                 else if(root.wordMode && wordPane.navigatingTerms && [Qt.Key_Left,Qt.Key_Right].includes(event.key)){wordPane.moveTerm(event.key===Qt.Key_Left?-1:1);event.accepted=true;}
@@ -729,6 +744,37 @@ ShellRoot {
                                 readonly property bool browserTab: modelData.provider==='Browser' && (modelData.id || '').includes(':tab:')
                                 readonly property bool closing: root.closingIds.includes(modelData.id)
                                 required property int index
+                                Item {
+                                    objectName: 'copySuccessBadge'
+                                    anchors.centerIn: parent;z:10
+                                    width:56;height:56
+                                    opacity:root.copiedId===modelData.id?1:0
+                                    scale:root.copiedId===modelData.id?1:0.75
+                                    Behavior on opacity {NumberAnimation {duration:120}}
+                                    Behavior on scale {NumberAnimation {duration:220;easing.type:Easing.OutBack}}
+                                    Canvas {
+                                        anchors.fill:parent
+                                        property real progress:root.copiedId===modelData.id?1:0
+                                        property color strokeColor:root.theme.accent
+                                        Behavior on progress {NumberAnimation {duration:260;easing.type:Easing.OutQuad}}
+                                        onProgressChanged:requestPaint()
+                                        onStrokeColorChanged:requestPaint()
+                                        onPaint:{
+                                            const ctx=getContext('2d');ctx.reset();
+                                            if(progress<=0)return;
+                                            ctx.strokeStyle=strokeColor;ctx.lineWidth=5;
+                                            ctx.lineCap='round';ctx.lineJoin='round';
+                                            ctx.beginPath();ctx.moveTo(10,28);
+                                            const first=Math.min(1,progress/0.35);
+                                            ctx.lineTo(10+13*first,28+13*first);
+                                            if(progress>0.35){
+                                                const second=(progress-0.35)/0.65;
+                                                ctx.lineTo(23+23*second,41-28*second);
+                                            }
+                                            ctx.stroke();
+                                        }
+                                    }
+                                }
                                 width:root.captureMenu && index===root.captureChoices && root.results.length===root.captureChoices+1?items.width-6:root.listMode?items.cellWidth:items.cellWidth-6;height:root.captureMenu && index>=root.captureChoices?items.height/2-6:items.cellHeight-6;radius:12
                                 color:index===root.selected?root.theme.surface:'transparent'
                                 border.width:index===root.selected?1:0

@@ -35,6 +35,14 @@ with private_compositor():
                 key('-M','ctrl','-k',arrow,'-m','ctrl')
                 wait_for(lambda:state().get('resultQuery')==expected)
             query('!ss history')
+            for gallery in ['!ss history', '/rec history']:
+                query(gallery)
+                # Selected search text still uses the native TextInput clipboard action.
+                key('-M','ctrl','-k','a','-k','c','-m','ctrl')
+                wait_for(lambda:subprocess.check_output(['wl-paste','--no-newline'],text=True)==gallery)
+                key('-k','End')
+            print('PASS: selected search text takes priority in both galleries',flush=True)
+            query('!ss history')
             key('-M','ctrl','-k','z','-m','ctrl')
             wait_for(lambda:'Trash unchanged' in json.loads(ipc('status'))['message'])
             query('/cliphist images')

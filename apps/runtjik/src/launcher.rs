@@ -5,7 +5,7 @@ use crate::{
     store::Store,
     util::*,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::{collections::HashMap, time::Instant};
 pub struct Launcher {
@@ -460,9 +460,15 @@ impl Launcher {
                 .current
                 .get(id)
                 .filter(|entry| {
-                    entry.provider == "Screenshots" && entry.data["clip_id"].is_string()
+                    ["Screenshots", "Recorder"].contains(&entry.provider.as_str())
+                        && (entry.data["file"].is_string()
+                            || entry.data["clip_id"].is_string()
+                            || (self.demo
+                                && entry
+                                    .id
+                                    .starts_with(&format!("{}:demo-file-", entry.provider))))
                 })
-                .ok_or_else(|| anyhow::anyhow!("Select a clipboard image to copy"))?;
+                .context("Select an image or video to copy")?;
             return self
                 .captures
                 .activate(entry, &self.settings, mode, self.demo);

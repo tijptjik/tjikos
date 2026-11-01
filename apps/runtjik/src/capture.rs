@@ -580,9 +580,11 @@ impl Captures {
             return Ok(json!({"kind":"edit","text":edit}));
         }
         if demo {
-            return Ok(message(
-                "Synthetic capture action; no files or recording created",
-            ));
+            return Ok(if mode == "copy" {
+                json!({"kind":"copied", "entry":entry.id, "message":"Demo capture copy; clipboard unchanged"})
+            } else {
+                message("Synthetic capture action; no files or recording created")
+            });
         }
         if let Some(id) = data["clip_id"].as_str() {
             ensure!(
@@ -624,6 +626,39 @@ impl Captures {
                     && !path.is_symlink(),
                 "Capture is no longer available"
             );
+            if mode == "copy" {
+                let (mime, bytes) = if rec {
+                    let uri = url::Url::from_file_path(path)
+                        .map_err(|_| anyhow::anyhow!("Invalid capture path"))?;
+                    ("text/uri-list", format!("{uri}\r\n").into_bytes())
+                } else {
+                    let mime = match path
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase()
+                        .as_str()
+                    {
+                        "png" => "image/png",
+                        "jpg" | "jpeg" => "image/jpeg",
+                        "webp" => "image/webp",
+                        _ => bail!("Unsupported capture image format"),
+                    };
+                    (mime, fs::read(path)?)
+                };
+                binary(
+                    &["wl-copy".into(), "--type".into(), mime.into()],
+                    bytes,
+                    5,
+                    true,
+                )
+                .context("Could not copy capture to clipboard")?;
+                return Ok(json!({"kind":"copied", "entry":entry.id, "message":if rec {
+                    "Copied video to clipboard"
+                } else {
+                    "Copied image to clipboard"
+                }}));
+            }
             if mode == "close" {
                 if rec {
                     ensure!(
