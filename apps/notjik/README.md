@@ -378,6 +378,11 @@ Qt caches loaded components.
 
 ## History and keyboard navigation
 
+`history.excludeApps` optionally lists application names or desktop-entry IDs to
+exclude from local history (case-insensitive exact matches). It applies to every
+lifecycle event, including expiry and dismissal, without disabling popups.
+Existing history records are not deleted by changing this setting.
+
 ```sh
 notjikctl history show             # also: hide, toggle
 notjikctl navigate previous        # older

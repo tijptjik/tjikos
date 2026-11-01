@@ -123,6 +123,14 @@ pub fn load(root: &Path) -> Result<Value> {
         ensure!(cfg["history"][k].is_u64(), "{k} must be an integer");
     }
     number(&cfg["history"]["maxAgeDays"], "maxAgeDays", 0., 3650.)?;
+    if let Some(apps) = cfg["history"].get("excludeApps") {
+        ensure!(
+            apps.as_array().is_some_and(|apps| apps
+                .iter()
+                .all(|v| v.as_str().is_some_and(|s| !s.trim().is_empty()))),
+            "history.excludeApps must be an array of nonempty app identities"
+        );
+    }
     ensure!(
         cfg["history"]["maxEvents"].as_u64() != Some(0)
             || cfg["history"]["maxAgeDays"].as_f64() != Some(0.),

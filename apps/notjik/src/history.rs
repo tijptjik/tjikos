@@ -140,8 +140,25 @@ pub fn prune(db: &Connection, h: &Value) -> Result<bool> {
     }
     Ok(before != db.total_changes())
 }
+fn excluded(n: &Value, cfg: &Value) -> bool {
+    cfg["history"]["excludeApps"]
+        .as_array()
+        .is_some_and(|apps| {
+            apps.iter().filter_map(Value::as_str).any(|app| {
+                ["app", "desktopEntry"].iter().any(|key| {
+                    n[key]
+                        .as_str()
+                        .is_some_and(|identity| identity.eq_ignore_ascii_case(app))
+                })
+            })
+        })
+}
+
 pub fn record(db: &mut Connection, cfg: &Value, event: &Value) -> Result<()> {
     let n = &event["notice"];
+    if excluded(n, cfg) {
+        return Ok(());
+    }
     let _ = cache_avatar(db, n);
     if cfg["history"]["enabled"] != true
         || (truthy(&n["transient"]) && cfg["history"]["logTransient"] != true)
@@ -171,6 +188,43 @@ pub fn record(db: &mut Connection, cfg: &Value, event: &Value) -> Result<()> {
     prune(&tx, &cfg["history"])?;
     tx.commit()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod retention_tests {
+    use super::*;
+
+    #[test]
+    fn excluded_apps_cannot_reappear_on_later_lifecycle_events() {
+        let mut db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE events (id INTEGER PRIMARY KEY,time TEXT,event TEXT,notice_id TEXT,app TEXT,payload TEXT);").unwrap();
+        let mut cfg = crate::config::defaults();
+        cfg["history"]["excludeApps"] = json!(["Telegram Desktop", "org.telegram.desktop"]);
+        for event in ["received", "expired", "dismissed", "updated"] {
+            for notice in [
+                json!({"id":"a","app":"telegram desktop"}),
+                json!({"id":"b","app":"Other name","desktopEntry":"org.telegram.desktop"}),
+            ] {
+                record(&mut db, &cfg, &json!({"event":event,"notice":notice})).unwrap();
+            }
+        }
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM events", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        record(
+            &mut db,
+            &cfg,
+            &json!({"event":"received","notice":{"id":"mail","app":"Mail"}}),
+        )
+        .unwrap();
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM events", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
 }
 pub fn notices(db: &Connection, limit: usize) -> Result<Value> {
     let mut seen = HashSet::new();
