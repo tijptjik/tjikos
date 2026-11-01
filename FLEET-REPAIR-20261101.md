@@ -28,8 +28,14 @@
   preserved under `~/.local/state/tjikup/fleet-20261101/preserved`.
 - Verified Si storage mounts, nginx syntax, and `synctjik ready`.
 - Fixed Tasktjik's call to a removed method, Runtjik's missing transitive lockfile
-  entry, and the weekly unit's missing Bun paths. Scoped Fish's bat alias to
+  entry, the workspace Bun lockfile, and the weekly unit's missing Bun paths.
+  Runtjik now installs frozen browser-build dependencies and no longer checks
+  for Python. Scoped Fish's bat alias to
   interactive shells so SSH cat remains byte-preserving.
+
+- Li's complete weekly workflow passed at 11:17:38 HKT, including Runtjik.
+  Its scheduled receipt records delivered=true, Tasktjik remains successful,
+  no user units are failed, and both source checkouts are clean and match origin.
 
 ## Waiting or requiring follow-up
 
@@ -47,8 +53,6 @@
   24 hours, and is consumed before parity changes. Mount, scrub and other safety
   gates remain enabled. It accepts missing files into parity, not deletion of
   existing source files.
-- Li's weekly service is being rerun after the three build/environment fixes;
-  record its final outcome before claiming the complete weekly workflow passed.
 - Si's old weekly failure remains outstanding until maintenance ends and a new
   complete weekly run succeeds.
 
@@ -56,7 +60,8 @@
 
 Dotjik validation passed 329 tests (10 skipped), including Fi/Li/Si template
 rendering. Synctjik, Notjik transport and authority tests passed. Tasktjik's eight
-library tests passed; its release build succeeded. Runtjik check succeeded after
-its lockfile repair. The actual notification reached Fi with both actions, and
+library tests passed; its release build succeeded. The workspace
+`bun run check` passed all 12 tasks and frozen Bun installation succeeded.
+Runtjik check succeeded after its lockfile repair. The actual notification reached Fi with both actions, and
 Zed opened the SSH-fetched report. The approval action was deliberately not
 invoked against production parity.
