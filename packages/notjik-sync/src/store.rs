@@ -279,7 +279,10 @@ fn apply(
                     .as_array()
                     .unwrap()
                     .iter()
-                    .any(|a| a["id"] == v["action"] && a["url"].is_null()),
+                    .any(|a| a["id"].is_string()
+                        && a["id"] == v["action"]
+                        && a["url"].is_null()
+                        && a["open"].is_null()),
                 "Unknown action"
             );
             let existing=c.query_row("SELECT id FROM jobs WHERE owner=?1 AND notification=?2 AND action=?3 AND state IN ('pending','started') ORDER BY created DESC LIMIT 1",params![owner,text(v,"id"),text(v,"action")],|r|r.get::<_,String>(0)).optional()?;
@@ -529,10 +532,38 @@ mod tests {
             json!({"label":"Bad","command":["sh","-c","echo bad"]}),
             json!({"label":"Bad","url":"file:///etc/passwd"}),
             json!({"label":"Bad","url":"javascript:alert(1)"}),
+            json!({"label":"Bad","open":{"kind":"shell","host":"si","unit":"example.service"}}),
+            json!({"label":"Bad","open":{"kind":"snapraid-review","host":"other","review":"a".repeat(64)}}),
+            json!({"label":"Bad","open":{"kind":"service-logs","host":"si;reboot","unit":"example.service"}}),
         ] {
             let mut n = f.notice();
             n["actions"] = json!([action]);
             assert!(validate(&n).is_err());
+        }
+    }
+    #[test]
+    fn local_actions_survive_delivery_without_becoming_remote_jobs() {
+        for action in [
+            json!({"label":"Investigate","open":{"kind":"service-logs","host":"si","unit":"si-snapraid-sync.service"}}),
+            json!({"label":"Review","open":{"kind":"snapraid-review","host":"si","review":"a".repeat(64)}}),
+            json!({"label":"Copy code","copy":"004281"}),
+        ] {
+            let f = Fixture::new();
+            let mut n = f.notice();
+            n["actions"] = json!([action]);
+            validate(&n).unwrap();
+            f.req(&f.si, json!({"op":"publish","notice":n}), 1000);
+            let history = f.req(&f.fi, json!({"op":"history"}), 1001);
+            assert_eq!(history["notices"][0]["actions"], n["actions"]);
+            assert!(apply(
+                &f.c,
+                "owner",
+                &f.fi,
+                KEY,
+                &json!({"op":"invoke","id":n["id"],"action":null}),
+                1002
+            )
+            .is_err());
         }
     }
     #[test]

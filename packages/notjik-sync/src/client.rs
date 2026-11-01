@@ -84,6 +84,63 @@ pub fn state() -> PathBuf {
 pub fn configured() -> bool {
     config_path().is_file()
 }
+fn service_logs_command(intent: &Value) -> Result<Vec<String>> {
+    validate_service_logs(intent)?;
+    // Resolve the fleet identity locally. Remote notices provide data only;
+    // the terminal, executable and read-only operation are fixed here.
+    Ok(vec![
+        "kitty".into(),
+        "--hold".into(),
+        home()
+            .join(".local/bin/tjikup")
+            .to_string_lossy()
+            .into_owned(),
+        "ssh".into(),
+        text(intent, "host").into(),
+        "journalctl".into(),
+        "--no-pager".into(),
+        "--lines=100".into(),
+        format!("--unit={}", text(intent, "unit")),
+    ])
+}
+
+#[cfg(test)]
+mod desktop_action_tests {
+    use super::*;
+
+    #[test]
+    fn service_logs_use_local_fleet_identity_and_fixed_read_only_command() {
+        let intent = json!({"kind":"service-logs","host":"si","unit":"si-snapraid-sync.service"});
+        let argv = service_logs_command(&intent).unwrap();
+        assert_eq!(&argv[..2], ["kitty", "--hold"]);
+        assert!(argv[2].ends_with("/.local/bin/tjikup"));
+        assert_eq!(
+            &argv[3..],
+            [
+                "ssh",
+                "si",
+                "journalctl",
+                "--no-pager",
+                "--lines=100",
+                "--unit=si-snapraid-sync.service"
+            ]
+        );
+        for (key, value) in [
+            ("host", "-oProxyCommand=bad"),
+            ("host", "si;reboot"),
+            ("unit", "$(reboot).service"),
+            ("unit", "x.service --all"),
+            ("kind", "shell"),
+        ] {
+            let mut bad = intent.clone();
+            bad[key] = json!(value);
+            assert!(service_logs_command(&bad).is_err());
+        }
+        let mut bad = intent;
+        bad["command"] = json!(["reboot"]);
+        assert!(service_logs_command(&bad).is_err());
+    }
+}
 pub fn private_dir(p: &Path) -> Result<()> {
     fs::DirBuilder::new()
         .recursive(true)
@@ -250,7 +307,9 @@ pub fn publish(mut n: Value, delivery: &str, retain: bool) -> Result<String> {
     let c = db()?;
     let mut actions = Vec::new();
     for a in n["actions"].as_array().cloned().unwrap_or_default() {
-        if let Some(argv) = a["command"].as_array() {
+        if a["copy"].is_string() {
+            actions.push(json!({"copy":a["copy"],"label":a["label"]}));
+        } else if let Some(argv) = a["command"].as_array() {
             ensure!(
                 !argv.is_empty() && argv.len() <= 128 && argv.iter().all(|x| x.is_string()),
                 "Invalid command arguments"
@@ -262,7 +321,7 @@ pub fn publish(mut n: Value, delivery: &str, retain: bool) -> Result<String> {
             )?;
             actions.push(json!({"id":action_id,"label":a["label"]}));
         } else if let Some(open) = a.get("open") {
-            validate_snapraid_review(open)?;
+            validate_desktop_action(open)?;
             actions.push(json!({"open":open,"label":a["label"]}));
         } else if a["url"].is_string() {
             actions.push(json!({"url":a["url"],"label":a["label"]}));
@@ -345,8 +404,15 @@ pub fn local(n: &Value) -> Result<String> {
         .unwrap_or_default()
         .into_iter()
         .map(|a| {
-            if let Some(open) = a.get("open") {
-                json!({"label":a["label"],"command":[home().join(".local/bin/notjik-sync"),"open-review",open.to_string()]})
+            if a["copy"].is_string() {
+                json!({"label":a["label"],"copy":a["copy"]})
+            } else if let Some(open) = a.get("open") {
+                let command = if text(open, "kind") == "snapraid-review" {
+                    "open-review"
+                } else {
+                    "open"
+                };
+                json!({"label":a["label"],"command":[home().join(".local/bin/notjik-sync"),command,open.to_string()]})
             } else if a["url"].is_string() {
                 json!({"label":a["label"],"command":["xdg-open",a["url"]]})
             } else {
@@ -568,6 +634,11 @@ pub fn command(args: &[String]) -> Result<()> {
         Some("tick")=>{println!("{}",tick()?);},
         Some("request")=>{let mut input=String::new();std::io::stdin().take(65537).read_to_string(&mut input)?;ensure!(input.len()<=65536,"Request too large");println!("{}",call(&config()?,&serde_json::from_str(&input)?)?);},
         Some("publish")=>{let mut input=String::new();std::io::stdin().take(65537).read_to_string(&mut input)?;ensure!(input.len()<=65536,"Notice too large");println!("{}",publish(serde_json::from_str(&input)?,"active",true)?);},
+        Some("open") if args.len()==2=>{
+            let intent: Value = serde_json::from_str(&args[1])?;
+            let argv = service_logs_command(&intent)?;
+            Command::new(&argv[0]).args(&argv[1..]).spawn()?;
+        },
         Some("invoke") if args.len()==3=>mutation(json!({"op":"invoke","id":args[1],"action":args[2]}))?,
         Some("dismiss"|"read") if args.len()==2=>mutation(json!({"op":args[0],"id":args[1]}))?,
         Some("history")=> {
