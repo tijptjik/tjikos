@@ -25,7 +25,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NotificationCardTest {
-    @Test fun tapRevealsActionsAndOnlyLeftSwipeDismisses() {
+    @Test fun tapActionsAndMomentumBasedRelease() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         var notice by mutableStateOf(Notice("synthetic-card", title = "Authentication code · preview",
@@ -35,7 +35,11 @@ class NotificationCardTest {
         var dismissals = 0
         var copies = 0
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scene ->
-            scene.onActivity { activity -> activity.setContent {
+            scene.onActivity { activity ->
+                activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                activity.setShowWhenLocked(true)
+                activity.setTurnScreenOn(true)
+                activity.setContent {
                 MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFF1A7C4))) {
                     Surface(Modifier.fillMaxSize(), color = Color(0xFF17131D), contentColor = Color(0xFFF2EDF4)) {
                         NotificationList(false, {}) {
@@ -54,7 +58,7 @@ class NotificationCardTest {
                 if (view is ViewGroup) for (index in 0 until view.childCount) root(view.getChildAt(index))?.let { return it }
                 return null
             }
-            fun settle() { instrumentation.waitForIdleSync(); Thread.sleep(450) }
+            fun settle() { instrumentation.waitForIdleSync(); Thread.sleep(750) }
             fun nodes(): List<SemanticsNode> {
                 var result = emptyList<SemanticsNode>()
                 scene.onActivity { result = root(it.window.decorView)!!.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false) }
@@ -63,9 +67,10 @@ class NotificationCardTest {
             fun text(node: SemanticsNode) = node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text }.orEmpty()
             fun bounds(label: String): Rect = nodes().first { text(it) == label }.boundsInRoot
             fun has(label: String) = nodes().any { text(it) == label }
-            fun gesture(fromX: Float, fromY: Float, toX: Float, toY: Float, steps: Int = 20, during: (() -> Unit)? = null) {
+            fun gesture(fromX: Float, fromY: Float, toX: Float, toY: Float, steps: Int = 20, hold: Boolean = false, during: (() -> Unit)? = null) {
                 val down = SystemClock.uptimeMillis()
                 for (step in 0..steps + 1) {
+                    if (step == steps + 1 && hold) Thread.sleep(180)
                     scene.onActivity { activity ->
                         val view = root(activity.window.decorView)!!.view
                         val progress = minOf(step, steps).toFloat() / steps
@@ -99,7 +104,7 @@ class NotificationCardTest {
             scene.onActivity { width = root(it.window.decorView)!!.view.width.toFloat() }
             // Vertical movement and a rightward swipe must not acknowledge or dismiss.
             gesture(width / 2, title.center.y + 60, width / 2, title.center.y)
-            gesture(width * 0.2f, title.center.y, width * 0.8f, title.center.y)
+            gesture(width * 0.2f, title.center.y, width * 0.35f, title.center.y, hold = true)
             assertEquals(0, reads); assertEquals(0, dismissals)
             tap(notice.title)
             assertTrue(has("Copy code")); assertTrue(has("Mark read")); assertTrue(has("Dismiss"))
@@ -111,25 +116,31 @@ class NotificationCardTest {
             assertEquals(1, reads)
             tap(notice.title)
             assertFalse(has("Copy code")); assertFalse(has("Dismiss"))
-            // Diagonal scrolling, fast short flicks and medium drags must not dismiss.
+            // Diagonal scrolling remains scrolling; slow releases return to rest.
             gesture(width * 0.8f, title.center.y + 60, width * 0.2f, title.center.y + 60 - width * 0.45f,
                 during = { assertEquals("Diagonal scrolling must not drag the card", title.left, bounds(notice.title).left, 2f) })
             assertEquals(0, dismissals)
             assertEquals(title.left, bounds(notice.title).left, 2f)
-            gesture(width * 0.8f, title.center.y, width * 0.6f, title.center.y, steps = 2)
+            gesture(width * 0.8f, title.center.y, width * 0.35f, title.center.y, hold = true)
             assertEquals(0, dismissals)
-            gesture(width * 0.8f, title.center.y, width * 0.35f, title.center.y)
+            // Crossing far left does not clear until release; holding stops momentum.
+            gesture(width * 0.8f, title.center.y, width * 0.7f, title.center.y, hold = true)
             assertEquals(0, dismissals)
-            // A short drag cancels; a deliberate left swipe dismisses once.
-            gesture(width * 0.8f, title.center.y, width * 0.7f, title.center.y)
+            gesture(width * 0.9f, title.center.y, width * 0.1f, title.center.y, hold = true,
+                during = { assertEquals(0, dismissals); capture("card-dragged.png") })
             assertEquals(0, dismissals)
-            gesture(width * 0.9f, title.center.y, width * 0.1f, title.center.y, during = { capture("card-dragged.png") })
+            // The same short distance now clears with a fast release.
+            gesture(width * 0.8f, title.center.y, width * 0.4f, title.center.y, steps = 3)
             assertEquals(1, dismissals)
             assertTrue(notice.dismissed)
             // The same card retained in History must return onscreen and stop swiping.
             assertTrue(bounds(notice.title).left >= 0)
             gesture(width * 0.9f, title.center.y, width * 0.1f, title.center.y)
             assertEquals(1, dismissals)
+            scene.onActivity { notice = notice.copy(dismissed = false) }
+            settle()
+            gesture(width * 0.2f, title.center.y, width * 0.6f, title.center.y, steps = 3)
+            assertEquals("A rightward flick clears too", 2, dismissals)
         }
     }
 }

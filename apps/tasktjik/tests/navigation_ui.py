@@ -22,6 +22,10 @@ for group, count in [('Work', 2), ('All', 5), ('Books', 3), ('Home', 7), ('Small
 fixture = {'tasks': tasks, 'groups': ['Work', 'All', 'Books', 'Home', 'Small'], 'today': '2026-11-01'}
 component = home / 'TodoApp.qml'
 component.write_text(component.read_text().replace('    id: app', '''    id: app
+    function testInputState() {
+        return {editor:editor,title:titleInput.text,titleFocus:titleInput.activeFocus,
+            searching:searching,filter:filterInput.text,filterFocus:filterInput.activeFocus,view:view};
+    }
     function testGeometry() {
         const result=[];
         for(const group of dropGroups)for(let i=0;i<group.rows.count;i++) {
@@ -49,11 +53,23 @@ ShellRoot {
     IpcHandler {
         target:'navigation-test'
         function state():string {return JSON.stringify({selected:view.selectedId,rows:view.testGeometry()});}
+        function inputState():string {return JSON.stringify(view.testInputState());}
+        function clickRow():void {
+            const first=view.visualRows()[0];
+            view.focusRow(first);
+            keyboard.wait(50);
+            for(const group of view.dropGroups)for(let i=0;i<group.rows.count;i++) {
+                const row=group.rows.itemAt(i);
+                if(row.modelData.id===first.id) {
+                    keyboard.mouseClick(row,90,row.height/2);
+                    return;
+                }
+            }
+        }
         function select(id:string):void {view.selectedId=id;view.forceActiveFocus();}
         function key(name:string):void {
-            view.forceActiveFocus();
-            const keys={Down:Qt.Key_Down,Up:Qt.Key_Up,j:Qt.Key_J,k:Qt.Key_K,Tab:Qt.Key_Tab,Left:Qt.Key_Left,Right:Qt.Key_Right};
-            keyboard.keyClick(keys[name]);
+            const keys={Down:Qt.Key_Down,Up:Qt.Key_Up,j:Qt.Key_J,k:Qt.Key_K,Tab:Qt.Key_Tab,Left:Qt.Key_Left,Right:Qt.Key_Right,n:Qt.Key_N,N:Qt.Key_N,Slash:Qt.Key_Slash,Escape:Qt.Key_Escape};
+            keyboard.keyClick(keys[name],name==='N'?Qt.ShiftModifier:Qt.NoModifier);
         }
         function resize(value:int):void {view.width=value;}
         function filter(value:string):void {view.filter=value;}
@@ -132,8 +148,38 @@ with (root / 'qml.log').open('w') as log:
         ipc('filter', '')
         ipc('resize', 650)
         check_navigation(1)
+        # N still types in the filter, but creates an item after clicking a task
+        # while that filter remains visible (including with a nonempty query).
+        def input_state():
+            return json.loads(ipc('inputState'))
+
+        ipc('key', 'n')
+        assert input_state()['editor'] == 'edit' and input_state()['titleFocus']
+        ipc('key', 'n')
+        assert input_state()['title'] == 'n'
+        ipc('key', 'Escape')
+        for typed_filter in [False, True]:
+            ipc('key', 'Slash')
+            assert input_state()['filterFocus']
+            if typed_filter:
+                ipc('key', 'n')
+                assert input_state()['filter'] == 'n' and not input_state()['editor']
+            settled()
+            ipc('clickRow')
+            assert input_state()['searching'] and not input_state()['filterFocus'], input_state()
+            ipc('key', 'n')
+            assert input_state()['editor'] == 'edit' and input_state()['titleFocus']
+            assert input_state()['title'] == ''
+            ipc('key', 'Escape')
+            ipc('key', 'Slash')
+            ipc('key', 'Escape')
+            assert not input_state()['searching'] and input_state()['filter'] == ''
+        ipc('key', 'Slash')
+        ipc('clickRow')
+        ipc('key', 'N')
+        assert input_state()['view'] == 'today' and not input_state()['editor']
         assert 'ERROR' not in (root / 'qml.log').read_text()
-        print('PASS rendered column navigation:', root)
+        print('PASS rendered column navigation and New shortcut with filter focus:', root)
     finally:
         process.terminate()
         process.wait(timeout=5)

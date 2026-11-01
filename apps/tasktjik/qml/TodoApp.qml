@@ -484,7 +484,7 @@ Pane {
         const task=undoToastTask;
         undoToastTask='';toastTimer.stop();
         if(operation) {
-            selectedId=operation.id;moveMessage='';app.forceActiveFocus();
+            selectedId=operation.id;moveMessage='';app.focusList();
             sendPurge();
         } else if(!pendingPurge)request(task?{action:'undo',id:task,undo_action:'purge'}:{action:'undo'});
     }
@@ -558,7 +558,7 @@ Pane {
         if(pendingSave)return;
         retrySave=null;
         if(draftId)request({action:'reading-cancel',draft_id:draftId});
-        else {editor='';app.forceActiveFocus();}
+        else {editor='';app.focusList();}
     }
     function saveEditor() {
         if(editor!=='edit' || pendingSave || !titleInput.text.trim())return;
@@ -578,7 +578,7 @@ Pane {
         }
         value.request_id=draftId || retrySave.id;
         pendingSave={request:value,draft:Object.assign({},editing,value.fields),sections:sections,sent:false};
-        if(!draftId){editor='';selectedId=value.id || value.request_id;app.forceActiveFocus();}
+        if(!draftId){editor='';selectedId=value.id || value.request_id;app.focusList();}
         sendSave();
     }
     function newRequestId() {
@@ -650,6 +650,11 @@ Pane {
         if(!ad || !bd)return ad?-1:bd?1:a.title.localeCompare(b.title);
         return (sortOrder===1?-1:1)*ad.localeCompare(bd) || a.title.localeCompare(b.title);
     }
+    function focusList() {
+        // Pane is a focus scope: focusing it alone retains the filter's focus.
+        filterInput.focus=false;
+        app.forceActiveFocus();
+    }
     function filterTag(tag) {
         searching=true;
         filterInput.text='tag:'+( /\s|"/.test(tag) ? JSON.stringify(tag) : tag );
@@ -699,7 +704,8 @@ Pane {
     Keys.onPressed: event=>{
         if(dragTask){if(event.key===Qt.Key_Escape && !pendingMove)cancelDrag();event.accepted=true;return;}
         if(help.visible || dateHelp.visible)return;
-        if(editor || searching){if(event.key===Qt.Key_Escape && editor){cancelEditor();event.accepted=true;}return;}
+        // An open filter must not disable list shortcuts after focus returns to a task.
+        if(editor || filterInput.activeFocus){if(event.key===Qt.Key_Escape && editor){cancelEditor();event.accepted=true;}return;}
         if(event.key===Qt.Key_N){if(event.modifiers & Qt.ShiftModifier && collection!=='reading')view='today';else {selectedId='';openEditor();}}
         else if(event.key===Qt.Key_L)view='all';
         else if(event.key===Qt.Key_W && collection!=='reading')view='week';
@@ -761,7 +767,7 @@ Pane {
                     text:modelData.label;quiet:true
                     checked:app.view===modelData.value
                     background:Rectangle {radius:9;color:parent.checked?theme.surface:'transparent';border.color:parent.checked?theme.border:'transparent'}
-                    onClicked:{app.view=modelData.value;app.forceActiveFocus();}
+                    onClicked:{app.view=modelData.value;app.focusList();}
                 }
             }
             Item {visible:collection!=='reading';Layout.fillWidth:true}
@@ -770,12 +776,12 @@ Pane {
             Item {visible:collection==='reading';Layout.fillWidth:true}
             Choice {visible:collection==='reading';model:['Recently saved','Title: A–Z','Site: A–Z'];currentIndex:app.readingSort;implicitWidth:145;onActivated:app.readingSort=currentIndex}
             Choice {visible:collection!=='reading';model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
-            IconButton {symbol:'search';description:collection==='reading'?'Filter saved pages (/)':'Filter tasks (/)' ;checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.forceActiveFocus();}}}
+            IconButton {symbol:'search';description:collection==='reading'?'Filter saved pages (/)':'Filter tasks (/)' ;checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.focusList();}}}
             IconButton {symbol:'completed';description:collection==='reading'?'Show read pages':'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
             IconButton {symbol:collection==='reading'?'categories':'cancelled';description:collection==='reading'?'Group pages by category':'Show cancelled tasks';checkable:true;checked:collection==='reading'?app.readingCategories:app.showCancelled;onClicked:{if(collection==='reading')app.readingCategories=checked;else app.showCancelled=checked}}
             IconButton {visible:collection!=='reading';symbol:'details';description:'Show selected task details';checkable:true;checked:app.showDetails;onClicked:app.showDetails=checked}
         }
-        Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:!editor && searching;Layout.fillWidth:true;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.forceActiveFocus();}}
+        Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:!editor && searching;Layout.fillWidth:true;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.focusList();}}
         Label {
             visible:!editor && showDetails && !!selected && text!==''
             Layout.fillWidth:true;wrapMode:Text.Wrap;color:theme.muted
@@ -787,7 +793,7 @@ Pane {
             id:readingPane
             visible:!editor && collection==='reading';Layout.fillWidth:true;Layout.fillHeight:true
             theme:app.theme;sites:visible?app.readingSites():[];grid:app.readingGrid;categories:app.readingCategories;selectedId:app.selectedId
-            onSelectSite:id=>{app.selectedId=id;app.forceActiveFocus();}
+            onSelectSite:id=>{app.selectedId=id;app.focusList();}
             onOpenSite:id=>{app.selectedId=id;app.action('open-reference');}
         }
         ScrollView {
@@ -877,8 +883,8 @@ Pane {
                                                     SnoozePicker {
                                                         Layout.fillWidth:true;ink:theme.text;accent:theme.accent
                                                         opened:app.snoozeTaskId===taskCard.modelData.id
-                                                        onChosen:until=>{app.action('snooze',{until:until});app.snoozeTaskId='';app.forceActiveFocus();}
-                                                        onCancelled:{app.snoozeTaskId='';app.forceActiveFocus();}
+                                                        onChosen:until=>{app.action('snooze',{until:until});app.snoozeTaskId='';app.focusList();}
+                                                        onCancelled:{app.snoozeTaskId='';app.focusList();}
                                                     }
                                                 }
                                             }
@@ -1007,7 +1013,7 @@ Pane {
                                                 preventStealing:true
                                                 property point pressedPoint
                                                 property bool moved: false
-                                                onPressed: mouse=>{pressedPoint=mapToItem(app,mouse.x,mouse.y);moved=false;selectedId=modelData.id;app.forceActiveFocus();}
+                                                onPressed: mouse=>{pressedPoint=mapToItem(app,mouse.x,mouse.y);moved=false;selectedId=modelData.id;app.focusList();}
                                                 onPositionChanged: mouse=>{
                                                     if(!pressed || app.pendingMove)return;
                                                     const point=mapToItem(app,mouse.x,mouse.y);
@@ -1016,7 +1022,7 @@ Pane {
                                                 }
                                                 onReleased: {if(moved)app.finishDrag();}
                                                 onCanceled: {if(moved && !app.pendingMove)app.cancelDrag();}
-                                                onClicked:{if(!moved){selectedId=modelData.id;app.forceActiveFocus();}}
+                                                onClicked:{if(!moved){selectedId=modelData.id;app.focusList();}}
                                                 onDoubleClicked:{if(!moved)app.action('toggle');}
                                             }
                                         }
@@ -1181,6 +1187,6 @@ Pane {
             if(saved)selectedId=saved.id;
             pendingSave=null;retrySave=null;
         }
-        draftId='';editor='';app.forceActiveFocus();
+        draftId='';editor='';app.focusList();
     }
 }

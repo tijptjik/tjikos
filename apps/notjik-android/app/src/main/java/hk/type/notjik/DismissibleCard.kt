@@ -34,6 +34,7 @@ import kotlin.math.abs
             var x = 0f
             var y = 0f
             var dragging = false
+            var rejectedHorizontal = false
             var released = false
             try {
                 while (true) {
@@ -42,15 +43,25 @@ import kotlin.math.abs
                     if (event.changes.count { it.pressed } > 1 || change.isConsumed) break
                     if (!change.pressed) {
                         released = true
-                        if (dragging) change.consume()
+                        if (dragging || rejectedHorizontal) change.consume()
                         break
+                    }
+                    if (rejectedHorizontal) {
+                        change.consume()
+                        continue
                     }
                     val delta = change.positionChange()
                     x += delta.x
                     y += delta.y
                     if (!dragging) {
                         // Yield to the list as soon as vertical intent is apparent.
-                        if (abs(y) > viewConfiguration.touchSlop || x > horizontalSlop) break
+                        if (abs(y) > viewConfiguration.touchSlop) break
+                        if (x > viewConfiguration.touchSlop) {
+                            // Cancel the child's click without moving the card right.
+                            rejectedHorizontal = true
+                            change.consume()
+                            continue
+                        }
                         if (x < -horizontalSlop && abs(x) > abs(y) * 2) dragging = true
                     }
                     if (dragging) {
