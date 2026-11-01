@@ -14,6 +14,25 @@ Install the HTTPS authority on Si before updating clients. There is one writable
 authority; unavailable authorities fail visibly. SSH endpoints must run the native `tasktjik-api serve` command. No Python
 fallback is installed.
 
+Reading has list and grid views for saved web pages, with titles, domains,
+page images, descriptions and an Open page action. It defaults to an ungrouped
+list sorted by recently saved; the category toggle replaces the cancelled-task
+filter and shows only categories containing matching pages. Completed pages are
+labelled Read and can be included with the read-pages toggle. Enter opens the
+selected page; D marks it read or unread.
+
+Previews render pages using installed Chrome or Chromium in headless mode with
+a fresh, temporary profile; they never use your browser cookies or a third-party
+preview service. Python 3 fetches descriptions and fallback site images. Browser
+error pages and sign-in screens are rejected; sites that block rendering show a
+favicon fallback when available, otherwise a clear placeholder. Successful images and metadata are cached for a day under
+`$XDG_CACHE_HOME/tasktjik/page-previews` (normally `~/.cache/tasktjik/page-previews`).
+Pages without an available image retain a domain placeholder and their link.
+Failed previews retry after five minutes on the next load; old metadata-only
+cache entries are refreshed automatically. Rendering requires Chrome or Chromium;
+without it, site-provided images remain available.
+Run `python3 -B tests/reading_ui.py` for the isolated synthetic renderer check.
+
 In the task list, press `P` to purge the selected task immediately. A three-second
 Undo toast appears after deletion succeeds. `U` and Ctrl+Z remain available after
 the toast disappears. Purge removes the entire task, including recurrence history.

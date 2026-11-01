@@ -25,6 +25,9 @@ Pane {
     property bool showCompleted: false
     property bool showCancelled: false
     property bool showDetails: false
+    property bool readingGrid: false
+    property bool readingCategories: false
+    property int readingSort: 0
     property int sortOrder: 0
     property bool requestBusy: false
     property var dueToday: new Date()
@@ -158,12 +161,14 @@ Pane {
         else if(next.y+next.height>flick.contentY+flick.height)flick.contentY=Math.max(0,Math.min(flick.contentHeight-flick.height,next.y+next.height-flick.height));
     }
     function focusVertical(direction) {
+        if(collection==='reading'){readingPane.navigate(direction,false);return;}
         const rows=visualRows();
         if(!rows.length)return;
         const index=rows.findIndex(r=>r.id===selectedId);
         focusRow(rows[index<0?(direction>0?0:rows.length-1):(index+direction+rows.length)%rows.length]);
     }
     function focusColumn(direction) {
+        if(collection==='reading'){readingPane.navigate(direction,true);return;}
         const rows=visualRows();
         const current=rows.find(r=>r.id===selectedId);
         if(!current)return;
@@ -203,6 +208,9 @@ Pane {
         property string description
         implicitWidth:38;implicitHeight:38
         Accessible.name:description
+        ToolTip.visible:hovered
+        ToolTip.delay:500
+        ToolTip.text:description
         background:Rectangle {
             radius:8
             color:control.checked?theme.surface:control.hovered?theme.border:'transparent'
@@ -213,7 +221,7 @@ Pane {
             implicitWidth:22;implicitHeight:22
             onWidthChanged:requestPaint()
             onHeightChanged:requestPaint()
-            Connections {target:control;function onCheckedChanged(){iconCanvas.requestPaint();}}
+            Connections {target:control;function onCheckedChanged(){iconCanvas.requestPaint();}function onSymbolChanged(){iconCanvas.requestPaint();}}
             onPaint:{
                 const c=getContext('2d');c.reset();
                 c.translate((width-22)/2,(height-22)/2);
@@ -226,6 +234,8 @@ Pane {
                 } else if(control.symbol==='info') {
                     c.beginPath();c.arc(11,11,8,0,Math.PI*2);c.stroke();
                     c.fillRect(10,6,2,2);c.beginPath();c.moveTo(11,10);c.lineTo(11,16);c.stroke();
+                } else if(control.symbol==='categories') {
+                    for(let y=3;y<=17;y+=7){c.strokeRect(2,y,4,4);c.beginPath();c.moveTo(10,y+2);c.lineTo(20,y+2);c.stroke();}
                 } else if(control.symbol==='keyboard') {
                     c.strokeRect(1,4,20,14);
                     for(let y=7;y<=10;y+=3)for(let x=4;x<=18;x+=3)c.fillRect(x,y,1,1);
@@ -326,6 +336,12 @@ Pane {
                             ['⌥ D','Due date'],['⌥ R','Repeat'],
                             ['⌥ L','Reference / note'],['⌥ M','Reminder'],
                             ['⌃ ↵','Save'],['⎋','Cancel']
+                        ]:collection==='reading'?[
+                            ['N','Save a page'],['D','Mark read / unread'],
+                            ['T','Edit page'],['G','Edit category'],
+                            ['/','Search pages'],['↵','Open page'],
+                            ['← →','Previous / next page'],['↑ ↓ / J K','Select row'],
+                            ['P','Remove page'],['U / Ctrl+Z','Undo'],['⎋','Close window']
                         ]:[
                             ['N','New item'],['⇧ N','Today'],
                             ['W','This week'],['L','Later'],
@@ -402,7 +418,7 @@ Pane {
         leadValue.text=String(editing.notifyBeforeDueLeadValue ?? 1);
         leadUnit.currentIndex=Math.max(0,leadUnit.model.indexOf(editing.notifyBeforeDueLeadUnit || 'days'));
         sections = {group:!!editing.id && editing.group!=='All',tags:editing.tags.length>0,
-            due:!!editing.due,repeat:!!editing.repeat.unit,reference:!!planInput.text,
+            due:!!editing.due,repeat:!!editing.repeat.unit,reference:editing.kind==='reading' || !!planInput.text,
             reminder:!!editing.id && (editing.notifyBeforeDue===false || Number(leadValue.text)!==1 || leadUnit.currentText!=='days')};
         planPicker.visible=false;
         editor='edit';titleInput.forceActiveFocus();
@@ -422,13 +438,16 @@ Pane {
                 notifyBeforeDueLeadValue:Number(leadValue.text),notifyBeforeDueLeadUnit:leadUnit.currentText}});
     }
     function selectVisibleTask() {
-        const rows=(listState?.groups || []).reduce((items,g)=>items.concat(tasks(g)),[]);
+        const rows=collection==='reading'?readingSites():(listState?.groups || []).reduce((items,g)=>items.concat(tasks(g)),[]);
         if(!rows.some(t=>t.id===selectedId))selectedId=rows.length?rows[0].id:'';
     }
     onViewChanged: selectVisibleTask()
     onFilterChanged: selectVisibleTask()
     onCollectionChanged: selectVisibleTask()
-    function visibleCount() {return (listState?.groups || []).reduce((n,g)=>n+tasks(g).length,0);}
+    function readingSites() {
+        return (listState?.tasks || []).filter(t=>t.kind==='reading' && (showCompleted || !t.done) && t.status!=='cancelled' && matchesFilter(t)).sort((a,b)=>readingSort===1?a.title.localeCompare(b.title):readingSort===2?String(a.reference || '').replace(/^https?:\/\/(www\.)?/,'').localeCompare(String(b.reference || '').replace(/^https?:\/\/(www\.)?/,'')):String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || b.id.localeCompare(a.id));
+    }
+    function visibleCount() {if(collection==='reading')return readingSites().length;return (listState?.groups || []).reduce((n,g)=>n+tasks(g).length,0);}
     function taskMeta(task) {
         const parts=[];
         if(task.status && !['ready','inbox','done','cancelled','blocked'].includes(task.status))parts.push(task.status.replace('_',' '));
@@ -504,9 +523,9 @@ Pane {
         if(dragTask){if(event.key===Qt.Key_Escape && !pendingMove)cancelDrag();event.accepted=true;return;}
         if(help.visible || dateHelp.visible)return;
         if(editor || searching){if(event.key===Qt.Key_Escape && editor){cancelEditor();event.accepted=true;}return;}
-        if(event.key===Qt.Key_N){if(event.modifiers & Qt.ShiftModifier)view='today';else {selectedId='';openEditor();}}
+        if(event.key===Qt.Key_N){if(event.modifiers & Qt.ShiftModifier && collection!=='reading')view='today';else {selectedId='';openEditor();}}
         else if(event.key===Qt.Key_L)view='all';
-        else if(event.key===Qt.Key_W)view='week';
+        else if(event.key===Qt.Key_W && collection!=='reading')view='week';
         else if(event.key===Qt.Key_D)action('toggle');
         else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && collection==='reading')action('open-reference');
         else if(event.key===Qt.Key_T || event.key===Qt.Key_G){if(selected){openEditor();if(event.key===Qt.Key_G)reveal('group');}}
@@ -543,17 +562,17 @@ Pane {
             ColumnLayout {
                 Layout.fillWidth:true;spacing:3
                 Label {text:collection==='reading'?'Reading':'Tasks';font.pixelSize:24;font.weight:Font.DemiBold;color:theme.text}
-                Label {text:editor==='edit'?(draftId?'Save this page to your reading list.':editing && editing.id?'Edit details':'Add a new '+(collection==='reading'?'reading item':'task')):visibleCount()+' '+(collection==='reading'?'items':'tasks')+' · '+(view==='week'?'This week':view==='today'?'Today':'All dates');font.pixelSize:12;color:theme.muted}
+                Label {text:editor==='edit'?(draftId?'Save this page to your reading list.':editing && editing.id?'Edit details':'Add a new '+(collection==='reading'?'reading item':'task')):visibleCount()+' '+(collection==='reading'?'saved pages':('tasks · '+(view==='week'?'This week':view==='today'?'Today':'All dates')));font.pixelSize:12;color:theme.muted}
             }
             Item {Layout.fillWidth:true}
             Choice {visible:!editor;model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectVisibleTask();}}
             QuietButton {text:'Open window';visible:canOpenWindow && !editor;quiet:true;onClicked:app.openWindow()}
-            QuietButton {text:'+ New';visible:!editor;primary:true;enabled:!draftId;onClicked:{selectedId='';openEditor();}}
+            QuietButton {text:collection==='reading'?'+ Save page':'+ New';visible:!editor;primary:true;enabled:!draftId;onClicked:{selectedId='';openEditor();}}
         }
         RowLayout {
             visible:!editor;Layout.fillWidth:true;spacing:4
             Repeater {
-                model:[{label:'Today',value:'today'},{label:'This week',value:'week'},{label:'All tasks',value:'all'}]
+                model:collection==='reading'?[]:[{label:'Today',value:'today'},{label:'This week',value:'week'},{label:'All tasks',value:'all'}]
                 QuietButton {
                     required property var modelData
                     text:modelData.label;quiet:true
@@ -562,12 +581,16 @@ Pane {
                     onClicked:{app.view=modelData.value;app.forceActiveFocus();}
                 }
             }
-            Item {Layout.fillWidth:true}
-            Choice {model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
-            IconButton {symbol:'search';description:'Filter tasks (/)';checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.forceActiveFocus();}}}
-            IconButton {symbol:'completed';description:'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
-            IconButton {symbol:'cancelled';description:'Show cancelled tasks';checkable:true;checked:app.showCancelled;onClicked:app.showCancelled=checked}
-            IconButton {symbol:'details';description:'Show selected task details';checkable:true;checked:app.showDetails;onClicked:app.showDetails=checked}
+            Item {visible:collection!=='reading';Layout.fillWidth:true}
+            QuietButton {visible:collection==='reading';text:'List';quiet:app.readingGrid;onClicked:app.readingGrid=false}
+            QuietButton {visible:collection==='reading';text:'Grid';quiet:!app.readingGrid;onClicked:app.readingGrid=true}
+            Item {visible:collection==='reading';Layout.fillWidth:true}
+            Choice {visible:collection==='reading';model:['Recently saved','Title: A–Z','Site: A–Z'];currentIndex:app.readingSort;implicitWidth:145;onActivated:app.readingSort=currentIndex}
+            Choice {visible:collection!=='reading';model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
+            IconButton {symbol:'search';description:collection==='reading'?'Filter saved pages (/)':'Filter tasks (/)' ;checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.forceActiveFocus();}}}
+            IconButton {symbol:'completed';description:collection==='reading'?'Show read pages':'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
+            IconButton {symbol:collection==='reading'?'categories':'cancelled';description:collection==='reading'?'Group pages by category':'Show cancelled tasks';checkable:true;checked:collection==='reading'?app.readingCategories:app.showCancelled;onClicked:{if(collection==='reading')app.readingCategories=checked;else app.showCancelled=checked}}
+            IconButton {visible:collection!=='reading';symbol:'details';description:'Show selected task details';checkable:true;checked:app.showDetails;onClicked:app.showDetails=checked}
         }
         Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:!editor && searching;Layout.fillWidth:true;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.forceActiveFocus();}}
         Label {
@@ -577,9 +600,16 @@ Pane {
                 (selected.acceptance || []).map(c=>'Accept: '+c),
                 (selected.verification || []).slice(-1).map(v=>v.outcome+' by '+v.actor+' · '+v.artifact+' · '+v.evidence)).join('\n') : ''
         }
+        ReadingView {
+            id:readingPane
+            visible:!editor && collection==='reading';Layout.fillWidth:true;Layout.fillHeight:true
+            theme:app.theme;sites:visible?app.readingSites():[];grid:app.readingGrid;categories:app.readingCategories;selectedId:app.selectedId
+            onSelectSite:id=>{app.selectedId=id;app.forceActiveFocus();}
+            onOpenSite:id=>{app.selectedId=id;app.action('open-reference');}
+        }
         ScrollView {
             id: taskScroll
-            visible:!editor;Layout.fillWidth:true;Layout.fillHeight:true;clip:true
+            visible:!editor && collection!=='reading';Layout.fillWidth:true;Layout.fillHeight:true;clip:true
             contentWidth:availableWidth
             ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
             ColumnLayout {
@@ -801,11 +831,11 @@ Pane {
         }
         RowLayout {
             visible:!editor;Layout.fillWidth:true;spacing:4
-            QuietButton {text:selected && selected.done?'Mark undone':'Mark done';enabled:!!selected;quiet:true;onClicked:action('toggle')}
+            QuietButton {text:collection==='reading'?(selected && selected.done?'Mark unread':'Mark read'):(selected && selected.done?'Mark undone':'Mark done');enabled:!!selected;quiet:true;onClicked:action('toggle')}
             QuietButton {text:'Edit';enabled:!!selected;quiet:true;onClicked:openEditor()}
             Item {Layout.fillWidth:true}
             IconButton {symbol:'undo';description:'Undo (U / Ctrl+Z)';onClicked:app.undoLastAction()}
-            IconButton {symbol:'info';description:'Due dates and snoozing';onClicked:dateHelp.open()}
+            IconButton {visible:collection!=='reading';symbol:'info';description:'Due dates and snoozing';onClicked:dateHelp.open()}
             IconButton {symbol:'keyboard';description:'Keyboard shortcuts (?)';onClicked:help.open()}
         }
         ScrollView {
@@ -816,7 +846,7 @@ Pane {
                 ColumnLayout {
                     Layout.fillWidth:true;spacing:6
                     Label {text:'Title';color:theme.muted;font.pixelSize:12}
-                    Entry {id:titleInput;Layout.fillWidth:true;placeholderText:'What needs to be done?';font.pixelSize:18;onAccepted:if(text.trim())saveEditor()}
+                    Entry {id:titleInput;Layout.fillWidth:true;placeholderText:collection==='reading'?'Page title':'What needs to be done?';font.pixelSize:18;onAccepted:if(text.trim())saveEditor()}
                 }
                 ColumnLayout {
                     visible:!!sections.reference;Layout.fillWidth:true;spacing:6
