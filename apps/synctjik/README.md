@@ -44,7 +44,10 @@ Encryption is independent of mode and defaults to true. `encrypted: false` suppo
 non-secret assets. Folder include/exclude rules, allowlisted file patterns, SQLite
 recovery, Telegram theme compaction, and latest/daily-weekly-monthly retention remain
 supported. SQLite's online backup API preserves committed WAL; recovery omissions
-modify only the disposable copy. Telegram format parsing fails closed on unknown
+modify only the disposable copy. Live SQLite writes are allowed while the captured
+copy is validated; ordinary files still fail if they change during capture. This
+preserves a consistent committed database state, not writes made after capture.
+Telegram format parsing fails closed on unknown
 records and never reads account keys.
 
 V2 tar+zstd archives, age encryption, manifests, completion/latest references, plan

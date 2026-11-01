@@ -126,13 +126,13 @@ pub fn is_sqlite(p: &Path) -> Result<bool> {
 }
 pub fn scan(root: &Path, p: &Value) -> Result<Entries> {
     scan_using(root, p, &mut |path, m| {
-        Ok(json!({"size":m.len(),"sha256":hash(path)?}))
+        Ok((json!({"size":m.len(),"sha256":hash(path)?}), false))
     })
 }
 fn scan_using(
     root: &Path,
     p: &Value,
-    entry: &mut dyn FnMut(&Path, &fs::Metadata) -> Result<Value>,
+    entry: &mut dyn FnMut(&Path, &fs::Metadata) -> Result<(Value, bool)>,
 ) -> Result<Entries> {
     let mut policy = p.clone();
     let mut required = Entries::new();
@@ -156,7 +156,7 @@ fn scan_using(
         dir: &Path,
         p: &Value,
         out: &mut Entries,
-        entry: &mut dyn FnMut(&Path, &fs::Metadata) -> Result<Value>,
+        entry: &mut dyn FnMut(&Path, &fs::Metadata) -> Result<(Value, bool)>,
     ) -> Result<()> {
         let mut paths = fs::read_dir(dir)?
             .map(|x| x.map(|e| e.path()))
@@ -203,11 +203,18 @@ fn scan_using(
                 if journal {
                     continue;
                 }
-                let value = entry(&path, &m)?;
+                let (value, sqlite_snapshot) = entry(&path, &m)?;
                 let after = fs::symlink_metadata(&path)?;
                 ensure!(
-                    signature(&m) == signature(&after),
-                    "File changed during scan"
+                    if sqlite_snapshot {
+                        after.is_file()
+                            && m.dev() == after.dev()
+                            && m.ino() == after.ino()
+                            && m.mode() == after.mode()
+                    } else {
+                        signature(&m) == signature(&after)
+                    },
+                    "File changed during scan: {name}"
                 );
                 out.insert(
                     name,
@@ -363,12 +370,23 @@ pub fn sqlite_copy(src: &Path, dst: &Path, options: Option<&Value>) -> Result<()
     ensure!(checks == ["ok"], "SQLite validation failed");
     Ok(())
 }
+// Source SQLite bytes may change during an online backup. Inventory them here;
+// stage() obtains their contents through sqlite_copy and hashes the stable copy.
+fn scan_for_staging(root: &Path, p: &Value) -> Result<Entries> {
+    scan_using(root, p, &mut |path, m| {
+        if is_sqlite(path)? {
+            Ok((json!({"size":0,"sha256":"0".repeat(64)}), true))
+        } else {
+            Ok((json!({"size":m.len(),"sha256":hash(path)?}), false))
+        }
+    })
+}
 pub fn stage(src: &Path, dst: &Path, p: &Value) -> Result<(Entries, Vec<String>)> {
     ensure!(
         src.is_dir() && !src.is_symlink(),
         "Missing or symlinked source"
     );
-    let before = scan(src, p)?;
+    let before = scan_for_staging(src, p)?;
     fs::create_dir(dst)?;
     let mut dbs = BTreeSet::new();
     for (n, e) in &before {
@@ -400,7 +418,7 @@ pub fn stage(src: &Path, dst: &Path, p: &Value) -> Result<(Entries, Vec<String>)
             }
         }
     }
-    let after = scan(src, p)?;
+    let after = scan_for_staging(src, p)?;
     ensure!(
         before.keys().eq(after.keys())
             && before
@@ -550,7 +568,10 @@ pub fn fingerprint(root: &Path, p: &Value, cache: &Path, temp: &Path) -> Result<
                 );
             }
             sqlite_copy(path, &snapshot, options)?;
-            return Ok(json!({"size":fs::metadata(&snapshot)?.len(),"sha256":hash(&snapshot)?}));
+            return Ok((
+                json!({"size":fs::metadata(&snapshot)?.len(),"sha256":hash(&snapshot)?}),
+                true,
+            ));
         }
         let sig = json!(signature(m));
         let prior = &previous["files"][name];
@@ -564,7 +585,7 @@ pub fn fingerprint(root: &Path, p: &Value, cache: &Path, temp: &Path) -> Result<
             hash(path)?
         };
         updated.insert(name.into(), json!({"stat":sig,"sha256":h}));
-        Ok(json!({"size":m.len(),"sha256":h}))
+        Ok((json!({"size":m.len(),"sha256":h}), false))
     })?;
     if p["telegram_themes"] == true {
         use sha2::{Digest, Sha256};
@@ -598,4 +619,39 @@ pub fn fingerprint(root: &Path, p: &Value, cache: &Path, temp: &Path) -> Result<
     }
     atomic_json(cache, &json!({"version":1,"files":updated}))?;
     Ok(entries)
+}
+
+#[cfg(test)]
+mod live_snapshot_tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_scan_allows_content_changes_but_rejects_replacement() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("store.db");
+        fs::write(&file, "before").unwrap();
+        let result = scan_using(tmp.path(), &json!({}), &mut |path, _| {
+            fs::write(path, "changed during snapshot").unwrap();
+            Ok((json!({"size":6,"sha256":"captured"}), true))
+        });
+        assert!(result.is_ok());
+        let result = scan_using(tmp.path(), &json!({}), &mut |path, _| {
+            let replacement = tmp.path().join("replacement");
+            fs::write(&replacement, "replacement").unwrap();
+            fs::rename(replacement, path).unwrap();
+            Ok((json!({"size":6,"sha256":"captured"}), true))
+        });
+        assert!(result.unwrap_err().to_string().contains("store.db"));
+    }
+
+    #[test]
+    fn ordinary_file_scan_still_rejects_changes() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("key"), "before").unwrap();
+        let result = scan_using(tmp.path(), &json!({}), &mut |path, _| {
+            fs::write(path, "changed during scan").unwrap();
+            Ok((json!({"size":6,"sha256":"captured"}), false))
+        });
+        assert!(result.unwrap_err().to_string().contains("key"));
+    }
 }
