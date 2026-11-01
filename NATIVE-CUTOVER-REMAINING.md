@@ -1,5 +1,9 @@
 # Native cutover status — 2026-10-30
 
+For the current 1 November failures, preserved commits and update runs, see
+[FLEET-UPDATE-20261101.md](FLEET-UPDATE-20261101.md). The following is the
+30 October deployment record; Si's Drive restore validation has since passed.
+
 **Li's native release catch-up and convergence are complete.** The fleet is not
 yet fully cut over: Si still awaits its backup and restore-validation gates.
 
