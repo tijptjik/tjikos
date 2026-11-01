@@ -813,7 +813,7 @@ Pane {
                     function balance() {
                         if(app.imageDetails || app.dragTask || app.snoozeTaskId)return;
                         const loads=Array(columnCount).fill(0),next={};
-                        const ordered=groups.map((g,i)=>({group:g,index:i,height:measuredHeights[g] || 30+app.tasks(g).length*48}));
+                        const ordered=groups.map((g,i)=>({group:g,index:i,height:measuredHeights[g] || 30+app.tasks(g).length*48})).filter(item=>app.tasks(item.group).length>0);
                         ordered.sort((a,b)=>Number(b.group==='All' || b.group==='Inbox')-Number(a.group==='All' || a.group==='Inbox') || b.height-a.height || a.index-b.index);
                         for(const item of ordered) {
                             const column=loads.indexOf(Math.min(...loads));
@@ -843,6 +843,7 @@ Pane {
                                     id:groupPanel
                                     required property string modelData
                                     property alias rows:groupRows
+                                    visible:groupRows.count>0 || !!app.dragTask
                                     width:parent.width;spacing:6
                                     onImplicitHeightChanged:groupColumns.noteHeight(modelData,implicitHeight)
                                     Component.onCompleted:{app.dropGroups=app.dropGroups.concat([groupPanel]);groupColumns.noteHeight(modelData,implicitHeight);}
