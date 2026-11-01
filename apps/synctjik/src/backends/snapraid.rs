@@ -11,8 +11,10 @@ use std::{fs, path::PathBuf, process::Command};
     about = "Guarded parity maintenance and recovery of owned writer pauses"
 )]
 struct Cli {
-    #[arg(value_parser=["check", "guard", "status", "preflight", "sync", "scrub", "resume"])]
+    #[arg(value_parser=["check", "guard", "status", "preflight", "sync", "scrub", "resume", "review", "approve-removals"])]
     action: String,
+    #[arg(long)]
+    review_id: Option<String>,
     #[arg(long, default_value = "/etc/si-snapraid-maintenance/config.json")]
     policy: PathBuf,
 }
@@ -47,6 +49,42 @@ fn summary(text: &str, label: &str) -> Result<u64> {
         .collect();
     ensure!(counts.len() == 1, "Missing or ambiguous diff summary");
     Ok(counts[0])
+}
+fn removal_review(diff: &str, layout: &[Vec<String>]) -> Result<Value> {
+    let mut removals: Vec<_> = diff
+        .lines()
+        .filter(|line| line.starts_with("remove "))
+        .map(str::to_owned)
+        .collect();
+    removals.sort();
+    let removed = summary(diff, "removed")?;
+    ensure!(
+        removals.len() as u64 == removed,
+        "Removal inventory does not match diff summary"
+    );
+    let id = crate::util::digest(&json!({"layout":layout,"removals":removals}));
+    Ok(json!({"id":id,"created_at":now(),"removed":removed,"removals":removals}))
+}
+fn approval_matches(approval: &Value, review: &Value) -> bool {
+    approval["review_id"] == review["id"]
+        && approval["review_id"].is_string()
+        && approval["approved_at"]
+            .as_str()
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .is_some_and(|t| {
+                let age = chrono::Utc::now().signed_duration_since(t).num_seconds();
+                (0..86400).contains(&age)
+            })
+}
+fn checked_review_id(id: &str) -> Result<()> {
+    ensure!(
+        id.len() == 64
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()),
+        "Invalid review identifier"
+    );
+    Ok(())
 }
 impl Policy {
     fn validate(&self) -> Result<()> {
@@ -197,11 +235,29 @@ impl Policy {
                 let diff = String::from_utf8(diff)?;
                 ensure!(code == 0 || code == 2, "SnapRAID diff failed; inspect log");
                 let removed = summary(&diff, "removed")?;
-                ensure!(
-                    removed <= self.max_removed,
-                    "{removed} removals exceed limit {}; review diff before any sync",
-                    self.max_removed
-                );
+                if removed > self.max_removed {
+                    let review = removal_review(&diff, &self.layout)?;
+                    atomic_json(&self.state.join("removal-review.json"), &review)?;
+                    let approval_path = self.state.join("removal-approval.json");
+                    let approval = if approval_path.exists() {
+                        read_json(&approval_path)?
+                    } else {
+                        Value::Null
+                    };
+                    ensure!(
+                        approval_matches(&approval, &review),
+                        "{removed} removals exceed limit {}; review diff before any sync",
+                        self.max_removed
+                    );
+                    if action == "sync" {
+                        // Consume before parity changes; failures require fresh human approval.
+                        remove(&approval_path)?;
+                        atomic_json(
+                            &self.state.join("last-removal-approval-used.json"),
+                            &approval,
+                        )?;
+                    }
+                }
                 if let Some(limit) = self.max_changed {
                     ensure!(
                         summary(&diff, "updated")? <= limit,
@@ -265,6 +321,69 @@ pub fn main(args: &[String], r: &Runner) -> Result<()> {
         println!("SnapRAID protection policy valid");
         return Ok(());
     }
+    if cli.action == "review" || cli.action == "approve-removals" {
+        if cli.action == "review" && cli.review_id.as_deref() == Some("latest") {
+            let mut logs = fs::read_dir(&p.log_dir)?
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_name().to_string_lossy().ends_with("-diff.log"))
+                .map(|e| e.path())
+                .collect::<Vec<_>>();
+            logs.sort();
+            let latest = logs.last().context("No completed diff to review")?;
+            no_symlinks(latest)?;
+            let diff = fs::read_to_string(latest)?;
+            let review = removal_review(&diff, &p.layout)?;
+            atomic_json(&p.state.join("removal-review.json"), &review)?;
+            println!("{}", review["id"].as_str().unwrap());
+            return Ok(());
+        }
+        let requested = cli
+            .review_id
+            .as_deref()
+            .context("--review-id is required")?;
+        checked_review_id(requested)?;
+        let review = read_json(&p.state.join("removal-review.json"))?;
+        ensure!(
+            review["id"] == requested,
+            "Removal list changed; open the current review instead"
+        );
+        if cli.action == "review" {
+            println!("SnapRAID removal review\nReview: {requested}\nMissing files: {}\n\nThese files are already absent from the data disks. APPROVE & SYNC accepts\nthe listed removals into parity, reducing recovery options for these files.\nIt does not delete existing source files. Other sync safety gates still apply.\n\n", review["removed"]);
+            for line in review["removals"]
+                .as_array()
+                .context("Missing removal list")?
+            {
+                println!("{}", line.as_str().context("Invalid removal record")?);
+            }
+            return Ok(());
+        }
+        ensure!(
+            unsafe { libc::geteuid() } == 0,
+            "Removal approval requires root"
+        );
+        atomic_json(
+            &p.state.join("removal-approval.json"),
+            &json!({"review_id":requested,"approved_at":now()}),
+        )?;
+        let unit = format!("synctjik-reviewed-sync-{}", &requested[..16]);
+        r.run(
+            Command::new("systemd-run")
+                .args([
+                    "--no-block",
+                    "--collect",
+                    "--unit",
+                    &unit,
+                    "--property=Type=oneshot",
+                    "--property=TimeoutStartSec=infinity",
+                    "--property=After=si-snapraid-scrub.service si-snapraid-sync.service",
+                ])
+                .arg(std::env::current_exe()?)
+                .args(["snapraid", "sync", "--policy"])
+                .arg(&cli.policy),
+        )?;
+        println!("Approved this exact removal list for one sync within 24 hours; sync queued behind maintenance.");
+        return Ok(());
+    }
     let _lock = Lock::take(&p.lock, cli.action != "status", r)?;
     if cli.action == "status" {
         p.guard(r)?;
@@ -285,4 +404,28 @@ pub fn main(args: &[String], r: &Runner) -> Result<()> {
         return p.resume(r);
     }
     p.maintain(r, &cli.action)
+}
+
+#[cfg(test)]
+mod review_tests {
+    use super::*;
+    #[test]
+    fn approval_is_bound_to_exact_removals_layout_and_age() {
+        let layout = vec![vec!["data".into(), "d1".into(), "/disk".into()]];
+        let a = removal_review("remove d1/a\nremove d1/b\n2 removed\n", &layout).unwrap();
+        let reordered = removal_review("remove d1/b\nremove d1/a\n2 removed\n", &layout).unwrap();
+        assert_eq!(a["id"], reordered["id"]);
+        let approval = json!({"review_id":a["id"],"approved_at":now()});
+        assert!(approval_matches(&approval, &a));
+        let b = removal_review("remove d1/a\nremove d1/c\n2 removed\n", &layout).unwrap();
+        assert!(!approval_matches(&approval, &b));
+        assert!(!approval_matches(
+            &json!({"review_id":a["id"],"approved_at":"2000-01-01T00:00:00Z"}),
+            &a
+        ));
+        assert!(removal_review("remove d1/a\n2 removed\n", &layout).is_err());
+        assert!(checked_review_id("../../bad").is_err());
+        let changed = removal_review("remove d1/a\nremove d1/b\n2 removed\n", &[]).unwrap();
+        assert!(!approval_matches(&approval, &changed));
+    }
 }

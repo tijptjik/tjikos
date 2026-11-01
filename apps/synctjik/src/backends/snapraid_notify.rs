@@ -17,7 +17,7 @@ use std::{
     about = "Maintenance incident, recovery and missed-run notifications"
 )]
 struct Cli {
-    #[arg(value_parser=["check", "failure", "recovery", "health"])]
+    #[arg(value_parser=["check", "failure", "recovery", "health", "review"])]
     action: String,
     unit: Option<String>,
     #[arg(
@@ -150,10 +150,28 @@ impl Policy {
             Some(problem) => format!("⚠️ <b>SnapRAID · Action needed</b>\n{heading}\n\n{}\n\n<b>Review logs</b>\n<pre>journalctl -u {} -n 50</pre>", escape(problem), escape(unit.trim_end_matches(".service"))),
         }
     }
-    fn send(&self, message: &str) -> Result<Value> {
+    fn send(&self, unit: &str, problem: Option<&str>) -> Result<Value> {
+        let message = self.format(unit, problem);
+        let mut actions = Vec::new();
+        let mut body = problem
+            .unwrap_or("Maintenance completed successfully.")
+            .to_owned();
+        if self.host == "si"
+            && self.jobs[unit].mode.as_deref() == Some("sync")
+            && problem.is_some_and(|p| p.contains("removals exceed limit"))
+        {
+            if let Ok(review) = read_json(&self.receipts.join("removal-review.json")) {
+                let open = json!({"kind":"snapraid-review","host":"si","review":review["id"]});
+                if notjik_sync::validate_snapraid_review(&open).is_ok() {
+                    body.push_str("\n\nReview the missing files before approving. Approval accepts this exact removal list into parity; it does not delete existing source files.");
+                    actions.push(json!({"label":"Review removals","open":open}));
+                    actions.push(json!({"label":"APPROVE & SYNC","command":["/usr/local/lib/synctjik/review","snapraid","approve-removals","--review-id",review["id"]]}));
+                }
+            }
+        }
         if notjik_sync::client::configured() {
             let id = notjik_sync::client::publish(
-                json!({"title":"Storage maintenance","body":message,"app":"Synctjik","type":"standard","actions":[],"urgency":"critical"}),
+                json!({"title":if problem.is_some(){"SnapRAID · Action needed"}else{"SnapRAID · Recovered"},"body":format!("{} · {}\n\n{body}",self.host,self.jobs[unit].task),"app":"Synctjik","type":"standard","actions":actions,"urgency":if problem.is_some(){"critical"}else{"normal"}}),
                 "active",
                 true,
             )?;
@@ -215,7 +233,7 @@ impl Policy {
         state["problem"] = json!(problem);
         state["last_sent_at"] = Value::Null;
         atomic_json(&path, &state)?;
-        let id = self.send(&self.format(unit, Some(problem)))?;
+        let id = self.send(unit, Some(problem))?;
         state["last_sent_at"] = json!(now());
         state["message_id"] = id;
         atomic_json(&path, &state)
@@ -225,7 +243,7 @@ impl Policy {
         if optional(&path)?["active"] != true {
             return Ok(());
         }
-        let id = self.send(&self.format(unit, None))?;
+        let id = self.send(unit, None)?;
         atomic_json(
             &path,
             &json!({"active":false, "recovered_at":now(), "message_id":id}),
@@ -328,6 +346,20 @@ pub fn main(args: &[String], r: &Runner) -> Result<()> {
     }
     let unit = cli.unit.context("Supply a maintenance unit")?;
     ensure!(p.jobs.contains_key(&unit), "Unknown maintenance unit");
+    if cli.action == "review" {
+        ensure!(
+            p.jobs[&unit].mode.as_deref() == Some("sync"),
+            "Removal review belongs to sync"
+        );
+        let review = read_json(&p.receipts.join("removal-review.json"))?;
+        return p.incident(
+            &unit,
+            &format!(
+                "{} removals exceed limit; review the missing-file list before syncing",
+                review["removed"]
+            ),
+        );
+    }
     let status = unit_status(r, &unit)?;
     let recovered = status.get("Result").map(String::as_str) == Some("success")
         && status.get("ActiveState").map(String::as_str) != Some("failed");

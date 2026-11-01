@@ -18,6 +18,23 @@ pub fn hash(s: &str) -> String {
 pub fn text<'a>(v: &'a Value, k: &str) -> &'a str {
     v[k].as_str().unwrap_or("")
 }
+pub fn validate_snapraid_review(v: &Value) -> Result<()> {
+    ensure!(
+        v.as_object().is_some_and(|m| m.len() == 3)
+            && text(v, "kind") == "snapraid-review"
+            && text(v, "host") == "si",
+        "Invalid review action"
+    );
+    let id = text(v, "review");
+    ensure!(
+        id.len() == 64
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()),
+        "Invalid review identifier"
+    );
+    Ok(())
+}
 pub fn validate(v: &Value) -> Result<()> {
     ensure!(
         v.is_object() && v.to_string().len() <= 65536,
@@ -52,11 +69,17 @@ pub fn validate(v: &Value) -> Result<()> {
         ensure!(
             action.as_object().is_some_and(|m| m
                 .keys()
-                .all(|k| ["id", "label", "url"].contains(&k.as_str()))),
+                .all(|k| ["id", "label", "url", "open"].contains(&k.as_str()))),
             "Remote command arguments are forbidden"
         );
         ensure!(text(action, "label").len() <= 160, "Invalid action label");
-        if let Some(link) = action["url"].as_str() {
+        if let Some(open) = action.get("open") {
+            ensure!(
+                action.get("id").is_none() && action.get("url").is_none(),
+                "Ambiguous action"
+            );
+            validate_snapraid_review(open)?;
+        } else if let Some(link) = action["url"].as_str() {
             let u = url::Url::parse(link)?;
             ensure!(
                 u.scheme() == "https" && u.username().is_empty() && u.password().is_none(),

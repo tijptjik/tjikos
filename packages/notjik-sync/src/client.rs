@@ -261,6 +261,9 @@ pub fn publish(mut n: Value, delivery: &str, retain: bool) -> Result<String> {
                 params![action_id, key, serde_json::to_string(argv)?],
             )?;
             actions.push(json!({"id":action_id,"label":a["label"]}));
+        } else if let Some(open) = a.get("open") {
+            validate_snapraid_review(open)?;
+            actions.push(json!({"open":open,"label":a["label"]}));
         } else if a["url"].is_string() {
             actions.push(json!({"url":a["url"],"label":a["label"]}));
         }
@@ -342,7 +345,9 @@ pub fn local(n: &Value) -> Result<String> {
         .unwrap_or_default()
         .into_iter()
         .map(|a| {
-            if a["url"].is_string() {
+            if let Some(open) = a.get("open") {
+                json!({"label":a["label"],"command":[home().join(".local/bin/notjik-sync"),"open-review",open.to_string()]})
+            } else if a["url"].is_string() {
                 json!({"label":a["label"],"command":["xdg-open",a["url"]]})
             } else {
                 json!({"label":a["label"],"command":[home().join(".local/bin/notjik-sync"),"invoke",n["id"],a["id"]]})
@@ -476,8 +481,72 @@ pub fn tick() -> Result<Value> {
     atomic(&state().join("presence.json"), &result)?;
     Ok(result)
 }
+fn review_commands(intent: &Value) -> Result<(Vec<String>, Vec<String>)> {
+    validate_snapraid_review(intent)?;
+    let review = text(intent, "review");
+    // Only the digest comes from the remote notice. Identity and commands are local policy.
+    let remote=format!("umask 077; mkdir -p ~/.local/state/synctjik/snapraid-reviews && sudo -n /usr/local/lib/synctjik/review snapraid review --review-id {review} > ~/.local/state/synctjik/snapraid-reviews/{review}.txt");
+    Ok((
+        vec![
+            home()
+                .join(".local/bin/tjikup")
+                .to_string_lossy()
+                .into_owned(),
+            "ssh".into(),
+            "si".into(),
+            "-T".into(),
+            remote,
+        ],
+        vec![
+            "zed-preview".into(),
+            format!(
+                "ssh://m@ssh.type.hk/home/m/.local/state/synctjik/snapraid-reviews/{review}.txt"
+            ),
+        ],
+    ))
+}
+fn open_review(intent: &Value) -> Result<()> {
+    let (remote, editor) = review_commands(intent)?;
+    ensure!(
+        Command::new(&remote[0])
+            .args(&remote[1..])
+            .stdin(Stdio::null())
+            .status()?
+            .success(),
+        "Could not prepare remote review"
+    );
+    ensure!(
+        Command::new(&editor[0])
+            .args(&editor[1..])
+            .stdin(Stdio::null())
+            .status()?
+            .success(),
+        "Could not open Zed Preview"
+    );
+    Ok(())
+}
+#[cfg(test)]
+mod review_action_tests {
+    use super::*;
+    #[test]
+    fn review_actions_cannot_supply_commands_or_paths() {
+        let id = "a".repeat(64);
+        let good = json!({"kind":"snapraid-review","host":"si","review":id});
+        let (remote, editor) = review_commands(&good).unwrap();
+        assert_eq!(&remote[1..4], &["ssh", "si", "-T"]);
+        assert!(editor[1].ends_with(&format!("/{id}.txt")));
+        for bad in [
+            json!({"kind":"snapraid-review","host":"si","review":";touch /tmp/pwn"}),
+            json!({"kind":"snapraid-review","host":"other","review":id}),
+            json!({"kind":"snapraid-review","host":"si","review":id,"path":"/etc/shadow"}),
+        ] {
+            assert!(review_commands(&bad).is_err());
+        }
+    }
+}
 pub fn command(args: &[String]) -> Result<()> {
     match args.first().map(String::as_str){
+        Some("open-review") if args.len()==2 => open_review(&serde_json::from_str(&args[1])?)?,
         Some("connect")=>{ensure!(args.len()>=4,"connect URL NAME desktop|server [SOCKET]");enroll(args[1].clone(),args[2].clone(),args[3].clone(),args.get(4).map(PathBuf::from))?;},
         Some("enroll")=>{let cfg=config()?;call(&cfg,&json!({"op":"enroll","name":cfg.name,"kind":cfg.kind}))?;},
         Some("run")=>loop{if let Err(e)=tick(){eprintln!("notjik-sync: {e}");}std::thread::sleep(std::time::Duration::from_secs(5));},
