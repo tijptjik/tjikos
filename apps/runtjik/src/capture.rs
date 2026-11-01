@@ -83,13 +83,19 @@ pub fn directory(value: &str) -> Result<PathBuf> {
     for s in suffix.iter().rev() {
         path.push(s);
     }
-    let app = paths::root();
+    validate_directory(&path, &paths::root())?;
+    Ok(path)
+}
+fn validate_directory(path: &Path, app: &Path) -> Result<()> {
     ensure!(
-        !path.starts_with(&app),
+        !path.starts_with(app),
         "Captures must be stored outside the application directory"
     );
     for ancestor in app.ancestors() {
-        if ancestor.join(".git").exists() {
+        let git = ancestor.join(".git");
+        // An empty .git directory is not a repository. A checkout has HEAD;
+        // linked worktrees and submodules use a .git file instead.
+        if git.join("HEAD").is_file() || git.is_file() {
             ensure!(
                 !path.starts_with(ancestor),
                 "Captures must be stored outside the repository"
@@ -97,7 +103,38 @@ pub fn directory(value: &str) -> Result<PathBuf> {
             break;
         }
     }
-    Ok(path)
+    Ok(())
+}
+
+#[cfg(test)]
+mod directory_tests {
+    use super::*;
+
+    #[test]
+    fn empty_home_git_marker_does_not_block_installed_capture_directory() {
+        let home = tempfile::tempdir().unwrap();
+        fs::create_dir(home.path().join(".git")).unwrap();
+        let app = home.path().join(".local/lib/runtjik");
+        let videos = home.path().join("media/video");
+        assert!(validate_directory(&videos, &app).is_ok());
+        assert!(validate_directory(&app.join("captures"), &app).is_err());
+    }
+
+    #[test]
+    fn checkout_and_worktree_capture_directories_remain_blocked() {
+        let home = tempfile::tempdir().unwrap();
+        let repo = home.path().join("code/tjikos");
+        let git = repo.join(".git");
+        fs::create_dir_all(&git).unwrap();
+        fs::write(git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+        let app = repo.join("apps/runtjik");
+        let captures = repo.join("captures");
+        assert!(validate_directory(&captures, &app).is_err());
+        assert!(validate_directory(&home.path().join("media/video"), &app).is_ok());
+        fs::remove_dir_all(&git).unwrap();
+        fs::write(&git, "gitdir: /tmp/example-worktree\n").unwrap();
+        assert!(validate_directory(&captures, &app).is_err());
+    }
 }
 #[derive(Default)]
 pub struct Captures {

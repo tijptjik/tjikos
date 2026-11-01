@@ -286,7 +286,7 @@ fn capture_directory(value: &str) -> Result<()> {
     if path.starts_with(&root)
         || root
             .ancestors()
-            .find(|p| p.join(".git").exists())
+            .find(|p| p.join(".git").is_file() || p.join(".git/HEAD").is_file())
             .is_some_and(|p| p != home() && path.starts_with(p))
     {
         bail!("Captures must be stored outside the repository/application directory");
