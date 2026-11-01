@@ -3,8 +3,10 @@ set -euo pipefail
 app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ "${1:-}" == --from-build ]]; then
     shift
-    source_binary="$app_dir/target/release/synctjik"
+    source_binary="$app_dir/dist/synctjik"
+    from_build=1
 else
+    from_build=0
     bash "$app_dir/scripts/fetch-release.sh"
     source_binary="$app_dir/dist/synctjik"
 fi
@@ -16,7 +18,7 @@ supports_backups() {
         grep -Eq '"protection_backends"[[:space:]]*:[[:space:]]*1([,}])' <<< "$capabilities"
 }
 if ! supports_backups "$source_binary"; then
-    if [[ "$source_binary" == "$app_dir/target/release/synctjik" ]]; then
+    if (( from_build )); then
         echo 'Local Synctjik build lacks native protection engines; build the current source before installing.' >&2
         exit 1
     fi

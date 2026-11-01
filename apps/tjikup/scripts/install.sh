@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "${1:-}" == --from-build ]]; then
+    shift
+    test -x "$app_dir/dist/tjikup"
+else
+    bash "$app_dir/scripts/fetch-release.sh"
+fi
 prefix="${1:-$HOME/.local}"
-bash "$app_dir/scripts/fetch-release.sh"
 # External native manifests may require features not visible to --check.
 "$app_dir/dist/tjikup" capabilities | jq -e '
     .encrypted_credentials >= 1 and .bootstrap_archives >= 1 and

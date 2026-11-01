@@ -91,3 +91,60 @@ a greeting, or whatever the kettle just told you.
 [Overview and usage](apps/greetjik/README.md) ·
 [Installation](apps/greetjik/README.md#build-and-install) ·
 [Motivation and benchmarks](apps/greetjik/README.md#motivation)
+
+## Local development and installation
+
+From this checkout, use the development runner to keep the installed application
+in sync before launching it:
+
+```sh
+bun run dev runtjik
+bun run dev mailtjik -- read
+bun run dev greetjik -- --help
+bun run dev --check runtjik
+```
+
+`dev` supports `mailtjik`, `notjik`, `tjikup`, `synctjik`, `greetjik`, `bartjik`,
+`runtjik`, and `tasktjik`. It fingerprints source content (including uncommitted
+and new files), workspace dependencies, shared build/install scripts, and the
+installed executables and runtime files. The first invocation establishes a
+receipt. Later invocations skip building and installing when both fingerprints
+match. Missing or changed installed files trigger repair. `--check` only reports
+freshness and exits 0 for current or 1 for an update needed.
+
+When stale, the runner installs locked Bun dependencies, builds the selected app
+and its workspace dependencies through Turbo, installs those local artifacts, and
+launches `~/.local/bin/<app>`. A user-wide lock serializes development installs,
+including shared dependencies. A failed command or a source edit during the
+build prevents launching and leaves no successful receipt. Receipts live in
+`$XDG_CACHE_HOME/tjikos/local-run` (normally `~/.cache/tjikos/local-run`). The runner
+uses the current checkout; it does not pull or push Git changes.
+
+Arguments after the app name are passed through literally; the separator `--` is
+optional. With no arguments, Mailtjik opens `read`, Runtjik and Tasktjik use
+`show`, and Tjikup/Synctjik show help instead of starting an update or sync.
+Notjik and Bartjik reuse an active user service, restarting it after an update;
+otherwise the runner replaces only that application's installed Quickshell UI.
+No archive workers are stopped. Existing app configuration and data are preserved.
+This is an explicit development mode; ordinary installed commands and desktop
+shortcuts continue launching the installed copy directly.
+
+For a full local installation:
+
+```sh
+bun install
+bun run install:local
+```
+
+This builds and installs all eight applications, including Runtjik, Bartjik and
+Tasktjik. It explicitly installs locally built Tjikup and Synctjik binaries. Their
+normal standalone installers still fetch pinned releases unless `--from-build`
+is supplied. To build and install only Runtjik and its dependency:
+
+```sh
+bun run build --filter=@tjikos/runtjik
+bash scripts/install.sh --from-build runtjik
+```
+
+Run `bun run test:local-run` to check freshness, repair, failure handling, and
+concurrent development invocations using isolated fixtures.

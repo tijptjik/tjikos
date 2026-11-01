@@ -157,6 +157,10 @@ runtjik quit            # fully stop and release memory
 runtjik --version
 ```
 
+From the workspace root, `bun run dev runtjik` checks source and installed files,
+builds and installs if needed, then opens the launcher. See the
+[local development workflow](../../README.md#local-development-and-installation).
+
 The shared `scripts/install.sh runtjik` entry point is also supported. Installation
 preserves an existing config. There is no startup service: the first request starts
 Quickshell and the Rust helper, which remain warm until `runtjik quit`, logout,

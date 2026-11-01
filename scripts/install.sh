@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+from_build=()
+if [[ "${1:-}" == --from-build ]]; then
+    from_build=(--from-build)
+    shift
+fi
 if (( $# == 0 )); then
-    set -- mailtjik notjik tjikup synctjik greetjik
+    set -- tasktjik mailtjik notjik tjikup synctjik greetjik bartjik runtjik
 fi
 # Validate all targets before installing any of them.
 for app in "$@"; do
@@ -29,14 +34,16 @@ for app in "$@"; do
             bash "$root_dir/apps/greetjik/scripts/install.sh"
             ;;
         synctjik)
-            bash "$root_dir/apps/synctjik/scripts/install.sh"
+            bash "$root_dir/apps/synctjik/scripts/install.sh" "${from_build[@]}"
             ;;
         tjikup)
-            bash "$root_dir/apps/tjikup/scripts/install.sh"
+            bash "$root_dir/apps/tjikup/scripts/install.sh" "${from_build[@]}"
             ;;
         mailtjik)
             install -d -m 755 "$HOME/.local/bin" "$HOME/.local/lib/mailtjik"
-            install -m 755 "$root_dir/apps/mailtjik/dist/mailtjik" "$HOME/.local/bin/mailtjik"
+            mail_binary="$(mktemp "$HOME/.local/bin/.mailtjik.XXXXXXXX")"
+            install -m 755 "$root_dir/apps/mailtjik/dist/mailtjik" "$mail_binary"
+            mv -f -- "$mail_binary" "$HOME/.local/bin/mailtjik"
             install -m 644 "$root_dir"/apps/mailtjik/dist/backend/*.py "$HOME/.local/lib/mailtjik/"
             bash "$root_dir/scripts/install-completions.sh" "$HOME/.local" mailtjik
             ;;
