@@ -12,6 +12,10 @@
       "name": "@tjikos/bartjik",
       "version": "0.1.0",
     },
+    "apps/gmailtjik": {
+      "name": "@tjikos/gmailtjik",
+      "version": "0.1.0",
+    },
     "apps/greetjik": {
       "name": "@tjikos/greetjik",
       "version": "0.1.0",
@@ -284,6 +288,8 @@
     "@speed-highlight/core": ["@speed-highlight/core@1.2.24", "", {}, "sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw=="],
 
     "@tjikos/bartjik": ["@tjikos/bartjik@workspace:apps/bartjik"],
+
+    "@tjikos/gmailtjik": ["@tjikos/gmailtjik@workspace:apps/gmailtjik"],
 
     "@tjikos/greetjik": ["@tjikos/greetjik@workspace:apps/greetjik"],
 

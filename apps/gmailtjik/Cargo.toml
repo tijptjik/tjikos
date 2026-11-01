@@ -1,0 +1,43 @@
+[package]
+name = "gmailtjik"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+blitz-dom = { version = "=0.3.0-beta.4", default-features = false, features = ["system-fonts", "floats"] }
+blitz-html = { version = "=0.3.0-beta.4", default-features = false }
+blitz-paint = { version = "=0.3.0-beta.4", default-features = false }
+blitz-traits = { version = "=0.3.0-beta.4", default-features = false }
+anyrender = "=0.14.0"
+anyrender_vello_cpu = { version = "=0.18.0", default-features = false }
+anyhow = "1"
+base64 = "0.22"
+chrono = "0.4"
+encoding_rs = "0.8"
+gpui-kit = "=0.8.1"
+html2text = "0.16"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+mail-builder = "0.4"
+mailparse = "0.16"
+rand = "0.9"
+regex = "1"
+notjik-sync = { path = "../../packages/notjik-sync" }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+scraper = "0.24"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+url = "2"
+webbrowser = "1"
+
+tempfile = "3"
+
+[dev-dependencies]
+
+[profile.dev]
+debug = 0
+
+[profile.release]
+strip = true

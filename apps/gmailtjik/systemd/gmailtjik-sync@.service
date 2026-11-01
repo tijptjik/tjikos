@@ -1,0 +1,16 @@
+[Unit]
+Description=Gmailtjik email sync and rules (%i)
+After=network-online.target notjik-sync.service
+
+[Service]
+Type=simple
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=%h/.config/gmailtjik/accounts/%i.env
+ExecStart=%h/.local/lib/gmailtjik/gmailtjik --sync
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

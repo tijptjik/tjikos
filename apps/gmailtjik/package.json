@@ -1,0 +1,13 @@
+{
+  "name": "@tjikos/gmailtjik",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "cargo build --locked --release && mkdir -p dist && cp target/release/gmailtjik dist/.gmailtjik.new && mv -f dist/.gmailtjik.new dist/gmailtjik",
+    "check": "cargo fmt --check && cargo check --locked",
+    "test": "cargo test --locked",
+    "test:ui": "python3 -B tests/ui_smoke.py dist/gmailtjik",
+    "test:codex": "cargo test --locked live_synthetic_proposal -- --ignored",
+    "demo": "cargo run --locked -- --demo"
+  }
+}
