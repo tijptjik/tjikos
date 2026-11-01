@@ -5,6 +5,58 @@ use clap::Parser;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{fs, path::PathBuf, process::Command};
+
+// Only expose numeric summaries, never protected filenames or raw diagnostics.
+fn command_failure(action: &str, code: i32, log: &std::path::Path) -> String {
+    let contents = fs::read_to_string(log).unwrap_or_default();
+    let count = |key: &str| -> Option<u64> {
+        let prefix = format!("summary:{key}:");
+        let values: Vec<_> = contents
+            .lines()
+            .filter_map(|line| line.strip_prefix(&prefix))
+            .collect();
+        (values.len() == 1)
+            .then(|| values[0].parse().ok())
+            .flatten()
+    };
+    let details = match (count("error_soft"), count("error_io"), count("error_data")) {
+        (Some(soft), Some(io), Some(data)) => {
+            let missing: Vec<_> = contents
+                .lines()
+                .filter_map(|line| line.strip_prefix("msg:error: Missing file '"))
+                .filter_map(|line| line.strip_suffix("'."))
+                .collect();
+            let missing_details = if soft > 0 && missing.len() as u64 == soft {
+                let unique: std::collections::BTreeSet<_> = missing.into_iter().collect();
+                format!(" ({} missing files)", unique.len())
+            } else {
+                String::new()
+            };
+            format!(": {soft} soft errors{missing_details}, {io} I/O errors, {data} data errors")
+        }
+        _ => String::new(),
+    };
+    format!(
+        "SnapRAID {action} failed (exit {code}){details}. Log: {}",
+        log.display()
+    )
+}
+
+fn run_maintenance(
+    r: &Runner,
+    action: &str,
+    log: &std::path::Path,
+    command: &mut Command,
+) -> Result<()> {
+    let (code, _) = r.guarded(command, None, true).map_err(|e| {
+        anyhow::anyhow!(
+            "SnapRAID {action} interrupted or could not run; log: {} ({e})",
+            log.display()
+        )
+    })?;
+    ensure!(code == 0, "{}", command_failure(action, code, log));
+    Ok(())
+}
 #[derive(Parser)]
 #[command(
     name = "synctjik snapraid",
@@ -268,21 +320,29 @@ impl Policy {
                     println!("Diff gate passed");
                     return Ok(());
                 }
-                r.run(
+                let log = self.log_dir.join(format!("{stamp}-sync.log"));
+                run_maintenance(
+                    r,
+                    "sync",
+                    &log,
                     Command::new("snapraid")
                         .arg("-c")
                         .arg(&self.snapraid_config)
                         .arg("-l")
-                        .arg(self.log_dir.join(format!("{stamp}-sync.log")))
+                        .arg(&log)
                         .arg("sync"),
                 )?;
             } else {
-                r.run(
+                let log = self.log_dir.join(format!("{stamp}-scrub.log"));
+                run_maintenance(
+                    r,
+                    "scrub",
+                    &log,
                     Command::new("snapraid")
                         .arg("-c")
                         .arg(&self.snapraid_config)
                         .arg("-l")
-                        .arg(self.log_dir.join(format!("{stamp}-scrub.log")))
+                        .arg(&log)
                         .args([
                             "-p",
                             &self.scrub_percent.to_string(),
@@ -409,6 +469,48 @@ pub fn main(args: &[String], r: &Runner) -> Result<()> {
 #[cfg(test)]
 mod review_tests {
     use super::*;
+    #[test]
+    fn failure_reports_counts_without_exposing_filenames() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("scrub.log");
+        fs::write(&log, "msg:error: Missing file '/private/secret'.\nmsg:error: Missing file '/private/secret'.\nsummary:error_soft:2\nsummary:error_io:0\nsummary:error_data:0\n").unwrap();
+        let message = command_failure("scrub", 1, &log);
+        assert!(message.contains("SnapRAID scrub failed (exit 1): 2 soft errors (1 missing files), 0 I/O errors, 0 data errors"));
+        assert!(message.contains(log.to_str().unwrap()));
+        assert!(!message.contains("secret"));
+        fs::write(
+            &log,
+            "summary:error_soft:2\nsummary:error_io:1\nsummary:error_data:3\n",
+        )
+        .unwrap();
+        let message = command_failure("scrub", 1, &log);
+        assert!(message.contains("2 soft errors, 1 I/O errors, 3 data errors"));
+        assert!(!message.contains("missing files"));
+    }
+    #[test]
+    fn failure_handles_missing_or_invalid_summary_without_claiming_clean_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("sync.log");
+        for contents in [None, Some("summary:error_soft:private-name\nsummary:error_io:0\nsummary:error_data:0\n"), Some("summary:error_soft:0\nsummary:error_soft:1\nsummary:error_io:0\nsummary:error_data:0\n")] {
+            if let Some(contents) = contents { fs::write(&log, contents).unwrap(); }
+            assert_eq!(command_failure("sync", 2, &log), format!("SnapRAID sync failed (exit 2). Log: {}", log.display()));
+        }
+    }
+    #[test]
+    fn failed_process_uses_snapraid_diagnostics() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("scrub.log");
+        let result = run_maintenance(
+            &Runner::new().unwrap(),
+            "scrub",
+            &log,
+            Command::new("sh").args(["-c", "exit 1"]),
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .starts_with("SnapRAID scrub failed (exit 1). Log:"));
+    }
     #[test]
     fn approval_is_bound_to_exact_removals_layout_and_age() {
         let layout = vec![vec!["data".into(), "d1".into(), "/disk".into()]];
