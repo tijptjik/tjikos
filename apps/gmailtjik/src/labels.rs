@@ -10,6 +10,7 @@ pub struct Row {
     pub depth: usize,
     pub children: bool,
     pub color: u32,
+    pub unread: u64,
 }
 
 // TjikOS rainbow: red, amber, green, cyan, blue, violet.
@@ -32,6 +33,13 @@ pub fn preference(path: &str, preferences: &Preferences) -> Visibility {
         }
     })
 }
+pub fn display_name(name: &str) -> String {
+    name.split('/')
+        .map(|part| if part == "AUTH" { "Auth" } else { part })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 fn rainbow(index: usize, count: usize) -> u32 {
     let position =
         index as f32 * (PALETTE.len() - 1) as f32 / count.saturating_sub(1).max(1) as f32;
@@ -86,6 +94,7 @@ pub fn visible_rows(
                 depth: 0,
                 children: false,
                 color: 0xa5a0ba,
+                unread: label.messages_unread,
             });
             continue;
         }
@@ -145,6 +154,7 @@ pub fn visible_rows(
         collapsed: &HashSet<String>,
         out: &mut Vec<Row>,
         colors: &BTreeMap<String, u32>,
+        labels: &[Label],
     ) {
         for (path, id) in folders {
             if path.rsplit_once('/').map(|(p, _)| p) != parent {
@@ -164,24 +174,121 @@ pub fn visible_rows(
                 .any(|p| p.rsplit_once('/').is_some_and(|(parent, _)| parent == path));
             out.push(Row {
                 path: path.clone(),
-                name: path.rsplit('/').next().unwrap_or(path).into(),
+                name: display_name(path.rsplit('/').next().unwrap_or(path)),
                 id: id.clone(),
                 depth,
                 children,
                 color,
+                unread: labels
+                    .iter()
+                    .find(|label| Some(&label.id) == id.as_ref())
+                    .map_or(0, |label| label.messages_unread),
             });
             if !collapsed.contains(path) {
-                append(Some(path), folders, collapsed, out, colors);
+                append(Some(path), folders, collapsed, out, colors, labels);
             }
         }
     }
-    append(None, &folders, collapsed, &mut roots, &colors);
+    append(None, &folders, collapsed, &mut roots, &colors, labels);
     roots
+}
+
+// Apply a confirmed message change once, before replacing its cached labels.
+pub fn update_unread(
+    labels: &mut [Label],
+    before: &crate::model::Message,
+    add: &[String],
+    remove: &[String],
+) {
+    let mut after = before.label_ids.clone();
+    after.retain(|id| !remove.contains(id));
+    for id in add {
+        if !after.contains(id) {
+            after.push(id.clone());
+        }
+    }
+    let was_unread = before.unread();
+    let is_unread = after.iter().any(|id| id == "UNREAD");
+    for label in labels {
+        let was_counted = was_unread && before.label_ids.contains(&label.id);
+        let is_counted = is_unread && after.contains(&label.id);
+        if was_counted && !is_counted {
+            label.messages_unread = label.messages_unread.saturating_sub(1);
+        } else if !was_counted && is_counted {
+            label.messages_unread = label.messages_unread.saturating_add(1);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn auth_display_keeps_original_paths_and_ids() {
+        let labels = vec![Label {
+            id: "label-1".into(),
+            name: "AUTH/Code".into(),
+            messages_unread: 2,
+        }];
+        let rows = visible_rows(&labels, &HashSet::new(), &Preferences::new(), true);
+        assert_eq!(rows[0].name, "Auth");
+        assert_eq!(rows[0].path, "AUTH");
+        assert_eq!(rows[1].id.as_deref(), Some("label-1"));
+        assert_eq!(display_name("AUTH/Code"), "Auth/Code");
+    }
+
+    #[test]
+    fn counts_follow_confirmed_read_and_archive_changes() {
+        let (mut labels, page) = crate::model::demo();
+        let before = &page.messages[0];
+        let inbox = labels
+            .iter()
+            .find(|l| l.id == "INBOX")
+            .unwrap()
+            .messages_unread;
+        update_unread(&mut labels, before, &[], &["INBOX".into()]);
+        assert_eq!(
+            labels
+                .iter()
+                .find(|l| l.id == "INBOX")
+                .unwrap()
+                .messages_unread,
+            inbox - 1
+        );
+        let mut labels = vec![Label {
+            id: "custom".into(),
+            name: "Custom".into(),
+            messages_unread: 1,
+        }];
+        let mut message = before.clone();
+        message.label_ids = vec!["custom".into(), "UNREAD".into()];
+        let preferences = Preferences::from([("Custom".into(), Visibility::Unread)]);
+        assert_eq!(
+            visible_rows(&labels, &HashSet::new(), &preferences, false)[0].unread,
+            1
+        );
+        update_unread(&mut labels, &message, &[], &["UNREAD".into()]);
+        assert!(visible_rows(&labels, &HashSet::new(), &preferences, false).is_empty());
+        assert_eq!(
+            visible_rows(&labels, &HashSet::new(), &preferences, true)[0].unread,
+            0
+        );
+    }
+
+    #[test]
+    fn parent_visibility_includes_descendants_without_inventing_an_aggregate_count() {
+        let labels = vec![Label {
+            id: "child".into(),
+            name: "Parent/Child".into(),
+            messages_unread: 3,
+        }];
+        let preferences = Preferences::from([("Parent".into(), Visibility::Unread)]);
+        let rows = visible_rows(&labels, &HashSet::new(), &preferences, false);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].unread, 0); // No Gmail label exists for this structural parent.
+        assert_eq!(rows[1].unread, 3);
+    }
+
     #[test]
     fn nested_holders_preserve_ids_and_inherit_lighter_colors() {
         let labels = vec![

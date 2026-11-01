@@ -132,6 +132,12 @@ impl Store {
         self.db.execute("DELETE FROM messages", [])?;
         Ok(())
     }
+    pub fn invalidate_mail_views(&self) -> Result<()> {
+        self.db.execute_batch(
+            "DELETE FROM messages; DELETE FROM searches; DELETE FROM kv WHERE key LIKE 'thread:%';",
+        )?;
+        Ok(())
+    }
     pub fn apply_labels(&self, id: &str, add: &[String], remove: &[String]) -> Result<()> {
         let mut stmt = self.db.prepare("SELECT key,value FROM searches")?;
         let rows = stmt
@@ -154,9 +160,10 @@ impl Store {
                     }
                 }
             }
-            if !label.is_empty() {
-                page.messages.retain(|m| m.label_ids.contains(&label));
-            }
+            page.messages.retain(|m| {
+                (label.is_empty() || m.label_ids.contains(&label))
+                    && (label == "TRASH" || !m.label_ids.iter().any(|l| l == "TRASH"))
+            });
             self.save_page(&key, &page)?;
         }
         self.invalidate(id)
@@ -258,6 +265,35 @@ mod tests {
         fs::write(dir.path().join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
         assert!(private_dir(&dir.path().join("mail")).is_err());
         assert!(!dir.path().join("mail").exists());
+    }
+    #[test]
+    fn trashed_mail_leaves_cached_views_and_searches() {
+        let store = Store::open(None).unwrap();
+        let page = crate::model::demo().1;
+        for label in ["INBOX", "", "STARRED", "TRASH"] {
+            store
+                .save_page(&crate::worker::key(label, "", ""), &page)
+                .unwrap();
+        }
+        let search = crate::worker::key("", "synthetic", "");
+        store.save_page(&search, &page).unwrap();
+        store
+            .apply_labels("demo-0", &["TRASH".into()], &["INBOX".into()])
+            .unwrap();
+        for label in ["INBOX", "", "STARRED"] {
+            let page = store
+                .page(&crate::worker::key(label, "", ""))
+                .unwrap()
+                .unwrap();
+            assert!(page.messages.iter().all(|message| message.id != "demo-0"));
+        }
+        assert!(store.page(&search).unwrap().is_none());
+        let trash = store
+            .page(&crate::worker::key("TRASH", "", ""))
+            .unwrap()
+            .unwrap();
+        assert_eq!(trash.messages.len(), 1);
+        assert_eq!(trash.messages[0].id, "demo-0");
     }
     #[test]
     fn archived_mail_does_not_reappear_from_a_cached_inbox() {

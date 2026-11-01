@@ -50,6 +50,57 @@ with private_compositor(isolate_pointer=True):
                 time.sleep(.3)
                 subprocess.run(["grim", "-o", "GMAIL", str(root / name)], check=True)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "list-actions":
+                click(285, 145)
+                capture("unread-only.png")
+                click(400, 145)
+                capture("all-read.png")
+                click(285, 145)
+                capture("filter-off.png")
+                for before, after in [("inbox.png", "unread-only.png"), ("unread-only.png", "all-read.png"), ("all-read.png", "filter-off.png")]:
+                    assert (root / before).read_bytes() != (root / after).read_bytes(), (before, after)
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "label-counts":
+                click(885, 106)
+                capture("counts-after-read.png")
+                click(100, 912)
+                capture("manage-labels.png")
+                click(195, 137)
+                capture("label-visibility.png")
+                assert (root / "inbox.png").read_bytes() != (root / "counts-after-read.png").read_bytes()
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "action-buttons":
+                click(805, 106)
+                capture("delete-button.png")
+                click(80, 342)
+                capture("trash-folder-after-button.png")
+                assert (root / "inbox.png").read_bytes() != (root / "delete-button.png").read_bytes()
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "actions":
+                subprocess.run(["wtype", "-s", "150", "-k", "Escape", "r", "Reply body: r a d stay as text."], check=True)
+                capture("reply-focused.png")
+                subprocess.run(["wtype", "-s", "150", "-k", "Escape", "r", " Resumed."], check=True)
+                capture("reply-resumed.png")
+                subprocess.run(["wtype", "-s", "150", "-k", "Escape", "a"], check=True)
+                capture("archived.png")
+                subprocess.run(["wtype", "-s", "150", "d"], check=True)
+                capture("trashed.png")
+                # Draft protection: replying to the next message must retain the old draft.
+                subprocess.run(["wtype", "-s", "150", "r"], check=True)
+                capture("draft-protected.png")
+                click(80, 342)
+                capture("trash-folder.png")
+                for before, after in [("reply-focused.png", "reply-resumed.png"), ("archived.png", "trashed.png")]:
+                    assert (root / before).read_bytes() != (root / after).read_bytes(), (before, after)
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "settings-layout":
                 capture("mail-sidebar.png")
                 click(55, 945)

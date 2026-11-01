@@ -6,7 +6,7 @@ use crate::{
 };
 use gpui_kit::base::Disableable;
 use gpui_kit::component::{
-    Sizable, Theme, ThemeMode,
+    Icon, Sizable, Theme, ThemeMode,
     button::{Button, ButtonVariants},
     input::{Input, InputEvent, InputState, Textarea, TextareaState},
     resizable::{ResizableState, h_resizable, resizable_panel},
@@ -30,6 +30,30 @@ const TEXT: u32 = 0xe5e5e5;
 const MUTED: u32 = 0xa5a0ba;
 const ACCENT: u32 = 0xff53a6;
 const BORDER: u32 = 0x393546;
+
+fn proicon(name: &str) -> Icon {
+    let bytes: &[u8] = match name {
+        "archive" => include_bytes!("../assets/proicons/archive.svg"),
+        "arrow-left" => include_bytes!("../assets/proicons/arrow-left.svg"),
+        "arrow-reply" => include_bytes!("../assets/proicons/arrow-reply.svg"),
+        "arrow-right" => include_bytes!("../assets/proicons/arrow-right.svg"),
+        "arrow-sync" => include_bytes!("../assets/proicons/arrow-sync.svg"),
+        "chevron-down" => include_bytes!("../assets/proicons/chevron-down.svg"),
+        "chevron-right" => include_bytes!("../assets/proicons/chevron-right.svg"),
+        "compose" => include_bytes!("../assets/proicons/compose.svg"),
+        "delete" => include_bytes!("../assets/proicons/delete.svg"),
+        "folder" => include_bytes!("../assets/proicons/folder.svg"),
+        "mail" => include_bytes!("../assets/proicons/mail.svg"),
+        "mail-open" => include_bytes!("../assets/proicons/mail-open.svg"),
+        "open" => include_bytes!("../assets/proicons/open.svg"),
+        "send" => include_bytes!("../assets/proicons/send.svg"),
+        "settings" => include_bytes!("../assets/proicons/settings.svg"),
+        "sparkle" => include_bytes!("../assets/proicons/sparkle.svg"),
+        "star" => include_bytes!("../assets/proicons/star.svg"),
+        _ => unreachable!("Unknown Proicon"),
+    };
+    Icon::default().data(bytes)
+}
 
 pub fn theme(cx: &mut App) {
     Theme::change(ThemeMode::Dark, None, cx);
@@ -95,6 +119,8 @@ pub struct MailApp {
     selected: Option<Message>,
     label: String,
     query: String,
+    unread_only: bool,
+    marking_all_read: bool,
     page_token: String,
     previous: Vec<String>,
     ticket: u64,
@@ -392,6 +418,8 @@ impl MailApp {
             selected,
             label: "INBOX".into(),
             query: String::new(),
+            unread_only: false,
+            marking_all_read: false,
             page_token: String::new(),
             previous: vec![],
             ticket: 0,
@@ -483,7 +511,20 @@ impl MailApp {
                 cx.notify();
                 return;
             }
+            if event.keystroke.modifiers.control
+                || event.keystroke.modifiers.alt
+                || event.keystroke.modifiers.platform
+            {
+                return;
+            }
             match key {
+                "r" => {
+                    if let Some(message) = self.selected.clone() {
+                        self.reply(&message, window, cx);
+                    }
+                }
+                "a" => self.archive_selected(cx),
+                "d" => self.trash_selected(cx),
                 "s" if self.zone == 0 => {
                     self.label_menu = Some(self.label_cursor.clone());
                     self.label_menu_index = 0;
@@ -553,6 +594,43 @@ impl MailApp {
         cx.stop_propagation();
         cx.notify();
     }
+    fn reply(&mut self, message: &Message, window: &mut Window, cx: &mut Context<Self>) {
+        let reply = Draft::reply(message);
+        let has_draft = self.draft != Draft::default();
+        let same_reply = !reply.in_reply_to.is_empty()
+            && self.draft.in_reply_to == reply.in_reply_to
+            && self.draft.thread_id == reply.thread_id;
+        if has_draft && !same_reply {
+            self.status = "Finish or clear your current draft before starting a reply.".into();
+        } else {
+            if !same_reply {
+                self.set_draft(reply, window, cx);
+            }
+            self.composing = true;
+            self.body.read(cx).focus_handle(cx).focus(window, cx);
+        }
+        cx.notify();
+    }
+    fn archive_selected(&mut self, cx: &mut Context<Self>) {
+        if let Some(message) = &self.selected {
+            self.modify(message.id.clone(), vec![], vec!["INBOX".into()], cx);
+        }
+    }
+    fn trash_selected(&mut self, cx: &mut Context<Self>) {
+        if let Some(message) = &self.selected {
+            if message.label_ids.iter().any(|label| label == "TRASH") {
+                return;
+            }
+            let id = message.id.clone();
+            if self.demo {
+                self.modified(&id, &["TRASH".into()], &["INBOX".into()], cx);
+            } else {
+                self.status = "Moving email to Trash…".into();
+                self.dispatch(Command::Trash(id));
+            }
+            cx.notify();
+        }
+    }
     fn changed(&mut self, cx: &mut Context<Self>) {
         self.draft.to = self.to.read(cx).value().to_string();
         self.draft.cc = self.cc.read(cx).value().to_string();
@@ -588,6 +666,7 @@ impl MailApp {
                 self.error="Gmail connection is unavailable. Restart gmailtjik after checking your connection.".into();
                 self.loading = false;
                 self.compose_busy = false;
+                self.marking_all_read = false;
             }
         }
     }
@@ -595,13 +674,20 @@ impl MailApp {
         self.ticket += 1;
         self.error.clear();
         self.images.clear();
+        let query = if self.unread_only {
+            crate::google::unread_query(&self.query)
+        } else {
+            self.query.clone()
+        };
         if self.demo {
             let mut page = Page {
                 messages: self.demo_messages.clone(),
                 next: String::new(),
             };
             page.messages.retain(|m| {
-                (self.label.is_empty() || m.label_ids.contains(&self.label))
+                (!self.unread_only || m.unread())
+                    && (self.label.is_empty() || m.label_ids.contains(&self.label))
+                    && (self.label == "TRASH" || !m.label_ids.iter().any(|l| l == "TRASH"))
                     && (self.query.is_empty()
                         || format!("{} {} {}", m.subject(), m.header("From"), m.text())
                             .to_lowercase()
@@ -610,13 +696,13 @@ impl MailApp {
             self.page = page;
             self.selected = self.page.messages.first().cloned();
             self.status = "Demo · synthetic mail · plain-text search".into();
-            self.demo_image();
+            self.refresh_reader();
         } else {
             self.loading = true;
             self.status = "Syncing with Gmail…".into();
             if let Ok(Some(page)) =
                 self.store
-                    .page(&worker::key(&self.label, &self.query, &self.page_token))
+                    .page(&worker::key(&self.label, &query, &self.page_token))
             {
                 self.page = page;
                 self.selected = self.page.messages.first().cloned();
@@ -627,11 +713,46 @@ impl MailApp {
             self.dispatch(Command::Load {
                 ticket: self.ticket,
                 label: self.label.clone(),
-                query: self.query.clone(),
+                query,
                 page: self.page_token.clone(),
             });
         }
         self.last_sync = Instant::now();
+        cx.notify();
+    }
+    fn mark_all_read(&mut self, cx: &mut Context<Self>) {
+        if self.marking_all_read {
+            return;
+        }
+        if self.demo {
+            let ids: Vec<_> = self
+                .demo_messages
+                .iter()
+                .filter(|m| {
+                    m.unread()
+                        && (self.label.is_empty() || m.label_ids.contains(&self.label))
+                        && (self.label == "TRASH" || !m.label_ids.iter().any(|l| l == "TRASH"))
+                        && (self.query.is_empty()
+                            || format!("{} {} {}", m.subject(), m.header("From"), m.text())
+                                .to_lowercase()
+                                .contains(&self.query.to_lowercase()))
+                })
+                .map(|m| m.id.clone())
+                .collect();
+            for id in &ids {
+                self.modified(id, &[], &["UNREAD".into()], cx);
+            }
+            self.load(cx);
+            self.status = format!("Marked {} messages read", ids.len());
+        } else {
+            self.marking_all_read = true;
+            self.error.clear();
+            self.status = "Marking all matching unread mail as read…".into();
+            self.dispatch(Command::MarkAllRead {
+                label: self.label.clone(),
+                query: self.query.clone(),
+            });
+        }
         cx.notify();
     }
     fn refresh_reader(&mut self) {
@@ -706,6 +827,16 @@ impl MailApp {
             .is_some_and(|message| message.id == id);
         let archived = remove.iter().any(|label| label == "INBOX");
         let successor = successor(&self.page.messages, id);
+        if let Some(before) = self
+            .page
+            .messages
+            .iter()
+            .chain(self.selected.iter())
+            .chain(self.demo_messages.iter())
+            .find(|m| m.id == id)
+        {
+            crate::labels::update_unread(&mut self.labels, before, add, remove);
+        }
 
         for message in self
             .page
@@ -723,11 +854,11 @@ impl MailApp {
                 }
             }
         }
-        if !self.label.is_empty() {
-            self.page
-                .messages
-                .retain(|m| m.label_ids.contains(&self.label));
-        }
+        self.page.messages.retain(|m| {
+            (!self.unread_only || m.unread())
+                && (self.label.is_empty() || m.label_ids.contains(&self.label))
+                && (self.label == "TRASH" || !m.label_ids.iter().any(|l| l == "TRASH"))
+        });
         let selection_removed =
             selected_target && !self.page.messages.iter().any(|message| message.id == id);
         if selected_target && (archived || selection_removed) {
@@ -777,6 +908,16 @@ impl MailApp {
         let notify = !events.is_empty();
         for event in events {
             match event {
+                Event::AllRead(result) => {
+                    self.marking_all_read = false;
+                    self.page_token.clear();
+                    self.previous.clear();
+                    self.load(cx);
+                    match result {
+                        Ok(count) => self.status = format!("Marked {count} messages read"),
+                        Err(error) => self.error = error,
+                    }
+                }
                 Event::Connected => {
                     self.connecting = false;
                     self.error.clear();
@@ -788,6 +929,7 @@ impl MailApp {
                 }
                 Event::Inbox(page) => {
                     if self.label == "INBOX"
+                        && !self.unread_only
                         && self.query.is_empty()
                         && self.page_token.is_empty()
                         && !self.loading
@@ -833,6 +975,7 @@ impl MailApp {
                     self.loading = false;
                 }
                 Event::Error(error) => {
+                    self.marking_all_read = false;
                     self.error = error;
                 }
                 Event::Modified { id, add, remove } => {
@@ -1300,7 +1443,8 @@ impl MailApp {
                     .child(
                         Button::new("back-to-mail")
                             .ghost()
-                            .label("← Back to mail")
+                            .icon(proicon("arrow-left"))
+                            .label("Back to mail")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.capture_rule(cx);
                                 this.settings = false;
@@ -1572,39 +1716,14 @@ impl MailApp {
             .gap_2()
             .bg(rgb(BG))
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .py_4()
-                    .child(
-                        img(Arc::new(Image::from_bytes(
-                            ImageFormat::Svg,
-                            include_bytes!("../assets/gmailtjik.svg").to_vec(),
-                        )))
-                        .w(px(32.))
-                        .h(px(32.)),
-                    )
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child("gmailtjik"),
-                    ),
-            )
-            .child(
-                Button::new("compose")
-                    .primary()
-                    .label(if self.composing {
-                        "Continue draft"
-                    } else {
-                        "＋  Compose"
-                    })
-                    .w_full()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.composing = true;
-                        cx.notify();
-                    })),
+                div().flex().items_center().gap_2().h(px(28.)).child(
+                    img(Arc::new(Image::from_bytes(
+                        ImageFormat::Svg,
+                        include_bytes!("../assets/gmailtjik.svg").to_vec(),
+                    )))
+                    .size(px(28.))
+                    .flex_shrink_0(),
+                ),
             )
             .child(
                 div()
@@ -1638,15 +1757,16 @@ impl MailApp {
             let color = label.color;
             let expanded = !self.collapsed_labels.contains(&path);
             let icon = match id.as_str() {
-                "INBOX" => "▤",
-                "STARRED" => "☆",
-                "SENT" => "↗",
-                "DRAFT" => "▧",
-                "TRASH" => "⌫",
-                _ => "·",
+                "INBOX" => "mail",
+                "STARRED" => "star",
+                "SENT" => "send",
+                "DRAFT" => "compose",
+                "TRASH" => "delete",
+                _ => "folder",
             };
             let menu_path = path.clone();
             let context_path = path.clone();
+            let manage_path = path.clone();
             navigation = navigation.child(
                 div()
                     .id(SharedString::from(format!("label-{path}")))
@@ -1680,11 +1800,18 @@ impl MailApp {
                             .w_4()
                             .flex_shrink_0()
                             .text_color(rgb(color))
-                            .child(if label.children {
-                                if expanded { "▾" } else { "▸" }
-                            } else {
-                                icon
-                            })
+                            .child(
+                                proicon(if label.children {
+                                    if expanded {
+                                        "chevron-down"
+                                    } else {
+                                        "chevron-right"
+                                    }
+                                } else {
+                                    icon
+                                })
+                                .small(),
+                            )
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 if label.children {
                                     this.zone = 0;
@@ -1716,7 +1843,30 @@ impl MailApp {
                                 this.page_token.clear();
                                 this.load(cx);
                             })),
-                    ),
+                    )
+                    .when(label.unread > 0, |row| {
+                        row.child(
+                            div()
+                                .flex_shrink_0()
+                                .text_xs()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(label.unread.to_string()),
+                        )
+                    })
+                    .when(self.show_hidden_labels, |row| {
+                        row.child(
+                            Button::new(SharedString::from(format!("manage-{manage_path}")))
+                                .ghost()
+                                .small()
+                                .icon(proicon("settings"))
+                                .tooltip("Label visibility")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.label_menu = Some(manage_path.clone());
+                                    this.label_menu_index = 0;
+                                    cx.notify();
+                                })),
+                        )
+                    }),
             );
             if self.label_menu.as_deref() == Some(&menu_path) {
                 let selected = crate::labels::preference(&menu_path, &self.label_visibility);
@@ -1730,8 +1880,8 @@ impl MailApp {
                     .border_color(rgb(BORDER))
                     .rounded_lg();
                 for (index, (title, mode)) in [
-                    ("Visible", crate::labels::Visibility::Visible),
-                    ("Visible when new mail", crate::labels::Visibility::Unread),
+                    ("Always show", crate::labels::Visibility::Visible),
+                    ("Only when unread", crate::labels::Visibility::Unread),
                     ("Hidden", crate::labels::Visibility::Hidden),
                 ]
                 .into_iter()
@@ -1780,7 +1930,7 @@ impl MailApp {
                 div().flex().items_center().child(
                     Button::new("settings")
                         .ghost()
-                        .icon(assets::IconName::Settings)
+                        .icon(proicon("settings"))
                         .tooltip("Settings")
                         .w(px(36.))
                         .h(px(36.))
@@ -1799,7 +1949,7 @@ impl MailApp {
             self.labels
                 .iter()
                 .find(|l| l.id == self.label)
-                .map(|l| l.name.clone())
+                .map(|l| crate::labels::display_name(&l.name))
                 .unwrap_or_else(|| "Inbox".into())
         };
         div()
@@ -1827,10 +1977,29 @@ impl MailApp {
                         Button::new("refresh")
                             .ghost()
                             .small()
-                            .label("↻")
+                            .icon(proicon("arrow-sync"))
+                            .tooltip("Refresh mail")
                             .disabled(self.loading)
                             .on_click(cx.listener(|this, _, _, cx| this.load(cx))),
                     ),
+            )
+            .child(
+                div().flex().flex_wrap().gap_2().px_4().pb_3()
+                    .child(Button::new("unread-only").small().icon(proicon("mail"))
+                        .label("Unread").tooltip("Show unread emails only")
+                        .bg(rgb(if self.unread_only { ACCENT } else { RAISED }))
+                        .text_color(rgb(if self.unread_only { BG } else { TEXT }))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.unread_only = !this.unread_only;
+                            this.page_token.clear();
+                            this.previous.clear();
+                            this.load(cx);
+                        })))
+                    .child(Button::new("mark-all-read").small().ghost().icon(proicon("mail-open"))
+                        .label(if self.marking_all_read { "Marking read…" } else { "Mark all read" })
+                        .tooltip("Mark all unread messages in this label or search as read, across all pages")
+                        .disabled(self.marking_all_read || self.loading)
+                        .on_click(cx.listener(|this, _, _, cx| this.mark_all_read(cx))))
             )
             .child(
                 div()
@@ -1928,7 +2097,8 @@ impl MailApp {
                         Button::new("previous")
                             .ghost()
                             .small()
-                            .label("← Newer")
+                            .icon(proicon("arrow-left"))
+                            .label("Newer")
                             .disabled(self.previous.is_empty() || self.loading)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 if let Some(token) = this.previous.pop() {
@@ -1941,7 +2111,8 @@ impl MailApp {
                         Button::new("next")
                             .ghost()
                             .small()
-                            .label("Older →")
+                            .icon(proicon("arrow-right"))
+                            .label("Older")
                             .disabled(self.page.next.is_empty() || self.loading)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.previous.push(this.page_token.clone());
@@ -1974,92 +2145,103 @@ impl MailApp {
         let id = message.id.clone();
         let unread = message.unread();
         let starred = message.label_ids.iter().any(|l| l == "STARRED");
-        let archive_id = id.clone();
         let read_id = id.clone();
-        let mut reader =
-            div()
-                .id("reader")
-                .track_scroll(&self.reader_scroll)
-                .flex()
-                .flex_col()
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scroll()
-                .p_6()
-                .gap_4()
-                .child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .child(Button::new("reply").label("↩ Reply").on_click(cx.listener(
-                            |this, _, window, cx| {
-                                if this.composing
-                                    && (!this.draft.to.is_empty() || !this.draft.body.is_empty())
-                                {
-                                    this.status =
-                                    "Finish or clear your current draft before starting a reply."
-                                        .into();
-                                } else if let Some(m) = &this.selected {
-                                    this.set_draft(Draft::reply(m), window, cx);
+        let mut reader = div()
+            .id("reader")
+            .track_scroll(&self.reader_scroll)
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .p_6()
+            .gap_4()
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .flex_wrap()
+                    .child(
+                        Button::new("reply")
+                            .icon(proicon("arrow-reply"))
+                            .label("Reply")
+                            .tooltip("Reply (r)")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if let Some(message) = this.selected.clone() {
+                                    this.reply(&message, window, cx);
                                 }
-                                cx.notify();
-                            },
-                        )))
-                        .child(Button::new("archive").ghost().label("Archive").on_click(
-                            cx.listener(move |this, _, _, cx| {
-                                this.modify(archive_id.clone(), vec![], vec!["INBOX".into()], cx)
-                            }),
-                        ))
-                        .child(
-                            Button::new("read-state")
-                                .ghost()
-                                .label(if unread { "Mark read" } else { "Mark unread" })
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.modify(
-                                        read_id.clone(),
-                                        if unread {
-                                            vec![]
-                                        } else {
-                                            vec!["UNREAD".into()]
-                                        },
-                                        if unread {
-                                            vec!["UNREAD".into()]
-                                        } else {
-                                            vec![]
-                                        },
-                                        cx,
-                                    )
-                                })),
-                        )
-                        .child(
-                            Button::new("star")
-                                .ghost()
-                                .label(if starred { "★" } else { "☆" })
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.modify(
-                                        id.clone(),
-                                        if starred {
-                                            vec![]
-                                        } else {
-                                            vec!["STARRED".into()]
-                                        },
-                                        if starred {
-                                            vec!["STARRED".into()]
-                                        } else {
-                                            vec![]
-                                        },
-                                        cx,
-                                    )
-                                })),
-                        ),
-                )
-                .child(
-                    div()
-                        .mt_3()
-                        .text_2xl()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(message.subject()),
-                );
+                            })),
+                    )
+                    .child(
+                        Button::new("archive")
+                            .ghost()
+                            .icon(proicon("archive"))
+                            .label("Archive")
+                            .tooltip("Archive (a)")
+                            .on_click(cx.listener(|this, _, _, cx| this.archive_selected(cx))),
+                    )
+                    .child(
+                        Button::new("trash")
+                            .ghost()
+                            .icon(proicon("delete"))
+                            .label("Delete")
+                            .tooltip("Move to Trash (d)")
+                            .disabled(message.label_ids.iter().any(|l| l == "TRASH"))
+                            .on_click(cx.listener(|this, _, _, cx| this.trash_selected(cx))),
+                    )
+                    .child(
+                        Button::new("read-state")
+                            .ghost()
+                            .icon(proicon(if unread { "mail-open" } else { "mail" }))
+                            .label(if unread { "Mark read" } else { "Mark unread" })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.modify(
+                                    read_id.clone(),
+                                    if unread {
+                                        vec![]
+                                    } else {
+                                        vec!["UNREAD".into()]
+                                    },
+                                    if unread {
+                                        vec!["UNREAD".into()]
+                                    } else {
+                                        vec![]
+                                    },
+                                    cx,
+                                )
+                            })),
+                    )
+                    .child(
+                        Button::new("star")
+                            .ghost()
+                            .icon(proicon("star"))
+                            .text_color(rgb(if starred { ACCENT } else { TEXT }))
+                            .tooltip(if starred { "Unstar" } else { "Star" })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.modify(
+                                    id.clone(),
+                                    if starred {
+                                        vec![]
+                                    } else {
+                                        vec!["STARRED".into()]
+                                    },
+                                    if starred {
+                                        vec!["STARRED".into()]
+                                    } else {
+                                        vec![]
+                                    },
+                                    cx,
+                                )
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .mt_3()
+                    .text_2xl()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(message.subject()),
+            );
         reader = reader.child(
             div()
                 .flex()
@@ -2249,8 +2431,9 @@ impl MailApp {
                                     )))
                                     .ghost()
                                     .small()
+                                    .icon(proicon("open"))
                                     .label(format!(
-                                        "↗ {}",
+                                        "{}",
                                         if label.trim().is_empty() { &url } else { label }
                                     ))
                                     .on_click(move |_, _, cx| cx.open_url(&url)),
@@ -2304,18 +2487,10 @@ impl MailApp {
                 Button::new(SharedString::from(format!("reply-{id}")))
                     .ghost()
                     .small()
+                    .icon(proicon("arrow-reply"))
                     .label("Reply to this message")
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        if this.composing
-                            && (!this.draft.to.is_empty() || !this.draft.body.is_empty())
-                        {
-                            this.status =
-                                "Finish or clear your current draft before starting a reply."
-                                    .into();
-                        } else {
-                            this.set_draft(Draft::reply(&reply), window, cx);
-                        }
-                        cx.notify();
+                        this.reply(&reply, window, cx);
                     })),
             );
             if !self.auto_images
@@ -2847,7 +3022,7 @@ impl MailApp {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(div().text_color(rgb(ACCENT)).child("✦"))
+                    .child(proicon("sparkle").text_color(rgb(ACCENT)))
                     .child(
                         div()
                             .text_sm()
@@ -2978,9 +3153,27 @@ impl Render for MailApp {
                     ))
                     .when(self.shortcuts, |d| d.child(
                         div().p_4().rounded_lg().bg(rgb(RAISED))
-                            .child("Keyboard shortcuts · ? help · Esc return to navigation · ←/→ labels / messages / reader · ↑/↓ select · Enter/Space fold folder · d default address in suggestions · S label visibility · Ctrl+F search · Ctrl+N compose")
+                            .child("Keyboard shortcuts · ? help · Esc return to navigation · ←/→ labels / messages / reader · ↑/↓ select · Enter/Space fold folder · r reply · a archive · d move to Trash (default address in suggestions) · S label visibility · Ctrl+F search · Ctrl+N compose")
                     ))
-                    .child(Input::new(&self.search).h(px(42.)))
+                    .child(
+                        div().flex().items_center().gap_3()
+                            .child(div().flex_1().min_w_0().child(Input::new(&self.search)))
+                    .child(
+                        Button::new("compose")
+                            .primary()
+                            .icon(proicon("compose"))
+                            .label(if self.composing {
+                                "Continue draft"
+                            } else {
+                                "Compose"
+                            })
+                            .flex_shrink_0()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.composing = true;
+                                cx.notify();
+                            })),
+                    )
+                    )
                     .child(
                         div().flex().flex_1().min_h_0().child(
                         h_resizable("mail-panes").with_state(&self.panes)

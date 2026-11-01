@@ -6,7 +6,7 @@ GPUI Kit's native inputs and GPU renderer; it does not use Quickshell/Qt.
 The first version includes a label sidebar, a virtualized inbox, a readable
 message view, Gmail search with pagination, and a plain-text composer with To,
 Cc, Bcc, reply threading, local draft recovery, Gmail draft saving, and sending.
-Archive, star, and read/unread changes go through Gmail. UI and network work run
+Archive, move to Trash, star, and read/unread changes go through Gmail. UI and network work run
 on separate threads. Recent pages are cached in SQLite; Gmail history
 invalidates changed messages, including recovery when a history cursor expires.
 
@@ -217,6 +217,11 @@ AUTH, Closed, Offers and Personal default to the unread mode. **Manage labels**
 reveals hidden labels so these choices can be reversed. YELLOW_STAR/YELLOR_STAR
 are suppressed because Starred already represents them.
 
+The UI uses bundled Proicons. Outside text inputs, `r` replies to the selected
+email and focuses the composer body, `a` archives it, and `d` moves it to Trash.
+Delete also moves to Trash; it never permanently deletes mail. Existing drafts
+are preserved, and replying again to the same message resumes its draft.
+
 Press `?` outside an input for the shortcut guide. Escape returns focus to
 navigation. Left/Right moves between labels, messages and reader; Up/Down selects
 a label/message or scrolls the reader. Ctrl+F focuses search and Ctrl+N opens the
@@ -304,3 +309,13 @@ References: [Gmail search](https://developers.google.com/workspace/gmail/api/gui
 Synthetic HTML and divider check: `GMAILTJIK_DEMO_SCENE=html bun run --cwd apps/gmailtjik test:ui`.
 
 Install the built app with `bash scripts/install.sh gmailtjik` from the workspace root. This installs `~/.local/bin/gmailtjik`, its desktop entry and the approved rose icon for launcher discovery.
+
+Sidebar badges show Gmail unread message counts for each label. Right-click a label,
+or choose Manage labels and its settings icon, to select Always show, Only when
+unread, or Hidden. Manage labels also reveals hidden labels so these preferences
+can be changed. Counts update after confirmed mailbox actions and during sync.
+
+The message-list header offers an Unread toggle for the current label/search and
+Mark all read for every matching unread message across all result pages. The
+filter does not change the search text. Bulk changes remove only the UNREAD
+label, preserve mail and drafts, and report failed or partially completed batches.

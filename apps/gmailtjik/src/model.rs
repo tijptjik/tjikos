@@ -291,7 +291,7 @@ pub struct Page {
 }
 
 pub fn demo() -> (Vec<Label>, Page) {
-    let labels = [
+    let mut labels: Vec<Label> = [
         ("INBOX", "Inbox"),
         ("STARRED", "Starred"),
         ("SENT", "Sent"),
@@ -387,6 +387,12 @@ pub fn demo() -> (Vec<Label>, Page) {
         messages[0].payload.mime_type = "text/html".into();
         messages[0].payload.body.data =
             URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-email.html"));
+    }
+    for label in &mut labels {
+        label.messages_unread = messages
+            .iter()
+            .filter(|message| message.unread() && message.label_ids.contains(&label.id))
+            .count() as u64;
     }
     (
         labels,

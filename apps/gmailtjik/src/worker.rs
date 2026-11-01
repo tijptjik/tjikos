@@ -22,6 +22,11 @@ pub enum Command {
         add: Vec<String>,
         remove: Vec<String>,
     },
+    MarkAllRead {
+        label: String,
+        query: String,
+    },
+    Trash(String),
     ContactPhotos(Vec<String>),
     Contacts {
         query: String,
@@ -35,6 +40,7 @@ pub enum Command {
     Send(Draft),
 }
 pub enum Event {
+    AllRead(std::result::Result<usize, String>),
     SyncComplete,
     ContactBook(Vec<Contact>),
     ContactPhoto {
@@ -308,6 +314,26 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                         }
                         Command::Modify { id, add, remove } => {
                             google.modify(&id, &add, &remove)?;
+                            store.apply_labels(&id, &add, &remove)?;
+                            let _ = events.send(Event::Modified { id, add, remove });
+                        }
+                        Command::MarkAllRead { label, query } => {
+                            let result = google
+                                .mark_all_read(&store, &label, &query)
+                                .map_err(|e| e.to_string());
+                            if let Ok(labels) = google.labels() {
+                                let _ = store.put("labels", &labels);
+                                let _ = events.send(Event::Ready {
+                                    labels,
+                                    email: email.clone(),
+                                });
+                            }
+                            let _ = events.send(Event::AllRead(result));
+                        }
+                        Command::Trash(id) => {
+                            google.trash(&id)?;
+                            let add = vec!["TRASH".into()];
+                            let remove = vec!["INBOX".into()];
                             store.apply_labels(&id, &add, &remove)?;
                             let _ = events.send(Event::Modified { id, add, remove });
                         }

@@ -165,6 +165,9 @@ impl Google {
         if !label.is_empty() {
             params.push(("labelIds", label));
         }
+        if label == "TRASH" || label == "SPAM" {
+            params.push(("includeSpamTrash", "true"));
+        }
         if !page.is_empty() {
             params.push(("pageToken", page));
         }
@@ -260,6 +263,84 @@ impl Google {
             .send()?;
         if !response.status().is_success() {
             bail!("Gmail did not confirm the change ({})", response.status());
+        }
+        Ok(())
+    }
+    pub fn mark_all_read(&mut self, store: &Store, label: &str, query: &str) -> Result<usize> {
+        // Collect all IDs before mutating: changing unread results while paging can skip mail.
+        let query = unread_query(query);
+        let mut page = String::new();
+        let mut ids = std::collections::BTreeSet::new();
+        let mut seen_pages = std::collections::HashSet::new();
+        loop {
+            let mut params = vec![("maxResults", "500"), ("q", query.as_str())];
+            if !label.is_empty() {
+                params.push(("labelIds", label));
+            }
+            if label == "TRASH" || label == "SPAM" {
+                params.push(("includeSpamTrash", "true"));
+            }
+            if !page.is_empty() {
+                params.push(("pageToken", page.as_str()));
+            }
+            let value = self.get("messages", &params)?;
+            if let Some(messages) = value["messages"].as_array() {
+                for message in messages {
+                    ids.insert(
+                        message["id"]
+                            .as_str()
+                            .context("Missing message ID")?
+                            .to_owned(),
+                    );
+                }
+            }
+            page = value["nextPageToken"].as_str().unwrap_or_default().into();
+            if page.is_empty() {
+                break;
+            }
+            if !seen_pages.insert(page.clone()) {
+                bail!("Gmail repeated a results page; no mail was changed");
+            }
+        }
+        let ids: Vec<_> = ids.into_iter().collect();
+        let mut completed = 0;
+        for chunk in ids.chunks(1000) {
+            let token = self.auth.token()?;
+            // A lost response may still have applied remotely, so discard stale views before sending.
+            store.invalidate_mail_views()?;
+            let response = self
+                .client
+                .post(format!("{}messages/batchModify", self.api))
+                .bearer_auth(token)
+                .json(&json!({"ids": chunk, "removeLabelIds": ["UNREAD"]}))
+                .send()
+                .with_context(|| {
+                    format!("Mark all read interrupted after {completed} confirmed messages")
+                })?;
+            if !response.status().is_success() {
+                bail!(
+                    "Gmail did not confirm marking all read ({}); {completed} messages already updated",
+                    response.status()
+                );
+            }
+            completed += chunk.len();
+        }
+        Ok(completed)
+    }
+    pub fn trash(&mut self, id: &str) -> Result<()> {
+        let token = self.auth.token()?;
+        let response = self
+            .client
+            .post(format!("{}messages/{}/trash", self.api, segment(id)))
+            // Gmail requires an explicit length for this empty POST body.
+            .header(reqwest::header::CONTENT_LENGTH, "0")
+            .bearer_auth(token)
+            .send()?;
+        if !response.status().is_success() {
+            bail!(
+                "Gmail did not confirm moving the email to Trash ({})",
+                response.status()
+            );
         }
         Ok(())
     }
@@ -655,6 +736,14 @@ pub fn contact_photo(url: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+pub fn unread_query(query: &str) -> String {
+    if query.trim().is_empty() {
+        "is:unread".into()
+    } else {
+        format!("({query}) is:unread")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -709,6 +798,116 @@ mod tests {
             people_api: api.clone(),
             api,
         }
+    }
+
+    #[test]
+    fn mark_all_read_collects_every_page_before_bounded_writes() {
+        let first: Vec<_> = (0..500).map(|i| json!({"id": format!("id-{i}")})).collect();
+        let second: Vec<_> = (500..1001)
+            .map(|i| json!({"id": format!("id-{i}")}))
+            .collect();
+        let (api, requests, thread) = server(vec![
+            (200, json!({"messages": first, "nextPageToken": "next"})),
+            (200, json!({"messages": second})),
+            (200, json!({})),
+            (200, json!({})),
+        ]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let store = Store::open(None).unwrap();
+        assert_eq!(
+            google
+                .mark_all_read(&store, "Label_AUTH", "from:a OR from:b")
+                .unwrap(),
+            1001
+        );
+        for index in 0..2 {
+            let request = requests.recv().unwrap();
+            assert!(request.starts_with("GET /messages?"));
+            let route = request
+                .lines()
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .nth(1)
+                .unwrap();
+            let url = url::Url::parse(&format!("http://test{route}")).unwrap();
+            let params: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+            assert_eq!(params["labelIds"], "Label_AUTH");
+            assert_eq!(params["q"], "(from:a OR from:b) is:unread");
+            if index == 1 {
+                assert_eq!(params["pageToken"], "next");
+            }
+        }
+        for size in [1000, 1] {
+            let request = requests.recv().unwrap();
+            assert!(request.starts_with("POST /messages/batchModify "));
+            let body: Value =
+                serde_json::from_str(request.split_once("\r\n\r\n").unwrap().1).unwrap();
+            assert_eq!(body["ids"].as_array().unwrap().len(), size);
+            assert_eq!(body["removeLabelIds"], json!(["UNREAD"]));
+            assert!(body.get("addLabelIds").is_none());
+        }
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn mark_all_read_empty_and_failure_are_not_successful_writes() {
+        let (api, requests, thread) = server(vec![(200, json!({}))]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        assert_eq!(
+            client(dir.path(), api)
+                .mark_all_read(&Store::open(None).unwrap(), "INBOX", "")
+                .unwrap(),
+            0
+        );
+        assert!(requests.recv().unwrap().starts_with("GET "));
+        thread.join().unwrap();
+        let (api, requests, thread) = server(vec![
+            (200, json!({"messages":[{"id":"one"}]})),
+            (403, json!({})),
+        ]);
+        let error = client(dir.path(), api)
+            .mark_all_read(&Store::open(None).unwrap(), "INBOX", "")
+            .unwrap_err();
+        assert!(error.to_string().contains("0 messages already updated"));
+        requests.recv().unwrap();
+        requests.recv().unwrap();
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn trash_uses_recoverable_endpoint_and_reports_failure() {
+        let (api, requests, thread) = server(vec![(200, json!({})), (403, json!({}))]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        google.trash("synthetic-message").unwrap();
+        assert!(google.trash("synthetic-message").is_err());
+        for _ in 0..2 {
+            let request = requests.recv().unwrap();
+            assert!(request.starts_with("POST /messages/synthetic-message/trash HTTP/1.1"));
+            assert!(
+                request
+                    .to_ascii_lowercase()
+                    .contains("\r\ncontent-length: 0\r\n")
+            );
+            assert!(request.ends_with("\r\n\r\n"));
+        }
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn trash_folder_requests_trashed_messages() {
+        let (api, requests, thread) = server(vec![(200, json!({"messages":[]}))]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        google
+            .page(&Store::open(None).unwrap(), "TRASH", "", "")
+            .unwrap();
+        let request = requests.recv().unwrap();
+        assert!(request.contains("includeSpamTrash=true"));
+        assert!(request.contains("labelIds=TRASH"));
+        thread.join().unwrap();
     }
 
     #[test]
