@@ -210,3 +210,20 @@ The protection suite uses generated SQLite data, fake mounts/processes and
 localhost notification servers, plus real encrypted Restic repositories in
 temporary directories for Drive, application and independent-copy restore/hash
 rehearsals. These are synthetic recovery proofs, not live backup acceptance.
+
+### Review guarded SnapRAID removals
+
+When a sync exceeds the removal limit, the notification offers **Review removals**
+and **APPROVE & SYNC**. Review retrieves the exact list over pinned fleet SSH and
+opens a private read-only snapshot in Zed Preview. Missing files are already
+absent from data disks: approval accepts that list into parity and reduces their
+recovery options; it does not delete existing source files.
+
+The root review helper supports `snapraid review --review-id latest`,
+`snapraid review --review-id DIGEST`, and
+`snapraid approve-removals --review-id DIGEST`. Approval is tied to the sorted
+removal list and disk layout, expires after 24 hours, and is consumed before sync.
+The queued sync retains mount, scrub, changed-file and writer-lock checks. A stale
+list requires a new review. Install the helper separately at
+`/usr/local/lib/synctjik/review` when the canonical runtime is pinned by active
+maintenance; never replace a pinned worker to deliver notification changes.
