@@ -146,7 +146,7 @@ ShellRoot {
     }
     function maybeLoadMore() {
         const view=activeItems;
-        if(view.height>0 && view.contentHeight>0 && view.contentY+view.height>=(wordMode?view.originY:0)+view.contentHeight-(wordMode?160:items.cellHeight*2))loadMore();
+        if(view.height>0 && view.contentHeight>0 && view.contentY+view.height>=view.originY+view.contentHeight-(wordMode?160:items.cellHeight*2))loadMore();
     }
     function move(delta) {
         pointerSelection=false;
@@ -295,6 +295,8 @@ ShellRoot {
             if (!ready || msg.apply_config) view=msg.config.ui.view;
             settings=msg.config;
             const wordChanged=wordMode && JSON.stringify(results)!==JSON.stringify(msg.results);
+            // A new query starts a fresh layout; retained tiles can carry a shifted origin.
+            if(!sameQuery)resultModel.clear();
             if(appending){
                 const known=new Set(results.map(row=>row.id));
                 results=results.concat(msg.results.filter(row=>!known.has(row.id)));
@@ -318,7 +320,12 @@ ShellRoot {
                 }
             }
             else if(wordMode && wordChanged)wordPane.restoreReadingPosition(wordPosition);
-            else if(sameQuery && !wordMode)Qt.callLater(()=>{activeItems.contentY=Math.max(0,Math.min(previousY,activeItems.contentHeight-activeItems.height));root.maybeLoadMore();});
+            else if(sameQuery && !wordMode)Qt.callLater(()=>{
+                if(root.resultQuery!==(msg.query || '') || root.wordMode)return;
+                const origin=items.originY;
+                items.contentY=Math.max(origin,Math.min(previousY,origin+items.contentHeight-items.height));
+                root.maybeLoadMore();
+            });
             if(!sameQuery)activeItems.positionViewAtBeginning();
             message=msg.message || (msg.warnings || []).join(' · ');
             ready=true;captureInitialMonitor();
@@ -742,6 +749,9 @@ ShellRoot {
                                 required property var row
                                 readonly property var modelData: row
                                 readonly property bool browserTab: modelData.provider==='Browser' && (modelData.id || '').includes(':tab:')
+                                readonly property bool showStatusMarker: browserTab
+                                    ? !(root.browserTabScope || /^\/tabs( |$)/.test(root.displayQuery))
+                                    : modelData.windows>0
                                 readonly property bool closing: root.closingIds.includes(modelData.id)
                                 required property int index
                                 Item {
@@ -809,9 +819,9 @@ ShellRoot {
                                     horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter
                                 }
                                 Rectangle {
-                                    visible:root.listMode && (resultTile.browserTab || modelData.windows>0)
+                                    visible:root.listMode && resultTile.showStatusMarker
                                     x:8;y:(parent.height-height)/2
-                                    width:7;height:7;radius:resultTile.browserTab?0:4;color:root.theme.accent
+                                    width:resultTile.browserTab?4:7;height:width;radius:resultTile.browserTab?0:4;color:root.theme.accent
                                 }
                                 Item {
                                     id:titleArea
@@ -821,17 +831,17 @@ ShellRoot {
                                     Row {
                                         id:titleRow
                                         x:root.listMode?0:(parent.width-width)/2
-                                        width:Math.min(parent.width,label.implicitWidth+(runningDot.visible?13:0))
+                                        width:Math.min(parent.width,label.implicitWidth+(runningDot.visible?runningDot.width+titleRow.spacing:0))
                                         spacing:6
                                         Rectangle {
                                             id:runningDot
-                                            visible:!root.listMode && (resultTile.browserTab || modelData.windows>0)
-                                            width:7;height:7;radius:resultTile.browserTab?0:4;color:root.theme.accent
+                                            visible:!root.listMode && resultTile.showStatusMarker
+                                            width:resultTile.browserTab?4:7;height:width;radius:resultTile.browserTab?0:4;color:root.theme.accent
                                             y:(titleMetrics.height-height)/2
                                         }
                                         Text {
                                             id:label
-                                            width:titleRow.width-(runningDot.visible?13:0)
+                                            width:titleRow.width-(runningDot.visible?runningDot.width+titleRow.spacing:0)
                                             text:modelData.id==='Recorder:stop' && root.stopRequested?'Stopping recording…':modelData.name;color:root.theme.text;font.family:root.settings.ui.font
                                             font.pixelSize:root.settings.ui.font_size-1
                                             horizontalAlignment:root.listMode?Text.AlignLeft:Text.AlignHCenter
