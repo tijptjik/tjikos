@@ -703,9 +703,11 @@ ShellRoot {
                                 }
                             }
                             delegate:Rectangle {
+                                id:resultTile
                                 visible: !root.galleryEmpty
                                 required property var row
                                 readonly property var modelData: row
+                                readonly property bool browserTab: modelData.provider==='Browser' && (modelData.id || '').includes(':tab:')
                                 readonly property bool closing: root.closingIds.includes(modelData.id)
                                 required property int index
                                 width:root.captureMenu && index===root.captureChoices && root.results.length===root.captureChoices+1?items.width-6:root.listMode?items.cellWidth:items.cellWidth-6;height:root.captureMenu && index>=root.captureChoices?items.height/2-6:items.cellHeight-6;radius:12
@@ -742,9 +744,9 @@ ShellRoot {
                                     horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter
                                 }
                                 Rectangle {
-                                    visible:root.listMode && modelData.windows>0
+                                    visible:root.listMode && (resultTile.browserTab || modelData.windows>0)
                                     x:8;y:(parent.height-height)/2
-                                    width:7;height:7;radius:4;color:root.theme.accent
+                                    width:7;height:7;radius:resultTile.browserTab?0:4;color:root.theme.accent
                                 }
                                 Item {
                                     id:titleArea
@@ -758,8 +760,8 @@ ShellRoot {
                                         spacing:6
                                         Rectangle {
                                             id:runningDot
-                                            visible:!root.listMode && modelData.windows>0
-                                            width:7;height:7;radius:4;color:root.theme.accent
+                                            visible:!root.listMode && (resultTile.browserTab || modelData.windows>0)
+                                            width:7;height:7;radius:resultTile.browserTab?0:4;color:root.theme.accent
                                             y:(titleMetrics.height-height)/2
                                         }
                                         Text {
