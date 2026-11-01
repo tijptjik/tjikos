@@ -50,6 +50,34 @@ class NativeContracts(unittest.TestCase):
     def test_invalid_config_rejected(self):
         for cfg in [{'bars':'bad'},{'modules':{'x':{'provider':'process','command':'echo bad'}}},{'style':{'fontSize':True}},{'modules':{'x':{'provider':'datetime','timezone':'not/a/timezone'}}}]:
             self.path.write_text(json.dumps(cfg));self.assertNotEqual(self.call('config','--validate').returncode,0)
+    def test_crypto_retry_wakes_only_selected_provider(self):
+        self.env.pop('COINMARKETCAP_API_KEY', None)
+        self.path.write_text(json.dumps({
+            'modules': {
+                'prices': {'provider': 'crypto', 'interval': 600},
+                'other': {'provider': 'process', 'command': ['printf', '{"text":"Ready"}'], 'interval': 600},
+            },
+            'bars': [{'id': 'main', 'islands': [{'id': 'one', 'modules': ['prices', 'other']}]}],
+        }))
+        p = self.worker()
+        state = self.receive(p, lambda v: len(v.get('providers', {})) == 2 and
+                             all(x.get('polls') == 1 for x in v['providers'].values()))
+        bar = state['bars'][0]
+        source = bar['sources']['prices']
+        other = bar['sources']['other']
+        self.assertEqual(state['providers'][source]['error'], 'COINMARKETCAP_API_KEY is not set')
+        context = {'barKey': bar['key'], 'monitor': bar['screen'], 'module': 'prices', 'item': 'unavailable'}
+        for count in (2, 3):
+            p.stdin.write(json.dumps({'op': 'cryptoRetry', 'context': context}) + '\n')
+            p.stdin.flush()
+            state = self.receive(p, lambda v: v.get('providers', {}).get(source, {}).get('polls') == count, timeout=2)
+            self.assertEqual(state['providers'][source]['state'], 'unavailable')
+            self.assertEqual(state['providers'][other]['polls'], 1)
+        context['module'] = 'other'
+        p.stdin.write(json.dumps({'op': 'cryptoRetry', 'context': context}) + '\n')
+        p.stdin.flush()
+        state = self.receive(p, lambda v: v.get('error') == 'Invalid retry context')
+        self.assertEqual(state['providers'][other]['polls'], 1)
     def test_deduplicates_and_keeps_valid_config_on_reload_failure(self):
         cfg={'modules':{'a':{'provider':'process','command':['printf','[{"id":"value","type":"text","text":{"value":"Ready"},"actions":{"leftClick":["bad"]}}]'],'interval':30},'b':{'provider':'process','command':['printf','[{"id":"value","type":"text","text":{"value":"Ready"},"actions":{"leftClick":["bad"]}}]'],'interval':30,'style':{'color':'red'}}},'bars':[{'id':'main','islands':[{'id':'one','modules':['a','b']}]}]}
         self.path.write_text(json.dumps(cfg));p=self.worker()

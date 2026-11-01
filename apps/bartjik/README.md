@@ -316,7 +316,12 @@ option after migration.
 
 Providers retain last useful values in memory. Failed polls become stale with
 an error tooltip, initial failures become unavailable, and successful refresh clears
-the error. HTTP requests have an 8-second timeout and 1 MiB bound; command output
+the error. If prices have never loaded, the crypto panel shows the quote error and
+an icon-only **Retry** button. It disappears once prices load. Requests wake only
+that price provider, without waiting for its polling interval. The button is disabled while
+retrying, and an open unavailable panel automatically shows the first asset when
+prices recover. Chart requests still respect CoinGecko's cache and retry limits.
+HTTP requests have an 8-second timeout and 1 MiB bound; command output
 is bounded, default 256 KiB. HTTP 429 honors numeric Retry-After (bounded to one
 hour), other failures use exponential backoff. No balances/account tooltips are
 persisted to disk. In-flight bounded HTTP threads may finish after config removal;

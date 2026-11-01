@@ -68,6 +68,26 @@ DetachablePopup {
     property var headerIcon: ({})
     property var changes: ({})
     property var chart: ({})
+    readonly property var providerState: controller.state?.providers?.[anchor.window?.bar?.sources?.[selectedContext?.module]] || ({})
+    readonly property bool refreshing: providerState.state==='refreshing'
+    readonly property bool unavailable: pair==='Crypto'
+    onProviderStateChanged: Qt.callLater(syncQuote)
+    function syncQuote() {
+        if(!opened || !selectedContext)return;
+        const row=(providerState.items || []).find(r=>!r.state?.unavailable && (unavailable || r.id===pair));
+        if(!row)return;
+        const recovered=unavailable;
+        pair=row.id;price=row.text?.value || '';headerIcon=row.icon || {};changes=row.changes || {};
+        if(recovered){
+            selectedContext=Object.assign({},selectedContext,{item:row.id});
+            selectionKey=key(selectedContext);
+            if(loadChart(false))controller.send({op:'crypto',context:selectedContext,token:token});
+        }
+    }
+    function retryQuote() {
+        if(!unavailable || refreshing || !selectedContext)return;
+        controller.send({op:'cryptoRetry',context:selectedContext});
+    }
     property var cachedCharts: ({})
     property var requests: ({})
     property string cacheKey: ''
@@ -102,12 +122,17 @@ DetachablePopup {
         if(opened && selectionKey===key(context))return false;
         selectionKey=key(context);
         theme=window.bar.style;
-        token=context.barKey+'/'+context.module+'/'+row.id+'/'+(++controller.cryptoRequestSerial);
-        pair=row.id;price=row.text?.value || '';headerIcon=row.icon || {};changes=row.changes || {};
-        cacheKey=JSON.stringify([window.bar.sources[context.module],row.id]);
+        pair=row.state?.unavailable?'Crypto':row.id;price=row.text?.value || '';headerIcon=row.icon || {};changes=row.changes || {};
+        opened=true;
+        if(unavailable){cacheKey='';chart={loading:false};return false;}
+        return loadChart(false);
+    }
+    function loadChart(force) {
+        token=selectedContext.barKey+'/'+selectedContext.module+'/'+pair+'/'+(++controller.cryptoRequestSerial);
+        cacheKey=JSON.stringify([anchor.window.bar.sources[selectedContext.module],pair]);
         const cached=cachedCharts[cacheKey];
-        chart=cached?.chart || {loading:true};opened=true;
-        if(cached && Date.now()-cached.requestedAt<60000)return false;
+        chart=cached?.chart || {loading:true};
+        if(!force && cached && Date.now()-cached.requestedAt<60000)return false;
         remember(cachedCharts,cacheKey,{chart:chart,requestedAt:Date.now()});
         // A helper restart can lose a reply. Never retain abandoned tokens forever.
         remember(requests,token,cacheKey);
@@ -130,7 +155,14 @@ DetachablePopup {
                     Image {anchors.verticalCenter:parent.verticalCenter;width:22;height:22;fillMode:Image.PreserveAspectFit;sourceSize:Qt.size(44,44);visible:popup.headerIcon.kind==='image';source:visible?popup.headerIcon.value:''}
                     Text {anchors.verticalCenter:parent.verticalCenter;visible:popup.headerIcon.kind!=='image';text:popup.headerIcon.value || '';textFormat:Text.PlainText;color:popup.theme.text;font.pixelSize:20;font.family:popup.headerIcon.kind==='symbol'?popup.theme.iconFont:popup.theme.font}
                 }
-                Text {width:parent.width-30-closeButton.width;text:popup.pair+'  ·  '+popup.price;textFormat:Text.PlainText;color:popup.theme.text;font.family:popup.theme.font;font.pixelSize:17;anchors.verticalCenter:parent.verticalCenter}
+                Text {width:parent.width-30-closeButton.width-retryButton.width;text:popup.unavailable?'Crypto':popup.pair+'  ·  '+popup.price;elide:Text.ElideRight;textFormat:Text.PlainText;color:popup.theme.text;font.family:popup.theme.font;font.pixelSize:17;anchors.verticalCenter:parent.verticalCenter}
+                PanelButton {
+                    id:retryButton;objectName:'cryptoRetry';visible:popup.unavailable;width:visible?32:0;height:28
+                    theme:popup.theme;symbol:'refresh';iconOnlyHighlight:true
+                    text:popup.refreshing?'Retrying…':'Retry'
+                    enabled:!popup.refreshing
+                    onClicked:popup.retryQuote()
+                }
                 PanelHandle {id:closeButton;visible:popup.detached;width:visible?32:0;height:28;popup:popup;theme:popup.theme}
             }
             Row {
@@ -149,6 +181,7 @@ DetachablePopup {
                 width:parent.width;height:Math.max(0,body.height-164)
                 Item {
                     anchors.fill:parent;anchors.rightMargin:58
+                    visible:!popup.unavailable
                     opacity:popup.chart.loading ? .18 : .2
                     SequentialAnimation on opacity {
                         running:popup.panelVisible && popup.chart.loading===true;loops:Animation.Infinite
@@ -175,7 +208,7 @@ DetachablePopup {
                 }
                 Text {anchors.right:parent.right;anchors.top:parent.top;text:popup.points.length?popup.formatted(popup.high):'';color:popup.theme.muted;font.pixelSize:10}
                 Text {anchors.right:parent.right;anchors.bottom:parent.bottom;text:popup.points.length?popup.formatted(popup.low):'';color:popup.theme.muted;font.pixelSize:10}
-                Text {anchors.centerIn:parent;visible:popup.points.length<2 && !popup.chart.loading;text:'History unavailable';color:popup.theme.muted;font.pixelSize:13}
+                Text {anchors.centerIn:parent;visible:popup.points.length<2 && !popup.chart.loading;text:popup.unavailable?(popup.refreshing?'Requesting prices…':'Prices unavailable'):'History unavailable';color:popup.theme.muted;font.pixelSize:13}
             }
             Row {
                 width:parent.width
@@ -184,7 +217,7 @@ DetachablePopup {
             }
             Text {
                 width:parent.width;elide:Text.ElideRight
-                text:popup.chart.error ? (popup.chart.stale?'Cached · ':'')+popup.chart.error : popup.chart.source ? popup.chart.source+' · '+new Date(popup.chart.updated*1000).toLocaleTimeString(Qt.locale(),'HH:mm')+' · changes: quote feed' : ''
+                text:popup.providerState.error || (popup.chart.error ? (popup.chart.stale?'Cached · ':'')+popup.chart.error : popup.chart.source ? popup.chart.source+' · '+new Date(popup.chart.updated*1000).toLocaleTimeString(Qt.locale(),'HH:mm')+' · changes: quote feed' : '')
                 color:popup.theme.muted;font.pixelSize:10;textFormat:Text.PlainText
             }
         }

@@ -427,6 +427,23 @@ impl Engine {
         if op == "reload" {
             return self.reload(true).await;
         }
+        if op == "cryptoRetry" {
+            let (_, m, key) = self.context(&msg)?;
+            ensure!(m["provider"] == "crypto", "Invalid retry context");
+            if self.demo {
+                return Ok(false);
+            }
+            let worker = self
+                .workers
+                .get_mut(&key)
+                .context("Price provider unavailable")?;
+            if worker.state["state"] == "refreshing" {
+                return Ok(false);
+            }
+            worker.state["state"] = json!("refreshing");
+            worker.wake.notify_one();
+            return Ok(true);
+        }
         if op == "externalLeave" {
             if let Ok((_, m, _)) = self.context(&msg) {
                 if ["audio", "network"].contains(&s(&m["provider"])) {
