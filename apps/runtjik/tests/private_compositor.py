@@ -1,11 +1,85 @@
 """Isolated Wayland environment for Runtjik UI checks and benchmarks."""
 from contextlib import contextmanager
+import ctypes
+import errno
 import os
 from pathlib import Path
+import select
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
+
+
+# Some Python builds omit the pidfd APIs even on Linux. Use libc so cleanup
+# always signals a stable process handle, never a potentially recycled PID.
+_libc = ctypes.CDLL(None, use_errno=True)
+
+
+def _pidfd_call(name, *args):
+    result = getattr(_libc, name)(*args)
+    if result < 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error))
+    return result
+
+
+def _runtime_clients(runtime, compositor_pid):
+    marker = os.fsencode(f"XDG_RUNTIME_DIR={runtime}")
+    for path in Path("/proc").iterdir():
+        if not path.name.isdecimal() or int(path.name) in (os.getpid(), compositor_pid):
+            continue
+        fd = None
+        try:
+            if path.stat().st_uid != os.getuid():
+                continue
+            fd = _pidfd_call("pidfd_open", int(path.name), 0)
+            if marker in (path / "environ").read_bytes().split(b"\0"):
+                yield int(path.name), fd
+                fd = None  # The caller now owns this handle.
+        except (FileNotFoundError, ProcessLookupError, PermissionError):
+            pass
+        finally:
+            if fd is not None:
+                os.close(fd)
+
+
+def stop_runtime_clients(runtime, compositor_pid, grace=2):
+    """Stop even detached clients belonging to this private runtime only."""
+    clients = {}
+    poll = select.poll()
+    deadline = time.monotonic() + grace
+    try:
+        while True:
+            for pid, fd in _runtime_clients(runtime, compositor_pid):
+                if pid in clients:
+                    os.close(fd)
+                    continue
+                clients[pid] = fd
+                poll.register(fd, select.POLLIN)
+                try:
+                    _pidfd_call("pidfd_send_signal", fd, signal.SIGTERM, None, 0)
+                except ProcessLookupError:
+                    pass
+            for fd, _ in poll.poll(0):
+                poll.unregister(fd)
+                os.close(fd)
+                clients = {pid: handle for pid, handle in clients.items() if handle != fd}
+            if not clients:
+                return
+            if time.monotonic() >= deadline:
+                for fd in clients.values():
+                    try:
+                        _pidfd_call("pidfd_send_signal", fd, signal.SIGKILL, None, 0)
+                    except ProcessLookupError:
+                        pass
+                if time.monotonic() >= deadline + 3:
+                    raise RuntimeError(f"Private compositor clients did not exit: {list(clients)}")
+            time.sleep(.05)
+    finally:
+        for fd in clients.values():
+            os.close(fd)
 
 
 def wait_for(fn, timeout=12):
@@ -50,9 +124,22 @@ def private_compositor(isolate_pointer=False):
             os.environ.update(WAYLAND_DISPLAY=display,HYPRLAND_INSTANCE_SIGNATURE=signature)
             yield
         finally:
-            process.terminate()
-            try:process.wait(timeout=8)
-            except subprocess.TimeoutExpired:process.kill();process.wait()
-            for key,value in previous.items():
-                if value is None:os.environ.pop(key,None)
-                else:os.environ[key]=value
+            try:
+                try:
+                    # Close clients while their display is still alive. Detached
+                    # viewers and clipboard owners can outlive the test launcher.
+                    stop_runtime_clients(runtime, process.pid)
+                finally:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=8)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                    stop_runtime_clients(runtime, process.pid)
+            finally:
+                for key, value in previous.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value

@@ -414,6 +414,17 @@ Dotjik recipe retains its end-of-run upgrade prompt and seven-day deferral.
 
 ## Weekly unattended runs
 
+When Notjik sync is enrolled, interactive and scheduled results use Si's durable
+notification service and active-device routing. Each scheduled run has its own
+stable run ID; `--notify-only` retries its saved result without rerunning work.
+Scheduled results use the `results-table` card: completed/total stages, issue
+count, duration and outcome, with affected recipe IDs in the body. Saved results
+and relays retain that structure, including the original failure state on retry.
+No Telegram credentials are read in this mode. See
+[Notjik service](../notjik-service/README.md) for enrollment and recovery.
+
+The following Telegram setup remains a compatibility path for unenrolled hosts:
+
 `tjikup scheduled` runs the normal workflow and sends its result to a pinned
 Telegram message per device. It preserves normal workflow/resource locks and
 reports stopped or blocked work as ATTENTION, even when the workflow exits zero.

@@ -383,6 +383,27 @@ def main():
                     assert not any(word in errors for word in ("ReferenceError", "TypeError", "Unable to assign", "Binding loop", "Error decoding", "ERROR:")), errors
                     print("PASS: embedded sender artwork and app icon fallback rendered: " + str(image))
                     return
+                if "--runner-cards" in sys.argv[2:]:
+                    notices = [
+                        {"app": "Synctjik", "title": "SnapRAID · Action needed", "type": "status",
+                         "body": "Job failed or a safety check blocked it. Result=exit-code; exit=1.",
+                         "urgency": "critical", "data": {"state": "Action needed", "tone": "critical", "detail": "demo · Sync"}},
+                        {"app": "Tjikup", "title": "Tjikup · demo", "type": "results-table",
+                         "body": "home:notjik:update: Blocked", "urgency": "critical",
+                         "data": {"state": "FAILED", "tone": "critical", "duration": "328s",
+                                  "results": [{"label": "Stages completed", "value": "94/102"}, {"label": "Issues", "value": "8"}]}}
+                    ]
+                    for notice in notices:
+                        ipc(root, {"op": "send", "notice": dict(notice, timeout=0)})
+                    wait_for(lambda: len(ipc(root, {"op": "metrics"})["metrics"]["cards"]) == 2
+                             and all(c["opacity"] == 1 and c["extent"] == 1 for c in ipc(root, {"op": "metrics"})["metrics"]["cards"]))
+                    image = destination / "runner-cards.png"
+                    ipc(root, {"op": "capture", "path": str(image)})
+                    wait_for(lambda: readable_image(image))
+                    errors = (destination / "render.log").read_text()
+                    assert not any(word in errors for word in ("ReferenceError", "TypeError", "Unable to assign", "Binding loop", "ERROR:")), errors
+                    print("PASS: structured runner cards rendered: " + str(image))
+                    return
                 if "--telegram-formatting" in sys.argv[2:]:
                     from telegram_bridge import describe
                     text = "Bold · italic · underline · strike\nCode: a  b <literal>\nNested bold + strike · 🙂 custom emoji"

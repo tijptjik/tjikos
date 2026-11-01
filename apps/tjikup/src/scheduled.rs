@@ -1,4 +1,5 @@
 //! Unattended workflow entry point with durable Notjik results and legacy relay support.
+use crate::notifications::{Card, Data, Row};
 use crate::{actions::State, scheduler::Receipt};
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
@@ -81,6 +82,152 @@ fn summary(host: &str, code: i32, receipt: Option<&Receipt>) -> String {
     }
     text.push_str("Logs: journalctl --user -u tjikup-weekly.service");
     text.chars().take(3500).collect()
+}
+
+fn result_card(host: &str, code: i32, receipt: Option<&Receipt>) -> Card {
+    let issues: Vec<_> = receipt
+        .into_iter()
+        .flat_map(|r| &r.recipes)
+        .filter(|(_, o)| {
+            matches!(o.state, State::Failed | State::Stopped | State::Blocked)
+                || !o.warnings.is_empty()
+        })
+        .collect();
+    let state = if receipt.is_some_and(|r| r.interrupted) {
+        "INTERRUPTED"
+    } else if code != 0 {
+        "FAILED"
+    } else if receipt.is_none() {
+        "INCOMPLETE"
+    } else if !issues.is_empty() {
+        "ATTENTION"
+    } else {
+        "ALL SYSTEMS GO"
+    };
+    let completed = receipt
+        .map(|r| {
+            r.recipes
+                .values()
+                .filter(|o| matches!(o.state, State::Done | State::Unchanged))
+                .count()
+        })
+        .unwrap_or(0);
+    Card {
+        title: format!("Tjikup · {host}"),
+        // Do not send private error output, warning contents or local log paths.
+        body: if receipt.is_none() {
+            "Workflow did not produce a completion receipt.".into()
+        } else {
+            issues
+                .iter()
+                .take(8)
+                .map(|(id, o)| {
+                    format!(
+                        "{id}: {:?}{}",
+                        o.state,
+                        if o.warnings.is_empty() {
+                            ""
+                        } else {
+                            " (warnings)"
+                        }
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        },
+        data: Data {
+            state: state.into(),
+            duration: receipt
+                .map(|r| format!("{:.0}s", r.seconds))
+                .unwrap_or_default(),
+            tone: if matches!(state, "FAILED" | "INTERRUPTED") {
+                "critical"
+            } else if state == "ALL SYSTEMS GO" {
+                "success"
+            } else {
+                "warning"
+            }
+            .into(),
+            rainbow_text: state == "ALL SYSTEMS GO",
+            results: vec![
+                Row {
+                    label: "Stages completed".into(),
+                    value: receipt
+                        .map(|r| format!("{completed}/{}", r.recipes.len()))
+                        .unwrap_or_else(|| "Unknown".into()),
+                    tone: None,
+                },
+                Row {
+                    label: "Issues".into(),
+                    value: if receipt.is_some() {
+                        issues.len().to_string()
+                    } else {
+                        "Unknown".into()
+                    },
+                    tone: None,
+                },
+            ],
+        },
+    }
+}
+
+// Upgrade retained reports and older relays without rerunning maintenance or
+// mistaking a delivery retry's exit code for the original workflow result.
+fn legacy_card(host: &str, text: &str) -> Card {
+    let mut card = result_card(host, 0, None);
+    card.body = text.into();
+    let mut lines = text.lines();
+    if lines.next() != Some(format!("Tjikup · {host}").as_str()) {
+        return card;
+    }
+    let heading = lines
+        .next()
+        .unwrap_or_default()
+        .split(" · ")
+        .next()
+        .unwrap_or_default();
+    let (state, tone) = match heading {
+        "SUCCESS" => ("ALL SYSTEMS GO", "success"),
+        "FAILED" => ("FAILED", "critical"),
+        "ATTENTION" => ("ATTENTION", "warning"),
+        "INCOMPLETE" => ("INCOMPLETE", "warning"),
+        _ => return card,
+    };
+    card.data.state = state.into();
+    card.data.tone = tone.into();
+    card.data.rainbow_text = tone == "success";
+    let remaining: Vec<_> = lines.collect();
+    if let Some((counts, duration)) = remaining
+        .first()
+        .and_then(|s| s.split_once(" stages completed · "))
+    {
+        if counts
+            .split_once('/')
+            .is_some_and(|(a, b)| a.parse::<usize>().is_ok() && b.parse::<usize>().is_ok())
+        {
+            card.data.results[0].value = counts.into();
+            card.data.duration = duration.into();
+            let issues: Vec<_> = remaining[1..]
+                .iter()
+                .filter(|s| !s.starts_with("Logs: "))
+                .copied()
+                .collect();
+            card.body = issues.join("\n");
+            // Old summaries were capped at eight issues.
+            card.data.results[1].value = format!(
+                "{}{}",
+                issues.len(),
+                if issues.len() >= 8 { "+" } else { "" }
+            );
+        }
+    }
+    card
+}
+
+fn notice(card: &Card, run: &str) -> Value {
+    json!({"title":card.title,"body":card.body,"app":"Tjikup","run":run,
+        "type":"results-table","data":card.data,"actions":[],
+        "urgency":if card.data.tone=="critical"{"critical"}else{"normal"}})
 }
 
 fn api(
@@ -213,13 +360,13 @@ fn resolve_destination(config: Value) -> Result<Destination> {
     }
 }
 
-fn relay_report(argv: &[String], text: &str, run_id: &str) -> Result<()> {
+fn relay_report(argv: &[String], text: &str, run_id: &str, card: &Card) -> Result<()> {
     use std::process::{Command, Stdio};
     let host = fs::read_to_string("/proc/sys/kernel/hostname")?;
     let mut payload = tempfile::tempfile()?;
     serde_json::to_writer(
         &mut payload,
-        &json!({"host":host.trim(), "text":text, "run_id":run_id}),
+        &json!({"host":host.trim(), "text":text, "run_id":run_id, "card":card}),
     )?;
     use std::io::Seek;
     payload.rewind()?;
@@ -269,11 +416,12 @@ pub fn run(args: Vec<String>) -> Result<i32> {
             let fallback = notjik_sync::hash(text);
             let run = report["run_id"].as_str().unwrap_or(&fallback);
             ensure!(run.len() <= 128 && !run.is_empty(), "Invalid report run ID");
-            notjik_sync::client::publish(
-                json!({"title":format!("Tjikup scheduled result · {host}"),"body":text,"app":"Tjikup","run":format!("{host}:{run}"),"type":"status","actions":[]}),
-                "active",
-                true,
-            )?;
+            let card = match report.get("card") {
+                Some(value) => serde_json::from_value::<Card>(value.clone())?,
+                None => legacy_card(host, text),
+            };
+            crate::notifications::validate(&card)?;
+            notjik_sync::client::publish(notice(&card, &format!("{host}:{run}")), "active", true)?;
             return Ok(0);
         }
         let destination = destination()?;
@@ -310,18 +458,30 @@ pub fn run(args: Vec<String>) -> Result<i32> {
     } else {
         notjik_sync::id()
     };
-    let (text, code) = if args == ["--notify-test"] {
-        let host = fs::read_to_string("/proc/sys/kernel/hostname")?;
-        (format!("Tjikup · {}\nWeekly status delivery verified.\nScheduled: Sunday 09:00 Asia/Hong_Kong.\nThis is a notification test; no maintenance run was performed.", host.trim()), 0)
+    let host = fs::read_to_string("/proc/sys/kernel/hostname").unwrap_or_else(|_| "unknown".into());
+    let host = host.trim();
+    let (text, code, card) = if args == ["--notify-test"] {
+        let text = format!("Tjikup · {host}\nWeekly status delivery verified.\nScheduled: Sunday 09:00 Asia/Hong_Kong.\nThis is a notification test; no maintenance run was performed.");
+        let mut card = result_card(host, 0, None);
+        card.body = "This is a notification test; no maintenance run was performed.".into();
+        card.data.state = "Test passed".into();
+        card.data.tone = "success".into();
+        (text, 0, card)
     } else if args == ["--notify-only"] {
         let saved: Value = serde_json::from_slice(&fs::read(&pending)?)?;
-        (
-            saved["text"]
-                .as_str()
-                .context("Missing saved status")?
-                .to_owned(),
-            0,
-        )
+        let text = saved["text"]
+            .as_str()
+            .context("Missing saved status")?
+            .to_owned();
+        let card = match saved.get("card") {
+            Some(value) => serde_json::from_value::<Card>(value.clone())?,
+            None => legacy_card(host, &text),
+        };
+        let code = saved["exit_code"]
+            .as_i64()
+            .and_then(|n| i32::try_from(n).ok())
+            .unwrap_or(if card.data.tone == "success" { 0 } else { 1 });
+        (text, code, card)
     } else {
         ensure!(
             args.first().is_none_or(|s| s.starts_with("--"))
@@ -333,8 +493,6 @@ pub fn run(args: Vec<String>) -> Result<i32> {
         );
         std::env::set_var("TJIKUP_NOTIFY", "0");
         std::env::set_var("GIT_TERMINAL_PROMPT", "0");
-        let host =
-            fs::read_to_string("/proc/sys/kernel/hostname").unwrap_or_else(|_| "unknown".into());
         save(
             &pending,
             &json!({"text":format!("Tjikup · {}\nINCOMPLETE · started {}\nNo completion recorded; inspect tjikup-weekly.service.",host.trim(),chrono::Utc::now().to_rfc3339()),"delivered":false,"run_id":run_id}),
@@ -347,16 +505,21 @@ pub fn run(args: Vec<String>) -> Result<i32> {
                 1
             }
         };
-        (summary(host.trim(), code, receipt.as_ref()), code)
+        (
+            summary(host, code, receipt.as_ref()),
+            code,
+            result_card(host, code, receipt.as_ref()),
+        )
     };
+    crate::notifications::validate(&card)?;
     save(
         &pending,
-        &json!({"text":text,"exit_code":code,"delivered":false,"run_id":run_id}),
+        &json!({"text":text,"exit_code":code,"delivered":false,"run_id":run_id,"card":card}),
     )?;
     let delivery = if sync {
-        notjik_sync::client::publish(json!({"title":"Tjikup scheduled result","body":text,"app":"Tjikup","run":run_id,"type":"status","data":{"state":if code==0{"Complete"}else{"Failed"},"tone":if code==0{"success"}else{"critical"}},"actions":[]}),"active",true).map(|_|())
+        notjik_sync::client::publish(notice(&card, &run_id), "active", true).map(|_| ())
     } else if let Some(argv) = relay {
-        relay_report(&argv, &text, &run_id)
+        relay_report(&argv, &text, &run_id, &card)
     } else {
         deliver(
             direct.as_ref().context("Missing destination")?,
@@ -371,7 +534,7 @@ pub fn run(args: Vec<String>) -> Result<i32> {
     }
     save(
         &pending,
-        &json!({"text":text,"exit_code":code,"delivered":true,"run_id":run_id}),
+        &json!({"text":text,"exit_code":code,"delivered":true,"run_id":run_id,"card":card}),
     )?;
     Ok(code)
 }
@@ -415,7 +578,33 @@ mod tests {
         let text = summary("demo", 0, Some(&receipt));
         assert!(text.contains("ATTENTION"));
         assert!(!text.contains("private"));
+        let card = result_card("demo", 0, Some(&receipt));
+        assert_eq!(card.data.state, "ATTENTION");
+        assert_eq!(card.data.results[0].value, "0/1");
+        assert_eq!(card.data.results[1].value, "1");
+        assert_eq!(card.data.duration, "1s");
+        assert!(!serde_json::to_string(&card).unwrap().contains("private"));
+        assert_eq!(notice(&card, "demo-run")["type"], "results-table");
+        crate::notifications::validate(&card).unwrap();
     }
+    #[test]
+    fn retained_failed_report_keeps_its_result_on_retry() {
+        let text = "Tjikup · demo\nFAILED · 2026-11-01T03:01:46Z\n94/102 stages completed · 328s\nhome:notjik:update: Blocked\nLogs: journalctl --user -u tjikup-weekly.service";
+        let card = legacy_card("demo", text);
+        assert_eq!(card.data.state, "FAILED");
+        assert_eq!(card.data.tone, "critical");
+        assert_eq!(card.data.results[0].value, "94/102");
+        assert_eq!(card.data.duration, "328s");
+        assert_eq!(card.body, "home:notjik:update: Blocked");
+        let saved = serde_json::to_value(&card).unwrap();
+        let retry: Card = serde_json::from_value(saved).unwrap();
+        assert_eq!(notice(&card, "same-run"), notice(&retry, "same-run"));
+        assert_eq!(
+            legacy_card("demo", "Unknown report").data.state,
+            "INCOMPLETE"
+        );
+    }
+
     #[test]
     fn delivery_reuses_message_and_retries_failed_pin() {
         use std::io::{Read, Write};
@@ -513,6 +702,7 @@ mod tests {
             &["tee".into(), path.to_string_lossy().into_owned()],
             "synthetic status",
             "synthetic-run",
+            &result_card("demo", 1, None),
         )
         .unwrap();
         let value: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();

@@ -10,27 +10,27 @@ use std::time::{Duration, Instant};
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Row {
-    label: String,
-    value: String,
+    pub(super) label: String,
+    pub(super) value: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    tone: Option<String>,
+    pub(super) tone: Option<String>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Data {
-    state: String,
-    duration: String,
-    tone: String,
+    pub(super) state: String,
+    pub(super) duration: String,
+    pub(super) tone: String,
     #[serde(default, rename = "rainbow-text")]
-    rainbow_text: bool,
-    results: Vec<Row>,
+    pub(super) rainbow_text: bool,
+    pub(super) results: Vec<Row>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Card {
-    title: String,
-    body: String,
-    data: Data,
+    pub(super) title: String,
+    pub(super) body: String,
+    pub(super) data: Data,
 }
 
 fn tone(value: &str) -> bool {
@@ -152,7 +152,7 @@ pub fn focus() -> Option<Vec<String>> {
     None
 }
 
-pub fn native(card: &Card, focus: Option<&Vec<String>>) -> Result<bool> {
+pub fn validate(card: &Card) -> Result<()> {
     if card.title.len() > 1024
         || card.body.len() > 8192
         || card.data.state.len() > 8192
@@ -165,6 +165,11 @@ pub fn native(card: &Card, focus: Option<&Vec<String>>) -> Result<bool> {
     {
         bail!("invalid notification display metadata");
     }
+    Ok(())
+}
+
+pub fn native(card: &Card, focus: Option<&Vec<String>>) -> Result<bool> {
+    validate(card)?;
     // Only display metadata crosses the protocol. Never accept remote action commands.
     let argv = vec![
         "notjikctl".into(),
