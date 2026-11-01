@@ -283,6 +283,18 @@ pub fn mutation(mut v: Value) -> Result<()> {
     let _ = flush();
     Ok(())
 }
+fn embedded_png(value: &str) -> bool {
+    value.len() <= 32768
+        && value
+            .strip_prefix("data:image/png;base64,")
+            .is_some_and(|data| {
+                !data.is_empty()
+                    && data
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='))
+            })
+}
+
 pub fn publish(mut n: Value, delivery: &str, retain: bool) -> Result<String> {
     let cfg = config()?;
     let app = text(&n, "app").to_owned();
@@ -329,7 +341,9 @@ pub fn publish(mut n: Value, delivery: &str, retain: bool) -> Result<String> {
     }
     n["actions"] = json!(actions);
     // Never send local media paths or process-local image handles to the server.
-    n["image"] = json!("");
+    if !embedded_png(text(&n, "image")) {
+        n["image"] = json!("");
+    }
     if text(&n, "icon").contains('/') {
         n["icon"] = json!("");
     }
@@ -659,4 +673,27 @@ pub fn command(args: &[String]) -> Result<()> {
         _=>bail!("notjik-sync connect URL NAME desktop|server [SOCKET] | enroll | run | tick | publish | history [QUERY] [OFFSET] | devices | jobs | invoke ID ACTION | dismiss ID | read ID")
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod embedded_image_tests {
+    use super::*;
+    #[test]
+    fn only_bounded_embedded_png_survives_publication() {
+        assert!(embedded_png("data:image/png;base64,iVBORw0KGgo="));
+        for value in [
+            "/private/photo.png",
+            "file:///private/photo.png",
+            "https://example.test/image.png",
+            "image:handle",
+            "data:image/svg+xml;base64,AAAA",
+            "data:image/png;base64,",
+        ] {
+            assert!(!embedded_png(value));
+        }
+        assert!(!embedded_png(&format!(
+            "data:image/png;base64,{}",
+            "A".repeat(32768)
+        )));
+    }
 }

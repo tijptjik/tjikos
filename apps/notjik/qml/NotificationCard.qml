@@ -169,7 +169,7 @@ Rectangle {
 
     function imageSource(value) {
         if (!value) return "";
-        if (value.startsWith("/") || value.startsWith("file:") || value.startsWith("image:")) return value;
+        if (value.startsWith("/") || value.startsWith("file:") || value.startsWith("image:") || value.startsWith("data:image/png;base64,")) return value;
         if (value.startsWith("network-wireless")) return Qt.resolvedUrl("icons/wifi-cover.png").toString();
         return Quickshell.iconPath(value, true) || fallbackArtwork;
     }

@@ -360,6 +360,29 @@ def main():
                     assert capture.read_text() == "004281"
                     print("PASS: synthetic authentication card rendered and primary copy action invoked: " + str(image))
                     return
+                if "--sender-art" in sys.argv[2:]:
+                    import base64
+                    import io
+                    png = io.BytesIO()
+                    Image.new("RGB", (64, 64), (40, 160, 180)).save(png, format="PNG")
+                    artwork = "data:image/png;base64," + base64.b64encode(png.getvalue()).decode()
+                    for name, image_data in [("Sender photo", artwork), ("App icon fallback", "")]:
+                        ipc(root, {"op": "send", "notice": {
+                            "app": "gmailtjik", "group": name, "title": name, "body": "Synthetic email subject",
+                            "icon": str(ROOT.parent / "gmailtjik/assets/gmailtjik-app.svg"),
+                            "image": image_data, "timeout": 0,
+                            "actions": [{"label": "Open email", "command": ["true"]}]}})
+                    wait_for(lambda: len(ipc(root, {"op": "metrics"})["metrics"]["cards"]) == 2
+                             and all(c["opacity"] == 1 and c["extent"] == 1 for c in ipc(root, {"op": "metrics"})["metrics"]["cards"]))
+                    ipc(root, {"op": "revealControls"})
+                    time.sleep(.5)
+                    image = destination / "sender-art.png"
+                    ipc(root, {"op": "capture", "path": str(image)})
+                    wait_for(lambda: readable_image(image))
+                    errors = (destination / "render.log").read_text()
+                    assert not any(word in errors for word in ("ReferenceError", "TypeError", "Unable to assign", "Binding loop", "Error decoding", "ERROR:")), errors
+                    print("PASS: embedded sender artwork and app icon fallback rendered: " + str(image))
+                    return
                 if "--telegram-formatting" in sys.argv[2:]:
                     from telegram_bridge import describe
                     text = "Bold · italic · underline · strike\nCode: a  b <literal>\nNested bold + strike · 🙂 custom emoji"
