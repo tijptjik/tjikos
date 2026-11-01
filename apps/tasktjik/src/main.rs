@@ -275,7 +275,7 @@ fn router(app: Arc<App>) -> Router {
     Router::new()
         .nest("/tasktjik", routes.clone())
         .merge(routes)
-        .layer(DefaultBodyLimit::max(262144))
+        .layer(DefaultBodyLimit::max(7 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(app.clone(), auth))
         .layer(ConcurrencyLimitLayer::new(32))
         .layer(tower_http::timeout::TimeoutLayer::with_status_code(

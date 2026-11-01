@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Quickshell
+import Quickshell.Io
 import "DueDate.js" as DueDate
 
 Pane {
@@ -196,6 +198,32 @@ Pane {
         focusRow(adjacent[0]);
     }
     property var selected: (stateData.tasks || []).find(t=>t.id===selectedId) || null
+    readonly property bool imageDetails: !editor && collection!=='reading' && !dragTask && !!selected && (selected.images || []).length>0
+    readonly property int selectedColumn: selected ? (groupColumns.placements[selected.group] ?? Math.max(0,groupColumns.groups.indexOf(selected.group))) % groupColumns.columnCount : 0
+    readonly property bool imagesOnLeft: selectedColumn>=Math.ceil(groupColumns.columnCount/2)
+    onImageDetailsChanged: {if(!imageDetails)balanceTimer.restart();}
+    function pasteImage() {
+        if(!selected || requestBusy || pendingSave || pendingPurge || pendingMove || clipboardImage.running)return;
+        clipboardImage.taskId=selected.id;clipboardImage.revision=selected.revision;
+        clipboardImage.output='';clipboardImage.failure='';errorMessage='';clipboardImage.running=true;
+    }
+    Shortcut {sequence:'Ctrl+V';autoRepeat:false;enabled:app.visible && !app.dragTask && !app.editor && !app.searching && !help.visible && !dateHelp.visible && app.collection!=='reading' && !!app.selected;onActivated:app.pasteImage()}
+    Process {
+        id:clipboardImage
+        property string taskId
+        property int revision
+        property string output
+        property string failure
+        command:[Quickshell.env('TASKTJIK_HOME') ? Quickshell.env('TASKTJIK_HOME')+'/tasktjik-api' : 'tasktjik','clipboard-image']
+        stdout:StdioCollector {onStreamFinished:clipboardImage.output=text}
+        stderr:StdioCollector {onStreamFinished:clipboardImage.failure=text.trim()}
+        onExited:(code,status)=>{
+            if(code===0) {
+                try {app.request({action:'attach-image',id:taskId,revision:revision,data:JSON.parse(output).data});}
+                catch(e){app.errorMessage='Could not read clipboard image';}
+            } else app.errorMessage=failure || 'Could not read clipboard image';
+        }
+    }
     property string errorMessage: ""
     property var plans: []
     property var sections: ({})
@@ -364,6 +392,7 @@ Pane {
                             ['D','Mark done'],['P','Purge task'],['U / Ctrl+Z','Undo'],
                             ['T','Edit title'],['G','Edit group'],
                             ['S','Snooze'],['/','Search'],
+                            ['Ctrl+V','Attach clipboard image'],
                             ['← →','Nearest task in adjacent column'],['↑ ↓ / J K','Select item'],['↵','Open reading reference'],
                             ['⎋','Close window']
                         ]
@@ -654,6 +683,19 @@ Pane {
         }
         return rows;
     }
+    TaskImages {
+        id:imagePane
+        z:10
+        visible:app.imageDetails
+        theme:app.theme
+        task:visible?app.selected:null
+        x:taskScroll.parent.x+taskScroll.x+(app.imagesOnLeft?0:taskScroll.width/2+16)
+        y:taskScroll.parent.y+taskScroll.y
+        width:taskScroll.width/2-16
+        height:taskScroll.height
+        // Keep clicks and wheel events inside the details pane.
+        MouseArea {anchors.fill:parent;z:-1;onWheel:wheel=>{wheel.accepted=true;}}
+    }
     Keys.onPressed: event=>{
         if(dragTask){if(event.key===Qt.Key_Escape && !pendingMove)cancelDrag();event.accepted=true;return;}
         if(help.visible || dateHelp.visible)return;
@@ -755,20 +797,21 @@ Pane {
             ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
             ColumnLayout {
                 width:taskScroll.availableWidth;spacing:14
-                Row {
+                Item {
                     id: groupColumns
                     Layout.fillWidth:true
-                    spacing:32
+                    implicitHeight:childrenRect.height
+                    readonly property real spacing:32
                     readonly property int columnCount: Math.max(1, Math.floor(taskScroll.availableWidth / 420))
                     readonly property var groups: app.orderedGroups()
                     property var measuredHeights: ({})
                     property var placements: ({})
                     function noteHeight(group,height) {
-                        if(app.dragTask || app.snoozeTaskId || height<=0 || Math.abs((measuredHeights[group] || 0)-height)<0.5)return;
+                        if(app.imageDetails || app.dragTask || app.snoozeTaskId || height<=0 || Math.abs((measuredHeights[group] || 0)-height)<0.5)return;
                         measuredHeights[group]=height;balanceTimer.restart();
                     }
                     function balance() {
-                        if(app.dragTask || app.snoozeTaskId)return;
+                        if(app.imageDetails || app.dragTask || app.snoozeTaskId)return;
                         const loads=Array(columnCount).fill(0),next={};
                         const ordered=groups.map((g,i)=>({group:g,index:i,height:measuredHeights[g] || 30+app.tasks(g).length*48}));
                         ordered.sort((a,b)=>Number(b.group==='All' || b.group==='Inbox')-Number(a.group==='All' || a.group==='Inbox') || b.height-a.height || a.index-b.index);
@@ -788,7 +831,11 @@ Pane {
                         Column {
                             id: groupColumn
                             required property int index
-                            width:(groupColumns.width - groupColumns.spacing * (groupColumns.columnCount - 1)) / groupColumns.columnCount
+                            readonly property int leftCount:Math.ceil(groupColumns.columnCount/2)
+                            readonly property bool rightHalf:index>=leftCount
+                            readonly property int halfCount:rightHalf?groupColumns.columnCount-leftCount:leftCount
+                            width:app.imageDetails?(groupColumns.width/2-16-groupColumns.spacing*(halfCount-1))/halfCount:(groupColumns.width-groupColumns.spacing*(groupColumns.columnCount-1))/groupColumns.columnCount
+                            x:app.imageDetails?(rightHalf?groupColumns.width/2+16:0)+(index-(rightHalf?leftCount:0))*(width+groupColumns.spacing):index*(width+groupColumns.spacing)
                             spacing:28
                             Repeater {
                                 model:groupColumns.groups.filter((g,i)=>(groupColumns.placements[g] ?? i) % groupColumns.columnCount === groupColumn.index)
@@ -838,13 +885,27 @@ Pane {
                                                 id:cardBody
                                                 z:1
                                                 anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:4;anchors.topMargin:4+taskCard.gapHeight;spacing:8
-                                                Label {
+                                                Item {
                                                     readonly property bool focusedTask: selectedId===modelData.id
-                                                    text:focusedTask?'›':app.dueLabel(modelData)
-                                                    color:focusedTask?theme.accent:app.isOverdue(modelData)?'#eb6f92':theme.muted
-                                                    font.family:'monospace';font.pixelSize:focusedTask?20:11;font.weight:Font.DemiBold
-                                                    font.underline:!focusedTask && !!modelData.snoozedUntil
-                                                    Layout.preferredWidth:30;Layout.topMargin:focusedTask?0:3;Layout.alignment:Qt.AlignTop
+                                                    Layout.preferredWidth:30;Layout.preferredHeight:taskTitle.firstLineHeight;Layout.alignment:Qt.AlignTop
+                                                    Canvas {
+                                                        visible:parent.focusedTask
+                                                        width:12;height:12;anchors.verticalCenter:parent.verticalCenter
+                                                        property color ink:theme.accent
+                                                        onInkChanged:requestPaint()
+                                                        onPaint:{
+                                                            const c=getContext('2d');c.reset();
+                                                            c.strokeStyle=ink;c.lineWidth=1.8;c.lineCap='round';c.lineJoin='round';
+                                                            c.beginPath();c.moveTo(4,3);c.lineTo(7,6);c.lineTo(4,9);c.stroke();
+                                                        }
+                                                    }
+                                                    Label {
+                                                        visible:!parent.focusedTask
+                                                        y:3;text:app.dueLabel(modelData)
+                                                        color:app.isOverdue(modelData)?'#eb6f92':theme.muted
+                                                        font.family:'monospace';font.pixelSize:11;font.weight:Font.DemiBold
+                                                        font.underline:!!modelData.snoozedUntil
+                                                    }
                                                 }
                                                 ColumnLayout {
                                                     Layout.fillWidth:true;spacing:3
@@ -854,6 +915,7 @@ Pane {
                                                         Layout.rightMargin:statusIcons.visible?statusIcons.implicitWidth+6:0
                                                         property real lastLineWidth: 0
                                                         property real lastLineTop: 0
+                                                        property real firstLineHeight: 18
                                                         text:modelData.title
                                                         textFormat:Text.PlainText
                                                         font.pixelSize:15
@@ -863,7 +925,7 @@ Pane {
                                                         wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight
                                                         property var strikeLines: []
                                                         onLineLaidOut: line => {
-                                                            if(line.number===0) strikeLines=[];
+                                                            if(line.number===0) {strikeLines=[];firstLineHeight=line.height;}
                                                             strikeLines.push({x:line.x,y:line.y+line.height*0.52,width:Math.min(line.width,line.implicitWidth)});
                                                             lastLineWidth=Math.min(line.width,line.implicitWidth);
                                                             lastLineTop=line.y;
@@ -874,7 +936,13 @@ Pane {
                                                             id:statusIcons
                                                             x:taskTitle.lastLineWidth+6;y:taskTitle.lastLineTop+2
                                                             spacing:5
-                                                            visible:blockedIcon.visible || repeatIcon.visible
+                                                            visible:blockedIcon.visible || repeatIcon.visible || imageIcon.visible
+                                                            Canvas {
+                                                                id:imageIcon;width:14;height:14
+                                                                visible:(modelData.images || []).length>0
+                                                                Accessible.name:'Has images'
+                                                                onPaint:{const c=getContext('2d');c.reset();c.strokeStyle=theme.muted;c.lineWidth=1.2;c.strokeRect(1,2,12,10);c.beginPath();c.arc(9.5,5,1,0,Math.PI*2);c.stroke();c.beginPath();c.moveTo(2,11);c.lineTo(5,7);c.lineTo(8,10);c.lineTo(10,8);c.lineTo(12,11);c.stroke();}
+                                                            }
                                                             Canvas {
                                                                 id:blockedIcon;width:14;height:14
                                                                 visible:modelData.status==='blocked'

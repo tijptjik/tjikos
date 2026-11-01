@@ -33,6 +33,24 @@ cache entries are refreshed automatically. Rendering requires Chrome or Chromium
 without it, site-provided images remain available.
 Run `python3 -B tests/reading_ui.py` for the isolated synthetic renderer check.
 
+Select a task in the desktop overview and press **Ctrl+V** to attach an image
+from the Wayland clipboard (`wl-paste` is required). PNG, JPEG and WebP are
+supported, up to 5 MiB per image and 20 images per task. Repeatedly pasting the
+same image does not add another copy. Text fields keep their normal paste behavior.
+A small image icon follows the task name. Selecting a task with images opens a
+scrollable image details pane in the half opposite its column; arrow navigation
+still crosses columns and moves the pane. A one-column overview shares its width
+with the image pane on the right.
+
+Install the updated authority as well as the client before using attachments.
+Image bytes live in the authority's SQLite database, separately from task-list
+metadata, and are included in verified snapshots. Attaching images is undoable;
+bytes are retained so undoing a purge can restore them. Legacy local/SSH storage
+uses a private `images/` directory alongside task JSON; include both when copying
+that storage (`import-json` imports the images too). No image is stored in Git.
+Run `python3 -B tests/images_ui.py` for the isolated synthetic clipboard and
+renderer check.
+
 In the task list, press `P` to remove the selected task from the list immediately
 while deletion is sent to the authority. A rejected deletion restores the row
 and its selection. A three-second Undo toast appears immediately. Undo restores
@@ -67,7 +85,6 @@ show their resolved dates. Use Up/Down to choose and Enter or Tab to fill the
 field without saving; Escape dismisses suggestions. Complete dates still save
 with Enter. The editor keeps the title and link together,
 with compact optional details and save actions below.
-
 Task IDs, recurrence completions, revision checks and reading capture request IDs
 retain their existing format. Agent creates should supply a stable UUID
 `request_id` so retrying the same submission cannot duplicate a task.

@@ -107,7 +107,8 @@ fn response(text: &str) -> Result<Value> {
         .context("Invalid Tasktjik response")
 }
 pub(crate) fn api(options: &Value, mut request: Value) -> Result<Value> {
-    if !["list", "capabilities"].contains(&request["action"].as_str().unwrap_or("list"))
+    if !["list", "capabilities", "image-get"]
+        .contains(&request["action"].as_str().unwrap_or("list"))
         && request.get("request_id").is_none()
     {
         request["request_id"] = json!(Uuid::new_v4().to_string());
@@ -211,6 +212,7 @@ pub fn http(options: &Value, endpoint: &str, request: Option<&Value>) -> Result<
 #[derive(Default)]
 pub struct Todo {
     demo_tasks: Vec<Value>,
+    demo_images: std::collections::HashMap<String, Vec<u8>>,
 }
 fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
     let action = request["action"].as_str().unwrap_or("list");
@@ -222,7 +224,7 @@ fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
     }
     if action == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"protocol":1}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"images":true,"protocol":1}),
         );
     }
     if action == "create" {
@@ -252,7 +254,21 @@ fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
 impl Todo {
     pub fn request(&mut self, request: Value, settings: &Value, demo: bool) -> Result<Value> {
         if demo {
-            return apply(&mut self.demo_tasks, &request);
+            if request["action"] == "image-get" {
+                let metadata = crate::images::attached(&self.demo_tasks, &request)?;
+                return Ok(crate::images::source(
+                    metadata,
+                    self.demo_images
+                        .get(s(&metadata["id"]))
+                        .context("Image unavailable")?,
+                ));
+            }
+            let result = apply(&mut self.demo_tasks, &request)?;
+            if request["action"] == "attach-image" {
+                let (metadata, bytes) = crate::images::decode(s(&request["data"]))?;
+                self.demo_images.insert(s(&metadata["id"]).into(), bytes);
+            }
+            return Ok(result);
         }
         let options = options(settings)?;
         if !s(&options["url"]).is_empty() || !s(&options["socket"]).is_empty() {
@@ -339,7 +355,23 @@ impl Todo {
                 tasks.push(serde_json::from_slice(&fs::read(p)?)?);
             }
         }
+        if request["action"] == "image-get" {
+            let metadata = crate::images::attached(&tasks, &request)?;
+            let id = s(&metadata["id"]);
+            ensure!(
+                id.len() == 64 && id.bytes().all(|b| b.is_ascii_hexdigit()),
+                "Invalid image ID"
+            );
+            return Ok(crate::images::source(
+                metadata,
+                &fs::read(root.join("images").join(id))?,
+            ));
+        }
         let result = apply(&mut tasks, &request)?;
+        if request["action"] == "attach-image" {
+            let (metadata, bytes) = crate::images::decode(s(&request["data"]))?;
+            atomic(&root.join("images").join(s(&metadata["id"])), &bytes)?;
+        }
         if result.is_object() && request["action"] != "capabilities" {
             let id = s(&result["id"]);
             Uuid::parse_str(id)?;
@@ -393,6 +425,7 @@ impl Todo {
         let rows = self.request(json!({"action":"list"}), settings, demo)?;
         render_state(rows, &request, demo)
     }
+
     /// UI clients already have a list. Reconcile a mutation from its acknowledged
     /// task instead of making a second network request for the entire list.
     pub fn state_delta(&mut self, request: Value, settings: &Value, demo: bool) -> Result<Value> {
@@ -700,6 +733,7 @@ pub fn command_line(args: &[String]) -> Result<bool> {
     let mut todo = Todo::default();
     let settings = json!({});
     let result = match cmd {
+        "clipboard-image" => crate::images::clipboard()?,
         "state" if args.iter().any(|a| a == "--incremental") => {
             todo.state_delta(read()?, &settings, args.iter().any(|a| a == "--demo"))?
         }

@@ -114,6 +114,7 @@ pub fn defaults(t: &mut Value) {
         ("acceptance", json!([])),
         ("verification", json!([])),
         ("events", json!([])),
+        ("images", json!([])),
         ("kind", json!("todo")),
         (
             "reference",
@@ -135,6 +136,33 @@ pub fn validate(t: &mut Value) -> Result<()> {
     }
     for key in ["events", "verification", "blockers"] {
         ensure!(t[key].is_array(), "Invalid {key}");
+    }
+    let images = t["images"].as_array().context("Invalid task images")?;
+    ensure!(images.len() <= 20, "A task can hold up to 20 images");
+    for image in images {
+        let id = image["id"].as_str().context("Invalid image ID")?;
+        ensure!(
+            id.len() == 64 && id.bytes().all(|b| b.is_ascii_hexdigit()),
+            "Invalid image ID"
+        );
+        ensure!(
+            ["image/png", "image/jpeg", "image/webp"].contains(&field(image, "mime")),
+            "Invalid image type"
+        );
+        for dimension in ["width", "height"] {
+            ensure!(
+                image[dimension]
+                    .as_u64()
+                    .is_some_and(|v| (1..=8192).contains(&v)),
+                "Invalid image dimensions"
+            );
+        }
+        ensure!(
+            image["bytes"]
+                .as_u64()
+                .is_some_and(|v| v > 0 && v <= crate::images::MAX_BYTES as u64),
+            "Invalid image size"
+        );
     }
     ensure!(
         t["revision"].as_u64().is_some_and(|n| n < u64::MAX),
@@ -314,7 +342,17 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
     } else {
         period(&t, today())?
     };
-    if ["edit", "status", "verify", "toggle", "purge", "move"].contains(&op) {
+    if [
+        "edit",
+        "status",
+        "verify",
+        "toggle",
+        "purge",
+        "move",
+        "attach-image",
+    ]
+    .contains(&op)
+    {
         ensure!(
             r["revision"] == t["revision"],
             "Task changed; refresh before updating"
@@ -324,6 +362,14 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
         return Ok(json!({"id":t["id"],"deleted":true}));
     }
     match op {
+        "attach-image" => {
+            let (image, _) = crate::images::decode(field(r, "data"))?;
+            let images = t["images"].as_array_mut().context("Invalid task images")?;
+            if !images.iter().any(|i| i["id"] == image["id"]) {
+                ensure!(images.len() < 20, "A task can hold up to 20 images");
+                images.push(image);
+            }
+        }
         "move" => {
             let group = field(r, "group");
             ensure!(!group.is_empty(), "Choose a destination group");

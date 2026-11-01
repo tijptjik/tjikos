@@ -1,7 +1,6 @@
 """Measured column balancing and clickable tag filtering in an offscreen window."""
 import json
 import os
-import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -35,7 +34,7 @@ component = home / 'qml/TodoApp.qml'
 component.write_text(component.read_text().replace("text:'#'+modelData;textFormat:Text.PlainText","objectName:'tag-'+modelData; text:'#'+modelData;textFormat:Text.PlainText"))
 shell = home / 'qml/shell.qml'
 s = shell.read_text().replace('implicitWidth: 860','implicitWidth: 1400').replace('import QtQuick\n', 'import QtQuick\nimport QtTest\n')
-s = re.sub(r'view.stateData = JSON.parse\((text|output)\);', lambda m: "const state=JSON.parse("+m[1]+");state.groups=['Work','Tech','Socials','General','Domestic'];view.stateData=state;", s)
+s = s.replace('root.applyState(JSON.parse(output));', "const state=JSON.parse(output);state.groups=['Work','Tech','Socials','General','Domestic'];root.applyState(state);")
 s = s.replace('    Component.onCompleted:', '''    TestCase {id:pointer;name:"LayoutInput";when:false}
     IpcHandler {
         target:"layout-test"

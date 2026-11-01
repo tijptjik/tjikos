@@ -1,8 +1,148 @@
 use super::*;
 use axum::{body::Body, http::Request};
+use base64::Engine;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 use uuid::Uuid;
+
+fn image_fixture() -> String {
+    let mut seed = 7u32;
+    let pixels = image::RgbImage::from_fn(400, 400, |_, _| {
+        seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+        image::Rgb([(seed >> 24) as u8, (seed >> 16) as u8, (seed >> 8) as u8])
+    });
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    pixels
+        .write_to(&mut bytes, image::ImageFormat::Png)
+        .unwrap();
+    base64::engine::general_purpose::STANDARD.encode(bytes.into_inner())
+}
+
+#[tokio::test]
+async fn images_roundtrip_through_authority_and_survive_undo_and_snapshot() {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = app(&tmp);
+    let task = create(&a.database);
+    let data = image_fixture();
+    assert!(data.len() > 262144); // Exercise the actual HTTP upload limit.
+    let mut attach = mutation("attach-image");
+    attach["id"] = task["id"].clone();
+    attach["revision"] = task["revision"].clone();
+    attach["data"] = json!(data);
+    let (status, reply) = invoke(
+        a.clone(),
+        0,
+        Some("owner@example.test"),
+        "/api/v1/request",
+        Some(attach.clone()),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reply}");
+    let saved = &reply["result"];
+    assert_eq!(saved["images"][0]["width"], 400);
+    assert!(!saved.to_string().contains(&data));
+    let (_, retry) = invoke(
+        a.clone(),
+        0,
+        Some("owner@example.test"),
+        "/api/v1/request",
+        Some(attach.clone()),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!(retry, reply);
+    attach["request_id"] = json!(Uuid::new_v4().to_string());
+    assert!(db::request(&a.database, attach.clone(), "owner@example.test", "").is_err());
+    attach["revision"] = saved["revision"].clone();
+    attach["data"] = json!("bm90IGFuIGltYWdl");
+    assert!(db::request(&a.database, attach.clone(), "owner@example.test", "").is_err());
+    assert_eq!(
+        db::tasks(&db::connect(&a.database).unwrap()).unwrap()[0],
+        *saved
+    );
+    let get = json!({"action":"image-get","id":task["id"],"image_id":saved["images"][0]["id"]});
+    let expected = json!({"source":format!("data:image/png;base64,{data}")});
+    assert_eq!(
+        db::request(&a.database, get.clone(), "owner@example.test", "").unwrap(),
+        expected
+    );
+    let snapshot = tmp.path().join("snapshot.sqlite3");
+    db::snapshot(&a.database, &snapshot).unwrap();
+    assert_eq!(
+        db::request(&snapshot, get.clone(), "owner@example.test", "").unwrap(),
+        expected
+    );
+    let mut purge = mutation("purge");
+    purge["id"] = task["id"].clone();
+    purge["revision"] = saved["revision"].clone();
+    db::request(&a.database, purge, "owner@example.test", "").unwrap();
+    assert!(db::request(&a.database, get.clone(), "owner@example.test", "").is_err());
+    db::request(&a.database, mutation("undo"), "owner@example.test", "").unwrap();
+    assert_eq!(
+        db::request(&a.database, get.clone(), "owner@example.test", "").unwrap(),
+        expected
+    );
+    let undone = db::request(&a.database, mutation("undo"), "owner@example.test", "").unwrap();
+    assert_eq!(undone["images"], json!([]));
+    assert!(db::request(&a.database, get, "owner@example.test", "").is_err());
+}
+
+#[test]
+fn legacy_images_import_atomically_with_verified_bytes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let directory = tmp.path().join("legacy");
+    let mut client = tasktjik_api::client::Todo::default();
+    let task = client
+        .local(
+            json!({"action":"create","fields":{"title":"Synthetic local attachment"}}),
+            directory.to_str().unwrap(),
+        )
+        .unwrap();
+    let data = image_fixture();
+    let saved = client.local(json!({"action":"attach-image","id":task["id"],"revision":task["revision"],"data":data}), directory.to_str().unwrap()).unwrap();
+    let get = json!({"action":"image-get","id":task["id"],"image_id":saved["images"][0]["id"]});
+    let source = client
+        .local(get.clone(), directory.to_str().unwrap())
+        .unwrap();
+    let database = tmp.path().join("import.sqlite3");
+    assert_eq!(db::import(&database, &directory).unwrap(), 1);
+    assert_eq!(db::request(&database, get, "test", "test").unwrap(), source);
+    std::fs::write(
+        directory
+            .join("images")
+            .join(saved["images"][0]["id"].as_str().unwrap()),
+        b"corrupt",
+    )
+    .unwrap();
+    let failed = tmp.path().join("failed.sqlite3");
+    assert!(db::import(&failed, &directory).is_err());
+    assert!(db::tasks(&db::connect(&failed).unwrap())
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn undo_history_from_before_images_remains_usable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = app(&tmp);
+    let task = create(&a.database);
+    let mut edit = mutation("edit");
+    edit["id"] = task["id"].clone();
+    edit["revision"] = task["revision"].clone();
+    edit["fields"] = json!({"title":"Edited before attachments existed"});
+    db::request(&a.database, edit, "owner@example.test", "").unwrap();
+    let c = db::connect(&a.database).unwrap();
+    c.execute_batch("UPDATE tasks SET body=json_remove(body,'$.images');
+        UPDATE undo_history SET before_body=json_remove(before_body,'$.images'),after_body=json_remove(after_body,'$.images');").unwrap();
+    let restored = db::request(&a.database, mutation("undo"), "owner@example.test", "").unwrap();
+    assert_eq!(restored["title"], task["title"]);
+    assert_eq!(restored["images"], json!([]));
+    let removed = db::request(&a.database, mutation("undo"), "owner@example.test", "").unwrap();
+    assert_eq!(removed["deleted"], true);
+}
 fn app(tmp: &tempfile::TempDir) -> Arc<App> {
     let database = tmp.path().join("tasks.sqlite3");
     db::connect(&database).unwrap();

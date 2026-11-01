@@ -4,6 +4,7 @@ use rusqlite::{params, Connection, TransactionBehavior};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{os::unix::fs::OpenOptionsExt, path::Path, time::Duration};
+use tasktjik_api::images;
 use uuid::Uuid;
 
 pub fn connect(path: &Path) -> Result<Connection> {
@@ -11,11 +12,12 @@ pub fn connect(path: &Path) -> Result<Connection> {
     c.busy_timeout(Duration::from_secs(10))?;
     c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;
         CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY,body TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS images(id TEXT PRIMARY KEY,bytes BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY,digest TEXT NOT NULL,response TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY,owner TEXT NOT NULL,name TEXT NOT NULL,notifications INTEGER NOT NULL DEFAULT 0,last_seen TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS undo_history(seq INTEGER PRIMARY KEY AUTOINCREMENT,owner TEXT NOT NULL,device TEXT NOT NULL,task_id TEXT NOT NULL,before_body TEXT NOT NULL,after_body TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS undo_history_device ON undo_history(owner,device,seq);
-        PRAGMA user_version=2;")?;
+        PRAGMA user_version=3;")?;
     Ok(c)
 }
 pub fn tasks(c: &Connection) -> Result<Vec<Value>> {
@@ -34,11 +36,21 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
     let op = r["action"].as_str().unwrap_or("list");
     if op == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"protocol":1,"sqlite":true,"undo":true}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"images":true,"protocol":1,"sqlite":true,"undo":true}),
         );
     }
     if op == "list" {
         return Ok(json!(tasks(&tx)?));
+    }
+    if op == "image-get" {
+        let tasks = tasks(&tx)?;
+        let metadata = images::attached(&tasks, &r)?;
+        let bytes: Vec<u8> = tx.query_row(
+            "SELECT bytes FROM images WHERE id=?",
+            [metadata["id"].as_str()],
+            |row| row.get(0),
+        )?;
+        return Ok(images::source(metadata, &bytes));
     }
     ensure!(
         r.get("directory").is_none(),
@@ -82,7 +94,15 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
             "Undo target changed; the latest action belongs to another task"
         );
         let mut previous: Value = serde_json::from_str(&before)?;
-        let expected: Value = serde_json::from_str(&after)?;
+        let mut expected: Value = serde_json::from_str(&after)?;
+        // Undo entries written before attachments existed have no images field.
+        // Compare and restore them using the same defaults as current task rows.
+        if previous.is_object() {
+            model::defaults(&mut previous);
+        }
+        if expected.is_object() {
+            model::defaults(&mut expected);
+        }
         ensure!(
             r["undo_action"] != "purge" || expected.is_null(),
             "Undo target changed; the latest action is not a purge"
@@ -125,8 +145,25 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
         restored
     } else {
         let result = model::mutate(&before_tasks, &r)?;
+        if op == "attach-image" {
+            let (metadata, bytes) =
+                images::decode(r["data"].as_str().context("Image data required")?)?;
+            tx.execute(
+                "INSERT OR IGNORE INTO images VALUES (?,?)",
+                params![metadata["id"].as_str(), bytes],
+            )?;
+        }
         if [
-            "create", "edit", "toggle", "done", "status", "snooze", "verify", "purge", "move",
+            "create",
+            "edit",
+            "toggle",
+            "done",
+            "status",
+            "snooze",
+            "verify",
+            "purge",
+            "move",
+            "attach-image",
         ]
         .contains(&op)
             && result["id"].is_string()
@@ -222,6 +259,19 @@ pub fn import(path: &Path, source: &Path) -> Result<usize> {
         Uuid::parse_str(v["id"].as_str().context("Task ID required")?)?;
         model::defaults(&mut v);
         model::validate(&mut v)?;
+        for metadata in v["images"].as_array().context("Invalid task images")? {
+            let id = metadata["id"].as_str().context("Invalid image ID")?;
+            let bytes =
+                std::fs::read(source.join("images").join(id)).context("Missing imported image")?;
+            ensure!(
+                images::inspect(&bytes)? == *metadata,
+                "Imported image does not match task metadata"
+            );
+            tx.execute(
+                "INSERT OR IGNORE INTO images VALUES (?,?)",
+                params![id, bytes],
+            )?;
+        }
         let id = v["id"].as_str().unwrap();
         if let Ok(existing) = tx.query_row("SELECT body FROM tasks WHERE id=?", [id], |r| {
             r.get::<_, String>(0)

@@ -21,6 +21,6 @@ case "${1:-show}" in
         export QT_QUICK_CONTROLS_STYLE=Basic
         exec quickshell --path "$TASKTJIK_HOME/qml" --no-duplicate ;;
 
-    api|connect|enroll|devices|import-json|snapshot|request|state|serve|notify|done|dismiss|snooze) exec "$TASKTJIK_HOME/tasktjik-api" "$@" ;;
+    api|connect|enroll|devices|import-json|snapshot|request|state|serve|notify|done|dismiss|snooze|clipboard-image) exec "$TASKTJIK_HOME/tasktjik-api" "$@" ;;
     *) echo 'Usage: tasktjik [show|connect URL [--notifications]|enroll [--notifications]|devices|api|request|state|serve|notify|done|dismiss|snooze|import-json|snapshot]' >&2; exit 2 ;;
 esac
