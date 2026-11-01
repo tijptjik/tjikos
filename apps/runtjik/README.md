@@ -203,7 +203,7 @@ highlighted; keyboard scrolling preserves the keyboard selection.
 | Left / Right | Previous / next result in grid mode (Ctrl+Left / Ctrl+Right also works in lists) |
 | Enter / click | Switch to an existing application window, or launch if none are running |
 | Ctrl+Enter | Request that the app close gracefully; retry surviving processes with SIGTERM, then SIGKILL |
-| Shift+Enter / Shift+click | Launch another application instance; browser Read later integration is pending |
+| Shift+Enter / Shift+click | Launch another application instance; save browser tabs to Reading |
 | Ctrl+L | Toggle the current session between grid and list |
 | Esc | Return from a command or window picker to general search; press again to close |
 | `/pin` | Keep the launcher visible on outside clicks and app actions; dragging still works |

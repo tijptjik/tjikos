@@ -271,7 +271,7 @@ ShellRoot {
         if (msg.serial && msg.serial < serial) return;
         if(msg.kind==='results' && ready && (msg.query || '')!==query && !msg.reset_query && msg.edit_query===undefined)return;
         if (msg.kind !== 'results' || msg.serial === serial) busy = false;
-        if (msg.kind === 'app-state') {message=msg.app_state.message || '';appState=Object.assign({},appState,msg.app_state);if(msg.app_state.mutation_accepted)todoApp.accepted();return;}
+        if (msg.kind === 'app-state') {appState=Object.assign({},appState,msg.app_state);if(msg.app_state.mutation_accepted)todoApp.accepted();message=msg.app_state.message || '';return;}
         if (msg.kind === 'results') {
             stopRequested=false;
             browserTabScope=!!msg.browser_tab_scope;
@@ -547,9 +547,9 @@ ShellRoot {
                     Quickshell.execDetached(['env', 'TASKTJIK_VIEW='+todoApp.view, 'TASKTJIK_COLLECTION='+todoApp.collection, 'TASKTJIK_SELECTED='+todoApp.selectedId, 'tasktjik', 'show']);
                     root.close();
                 }
-                onRequest: request => {if(root.busy)return;root.busy=true;root.send(Object.assign({op:'app-action',provider:root.appMode}, request));}
+                onRequest: request => {if(root.busy)return;root.message='';root.busy=true;root.send(Object.assign({op:'app-action',provider:root.appMode}, request));}
                 onExitApp: { root.appMode=''; searchBox.text=''; root.query=''; root.search(); root.focusInput(); }
-                onVisibleChanged: {if(visible) forceActiveFocus();else {editor='';draftId='';}}
+                onVisibleChanged: {if(visible) forceActiveFocus();else {editor='';draftId='';lastDraftId='';}}
             }
             Column {
                 visible: root.appMode === ''

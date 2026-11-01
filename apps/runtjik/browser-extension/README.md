@@ -49,8 +49,10 @@ the selected tab through Zen, or the selected desktop window through Hyprland.
 Window closure first identifies the exact client using a temporary unique title
 marker, then sends a graceful compositor close request. Zen may show its own
 confirmation dialog. Closing a window closes its contained tabs,
-including pinned tabs. Shift+Enter currently reports that Read later integration
-is pending in the separate Tasktjik app; it does not save or close anything. Cards currently show browser icons, active-tab titles
+including pinned tabs. Shift+Enter on a tab opens the Tasktjik reading editor. Save sends the item to
+the Rust HTTP authority on Si, then closes the tab only after acknowledgement.
+Cancel leaves it open. A tab that navigated, moved or became pinned stays open;
+the saved item remains in Reading. Cards currently show browser icons, active-tab titles
 and tab counts, **not screenshot thumbnails**. Both connected browsers appear
 in these commands; `/zen` does not restrict the results to Zen.
 

@@ -5026,7 +5026,7 @@
             {
               "id": "/shortcuts/8",
               "name": "Shift+Enter / Shift+click",
-              "subtitle": "Launch a new application instance; browser Read later integration is pending",
+              "subtitle": "Launch a new application instance; save browser tabs to Reading",
               "provider": "internal",
               "count": 0,
               "windows": 0,
@@ -10278,7 +10278,7 @@
             {
               "id": "/shortcuts/8",
               "name": "Shift+Enter / Shift+click",
-              "subtitle": "Launch a new application instance; browser Read later integration is pending",
+              "subtitle": "Launch a new application instance; save browser tabs to Reading",
               "provider": "internal",
               "count": 0,
               "windows": 0,

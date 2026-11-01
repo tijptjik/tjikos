@@ -37,6 +37,17 @@ pub fn request(path: &std::path::Path, message: &Value) -> Result<Value> {
     }
     Ok(value)
 }
+pub fn session_path(session: &str) -> Result<PathBuf> {
+    anyhow::ensure!(
+        std::path::Path::new(session)
+            .file_name()
+            .and_then(|s| s.to_str())
+            == Some(session)
+            && session.ends_with(".sock"),
+        "Invalid browser session"
+    );
+    Ok(directory()?.join(session))
+}
 // Compile once per query, not once per tab. Configuration is reloaded on opening.
 pub fn favicon_overrides(value: &Value) -> Result<Vec<(regex::Regex, String)>> {
     let rules = value
@@ -294,9 +305,7 @@ impl Browser {
                 ));
                 return Ok(json!({"kind":"edit","text":"/tabs "}));
             }
-            return Ok(
-                json!({"kind":"message","message":"Read later is moving to Tasktjik; integration is not connected yet. Nothing was closed."}),
-            );
+            bail!("Open reading capture through Tasktjik");
         }
         let session = s(&e.data["session"]);
         if !demo

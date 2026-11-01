@@ -25,7 +25,7 @@ Previews render pages using installed Chrome or Chromium in headless mode with
 a fresh, temporary profile; they never use your browser cookies or a third-party
 preview service. Python 3 fetches descriptions and fallback site images. Browser
 error pages and sign-in screens are rejected; sites that block rendering show a
-favicon fallback when available, otherwise a clear placeholder. Successful images and metadata are cached for a day under
+clear placeholder. Successful images and metadata are cached for a day under
 `$XDG_CACHE_HOME/tasktjik/page-previews` (normally `~/.cache/tasktjik/page-previews`).
 Pages without an available image retain a domain placeholder and their link.
 Failed previews retry after five minutes on the next load; old metadata-only
@@ -185,3 +185,18 @@ registers the current device using its existing HTTPS or Unix-socket transport.
 Desktop and Android cards can mark a task done or dismiss its reminder through
 registered actions on the originating device. Tasktjik remains the task authority;
 Notjik owns notification routing/history.
+
+## Browser reading capture
+
+In Runtjik, Shift+Enter or Shift+click on a browser tab opens its title and URL
+in the reading editor. **Save and close tab** creates a reading item through the
+configured HTTPS authority on Si (or its local HTTP Unix socket), then asks the
+browser bridge to close that exact tab and URL. Cancel and failed saves leave
+the tab open. If closing fails after a successful save, the item remains saved
+and the UI reports the close failure.
+
+Retries of a submitted draft use the same UUID and fields, including after a
+lost HTTP reply. Confirm the original submission before editing the saved item.
+Capture drafts are held in the launcher process; after restarting it, check
+Reading before capturing a tab whose save outcome was unknown. Browser session
+identifiers stay on the client. Only HTTP and HTTPS references are accepted.

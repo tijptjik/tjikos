@@ -13,6 +13,7 @@ mod launcher;
 mod menus;
 mod offline_history;
 mod paths;
+mod reading;
 mod settings;
 mod stats;
 mod store;

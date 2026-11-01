@@ -52,7 +52,7 @@ with private_compositor():
             ipc('capture',str(temp/'filing.png'))
             time.sleep(.3)
             ipc('readingAction','save')
-            wait_for(lambda:state().get('mode')=='')
+            wait_for(lambda:state().get('mode')=='Todo' and state().get('editor')=='')
             query('/reading')
             wait_for(lambda:len(state().get('state',{}).get('tasks',[]))==1)
             assert state()['state']['tasks'][0]['kind']=='reading'

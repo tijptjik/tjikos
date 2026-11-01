@@ -26,6 +26,7 @@ pub struct Launcher {
     words: crate::words::Words,
     browser: crate::browser::Browser,
     todo: crate::todo::Todo,
+    reading: crate::reading::Reading,
     clipboard: crate::clipboard::Clipboard,
     captures: crate::capture::Captures,
 }
@@ -52,6 +53,7 @@ impl Launcher {
             words: crate::words::Words::default(),
             browser: crate::browser::Browser::default(),
             todo: crate::todo::Todo::default(),
+            reading: crate::reading::Reading::default(),
             clipboard: crate::clipboard::Clipboard::default(),
             captures: crate::capture::Captures::default(),
         };
@@ -596,6 +598,21 @@ impl Launcher {
                 return crate::words::Words::activate(e, self.demo);
             }
             if e.provider == "Browser" {
+                if mode == "switch" && !e.data["tab"].is_null() && e.data["history"] != true {
+                    anyhow::ensure!(
+                        strings(&self.settings["plugins"]["enabled"])
+                            .iter()
+                            .any(|p| p == "Todo"),
+                        "Enable Todo to save reading items"
+                    );
+                    let draft = self.reading.begin(e, &self.settings, self.demo)?;
+                    let mut value = self.open_query("/reading")?;
+                    value["app_state"]
+                        .as_object_mut()
+                        .ok_or_else(|| anyhow::anyhow!("Reading is unavailable"))?
+                        .extend(draft.as_object().unwrap().clone());
+                    return Ok(value);
+                }
                 let action = self.browser.activate(e, mode, self.demo)?;
                 if mode == "close" {
                     let q = if self.last_query.is_empty() {
@@ -784,7 +801,13 @@ impl Launcher {
                         .any(|p| p == "Todo"),
                     "Todo is disabled"
                 );
-                json!({"kind":"app-state", "app_state":self.todo.state(req, &self.settings, self.demo)?})
+                let state = if ["reading-save", "reading-cancel"].contains(&s(&req["action"])) {
+                    self.reading
+                        .action(req, &mut self.todo, &self.settings, self.demo)?
+                } else {
+                    self.todo.state(req, &self.settings, self.demo)?
+                };
+                json!({"kind":"app-state", "app_state":state})
             }
             "undo-trash" => {
                 let message = if self.demo {
