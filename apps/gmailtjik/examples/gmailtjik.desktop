@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Gmailtjik
+Comment=Gmail inbox, contacts and email composer
+Exec=gmailtjik
+Icon=gmailtjik
+StartupWMClass=gmailtjik
+Terminal=false
+Categories=Network;Email;
+Keywords=Gmail;Mail;Email;Inbox;
