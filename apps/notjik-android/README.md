@@ -21,7 +21,9 @@ system-wide Do Not Disturb and channel settings; there is no separate app pause.
 
 **Mark read** removes the unread indicator and the
 phone's system notification; the card stays in Inbox. **Dismiss** removes the card
-from Inbox and Unread, keeping it in **History**. These are separate states.
+from Inbox and Unread immediately, keeping it in **History**. The gap closes
+while saving continues in the background; a failed local save restores the card.
+Stale refreshes cannot undo a dismissal. These are separate states.
 Cards follow freely after a horizontal drag starts. On release, position and flick
 velocity project where the card will land: outside either edge clears it; otherwise
 it springs back. Vertical or diagonal gestures initially remain list scrolling;

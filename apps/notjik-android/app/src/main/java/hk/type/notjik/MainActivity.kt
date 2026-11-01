@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
     private var busy by mutableStateOf(false)
     private var pullRefreshing by mutableStateOf(false)
     private var saving by mutableStateOf<Set<String>>(emptySet())
+    private val dismissals = DismissalOverlay()
     private var nextOffset by mutableStateOf<Int?>(null)
     private var paginationInitialized = false
     private val refreshMutex = Mutex()
@@ -123,12 +124,25 @@ class MainActivity : ComponentActivity() {
     private fun mutate(op: String, id: String, action: String? = null) {
         if (id in saving) return
         saving = saving + id
+        if (op == "dismiss") dismissals.dismiss(id)
         lifecycleScope.launch {
+            var queued = false
             try {
                 withContext(Dispatchers.IO) { api.mutate(op, id, action) }
+                queued = true
                 reloadSaved()
                 message(when (op) { "read" -> "Marked as read"; "dismiss" -> "Dismissed · saved in History"; else -> "Action queued on the source device" })
-            } catch (_: Exception) { message("Couldn't save that change. Please try again.") }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) {
+                if (op == "dismiss" && !queued) {
+                    // A notification/scheduler failure after enqueue must not undo a durable dismissal.
+                    val persisted = withContext(Dispatchers.IO) {
+                        runCatching { api.store.card(id)?.optBoolean("dismissed") == true }.getOrDefault(false)
+                    }
+                    if (!persisted) dismissals.restore(id)
+                }
+                message("Couldn't save that change. Please try again.")
+            }
             finally { saving = saving - id }
             refresh()
         }
@@ -182,7 +196,7 @@ class MainActivity : ComponentActivity() {
     }
     @Composable private fun Drawer() {
         LaunchedEffect(search) { delay(300); refresh(reset = true) }
-        val matching = cards.filter { it.matches(search) }
+        val matching = dismissals.apply(cards).filter { it.matches(search) }
         val shown = matching.filter(filter::accepts)
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
