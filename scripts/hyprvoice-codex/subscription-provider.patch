@@ -1,0 +1,269 @@
+diff --git a/internal/config/codex_test.go b/internal/config/codex_test.go
+new file mode 100644
+index 0000000..3e8d326
+--- /dev/null
++++ b/internal/config/codex_test.go
+@@ -0,0 +1,21 @@
++package config
++
++import "testing"
++
++func TestCodexConfigNeedsNoAPIKey(t *testing.T) {
++	t.Setenv("OPENAI_API_KEY", "must-not-be-used")
++	c := DefaultConfig()
++	c.Notifications.Type = "none"
++	c.Transcription.Provider = "codex"
++	c.Transcription.Model = "gpt-4o-transcribe"
++	c.Transcription.Language = "en"
++	c.LLM.Enabled = true
++	c.LLM.Provider = "codex"
++	c.LLM.Model = "gpt-6-luna"
++	if err := c.Validate(); err != nil {
++		t.Fatal(err)
++	}
++	if c.ToTranscriberConfig().APIKey != "" || c.ToLLMConfig().APIKey != "" {
++		t.Fatal("inherited API key")
++	}
++}
+diff --git a/internal/llm/adapter_openai.go b/internal/llm/adapter_openai.go
+index 03b1ab5..d20a758 100644
+--- a/internal/llm/adapter_openai.go
++++ b/internal/llm/adapter_openai.go
+@@ -6,6 +6,7 @@ import (
+ 	"log"
+ 	"time"
+ 
++	"github.com/leonardotrapani/hyprvoice/internal/provider"
+ 	"github.com/sashabaranov/go-openai"
+ )
+ 
+@@ -17,8 +18,14 @@ type OpenAIAdapter struct {
+ 
+ // NewOpenAIAdapter creates a new OpenAI LLM adapter
+ func NewOpenAIAdapter(cfg Config) *OpenAIAdapter {
++	clientConfig := openai.DefaultConfig(cfg.APIKey)
++	if cfg.Provider == "codex" {
++		clientConfig = openai.DefaultConfig("")
++		clientConfig.BaseURL = provider.CodexBaseURL + "/v1"
++		clientConfig.HTTPClient = provider.CodexHTTPClient()
++	}
+ 	return &OpenAIAdapter{
+-		client: openai.NewClient(cfg.APIKey),
++		client: openai.NewClientWithConfig(clientConfig),
+ 		config: cfg,
+ 	}
+ }
+diff --git a/internal/llm/codex_test.go b/internal/llm/codex_test.go
+new file mode 100644
+index 0000000..4c6d06e
+--- /dev/null
++++ b/internal/llm/codex_test.go
+@@ -0,0 +1,42 @@
++package llm
++
++import (
++	"context"
++	"io"
++	"net/http"
++	"strings"
++	"testing"
++)
++
++type codexTransport func(*http.Request) (*http.Response, error)
++
++func (f codexTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
++func TestCodexUsesOnlyLocalProxyWithoutAPIKey(t *testing.T) {
++	old := http.DefaultTransport
++	t.Cleanup(func() { http.DefaultTransport = old })
++	calls := 0
++	http.DefaultTransport = codexTransport(func(r *http.Request) (*http.Response, error) {
++		calls++
++		if r.Header.Get("User-Agent") != "hyprvoice-codex/1.0.2" {
++			t.Fatal("missing client identification")
++		}
++		if r.URL.String() != "http://127.0.0.1:2455/v1/chat/completions" {
++			t.Fatalf("unexpected destination: %s", r.URL)
++		}
++		if r.Header.Get("Authorization") != "" {
++			t.Fatal("Codex must not send an API credential")
++		}
++		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"Synthetic test."}}]}`))}, nil
++	})
++	a, err := NewAdapter(Config{Provider: "codex", Model: "gpt-6-luna", APIKey: "must-not-be-forwarded"})
++	if err != nil {
++		t.Fatal(err)
++	}
++	_, err = a.Process(context.Background(), "synthetic test")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if calls != 1 {
++		t.Fatalf("got %d calls", calls)
++	}
++}
+diff --git a/internal/llm/llm.go b/internal/llm/llm.go
+index 0e8cef2..57f0793 100644
+--- a/internal/llm/llm.go
++++ b/internal/llm/llm.go
+@@ -26,6 +26,8 @@ type Config struct {
+ // NewAdapter creates an LLM adapter based on the provider
+ func NewAdapter(cfg Config) (Adapter, error) {
+ 	switch cfg.Provider {
++	case "codex":
++		return NewOpenAIAdapter(cfg), nil
+ 	case "openai":
+ 		if cfg.APIKey == "" {
+ 			return nil, fmt.Errorf("OpenAI API key required")
+diff --git a/internal/provider/codex.go b/internal/provider/codex.go
+new file mode 100644
+index 0000000..7e84a13
+--- /dev/null
++++ b/internal/provider/codex.go
+@@ -0,0 +1,32 @@
++package provider
++
++// CodexBaseURL is the local subscription proxy. No public API fallback is used.
++const CodexBaseURL = "http://127.0.0.1:2455"
++
++type CodexProvider struct{}
++
++func (*CodexProvider) Name() string               { return "codex" }
++func (*CodexProvider) RequiresAPIKey() bool       { return false }
++func (*CodexProvider) ValidateAPIKey(string) bool { return true }
++func (*CodexProvider) APIKeyURL() string          { return "" }
++func (*CodexProvider) IsLocal() bool              { return false }
++func (*CodexProvider) DefaultModel(t ModelType) string {
++	if t == Transcription {
++		return "gpt-4o-transcribe"
++	}
++	if t == LLM {
++		return "gpt-6-luna"
++	}
++	return ""
++}
++func (*CodexProvider) Models() []Model {
++	return []Model{
++		{ID: "gpt-4o-transcribe", Name: "Codex transcription", Type: Transcription,
++			SupportsBatch: true, AdapterType: AdapterOpenAI,
++			SupportedLanguages: openaiTranscriptionLanguages,
++			Endpoint:           &EndpointConfig{BaseURL: CodexBaseURL, Path: "/v1/audio/transcriptions"}},
++		{ID: "gpt-6-luna", Name: "Codex Luna cleanup", Type: LLM,
++			SupportsBatch: true, AdapterType: AdapterOpenAI,
++			Endpoint: &EndpointConfig{BaseURL: CodexBaseURL, Path: "/v1/chat/completions"}},
++	}
++}
+diff --git a/internal/provider/codex_http.go b/internal/provider/codex_http.go
+new file mode 100644
+index 0000000..862fb64
+--- /dev/null
++++ b/internal/provider/codex_http.go
+@@ -0,0 +1,28 @@
++package provider
++
++import (
++	"fmt"
++	"net/http"
++	"time"
++)
++
++// CodexHTTPClient identifies Hyprvoice and confines requests to the local proxy.
++func CodexHTTPClient() *http.Client {
++	return &http.Client{
++		Transport:     codexTransport{},
++		Timeout:       90 * time.Second,
++		CheckRedirect: func(*http.Request, []*http.Request) error { return fmt.Errorf("Codex proxy redirects are disabled") },
++	}
++}
++
++type codexTransport struct{}
++
++func (codexTransport) RoundTrip(r *http.Request) (*http.Response, error) {
++	if r.URL.Scheme != "http" || r.URL.Host != "127.0.0.1:2455" {
++		return nil, fmt.Errorf("Codex requests must use the local subscription proxy")
++	}
++	r = r.Clone(r.Context())
++	r.Header.Del("Authorization")
++	r.Header.Set("User-Agent", "hyprvoice-codex/1.0.2")
++	return http.DefaultTransport.RoundTrip(r)
++}
+diff --git a/internal/provider/provider.go b/internal/provider/provider.go
+index fb1013d..3fb55cd 100644
+--- a/internal/provider/provider.go
++++ b/internal/provider/provider.go
+@@ -26,6 +26,7 @@ var registry = make(map[string]Provider)
+ 
+ func init() {
+ 	Register(&OpenAIProvider{})
++	Register(&CodexProvider{})
+ 	Register(&GroqProvider{})
+ 	Register(&MistralProvider{})
+ 	Register(&ElevenLabsProvider{})
+diff --git a/internal/transcriber/adapter_openai.go b/internal/transcriber/adapter_openai.go
+index 47e8460..f6c7555 100644
+--- a/internal/transcriber/adapter_openai.go
++++ b/internal/transcriber/adapter_openai.go
+@@ -30,12 +30,19 @@ type OpenAIAdapter struct {
+ // keywords: optional spelling hints
+ // providerName: used for logging and language format conversion
+ func NewOpenAIAdapter(endpoint *provider.EndpointConfig, apiKey, model, lang string, keywords []string, providerName string) *OpenAIAdapter {
++	if providerName == "codex" {
++		apiKey = ""
++		endpoint = &provider.EndpointConfig{BaseURL: provider.CodexBaseURL}
++	}
+ 	var client *openai.Client
+ 
+ 	if endpoint != nil && endpoint.BaseURL != "" {
+ 		// use custom endpoint
+ 		clientConfig := openai.DefaultConfig(apiKey)
+ 		clientConfig.BaseURL = endpoint.BaseURL + "/v1"
++		if providerName == "codex" {
++			clientConfig.HTTPClient = provider.CodexHTTPClient()
++		}
+ 		client = openai.NewClientWithConfig(clientConfig)
+ 	} else {
+ 		// default to OpenAI
+diff --git a/internal/transcriber/codex_test.go b/internal/transcriber/codex_test.go
+new file mode 100644
+index 0000000..b1e8ecb
+--- /dev/null
++++ b/internal/transcriber/codex_test.go
+@@ -0,0 +1,39 @@
++package transcriber
++
++import (
++	"context"
++	"io"
++	"net/http"
++	"strings"
++	"testing"
++)
++
++type codexTransport func(*http.Request) (*http.Response, error)
++
++func (f codexTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
++func TestCodexUsesOnlyLocalProxyWithoutAPIKey(t *testing.T) {
++	old := http.DefaultTransport
++	t.Cleanup(func() { http.DefaultTransport = old })
++	calls := 0
++	http.DefaultTransport = codexTransport(func(r *http.Request) (*http.Response, error) {
++		calls++
++		if r.Header.Get("User-Agent") != "hyprvoice-codex/1.0.2" {
++			t.Fatal("missing client identification")
++		}
++		if r.URL.String() != "http://127.0.0.1:2455/v1/audio/transcriptions" {
++			t.Fatalf("unexpected destination: %s", r.URL)
++		}
++		if r.Header.Get("Authorization") != "" {
++			t.Fatal("Codex must not send an API credential")
++		}
++		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"text":"Synthetic test."}`))}, nil
++	})
++	a := NewOpenAIAdapter(nil, "must-not-be-forwarded", "gpt-4o-transcribe", "en", nil, "codex")
++	_, err := a.Transcribe(context.Background(), []byte{0, 0, 0, 0})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if calls != 1 {
++		t.Fatalf("got %d calls", calls)
++	}
++}
