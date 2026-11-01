@@ -485,7 +485,8 @@ fn review_commands(intent: &Value) -> Result<(Vec<String>, Vec<String>)> {
     validate_snapraid_review(intent)?;
     let review = text(intent, "review");
     // Only the digest comes from the remote notice. Identity and commands are local policy.
-    let remote=format!("umask 077; mkdir -p ~/.local/state/synctjik/snapraid-reviews && sudo -n /usr/local/lib/synctjik/review snapraid review --review-id {review} > ~/.local/state/synctjik/snapraid-reviews/{review}.txt");
+    let remote =
+        format!("sudo -n /usr/local/lib/synctjik/review snapraid review --review-id {review}");
     Ok((
         vec![
             home()
@@ -499,22 +500,36 @@ fn review_commands(intent: &Value) -> Result<(Vec<String>, Vec<String>)> {
         ],
         vec![
             "zed-preview".into(),
-            format!(
-                "ssh://m@ssh.type.hk/home/m/.local/state/synctjik/snapraid-reviews/{review}.txt"
-            ),
+            state()
+                .join("reviews")
+                .join(format!("{review}.txt"))
+                .to_string_lossy()
+                .into_owned(),
         ],
     ))
 }
 fn open_review(intent: &Value) -> Result<()> {
     let (remote, editor) = review_commands(intent)?;
+    let report = Command::new(&remote[0])
+        .args(&remote[1..])
+        .stdin(Stdio::null())
+        .output()?;
     ensure!(
-        Command::new(&remote[0])
-            .args(&remote[1..])
-            .stdin(Stdio::null())
-            .status()?
-            .success(),
-        "Could not prepare remote review"
+        report.status.success(),
+        "Could not fetch current remote review"
     );
+    ensure!(!report.stdout.is_empty(), "Empty remote review");
+    let directory = state().join("reviews");
+    private_dir(&directory)?;
+    // A private snapshot avoids Zed's remote-proxy dependency. The server still
+    // revalidates the digest before approval and again before changing parity.
+    let mut file = tempfile::NamedTempFile::new_in(&directory)?;
+    file.write_all(b"Read-only review fetched over SSH from Si.\n\n")?;
+    file.write_all(&report.stdout)?;
+    file.as_file()
+        .set_permissions(fs::Permissions::from_mode(0o400))?;
+    file.as_file().sync_all()?;
+    file.persist(&editor[1])?;
     ensure!(
         Command::new(&editor[0])
             .args(&editor[1..])
