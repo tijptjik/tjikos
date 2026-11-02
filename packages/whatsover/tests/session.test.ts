@@ -16,7 +16,7 @@ async function fixture() {
         sockets.push(record);
         expect(config.syncFullHistory).toBe(false);
         expect(config.markOnlineOnConnect).toBe(false);
-        expect(config.shouldSyncHistoryMessage!({ syncType: proto.HistorySync.HistorySyncType.PUSH_NAME })).toBe(false);
+        expect(config.shouldSyncHistoryMessage!({ syncType: proto.HistorySync.HistorySyncType.PUSH_NAME })).toBe(true);
         expect(config.shouldSyncHistoryMessage!({ syncType: proto.HistorySync.HistorySyncType.FULL })).toBe(false);
         expect(config.shouldSyncHistoryMessage!({ syncType: proto.HistorySync.HistorySyncType.RECENT })).toBe(false);
         return {
@@ -37,6 +37,15 @@ test('QR is cleared after pairing and after disconnect', async () => {
     events.emit('connection.update', { connection: 'open' });
     expect(session.pairing()).toEqual({ state: 'connected', qr: undefined });
     expect(session.status().account).toBe('synthetic-account');
+});
+
+test('profile-name snapshots are cached without importing chat history', async () => {
+    const { store, events } = await fixture();
+    events.emit('messaging-history.set', { syncType: proto.HistorySync.HistorySyncType.PUSH_NAME, contacts: [{ id: '85255550123@s.whatsapp.net', notify: 'Synthetic Profile' }] });
+    events.emit('messaging-history.set', { syncType: proto.HistorySync.HistorySyncType.FULL, contacts: [{ id: '85255550124@s.whatsapp.net', name: 'Not imported' }] });
+    await Bun.sleep(10);
+    expect(JSON.parse((await store.readAuth('contact:85255550123@s.whatsapp.net'))!).notify).toBe('Synthetic Profile');
+    expect(await store.readAuth('contact:85255550124@s.whatsapp.net')).toBeNull();
 });
 
 test('pairing restart opens a replacement socket; stale events are ignored', async () => {

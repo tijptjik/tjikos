@@ -16,6 +16,7 @@ const help = `whatsover — scriptable WhatsApp linked device
   whatsover login                          Display QR and wait for pairing
   whatsover status                         Connection status (JSON)
   whatsover groups                         Group names and JIDs (JSON)
+  whatsover members GROUP_ID               Membership and available names (JSON)
   whatsover send --to +852… --text 'Hello' --id stable-job-id
   whatsover send --to GROUP_JID --stdin --id stable-job-id
   whatsover result REQUEST_ID              Inspect a previous send (JSON)
@@ -40,11 +41,11 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     const common = { socket: { type: 'string' }, url: { type: 'string' } } as const;
     const commands = {
         serve: { 'state-dir': { type: 'string' }, duration: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' } },
-        login: common, status: common, groups: common, result: common,
+        login: common, status: common, groups: common, result: common, members: common,
         send: { ...common, to: { type: 'string' }, text: { type: 'string' }, stdin: { type: 'boolean' }, id: { type: 'string' } },
     } as const;
     if (!(command in commands)) throw new Error(`Unknown command: ${command}. Run whatsover --help.`);
-    const { values, positionals } = parseArgs({ args: args.slice(1), options: commands[command as keyof typeof commands], allowPositionals: command === 'result', strict: true });
+    const { values, positionals } = parseArgs({ args: args.slice(1), options: commands[command as keyof typeof commands], allowPositionals: command === 'result' || command === 'members', strict: true });
     const options = values as Record<string, string | boolean | undefined>;
     const string = (key: string) => options[key] as string | undefined;
     if (command === 'serve') {
@@ -103,6 +104,10 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     switch (command) {
         case 'status': output(await client.status()); break;
         case 'groups': output(await client.groups()); break;
+        case 'members':
+            if (positionals.length !== 1) throw new Error('Usage: whatsover members GROUP_ID');
+            output(await client.members(positionals[0]));
+            break;
         case 'result':
             if (positionals.length !== 1) throw new Error('Usage: whatsover result REQUEST_ID');
             output(await client.result(positionals[0]));

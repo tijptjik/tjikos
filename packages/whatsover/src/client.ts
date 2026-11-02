@@ -1,4 +1,5 @@
 import { WhatsoverError, type SendRequest, type SendResult, type Status } from './types.ts';
+import type { Membership } from './members.ts';
 
 export interface ClientOptions { socket?: string; url?: string; token?: string; timeoutMs?: number; }
 
@@ -35,6 +36,7 @@ export class Whatsover {
     status() { return this.request<Status>('/v1/status'); }
     pairing() { return this.request<{ qr?: string; state: Status['state'] }>('/v1/qr'); }
     groups() { return this.request<{ id: string; name: string }[]>('/v1/groups'); }
+    members(id: string) { return this.request<Membership>(`/v1/groups/${encodeURIComponent(id)}/members`); }
     send(request: SendRequest) { return this.request<SendResult>('/v1/messages', request); }
     result(id: string) { return this.request<SendResult>(`/v1/messages/${encodeURIComponent(id)}`); }
 }

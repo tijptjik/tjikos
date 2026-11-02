@@ -2,6 +2,7 @@ import makeWASocket, { DisconnectReason, proto, type WASocket } from 'baileys';
 import pino from 'pino';
 import { authentication } from './auth.ts';
 import { Sender } from './sender.ts';
+import { membership, saveContacts, type Membership } from './members.ts';
 import { WhatsoverError, type Status, type Store } from './types.ts';
 
 type SocketFactory = typeof makeWASocket;
@@ -17,6 +18,8 @@ export class WhatsAppSession {
     private authWrites: Promise<void> = Promise.resolve();
     private auth?: Awaited<ReturnType<typeof authentication>>;
     private opening?: Promise<void>;
+    private contactWrites: Promise<void> = Promise.resolve();
+    private contactsSync?: Promise<boolean>;
 
     constructor(private store: Store, private factory: SocketFactory = makeWASocket) {
         this.sender = new Sender(store, {
@@ -39,6 +42,12 @@ export class WhatsAppSession {
         this.current = { state: 'starting' };
         try {
             this.auth = await authentication(this.store, () => this.fail());
+            // Upgrade old sessions that did not keep contact names. Reset only the
+            // local contact collection cursor, before a socket can start syncing.
+            if (!await this.store.readAuth('whatsover:contacts-enabled')) {
+                await this.auth.state.keys.set({ 'app-state-sync-version': { critical_unblock_low: null } });
+                await this.store.writeAuth([['whatsover:contacts-enabled', '1']]);
+            }
             await this.auth.save();
             await this.connect();
         } catch (error) {
@@ -62,7 +71,8 @@ export class WhatsAppSession {
             browser: ['Whatsover', 'Chrome', '1.0.0'],
             markOnlineOnConnect: false,
             syncFullHistory: false,
-            shouldSyncHistoryMessage: () => false,
+            // Profile-name sync is separate from chat history. Do not import messages.
+            shouldSyncHistoryMessage: message => message.syncType === proto.HistorySync.HistorySyncType.PUSH_NAME,
             connectTimeoutMs: 30000,
             defaultQueryTimeoutMs: 30000,
             getMessage: async key => {
@@ -71,6 +81,16 @@ export class WhatsAppSession {
             },
         });
         this.socket = socket;
+        this.contactsSync = undefined;
+        const contacts = (items: Parameters<typeof saveContacts>[1]) => {
+            if (socket !== this.socket) return;
+            this.contactWrites = this.contactWrites.then(() => saveContacts(this.store, items)).catch(() => this.fail());
+        };
+        socket.ev.on('contacts.upsert', contacts);
+        socket.ev.on('contacts.update', contacts);
+        socket.ev.on('messaging-history.set', history => {
+            if (history.syncType === proto.HistorySync.HistorySyncType.PUSH_NAME) contacts(history.contacts);
+        });
         socket.ev.on('creds.update', () => {
             if (socket !== this.socket) return;
             this.authWrites = this.authWrites.then(() => this.auth!.save()).catch(() => {
@@ -119,6 +139,17 @@ export class WhatsAppSession {
         return Object.values(await this.socket!.groupFetchAllParticipating()).map(group => ({ id: group.id, name: group.subject, size: group.size, isCommunity: Boolean(group.isCommunity), isAnnouncement: Boolean(group.isCommunityAnnounce), parentId: group.linkedParent || null }));
     }
 
+    async members(id: string): Promise<Membership> {
+        if (!/^\d+(?:-\d+)?@g\.us$/.test(id)) throw new WhatsoverError('invalid_group', 'Use an exact group JID.');
+        if (this.current.state !== 'connected') throw new WhatsoverError('not_connected', 'WhatsApp is not connected.', 503);
+        const socket = this.socket!;
+        this.contactsSync ??= socket.resyncAppState(['critical_unblock_low'], false).then(() => true, () => false);
+        const synced = await this.contactsSync;
+        await this.contactWrites;
+        const metadata = await socket.groupMetadata(id);
+        return membership(metadata, this.store, lid => socket.signalRepository.lidMapping.getPNForLID(lid), synced);
+    }
+
     async stop(): Promise<void> {
         this.stopped = true;
         this.current = { state: 'stopped' };
@@ -128,6 +159,7 @@ export class WhatsAppSession {
         await this.opening?.catch(() => {});
         await this.socket?.end(undefined);
         await this.authWrites;
+        await this.contactWrites;
         this.qr = undefined;
         this.current = { state: 'stopped' };
     }
