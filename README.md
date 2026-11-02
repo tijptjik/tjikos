@@ -148,3 +148,11 @@ bash scripts/install.sh --from-build runtjik
 
 Run `bun run test:local-run` to check freshness, repair, failure handling, and
 concurrent development invocations using isolated fixtures.
+
+## WhatsApp scripting
+
+[Whatsover](packages/whatsover/README.md) provides a linked-device WhatsApp service,
+JSON CLI, and TypeScript client. Start with `bun run whatsover serve`, then run
+`bun run whatsover login` in another terminal to scan the QR code. Session state
+stays outside the repository. Installation and Cloudflare integration boundaries
+are documented in the package README.
