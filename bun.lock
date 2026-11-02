@@ -98,6 +98,9 @@
     "packages/whatsover": {
       "name": "@tjikos/whatsover",
       "version": "0.1.0",
+      "bin": {
+        "whatsover": "src/cli.ts",
+      },
       "dependencies": {
         "baileys": "7.0.0-rc14",
         "libphonenumber-js": "1.13.15",
