@@ -1,0 +1,1 @@
+../../tasktjik/qml/KineticScrollView.qml

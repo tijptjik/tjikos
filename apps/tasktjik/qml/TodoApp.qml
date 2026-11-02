@@ -22,6 +22,19 @@ Pane {
     palette.highlight: theme.accent
     palette.highlightedText: theme.background
     id: app
+    component EdgeScrollBar: ScrollBar {
+        required property var scrollView
+        // Keep the viewport padded, but place its attached bar at the panel edge.
+        parent: app.parent
+        x: parent.width-width
+        y: scrollView.y+scrollView.parent.mapToItem(parent,0,0).y
+        height: scrollView.height
+        padding: 0
+        z: 20
+        palette: app.palette
+        visible: app.visible && scrollView.visible && size<1
+        enabled: scrollView.enabled
+    }
     property var stateData: ({tasks:[],groups:[]})
     property var theme
     property string collection: 'todo'
@@ -305,7 +318,7 @@ Pane {
         Behavior on y {NumberAnimation {duration:160;easing.type:Easing.OutCubic}}
         radius:8;color:theme.background;border.color:theme.border
         Label {x:14;y:10;text:'Move to another group';color:theme.muted;font.pixelSize:12}
-        ScrollView {
+        KineticScrollView {
             anchors.fill:parent;anchors.margins:12;anchors.topMargin:34;clip:true;contentWidth:availableWidth
             Flow {
                 id:drawerFlow;width:parent.width;spacing:8
@@ -389,6 +402,7 @@ Pane {
     function focusRow(next) {
         if(!next)return;
         selectedId=next.id;focusList();selectedSubtaskId=next.subtaskId || '';
+        taskScroll.stopWheelScroll();
         const flick=taskScroll.contentItem;
         if(next.y<flick.contentY)flick.contentY=next.y;
         else if(next.y+next.height>flick.contentY+flick.height)flick.contentY=Math.max(0,Math.min(flick.contentHeight-flick.height,next.y+next.height-flick.height));
@@ -591,7 +605,7 @@ Pane {
                 Label {text:'Keyboard shortcuts';font.pixelSize:20;color:theme.text;Layout.fillWidth:true}
                 QuietButton {text:'Done';onClicked:help.close()}
             }
-            ScrollView {
+            KineticScrollView {
                 Layout.fillWidth:true;Layout.fillHeight:true
                 contentWidth:availableWidth
                 clip:true
@@ -1087,13 +1101,15 @@ Pane {
         }
         ReadingView {
             id:readingPane
+            ScrollBar.vertical: EdgeScrollBar {scrollView:readingPane}
             visible:!editor && collection==='reading';Layout.fillWidth:true;Layout.fillHeight:true
             theme:app.theme;sites:visible?app.readingSites():[];grid:app.readingGrid;categories:app.readingCategories;selectedId:app.selectedId
             onSelectSite:id=>{app.selectedId=id;app.focusList();}
             onOpenSite:id=>{app.selectedId=id;app.action('open-reference');}
         }
-        ScrollView {
-            id: taskScroll
+        KineticScrollView {
+            id: taskScroll;objectName:'task-scroll'
+            ScrollBar.vertical: EdgeScrollBar {scrollView:taskScroll}
             visible:!editor && collection!=='reading';Layout.fillWidth:true;Layout.fillHeight:true;clip:true
             contentWidth:availableWidth
             ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
@@ -1529,8 +1545,9 @@ Pane {
             IconButton {symbol:'keyboard';description:'Keyboard shortcuts (?)';onClicked:help.open()}
             IconButton {objectName:'settings-button';symbol:'settings';description:'Settings: groups and templates';onClicked:taskSettings.open()}
         }
-        ScrollView {
-            id:editorScroll;visible:editor==='edit';enabled:visible;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth;contentHeight:editorForm.implicitHeight;ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
+        KineticScrollView {
+            id:editorScroll;objectName:'editor-scroll';visible:editor==='edit';enabled:visible;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth;contentHeight:editorForm.implicitHeight;ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
+            ScrollBar.vertical: EdgeScrollBar {scrollView:editorScroll}
             ColumnLayout {
                 id:editorForm
                 width:editorScroll.availableWidth;height:implicitHeight;spacing:18

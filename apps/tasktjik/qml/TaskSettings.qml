@@ -174,7 +174,7 @@ FloatingWindow {
                             Rectangle {Layout.fillWidth:true;implicitHeight:1;color:Qt.alpha(theme.border,0.35)}
                         }
                         Label {visible:settings.tab!=='general';Layout.fillWidth:true;wrapMode:Text.Wrap;font.pixelSize:12;color:theme.muted;text:settings.tab==='groups'?'Rename groups here, or drag a handle onto another group to merge.':'Reusable workflows for new tasks. Select a template to edit it.'}
-                        ScrollView {
+                        KineticScrollView {
                             id:groupScroll;objectName:'settings-scroll'
                             visible:settings.tab!=='general';Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth
                             ScrollBar.horizontal.policy:ScrollBar.AlwaysOff

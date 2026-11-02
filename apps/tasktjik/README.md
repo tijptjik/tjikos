@@ -334,3 +334,9 @@ Hover help and add controls use the app theme. `tests/optimistic_ui.py` checks
 latency, failure rollback, navigation and control geometry with synthetic data;
 `tests/workflow_projection.test.ts` compares the shared client projection against
 the Rust authority.
+
+Mouse-wheel scrolling animates the full 160-pixel step without an initial jump.
+Rapid turns gradually increase travel up to twofold;
+reversing direction, clicking, or dragging the scrollbar stops the previous glide.
+Wheel scrolling stops at either edge without overshooting or restarting an outward
+glide. Touchpad pixel scrolling keeps Qt's native behavior.

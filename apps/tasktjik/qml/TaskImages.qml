@@ -58,7 +58,7 @@ Rectangle {
         anchors.fill:parent;anchors.margins:16;spacing:12
         Label {text:'Images · '+panel.images.length;color:theme.muted;font.pixelSize:12}
         Label {text:panel.task?panel.task.title:'';textFormat:Text.PlainText;color:theme.text;font.pixelSize:16;font.weight:Font.DemiBold;Layout.fillWidth:true;wrapMode:Text.Wrap;maximumLineCount:2;elide:Text.ElideRight}
-        ScrollView {
+        KineticScrollView {
             id:scroll
             Layout.fillWidth:true;Layout.fillHeight:true;clip:true
             contentWidth:availableWidth

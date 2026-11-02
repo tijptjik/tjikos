@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 
-ScrollView {
+KineticScrollView {
     id: root
     required property var theme
     property var sites: []
@@ -69,6 +69,7 @@ ScrollView {
         if(next){selectSite(next.id);Qt.callLater(revealSelection);}
     }
     function revealSelection() {
+        stopWheelScroll();
         const row=visualCards().find(r=>r.id===selectedId);
         if(!row)return;
         if(row.y<contentItem.contentY)contentItem.contentY=row.y;
