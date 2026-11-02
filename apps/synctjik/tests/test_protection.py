@@ -141,6 +141,47 @@ class Fixtures(unittest.TestCase):
         return [c for c in calls if name is None or c[0]==name]
 
 class Protection(Fixtures):
+    def test_backup_cards_use_current_attempt_and_suppress_success_stop_hook(self):
+        config = self.root / 'notjik.json'
+        config.write_text(json.dumps(dict(url='http://localhost', socket=str(self.root/'absent.sock'),
+                                         device='fixture', secret='synthetic', name='fixture', kind='desktop')))
+        config.chmod(0o600)
+        curl = self.root / 'bin/curl'
+        curl.write_text('#!/bin/sh\nexit 1\n')
+        curl.chmod(0o700)
+        state = self.root / 'pull-state'
+        state.mkdir()
+        (state/'last-success.json').write_text(json.dumps(dict(copiedAt='2026-11-01T00:00:00Z', dataCheck='passed')))
+        (state/'last-error.json').write_text(json.dumps(dict(invocation='current', error='Server backup is stale or future-dated')))
+        (self.root/'unit-status.json').write_text(json.dumps(dict(Restart='on-failure', RestartUSec='1h')))
+        env = dict(NOTJIK_SYNC_CONFIG=str(config), NOTJIK_SYNC_STATE=str(self.root/'notice-state'),
+                   INVOCATION_ID='current', SERVICE_RESULT='exit-code')
+        self.run_native('app-pull', 'notify', '--health-check', env=env)
+        with contextlib.closing(sqlite3.connect(self.root/'notice-state/client.sqlite3')) as db:
+            first = json.loads(db.execute('SELECT payload FROM outbox').fetchone()[0])['notice']
+            self.assertEqual(first['type'], 'results-table')
+            self.assertIn('freshness window', first['body'])
+            self.assertEqual(first['actions'][0]['open']['unit'], 'si-app-backup.service')
+            self.assertIn('Automatic retry after 1h', json.dumps(first['data']))
+            self.assertNotIn('Copied snapshot', json.dumps(first['data']))
+            self.run_native('app-pull', 'notify', '--health-check', env={**env, 'SERVICE_RESULT': 'success'})
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM outbox').fetchone()[0], 1)
+            self.run_native('app-pull', 'notify', '--health-check', env={**env, 'INVOCATION_ID': 'new', 'SERVICE_RESULT': 'timeout'})
+            last = json.loads(db.execute('SELECT payload FROM outbox ORDER BY seq DESC LIMIT 1').fetchone()[0])['notice']
+            self.assertIn('exceeded its time limit', last['body'])
+            self.assertNotIn('freshness window', last['body'])
+            self.assertEqual(first['id'], last['id'])
+            marker = state / 'notice-si-app-backup-health.service.json'
+            self.assertTrue(marker.exists())
+            self.run_native('app-pull', 'copy', env=env)
+            self.assertFalse((state/'last-error.json').exists())
+            self.assertTrue(marker.exists())
+            self.run_native('app-pull', 'health', env=env)
+            self.assertFalse(marker.exists())
+            recovered = json.loads(db.execute('SELECT payload FROM outbox ORDER BY seq DESC LIMIT 1').fetchone()[0])['notice']
+            self.assertEqual(recovered['id'], first['id'])
+            self.assertEqual(recovered['data']['state'], 'Complete')
+
     def test_failed_drive_backup_retains_private_diagnostics(self):
         result=self.run_native('drive','backup',ok=False,env={'FAIL_BACKUP':'1'})
         self.assertNotIn('synthetic-private-backup-diagnostic',result.stdout+result.stderr)
@@ -190,6 +231,20 @@ class Protection(Fixtures):
         self.assertEqual(record['mariadbDump'],'database-dumps/mariadb.sql')
         self.assertTrue((self.root/'app-state/last-success.json').exists())
         self.assertIn('--force',next(c for c in self.commands('restic') if 'backup' in c))
+
+    def test_application_backup_defers_before_work_and_records_current_failure(self):
+        with (self.root/'backup.lock').open('w') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            result = self.run_native('app-backup', 'backup', '--defer-if-busy', ok=False,
+                                     env={'INVOCATION_ID': 'synthetic-attempt'})
+        self.assertEqual(result.returncode, 75)
+        self.assertEqual(self.commands(), [])
+        receipt = json.loads((self.root/'app-state/last-error.json').read_text())
+        self.assertEqual(receipt['invocation'], 'synthetic-attempt')
+        self.assertIn('Another backup or sync', receipt['error'])
+        self.assertFalse((self.root/'stage').exists())
+        self.run_native('app-backup', 'backup', '--defer-if-busy')
+        self.assertFalse((self.root/'app-state/last-error.json').exists())
 
     def test_sqlite_wal_is_snapshotted_without_mutating_live_database(self):
         db=self.source/'wal.db'

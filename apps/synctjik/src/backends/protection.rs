@@ -228,7 +228,7 @@ pub fn record_error(state: &Path, result: &Result<()>) -> Result<()> {
     if let Err(e) = result {
         atomic_json(
             &state.join("last-error.json"),
-            &serde_json::json!({"time":crate::util::now(), "error":e.to_string()}),
+            &serde_json::json!({"time":crate::util::now(), "error":e.to_string(), "invocation":std::env::var("INVOCATION_ID").ok()}),
         )?;
     }
     Ok(())

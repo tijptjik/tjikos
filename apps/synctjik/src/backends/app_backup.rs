@@ -26,8 +26,11 @@ use std::{
     about = "Consistent application snapshots with SQLite and MariaDB exports"
 )]
 struct Cli {
-    #[arg(default_value="backup", value_parser=["backup", "check"])]
+    #[arg(default_value="backup", value_parser=["backup", "check", "notify"])]
     action: String,
+    /// Return temporary failure (75) instead of waiting behind storage maintenance.
+    #[arg(long)]
+    defer_if_busy: bool,
     #[arg(long, default_value = "/etc/si-app-backup/policy.json")]
     policy: PathBuf,
 }
@@ -405,16 +408,37 @@ pub fn main(args: &[String], r: &Runner) -> Result<()> {
         println!("Application backup policy valid");
         return Ok(());
     }
+    if cli.action == "notify" {
+        if std::env::var("SERVICE_RESULT").as_deref() == Ok("success") {
+            return Ok(());
+        }
+        return super::backup_notice::publish(
+            &p.state,
+            &p.host,
+            "si-app-backup.service",
+            false,
+            false,
+            r,
+        );
+    }
     private_dir(&p.state)?;
-    let _lock = Lock::take(&p.lock, true, r)?;
-    let result = p.backup(r);
+    let (_lock, result) = match Lock::take(&p.lock, !cli.defer_if_busy, r) {
+        Ok(lock) => {
+            let result = p.backup(r);
+            (Some(lock), result)
+        }
+        Err(error) => (None, Err(error)),
+    };
     record_error(&p.state, &result)?;
-    if notjik_sync::client::configured() {
-        let ok = result.is_ok();
-        if let Err(e) = notjik_sync::client::publish(
-            serde_json::json!({"title":if ok{"Application backup completed"}else{"Application backup failed"},"body":"Inspect the private backup receipt and service journal for details.","app":"Synctjik","type":"status","data":{"state":if ok{"Complete"}else{"Failed"},"tone":if ok{"success"}else{"critical"}},"urgency":if ok{"normal"}else{"critical"},"actions":[]}),
-            "active",
+    if result.is_ok() {
+        remove(&p.state.join("last-error.json"))?;
+        if let Err(e) = super::backup_notice::publish(
+            &p.state,
+            &p.host,
+            "si-app-backup.service",
+            false,
             true,
+            r,
         ) {
             eprintln!("Backup notification queue failed: {e}");
         }

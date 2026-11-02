@@ -12,7 +12,7 @@ use std::{path::PathBuf, process::Command};
     about = "Copy retained application snapshots into an independent verified repository"
 )]
 struct Cli {
-    #[arg(default_value="copy", value_parser=["copy", "health", "check"])]
+    #[arg(default_value="copy", value_parser=["copy", "health", "check", "notify"])]
     action: String,
     #[arg(long)]
     policy: Option<PathBuf>,
@@ -230,10 +230,46 @@ pub fn main(args: &[String], r: &Runner) -> Result<()> {
         println!("Independent-copy policy valid");
         return Ok(());
     }
+    let host = std::fs::read_to_string("/proc/sys/kernel/hostname")?
+        .trim()
+        .to_owned();
+    if cli.action == "notify" {
+        if std::env::var("SERVICE_RESULT").as_deref() == Ok("success") {
+            return Ok(());
+        }
+        let unit = std::env::var("MONITOR_UNIT").unwrap_or_else(|_| {
+            if cli.health_check {
+                "si-app-backup-health.service"
+            } else {
+                "si-app-backup-pull.service"
+            }
+            .into()
+        });
+        ensure!(
+            ["si-app-backup-pull.service", "si-app-backup-health.service"].contains(&unit.as_str()),
+            "Unexpected backup unit"
+        );
+        return super::backup_notice::publish(&p.state, &host, &unit, true, false, r);
+    }
     private_dir(&p.state)?;
     let _lock = Lock::take(&p.state.join("copy.lock"), true, r)?;
+    let unit = if cli.action == "health" || cli.health_check {
+        "si-app-backup-health.service"
+    } else {
+        "si-app-backup-pull.service"
+    };
+    let recovering =
+        p.state.join("last-error.json").exists() || super::backup_notice::pending(&p.state, unit);
     let result = p.copy(r, cli.action == "health" || cli.health_check);
     record_error(&p.state, &result)?;
+    if result.is_ok() {
+        remove(&p.state.join("last-error.json"))?;
+        if cli.action == "copy" || recovering {
+            if let Err(e) = super::backup_notice::publish(&p.state, &host, unit, true, true, r) {
+                eprintln!("Backup notification queue failed: {e}");
+            }
+        }
+    }
     result
 }
 

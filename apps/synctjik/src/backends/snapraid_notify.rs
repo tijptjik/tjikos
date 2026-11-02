@@ -146,7 +146,7 @@ impl Policy {
             escape(&job.task)
         );
         match problem {
-            None => format!("✅ <b>SnapRAID · Recovered</b>\n{heading}\n\nMaintenance completed successfully."),
+            None => format!("✅ <b>SnapRAID · Recovered</b>\n{heading}\n\nThe service no longer reports a failure. This does not certify a new scrub."),
             Some(problem) => format!("⚠️ <b>SnapRAID · Action needed</b>\n{heading}\n\n{}\n\n<b>Review logs</b>\n<pre>journalctl -u {} -n 50</pre>", escape(problem), escape(unit.trim_end_matches(".service"))),
         }
     }
@@ -162,7 +162,7 @@ impl Policy {
         } else {
             (
                 "SnapRAID · Recovered",
-                "Maintenance completed successfully.".to_owned(),
+                "The service no longer reports a failure. The last successful run is shown when available.".to_owned(),
             )
         };
         let mut actions = if problem.is_some() && !job.test {
@@ -186,16 +186,31 @@ impl Policy {
                 }
             }
         }
+        let mut results = vec![
+            json!({"label":"Host","value":self.host}),
+            json!({"label":"Task","value":job.task}),
+        ];
+        if let Some(mode) = &job.mode {
+            if let Ok(receipt) = read_json(&self.receipts.join(format!("last-{mode}-success.json")))
+            {
+                if let Some(time) = receipt["completed_at"]
+                    .as_str()
+                    .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                {
+                    results.push(json!({"label":"Last successful run","value":time.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M %Z").to_string()}));
+                }
+            }
+        }
         json!({
             "title": title,
             "body": body,
-            "app": "Synctjik", "type": "status",
+            "app": "Synctjik", "type": "results-table",
             "data": {
                 "state": if job.test {
                     if problem.is_some() { "Test alert" } else { "Test passed" }
                 } else if problem.is_some() { "Action needed" } else { "Recovered" },
                 "tone": if problem.is_some() && !job.test { "critical" } else if problem.is_some() { "warning" } else { "success" },
-                "detail": format!("{} · {}", self.host, job.task)
+                "results": results
             },
             "actions": actions,
             "urgency": if problem.is_some() && !job.test { "critical" } else { "normal" }
@@ -418,9 +433,10 @@ mod tests {
         let problem = "2062 removals exceed limit 200; review diff before any sync";
         let notice = p.notice(unit, Some(problem));
         assert_eq!(notice["body"], problem);
-        assert_eq!(notice["type"], "status");
+        assert_eq!(notice["type"], "results-table");
         assert_eq!(notice["data"]["state"], "Action needed");
-        assert_eq!(notice["data"]["detail"], "si · Sync");
+        assert_eq!(notice["data"]["results"][0]["value"], "si");
+        assert_eq!(notice["data"]["results"][1]["value"], "Sync");
         assert_eq!(notice["actions"][0]["label"], "Investigate");
         assert_eq!(notice["actions"][0]["open"]["host"], "si");
         assert_eq!(notice["actions"][0]["open"]["unit"], unit);
@@ -434,6 +450,21 @@ mod tests {
         assert_eq!(recovery["urgency"], "normal");
         assert_eq!(recovery["data"]["tone"], "success");
         assert_eq!(recovery["data"]["state"], "Recovered");
+        assert!(!recovery["body"]
+            .as_str()
+            .unwrap()
+            .contains("completed successfully"));
+        assert_eq!(recovery["data"]["results"].as_array().unwrap().len(), 2);
+        atomic_json(
+            &receipts.path().join("last-sync-success.json"),
+            &json!({"completed_at":"2026-11-01T00:00:00Z"}),
+        )
+        .unwrap();
+        let with_receipt = p.notice(unit, None);
+        assert_eq!(
+            with_receipt["data"]["results"][2]["label"],
+            "Last successful run"
+        );
         p.jobs.get_mut(unit).unwrap().test = true;
         assert_eq!(p.notice(unit, Some(problem))["actions"], json!([]));
     }
@@ -453,7 +484,7 @@ mod tests {
         let review_path = receipts.path().join("removal-review.json");
         atomic_json(&review_path, &json!({"id":review_id})).unwrap();
         let notice = p.notice(unit, Some(problem));
-        assert_eq!(notice["type"], "status");
+        assert_eq!(notice["type"], "results-table");
         assert_eq!(notice["data"]["state"], "Action needed");
         assert_eq!(notice["actions"].as_array().unwrap().len(), 3);
         assert_eq!(notice["actions"][0]["label"], "Investigate");

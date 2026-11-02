@@ -190,6 +190,17 @@ pause ownership for interrupted-writer recovery. `status` returns 75 when busy.
 Sync/scrub are real maintenance operations: never use them against live storage
 as migration tests. Notification health checks can send configured alerts.
 
+Scheduled application backups can use `app-backup backup --defer-if-busy`:
+exit 75 defers work when the shared storage lock is held, allowing systemd to
+retry without spending the execution timeout waiting. Dotjik configures hourly
+failure retries for the server backup, independent copy and health check.
+`app-backup notify` and `app-pull notify` are failure stop hooks; the latter uses
+`--health-check` for the health unit. They ignore successful stop hooks and use
+the current systemd invocation and retry settings. Native `results-table` cards
+include available success timestamps and verification details, omit missing
+fields, and update the same job card on recovery. Copy and health recovery
+markers are independent even though they share a backup receipt.
+
 Native SnapRAID incident alerts include **Investigate**, which opens Kitty on the
 receiving desktop and uses its pinned `tjikup ssh HOST` identity to show the last
 100 journal entries for the failed service. The terminal stays open for review.
@@ -199,6 +210,9 @@ Notjik sync authority/client and Notjik UI with this producer: the action carrie
 a validated host and service name, never a remote shell command. Recovery and
 test notifications have no investigation action. Telegram retains HTML formatting;
 native cards use plain text.
+SnapRAID result cards include the last successful run only when its receipt is
+available. Recovery describes the service's cleared failure state; it does not
+invent a new scrub result when an operator acknowledges an investigated incident.
 
 Dotjik owns source selection, exclusions, host identities, mount expectations,
 retention and notification policy. `${HOME}` and `${XDG_RUNTIME_DIR}` expand in

@@ -2,6 +2,7 @@
 mod app_backup;
 mod app_pull;
 mod app_restore;
+mod backup_notice;
 mod cloudflare;
 mod drive;
 mod private_assets;
