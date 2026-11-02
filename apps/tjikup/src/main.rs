@@ -135,7 +135,29 @@ fn cli(arguments: Vec<String>, completed: &mut Option<scheduler::Receipt>) -> Re
                 return Ok(0);
             }
             "--version" => {
-                println!("tjikup {} (recipes v2)", env!("CARGO_PKG_VERSION"));
+                let revision = env!("TJIKUP_SOURCE_REVISION");
+                let suffix = if env!("TJIKUP_SOURCE_DIRTY") == "true" {
+                    "-modified"
+                } else {
+                    ""
+                };
+                println!(
+                    "tjikup {} (recipes v2; {}{})",
+                    env!("CARGO_PKG_VERSION"),
+                    &revision[..revision.len().min(12)],
+                    suffix
+                );
+                return Ok(0);
+            }
+            "--build-info" => {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "source_revision": env!("TJIKUP_SOURCE_REVISION"),
+                        "source_dirty": env!("TJIKUP_SOURCE_DIRTY") == "true",
+                    })
+                );
                 return Ok(0);
             }
             "--config" => path = PathBuf::from(args.next().context("--config needs a path")?),

@@ -12,6 +12,12 @@ the static GitHub Release executable pinned in `apps/tjikos-sh/release.json` and
 verifies its SHA-256 using `curl` and `jq`. Rust/Cargo is required only for an
 explicit source build, not for installation or ordinary updates.
 
+`tjikup --version` includes the source commit and marks modified source builds.
+`tjikup --build-info` exposes that provenance as JSON. The package version alone
+does not distinguish bootstrap releases or local builds. After an explicit
+build, use `bash apps/tjikup/scripts/install.sh --from-build` to install it;
+the default install command fetches the pinned release again.
+
 Native file deployment is available through `tjikup files`; see
 [Native file and template management](docs/native-files.md) for manifests,
 conflict handling, isolated verification and recovery. MiniJinja templates can
