@@ -212,3 +212,125 @@ lost HTTP reply. Confirm the original submission before editing the saved item.
 Capture drafts are held in the launcher process; after restarting it, check
 Reading before capturing a tab whose save outcome was unknown. Browser session
 identifiers stay on the client. Only HTTP and HTTPS references are accepted.
+
+## Projects, templates and subtask flows
+
+The **Projects** tab lists projects, and **New** there creates a project.
+Open **Settings → Templates** to create or edit a template; task views create tasks. A project appears as one
+card with a completion bar. Open it (or press Enter) for the usual
+grouped task view scoped to its members. Drag its card between groups to change
+its grouping. In the project editor, **Only show Project tasks in their project**
+is enabled by default; disable it to also display members in the index. Moving a
+project changes its own grouping, preserving members' groupings inside it.
+Projects with members cannot be deleted until those members are reassigned.
+**Settings → Project sorting** offers **Always First**, **Always Last**, and
+**First Due** (the default). First/last placement applies within each group for
+every task sort order. First Due uses the earliest effective due date among
+unfinished, non-cancelled members, including hidden members; projects without
+dated members follow dated tasks when sorting by due date. The choice is saved
+locally and shared with the Runtjik task view.
+Empty groups are shown only during a drag. Double-click a task, use the pencil,
+or press **E** to edit it. Hover a task to reveal its animated completion checkbox;
+**D** also toggles completion. **C** immediately cancels the focused task, with
+rollback if saving fails. **Cancel task** and **C** also work in the editor
+(C does not intercept typing in text fields). Click a project or press
+**Enter** to open it, with its groups starting in column one.
+
+Double-click a group heading to edit its name in place for only the tasks currently
+visible. Enter or Save submits; Escape or Cancel discards the draft. A failed save
+keeps the field and error visible for correction.
+Settings opens a separate window with searchable General, Groups, and Templates
+sections. Its transient parent is the invoking task window; Dotjik's Hyprland rule
+floats it and centers it over that window.
+Task groups retain their delegates across column changes, and filtered/sorted
+rows are cached independently of window geometry. Run
+`python3 -B tests/resize_benchmark.py` for a synthetic 112-task resize workload;
+add `--wayland` for an isolated compositor with hardware rendering and per-client
+GPU engine time when the driver exposes it. These measurements do not include
+the desktop compositor's GPU work.
+**Settings → Groups** manages saved groups, including empty ones. Add, rename or
+remove a group there; removing moves its tasks to Inbox. Drag a group's handle
+into another group to merge, then confirm in the modal. Global group changes
+check all affected revisions and membership, preserve deadlines, and commit as
+one undoable authority transaction. Local JSON storage uses a roll-forward
+journal to recover interrupted batches. API actions are `group-add`,
+`group-rename`, `group-merge`, and `group-remove`, with `groupsRevision`, `source`,
+`target`, and `members: [{id, revision}]`; `scoped: true` limits a rename to those
+members. Rendered state includes `groupsRevision`.
+
+Progress pips indicate subtasks: click the card or pips, or press **Enter**, to
+expand or collapse them. Each primary step or flow contributes a pip, and active
+branch steps add their own. A flow completes after its selected branch completes.
+Click a subtask row or press **Enter** while it is focused to toggle completion.
+Rows use dots that reveal a checkbox on hover; red means exit and yellow means
+reminder. The date column uses the same compact codes as the main task. The hover **+** adds the first
+subtask; an expanded list has a **+** at the end. The editor supports
+ordinary steps and flow blocks. Select a flow to add alternatives and set its
+shared deadline. An alternative can be an ordinary choice, an **Exit**, or a
+**Reminder**. Select an ordinary alternative to add branch subtasks.
+
+Completing a choice cancels its siblings and activates its branches. Completing
+an exit also cancels subsequent steps. Reopening the choice restores the previous
+completion history and hides its branches again. Reminders accept intervals such
+as `one week before`, `2 days before the deadline`, or `on deadline`; they remain
+snoozed until that date. Completing a reminder leaves the choice open. Another
+choice cancels unfinished reminders but retains completed ones. Due reminders
+surface their owning task in date views and use the existing notification leases;
+notification completion targets the reminder, not the entire task.
+
+The **Workflow** toggle in the template/task editor makes each primary step wait
+for the preceding step. Alternatives are mutually exclusive choices, not a chain;
+activated branches must finish before the next primary step unlocks. Blocked steps
+cannot be completed or send reminders. Reopening an earlier step blocks later steps
+without erasing their completion history. **Show blocked** (the lock icon) reveals
+blocked tasks and steps; they are hidden by default. API clients set `fields.workflow`
+to a boolean, copied from a template when creating from it. Rendered stages include
+`dependsOn` and `status`, and `subtaskPips` carries the compact progress indicators.
+
+**Templates** are editable reusable flows. Select **From Template** on a new task
+to make an independent copy, with all completion flags reset. Later template edits
+do not modify existing tasks. Main-task completion remains an explicit action.
+
+API clients create records with `fields.kind` set to `todo`, `project`, or
+`template`, link tasks using `fields.project` (the project UUID), and instantiate
+with a top-level `template_id` on `create`. `fields.subtasks` is a list of nodes:
+`{id,title,kind,due,done,items}`. Flow nodes contain choices in `items`; choice
+nodes contain branch steps. Reminder nodes also have an `offset` string. Normal
+steps and flow blocks own their due dates; choice dates must be empty. Updates
+use `subtask-toggle` with `id`, `revision`, and `subtask_id`. As with other
+mutations, retain the UUID `request_id` on retry. A whole flow change is one
+revision-checked, undoable transaction. Rendered state includes `workflowRows`
+and `subtaskProgress`; raw records retain explicit completion flags only.
+
+Validation: `bun run test` covers authority/model/CLI behavior;
+`python3 -B tests/projects_ui.py` exercises the native renderer with synthetic
+projects, template copies, flow choices, exit reopening, branches and dragging.
+
+Repeat schedules accept phrases such as `every two weeks`, `every Monday and
+Friday`, and `on the 1st and 15th of every month`. Enter or leave the field to see
+the interpreted schedule; the pencil lets you retype it. Unsupported phrases stay
+editable with an error rather than being guessed.
+
+A repeat no longer requires a due date. Without a deadline, the authority stores
+`repeat.start` when the schedule is created. Clearing a legacy recurring task's
+deadline preserves its previous anchor and completion history. Calendar-month
+and yearly schedules retain month-end/leap-year behavior; weekdays and day-of-
+month schedules use their next matching calendar day. Scheduled occurrences can
+still become due and send reminders. Today, This week, and This month also include ordinary
+undated tasks, while respecting future snoozes and project visibility.
+
+`python3 -B tests/subtask_ui.py` checks workflow gating, compact controls, date
+alignment, the month view and vertically centered empty states with synthetic data.
+
+Completion controls update immediately, including workflow dependencies, branches,
+reminders and progress pips. Requests are serialized with revision guards; rapid
+changes can queue without waiting for the previous response. Rejected saves roll
+back that task and its queued dependent changes while independent tasks continue.
+Background refreshes cannot replace a pending optimistic projection.
+
+Up/Down traverse expanded subtasks, skipping flow headers and inactive options,
+then continue to the next task. The focused subtask survives save reconciliation.
+Hover help and add controls use the app theme. `tests/optimistic_ui.py` checks
+latency, failure rollback, navigation and control geometry with synthetic data;
+`tests/workflow_projection.test.ts` compares the shared client projection against
+the Rust authority.
