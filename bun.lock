@@ -39,6 +39,10 @@
         "@tjikos/notjik-sync": "workspace:*",
       },
     },
+    "apps/oo7-pam": {
+      "name": "@tjikos/oo7-pam",
+      "version": "0.1.0",
+    },
     "apps/runtjik": {
       "name": "@tjikos/runtjik",
       "version": "0.8.3",
@@ -302,6 +306,8 @@
     "@tjikos/notjik-service": ["@tjikos/notjik-service@workspace:apps/notjik-service"],
 
     "@tjikos/notjik-sync": ["@tjikos/notjik-sync@workspace:packages/notjik-sync"],
+
+    "@tjikos/oo7-pam": ["@tjikos/oo7-pam@workspace:apps/oo7-pam"],
 
     "@tjikos/runtjik": ["@tjikos/runtjik@workspace:apps/runtjik"],
 
