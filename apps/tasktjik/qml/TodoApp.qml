@@ -34,7 +34,13 @@ Pane {
     property var expandedTasks: ({})
     readonly property var currentProject: (listState?.tasks || []).find(t=>t.id===projectId) || null
     function enterProject(task) {projectReturnView=view;groupColumns.placements={};groupColumns.measuredHeights={};projectId=task.id;view='all';filter='';selectedId='';groupColumns.balance();taskScroll.contentItem.contentY=0;selectVisibleTask();}
-    function newItem(kind) {selectedId='';openEditor({title:'',kind:kind,project:kind==='todo'?projectId:'',group:currentProject?currentProject.group:'All',tags:[],due:'',repeat:{},reference:'',subtasks:[]});}
+    function newItem(kind,group) {selectedId='';openEditor({title:'',kind:kind,project:kind==='todo'?projectId:'',group:group || (currentProject?currentProject.group:'All'),tags:[],due:'',repeat:{},reference:'',subtasks:[]});}
+    function socialTitle(task) {return String(task.group || '').toLowerCase()==='socials'?task.title.replace(/^(Meet|Message)\s+(?=\S)/i,''):task.title;}
+    function socialTags(task) {
+        if(String(task.group || '').toLowerCase()!=='socials')return [];
+        const tags=(task.tags || []).map(tag=>tag.replace(/^#/,'').toLowerCase());
+        return ['message','hangout','call'].filter(tag=>tags.includes(tag));
+    }
     function addSubtask(task) {selectedId=task.id;openEditor();workflowEditor.add('task','');}
     function projectProgress(task) {
         let rows=(listState?.tasks || []).filter(t=>t.project===task.id && t.kind==='todo' && t.status!=='cancelled');
@@ -1187,6 +1193,17 @@ Pane {
                                 QuietButton {visible:groupNameEdit.visible;text:app.groupRename && app.groupRename.sent?'Saving…':'Save';enabled:!app.requestBusy && !!app.groupRename && !app.groupRename.sent;horizontalPadding:8;onClicked:app.saveGroupRename(groupNameEdit.text)}
                                 QuietButton {visible:groupNameEdit.visible;text:'Cancel';enabled:!!app.groupRename && !app.groupRename.sent;horizontalPadding:8;onClicked:{app.groupRename=null;app.focusList();}}
                                 Label {text:app.tasks(modelData).length;font.pixelSize:11;color:theme.muted}
+                                Button {
+                                    objectName:'domain-add-'+groupPanel.modelData
+                                    visible:!groupNameEdit.visible
+                                    implicitWidth:24;implicitHeight:28;padding:0
+                                    enabled:!app.pendingSave && !app.pendingPurge && !app.pendingMove && !app.completing
+                                    Accessible.name:'Add task to '+(groupPanel.modelData==='All'?'Inbox':groupPanel.modelData)
+                                    onClicked:{app.newItem('todo',groupPanel.modelData);app.sections=Object.assign({},app.sections,{group:true});}
+                                    contentItem:Text {text:'+';color:parent.hovered || parent.activeFocus?theme.accent:theme.muted;font.pixelSize:20;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
+                                    background:Rectangle {radius:4;color:parent.hovered || parent.activeFocus?theme.surface:'transparent'}
+                                    TaskToolTip {visible:parent.hovered;theme:app.theme;text:parent.Accessible.name}
+                                }
                             }
                             Label {visible:!!app.groupRename && app.groupRename.source===groupPanel.modelData && !!app.groupRename.error;text:visible?app.groupRename.error:'';color:'#eb6f92';Layout.fillWidth:true;wrapMode:Text.Wrap}
                             Repeater {
@@ -1299,7 +1316,8 @@ Pane {
                                                 property real lastLineWidth: 0
                                                 property real lastLineTop: 0
                                                 property real firstLineHeight: 18
-                                                text:modelData.title
+                                                text:app.socialTitle(modelData)
+                                                leftPadding:socialIcons.visible?socialIcons.width+6:0
                                                 textFormat:Text.PlainText
                                                 font.pixelSize:15
                                                 font.weight:Font.DemiBold
@@ -1316,8 +1334,36 @@ Pane {
                                                 }
                                                 onColorChanged: if(cancelledStrike.visible)cancelledStrike.requestPaint()
                                                 Row {
+                                                    id:socialIcons;objectName:'social-icons-'+taskCard.modelData.id
+                                                    y:taskTitle.topPadding+(taskTitle.firstLineHeight-16)/2;spacing:4
+                                                    visible:socialIconRepeater.count>0
+                                                    Repeater {
+                                                        id:socialIconRepeater;model:app.socialTags(taskCard.modelData)
+                                                        Canvas {
+                                                            required property string modelData
+                                                            width:16;height:16
+                                                            Accessible.name:modelData==='hangout'?'Hangout':modelData==='message'?'Message':'Call'
+                                                            property color ink:taskTitle.color
+                                                            onInkChanged:requestPaint()
+                                                            onPaint:{
+                                                                const c=getContext('2d');c.reset();c.strokeStyle=ink;c.lineWidth=1.3;c.lineCap='round';c.lineJoin='round';c.beginPath();
+                                                                if(modelData==='message'){
+                                                                    c.moveTo(2,2.5);c.lineTo(14,2.5);c.lineTo(14,11);c.lineTo(7,11);c.lineTo(3,14);c.lineTo(3,11);c.lineTo(2,11);c.closePath();
+                                                                    c.moveTo(5,5.5);c.lineTo(11,5.5);c.moveTo(5,8);c.lineTo(9,8);
+                                                                }else if(modelData==='hangout'){
+                                                                    c.arc(5.5,5,2.3,0,Math.PI*2);c.moveTo(1,14);c.bezierCurveTo(1,7.5,10,7.5,10,14);
+                                                                    c.moveTo(10,2.8);c.bezierCurveTo(14,2.8,14,7,10,7);c.moveTo(11,9);c.bezierCurveTo(14,9,15,11,15,14);
+                                                                }else{
+                                                                    c.moveTo(3,1.5);c.lineTo(6,1.5);c.lineTo(7,5);c.lineTo(5,6.5);c.bezierCurveTo(6,9,7,10,9.5,11);c.lineTo(11,9);c.lineTo(14.5,10);c.lineTo(14.5,13);c.quadraticCurveTo(14,15,11,14);c.bezierCurveTo(6,13,3,10,2,5);c.quadraticCurveTo(1,2,3,1.5);
+                                                                }
+                                                                c.stroke();
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                Row {
                                                     id:statusIcons
-                                                    x:taskTitle.lastLineWidth+6;y:taskTitle.lastLineTop+2
+                                                    x:taskTitle.leftPadding+taskTitle.lastLineWidth+6;y:taskTitle.lastLineTop+2
                                                     spacing:5
                                                     visible:blockedIcon.visible || repeatIcon.visible || imageIcon.visible
                                                     Canvas {
