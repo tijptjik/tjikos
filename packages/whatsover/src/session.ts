@@ -3,6 +3,7 @@ import pino from 'pino';
 import { authentication } from './auth.ts';
 import { Sender } from './sender.ts';
 import { membership, saveContacts, type Membership } from './members.ts';
+import { updateContact, validateContact, type ContactResult } from './contacts.ts';
 import { WhatsoverError, type Status, type Store } from './types.ts';
 
 type SocketFactory = typeof makeWASocket;
@@ -20,6 +21,7 @@ export class WhatsAppSession {
     private opening?: Promise<void>;
     private contactWrites: Promise<void> = Promise.resolve();
     private contactsSync?: Promise<boolean>;
+    private contactUpdates: Promise<unknown> = Promise.resolve();
 
     constructor(private store: Store, private factory: SocketFactory = makeWASocket) {
         this.sender = new Sender(store, {
@@ -150,12 +152,28 @@ export class WhatsAppSession {
         return membership(metadata, this.store, lid => socket.signalRepository.lidMapping.getPNForLID(lid), synced);
     }
 
+    saveContact(input: unknown): Promise<ContactResult> {
+        const request = validateContact(input);
+        const job = this.contactUpdates.then(async () => {
+            if (this.current.state !== 'connected') throw new WhatsoverError('not_connected', 'WhatsApp is not connected.', 503);
+            await this.socket!.resyncAppState(['critical_unblock_low'], false);
+            await this.contactWrites;
+            const result = await updateContact(this.store, request, (contact, jid) => this.socket!.chatModify({ contact }, jid));
+            await this.contactWrites;
+            await this.authWrites;
+            return result;
+        });
+        this.contactUpdates = job.catch(() => {});
+        return job;
+    }
+
     async stop(): Promise<void> {
         this.stopped = true;
         this.current = { state: 'stopped' };
         clearTimeout(this.retry);
         // Finish accepted sends before closing the transport and store.
         await this.sender.drain();
+        await this.contactUpdates;
         await this.opening?.catch(() => {});
         await this.socket?.end(undefined);
         await this.authWrites;

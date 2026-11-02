@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { publicResult, WhatsoverError, type SendResult, type Status, type Store } from './types.ts';
 import type { Membership } from './members.ts';
+import type { ContactResult } from './contacts.ts';
 
 export interface SessionAPI {
     status(): Status;
@@ -8,6 +9,7 @@ export interface SessionAPI {
     sender: { send(input: unknown): Promise<SendResult> };
     groups(): Promise<{ id: string; name: string }[]>;
     members?(id: string): Promise<Membership>;
+    saveContact?(input: unknown): Promise<ContactResult>;
 }
 
 export function handler(session: SessionAPI, store: Store, token?: string) {
@@ -33,13 +35,14 @@ export function handler(session: SessionAPI, store: Store, token?: string) {
                 const record = await store.result(decodeURIComponent(path.slice('/v1/messages/'.length)));
                 return record ? json(publicResult(record)) : json({ error: 'not_found' }, 404);
             }
-            if (request.method === 'POST' && path === '/v1/messages') {
+            if (request.method === 'POST' && (path === '/v1/messages' || (path === '/v1/contacts' && session.saveContact))) {
                 if (!request.headers.get('content-type')?.startsWith('application/json')) throw new WhatsoverError('invalid_content_type', 'Use application/json.', 415);
                 // Bun.serve additionally limits the body before buffering it.
                 const text = await request.text();
                 if (Buffer.byteLength(text) > 128 * 1024) throw new WhatsoverError('too_large', 'Request body exceeds 128 KiB.', 413);
                 let input: unknown;
                 try { input = JSON.parse(text); } catch { throw new WhatsoverError('invalid_json', 'Invalid JSON.'); }
+                if (path === '/v1/contacts') return json(await session.saveContact!(input));
                 const result = await session.sender.send(input);
                 return json(result, result.state === 'submitted' ? 200 : 409);
             }

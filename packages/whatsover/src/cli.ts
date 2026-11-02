@@ -17,6 +17,7 @@ const help = `whatsover — scriptable WhatsApp linked device
   whatsover status                         Connection status (JSON)
   whatsover groups                         Group names and JIDs (JSON)
   whatsover members GROUP_ID               Membership and available names (JSON)
+  whatsover contact --stdin                Save one guarded contact update (JSON)
   whatsover send --to +852… --text 'Hello' --id stable-job-id
   whatsover send --to GROUP_JID --stdin --id stable-job-id
   whatsover result REQUEST_ID              Inspect a previous send (JSON)
@@ -42,6 +43,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     const commands = {
         serve: { 'state-dir': { type: 'string' }, duration: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' } },
         login: common, status: common, groups: common, result: common, members: common,
+        contact: { ...common, stdin: { type: 'boolean' } },
         send: { ...common, to: { type: 'string' }, text: { type: 'string' }, stdin: { type: 'boolean' }, id: { type: 'string' } },
     } as const;
     if (!(command in commands)) throw new Error(`Unknown command: ${command}. Run whatsover --help.`);
@@ -104,6 +106,10 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     switch (command) {
         case 'status': output(await client.status()); break;
         case 'groups': output(await client.groups()); break;
+        case 'contact':
+            if (!options.stdin) throw new Error('Usage: whatsover contact --stdin (JSON: to, firstName, lastName, expectedName)');
+            output(await client.saveContact(JSON.parse(await Bun.stdin.text())));
+            break;
         case 'members':
             if (positionals.length !== 1) throw new Error('Usage: whatsover members GROUP_ID');
             output(await client.members(positionals[0]));
