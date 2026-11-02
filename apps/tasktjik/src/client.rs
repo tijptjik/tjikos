@@ -224,7 +224,7 @@ fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
     }
     if action == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"projects":true,"workflows":true,"undated_repeat":true,"workflow_dependencies":true,"protocol":1}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"projects":true,"workflows":true,"undated_repeat":true,"groups":true,"workflow_dependencies":true,"protocol":1}),
         );
     }
     if action == "create" {
@@ -239,7 +239,9 @@ fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
         ensure!(!s(&request["actor"]).trim().is_empty(), "Actor is required");
     }
     let result = model::mutate(tasks, request)?;
-    if action == "purge" {
+    if let Some(changed) = result["changed"].as_array() {
+        crate::groups::apply(tasks, changed);
+    } else if action == "purge" {
         tasks.retain(|t| t["id"] != result["id"]);
     } else if result.is_object() {
         if let Some(t) = tasks.iter_mut().find(|t| t["id"] == result["id"]) {
@@ -345,6 +347,21 @@ impl Todo {
         }
         private_dir(&root)?;
         let _lock = lock(&root.join(".lock"))?;
+        // Roll forward an interrupted batch before exposing any local snapshot.
+        let journal = root.join(".group-batch");
+        if journal.exists() {
+            let changes: Vec<Value> = serde_json::from_slice(&fs::read(&journal)?)?;
+            for task in changes {
+                let id = s(&task["id"]);
+                Uuid::parse_str(id)?;
+                atomic(
+                    &root.join(format!("{id}.json")),
+                    &serde_json::to_vec(&task)?,
+                )?;
+            }
+            fs::remove_file(&journal)?;
+            fs::File::open(&root)?.sync_all()?;
+        }
         let mut paths = fs::read_dir(&root)?
             .map(|e| e.map(|e| e.path()))
             .collect::<std::io::Result<Vec<_>>>()?;
@@ -372,7 +389,16 @@ impl Todo {
             let (metadata, bytes) = crate::images::decode(s(&request["data"]))?;
             atomic(&root.join("images").join(s(&metadata["id"])), &bytes)?;
         }
-        if result.is_object() && request["action"] != "capabilities" {
+        if let Some(changed) = result["changed"].as_array() {
+            atomic(&journal, &serde_json::to_vec(changed)?)?;
+            for task in changed {
+                let id = s(&task["id"]);
+                Uuid::parse_str(id)?;
+                atomic(&root.join(format!("{id}.json")), &serde_json::to_vec(task)?)?;
+            }
+            fs::remove_file(&journal)?;
+            fs::File::open(&root)?.sync_all()?;
+        } else if result.is_object() && request["action"] != "capabilities" {
             let id = s(&result["id"]);
             Uuid::parse_str(id)?;
             if request["action"] == "purge" {
@@ -449,6 +475,12 @@ impl Todo {
             return self.state(request, settings, demo);
         }
         let task = self.request(request.clone(), settings, demo)?;
+        if task["changed"].is_array() {
+            let rows = self.request(json!({"action":"list"}), settings, demo)?;
+            let mut state = render_state(rows, &request, demo)?;
+            state["mutation_accepted"] = json!(true);
+            return Ok(state);
+        }
         ensure!(task["id"].is_string(), "Missing acknowledged task ID");
         let removed = if task["deleted"] == true {
             json!([task["id"]])
@@ -461,6 +493,12 @@ impl Todo {
             json!([task])
         };
         let mut state = render_state(rows, &request, demo)?;
+        state["groups"] = json!(state["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|t| t["group"].as_str())
+            .collect::<Vec<_>>());
         state["incremental"] = json!(true);
         state["removed"] = removed;
         state["mutation_accepted"] = json!(true);
@@ -487,12 +525,9 @@ pub fn render_state(mut rows: Value, request: &Value, demo: bool) -> Result<Valu
         }
         return Ok(json!({"message":"Opened reading reference"}));
     }
-    let mut groups: Vec<String> = [
-        "All", "Quick", "General", "Work", "Socials", "Domestic", "Finances", "Tech",
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect();
+    let mut groups = crate::groups::names(rows);
+    let groups_revision = crate::groups::revision(rows);
+    rows.retain(|t| t["kind"] != "settings");
     let mut extra = Vec::new();
     for t in rows.iter_mut() {
         model::defaults(t);
@@ -516,7 +551,9 @@ pub fn render_state(mut rows: Value, request: &Value, demo: bool) -> Result<Valu
             groups.push(g);
         }
     }
-    Ok(json!({"tasks":rows,"groups":groups,"today":model::today().to_string()}))
+    Ok(
+        json!({"tasks":rows,"groups":groups,"groupsRevision":groups_revision,"today":model::today().to_string()}),
+    )
 }
 
 #[cfg(test)]

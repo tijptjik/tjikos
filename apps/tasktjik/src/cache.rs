@@ -89,13 +89,15 @@ impl CachedTodo {
             // Update the replica from the acknowledged task immediately; a complete
             // refresh follows to reconcile other devices and deletions.
             let mut snapshot = read(&path).unwrap_or_else(|_| json!({"tasks":[]}));
-            if result.is_object() && result["id"].is_string() {
-                let tasks = snapshot["tasks"].as_array_mut().context("Invalid cache")?;
-                tasks.retain(|t| t["id"] != result["id"]);
-                if result["deleted"] != true {
-                    tasks.push(result);
-                }
-                // Preserve the last full-sync timestamp for partial updates.
+            let changes = result["changed"]
+                .as_array()
+                .cloned()
+                .unwrap_or_else(|| vec![result]);
+            if changes.iter().all(|t| t["id"].is_string()) {
+                crate::groups::apply(
+                    snapshot["tasks"].as_array_mut().context("Invalid cache")?,
+                    &changes,
+                );
                 if let Err(e) = atomic(&path, &serde_json::to_vec(&snapshot)?) {
                     self.error = format!("Saved on server; cache update failed: {e}");
                 }

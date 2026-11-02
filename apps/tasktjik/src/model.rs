@@ -141,6 +141,23 @@ pub fn defaults(t: &mut Value) {
 }
 pub fn validate(t: &mut Value) -> Result<()> {
     ensure!(t.is_object(), "Task must be an object");
+    if t["kind"] == "settings" {
+        ensure!(
+            t["id"] == crate::groups::ID && t["revision"].as_u64().is_some_and(|r| r < u64::MAX),
+            "Invalid group settings"
+        );
+        let groups = t["groups"].as_array().context("Invalid groups")?;
+        ensure!(
+            groups.iter().any(|g| g == "All")
+                && groups
+                    .iter()
+                    .all(|g| g.as_str().is_some_and(|s| !s.is_empty()
+                        && s.len() <= 100
+                        && !s.chars().any(char::is_control))),
+            "Invalid groups"
+        );
+        return Ok(());
+    }
     for key in ["due", "owner", "createdAt", "updatedAt"] {
         ensure!(t[key].is_string(), "Invalid {key}");
     }
@@ -344,6 +361,13 @@ fn between_keys(lower: &str, upper: Option<&str>) -> Result<String> {
 
 pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
     let op = field(r, "action");
+    if op.starts_with("group-") {
+        return crate::groups::mutate(tasks, r);
+    }
+    ensure!(
+        r["id"] != crate::groups::ID,
+        "Use group settings to change groups"
+    );
     let mut t = if op == "create" {
         json!({"id":Uuid::new_v4().to_string(),"title":"","kind":"todo","reference":"","createKey":r["request_id"],"group":"All","tags":[],"due":"","repeat":{},"plan":"","owner":"tijptjik","notifyBeforeDue":true,"notifyBeforeDueLeadValue":1,"notifyBeforeDueLeadUnit":"days","snoozedUntil":null,"createdAt":now(),"updatedAt":now(),"completedAt":null,"completions":{},"notifications":{},"revision":0})
     } else {

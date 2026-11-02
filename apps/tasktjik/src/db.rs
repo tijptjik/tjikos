@@ -30,13 +30,65 @@ pub fn tasks(c: &Connection) -> Result<Vec<Value>> {
     })
     .collect()
 }
+// Advance only exact historical snapshots after undo changes their revision.
+// This keeps consecutive single-task and group undos usable without hiding external edits.
+fn advance_undo(
+    c: &Connection,
+    owner: &str,
+    device: &str,
+    old: &Value,
+    restored: &Value,
+) -> Result<()> {
+    if old.is_null() || restored["deleted"] == true {
+        return Ok(());
+    }
+    let mut old = old.clone();
+    if old.is_object() {
+        model::defaults(&mut old);
+    }
+    let entries: Vec<(i64, String)> = c
+        .prepare("SELECT seq,after_body FROM undo_history WHERE owner=? AND device=?")?
+        .query_map(params![owner, device], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<std::result::Result<_, _>>()?;
+    for (seq, body) in entries {
+        let mut snapshot: Value = serde_json::from_str(&body)?;
+        if snapshot.is_object() {
+            model::defaults(&mut snapshot);
+        } else if let Some(batch) = snapshot.as_array_mut() {
+            for item in batch {
+                if item.is_object() {
+                    model::defaults(item);
+                }
+            }
+        }
+        let mut updated = false;
+        if snapshot == old {
+            snapshot = restored.clone();
+            updated = true;
+        } else if let Some(batch) = snapshot.as_array_mut() {
+            for item in batch {
+                if *item == old {
+                    *item = restored.clone();
+                    updated = true;
+                }
+            }
+        }
+        if updated {
+            c.execute(
+                "UPDATE undo_history SET after_body=? WHERE seq=?",
+                params![serde_json::to_string(&snapshot)?, seq],
+            )?;
+        }
+    }
+    Ok(())
+}
 pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value> {
     let mut c = connect(path)?;
     let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let op = r["action"].as_str().unwrap_or("list");
     if op == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"projects":true,"workflows":true,"workflow_dependencies":true,"undated_repeat":true,"metadata":true,"images":true,"protocol":1,"sqlite":true,"undo":true}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"projects":true,"workflows":true,"undated_repeat":true,"groups":true,"workflow_dependencies":true,"protocol":1,"sqlite":true,"undo":true}),
         );
     }
     if op == "list" {
@@ -95,71 +147,105 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
         );
         let mut previous: Value = serde_json::from_str(&before)?;
         let mut expected: Value = serde_json::from_str(&after)?;
-        // Undo entries written before attachments existed have no images field.
-        // Compare and restore them using the same defaults as current task rows.
-        if previous.is_object() {
-            model::defaults(&mut previous);
-        }
-        if expected.is_object() {
-            model::defaults(&mut expected);
-        }
-        ensure!(
-            r["undo_action"] != "purge" || expected.is_null(),
-            "Undo target changed; the latest action is not a purge"
-        );
-        let current = before_tasks
-            .iter()
-            .find(|t| t["id"] == id)
-            .cloned()
-            .unwrap_or(Value::Null);
-        ensure!(
-            current == expected,
-            "Task changed since this action; undo would overwrite newer changes"
-        );
-        ensure!(
-            current["kind"] != "project"
-                || previous["kind"] == "project"
-                || !before_tasks.iter().any(|t| t["project"] == id),
-            "Project has tasks; move them before undoing its creation"
-        );
-        if let Some(project) = previous["project"]
-            .as_str()
-            .filter(|p| Uuid::parse_str(p).is_ok())
-        {
-            ensure!(
-                before_tasks
-                    .iter()
-                    .any(|p| p["id"] == project && p["kind"] == "project"),
-                "Project no longer exists; restore it before undoing this task"
-            );
-        }
-        let restored = if previous.is_null() {
-            json!({"id":id,"deleted":true})
-        } else {
-            previous["revision"] = json!(current["revision"]
-                .as_u64()
-                .unwrap_or(previous["revision"].as_u64().unwrap_or(0))
-                .checked_add(1)
-                .context("Invalid revision")?);
-            previous["updatedAt"] = json!(model::now());
-            if current["events"].is_array() {
-                previous["events"] = current["events"].clone();
+        if previous.is_array() {
+            for snapshot in [&mut previous, &mut expected] {
+                for task in snapshot.as_array_mut().context("Invalid group undo")? {
+                    if task.is_object() {
+                        model::defaults(task);
+                    }
+                }
             }
-            previous["events"]
-                .as_array_mut()
-                .context("Invalid event history")?
-                .push(json!({"action":"undo","actor":owner,"at":model::now()}));
-            model::validate(&mut previous)?;
-            previous
-        };
-        tx.execute("DELETE FROM undo_history WHERE seq=?", [seq])?;
-        // Keep consecutive undos of this task possible despite the new revision.
-        // Only the exact previous snapshot is advanced; unrelated edits stay protected.
-        if restored["deleted"] != true {
-            tx.execute("UPDATE undo_history SET after_body=? WHERE owner=? AND device=? AND task_id=? AND after_body=?",
-                params![serde_json::to_string(&restored)?,owner,device,id,before])?;
+            let previous = previous.as_array().context("Invalid group undo")?;
+            let expected = expected.as_array().context("Invalid group undo")?;
+            let mut changed = Vec::new();
+            for (old, after) in previous.iter().zip(expected) {
+                let current = before_tasks
+                    .iter()
+                    .find(|t| t["id"] == after["id"])
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                ensure!(
+                    current == *after,
+                    "Task or groups changed since this action; undo would overwrite newer changes"
+                );
+                let mut restored = old.clone();
+                if restored.is_null() {
+                    restored = json!({"id":after["id"],"deleted":true});
+                } else {
+                    restored["revision"] =
+                        json!(after["revision"].as_u64().context("Invalid revision")? + 1);
+                    restored["updatedAt"] = json!(model::now());
+                }
+                advance_undo(&tx, owner, device, old, &restored)?;
+                changed.push(restored);
+            }
+            tx.execute("DELETE FROM undo_history WHERE seq=?", [seq])?;
+            json!({"changed":changed})
+        } else {
+            // Undo entries written before attachments existed have no images field.
+            // Compare and restore them using the same defaults as current task rows.
+            if previous.is_object() {
+                model::defaults(&mut previous);
+            }
+            if expected.is_object() {
+                model::defaults(&mut expected);
+            }
+            ensure!(
+                r["undo_action"] != "purge" || expected.is_null(),
+                "Undo target changed; the latest action is not a purge"
+            );
+            let current = before_tasks
+                .iter()
+                .find(|t| t["id"] == id)
+                .cloned()
+                .unwrap_or(Value::Null);
+            ensure!(
+                current == expected,
+                "Task changed since this action; undo would overwrite newer changes"
+            );
+            ensure!(
+                current["kind"] != "project"
+                    || previous["kind"] == "project"
+                    || !before_tasks.iter().any(|t| t["project"] == id),
+                "Project has tasks; move them before undoing its creation"
+            );
+            if let Some(project) = previous["project"]
+                .as_str()
+                .filter(|p| Uuid::parse_str(p).is_ok())
+            {
+                ensure!(
+                    before_tasks
+                        .iter()
+                        .any(|p| p["id"] == project && p["kind"] == "project"),
+                    "Project no longer exists; restore it before undoing this task"
+                );
+            }
+            let restored = if previous.is_null() {
+                json!({"id":id,"deleted":true})
+            } else {
+                previous["revision"] = json!(current["revision"]
+                    .as_u64()
+                    .unwrap_or(previous["revision"].as_u64().unwrap_or(0))
+                    .checked_add(1)
+                    .context("Invalid revision")?);
+                previous["updatedAt"] = json!(model::now());
+                if current["events"].is_array() {
+                    previous["events"] = current["events"].clone();
+                }
+                previous["events"]
+                    .as_array_mut()
+                    .context("Invalid event history")?
+                    .push(json!({"action":"undo","actor":owner,"at":model::now()}));
+                model::validate(&mut previous)?;
+                previous
+            };
+            tx.execute("DELETE FROM undo_history WHERE seq=?", [seq])?;
+            // Keep consecutive undos of this task possible despite the new revision.
+            // Only the exact previous snapshot is advanced; unrelated edits stay protected.
+            let old: Value = serde_json::from_str(&before)?;
+            advance_undo(&tx, owner, device, &old, &restored)?;
+            restored
         }
-        restored
     } else {
         let result = model::mutate(&before_tasks, &r)?;
         if op == "attach-image" {
@@ -169,6 +255,20 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
                 "INSERT OR IGNORE INTO images VALUES (?,?)",
                 params![metadata["id"].as_str(), bytes],
             )?;
+        }
+        if let Some(changed) = result["changed"].as_array() {
+            let before: Vec<Value> = changed
+                .iter()
+                .map(|t| {
+                    before_tasks
+                        .iter()
+                        .find(|old| old["id"] == t["id"])
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                })
+                .collect();
+            tx.execute("INSERT INTO undo_history(owner,device,task_id,before_body,after_body) VALUES (?,?,?,?,?)",
+                params![owner,device,tasktjik_api::groups::ID,serde_json::to_string(&before)?,serde_json::to_string(changed)?])?;
         }
         if [
             "create",
@@ -202,13 +302,19 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
         }
         result
     };
-    if result["deleted"] == true {
-        tx.execute("DELETE FROM tasks WHERE id=?", [result["id"].as_str()])?;
-    } else if result.is_object() {
-        tx.execute(
-            "INSERT INTO tasks VALUES (?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body",
-            params![result["id"].as_str(), serde_json::to_string(&result)?],
-        )?;
+    let changes = result["changed"]
+        .as_array()
+        .cloned()
+        .unwrap_or_else(|| vec![result.clone()]);
+    for change in changes {
+        if change["deleted"] == true {
+            tx.execute("DELETE FROM tasks WHERE id=?", [change["id"].as_str()])?;
+        } else if change["id"].is_string() {
+            tx.execute(
+                "INSERT INTO tasks VALUES (?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body",
+                params![change["id"].as_str(), serde_json::to_string(&change)?],
+            )?;
+        }
     }
     tx.execute(
         "INSERT INTO requests VALUES (?,?,?,?)",
@@ -512,6 +618,126 @@ mod project_workflow_tests {
         assert_eq!(
             stored.iter().find(|t| t["id"] == template["id"]).unwrap()["subtasks"][0]["done"],
             false
+        );
+    }
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+    fn run(path: &Path, mut r: Value) -> Result<Value> {
+        if r["request_id"].is_null() {
+            r["request_id"] = json!(Uuid::new_v4().to_string());
+        }
+        request(path, r, "fixture", "groups-test")
+    }
+    fn rows(path: &Path) -> Vec<Value> {
+        tasks(&connect(path).unwrap()).unwrap()
+    }
+    fn members(tasks: &[Value], group: &str) -> Value {
+        json!(tasks
+            .iter()
+            .filter(|t| t["group"] == group)
+            .map(|t| json!({"id":t["id"],"revision":t["revision"]}))
+            .collect::<Vec<_>>())
+    }
+    #[test]
+    fn scoped_rename_preserves_hidden_tasks_and_dates_then_merge_is_atomic_and_undoable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("tasks.db");
+        let a = run(&path,json!({"action":"create","fields":{"title":"Visible","group":"Work","due":"2099-11-20"}})).unwrap();
+        let b = run(
+            &path,
+            json!({"action":"create","fields":{"title":"Hidden","group":"Work"}}),
+        )
+        .unwrap();
+        let r = json!({"action":"group-rename","source":"Work","target":"Wedding","scoped":true,"groupsRevision":0,"members":[{"id":a["id"],"revision":a["revision"]}],"request_id":Uuid::new_v4().to_string()});
+        let renamed = run(&path, r.clone()).unwrap();
+        assert_eq!(run(&path, r).unwrap(), renamed);
+        let ts = rows(&path);
+        assert_eq!(
+            ts.iter().find(|t| t["id"] == b["id"]).unwrap()["group"],
+            "Work"
+        );
+        assert_eq!(renamed["changed"][0]["due"], "2099-11-20");
+        assert!(tasktjik_api::groups::names(&ts).contains(&"Work".into()));
+        let stale = json!({"action":"group-merge","source":"Wedding","target":"Quick","groupsRevision":1,"members":[{"id":a["id"],"revision":a["revision"]}]});
+        assert!(run(&path, stale).is_err());
+        assert_eq!(rows(&path), ts);
+        let merged=run(&path,json!({"action":"group-merge","source":"Wedding","target":"Quick","groupsRevision":1,"members":members(&ts,"Wedding")})).unwrap();
+        assert_eq!(merged["changed"][0]["due"], "2099-11-20");
+        assert!(!tasktjik_api::groups::names(&rows(&path)).contains(&"Wedding".into()));
+        let undone = run(&path, json!({"action":"undo"})).unwrap();
+        assert_eq!(undone["changed"][0]["group"], "Wedding");
+        let ts = rows(&path);
+        let rev = tasktjik_api::groups::revision(&ts);
+        let removed=run(&path,json!({"action":"group-remove","source":"Wedding","groupsRevision":rev,"members":members(&ts,"Wedding")})).unwrap();
+        assert_eq!(removed["changed"][0]["group"], "All");
+        let task = &removed["changed"][0];
+        request(&path,json!({"action":"edit","id":task["id"],"revision":task["revision"],"fields":{"title":"Other device edit"},"request_id":Uuid::new_v4().to_string()}),"fixture","other").unwrap();
+        let before = rows(&path);
+        assert!(run(&path, json!({"action":"undo"})).is_err());
+        assert_eq!(rows(&path), before);
+    }
+    #[test]
+    fn empty_groups_persist_and_full_operations_reject_changed_membership() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("tasks.db");
+        run(
+            &path,
+            json!({"action":"group-add","target":"Empty","groupsRevision":0}),
+        )
+        .unwrap();
+        let ts = rows(&path);
+        let state = tasktjik_api::client::render_state(json!(ts), &json!({}), true).unwrap();
+        assert_eq!(state["tasks"], json!([]));
+        assert!(state["groups"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("Empty")));
+        assert!(run(
+            &path,
+            json!({"action":"group-add","target":"Lost","groupsRevision":0})
+        )
+        .is_err());
+        run(
+            &path,
+            json!({"action":"create","fields":{"title":"New member","group":"Empty"}}),
+        )
+        .unwrap();
+        let before = rows(&path);
+        assert!(run(
+            &path,
+            json!({"action":"group-remove","source":"Empty","groupsRevision":1,"members":[]})
+        )
+        .is_err());
+        assert_eq!(rows(&path), before);
+        assert!(run(
+            &path,
+            json!({"action":"group-remove","source":"All","groupsRevision":1,"members":[]})
+        )
+        .is_err());
+    }
+}
+
+#[cfg(test)]
+mod consecutive_group_undo {
+    use super::*;
+    #[test]
+    fn consecutive_group_undos_advance_snapshots() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("db");
+        let run = |mut r: Value| {
+            r["request_id"] = json!(Uuid::new_v4().to_string());
+            request(&path, r, "user", "device").unwrap()
+        };
+        run(json!({"action":"group-add","target":"A","groupsRevision":0}));
+        run(json!({"action":"group-add","target":"B","groupsRevision":1}));
+        run(json!({"action":"undo"}));
+        run(json!({"action":"undo"}));
+        assert!(
+            !tasktjik_api::groups::names(&tasks(&connect(&path).unwrap()).unwrap())
+                .contains(&"A".to_owned())
         );
     }
 }
