@@ -1173,6 +1173,18 @@ Pane {
                     QuietButton {primary:true;text:pendingSave?'Saving…':draftId?'Save and close tab':'Save';enabled:!pendingSave && titleInput.text.trim()!=='';onClicked:saveEditor()}
                     QuietButton {text:'Cancel';enabled:!pendingSave;onClicked:cancelEditor()}
                 }
+                Label {
+                    objectName:'task-metadata'
+                    Layout.fillWidth:true
+                    visible:!!editing && !!editing.id && text!==''
+                    text: {
+                        const metadata=editing && editing.metadata || {};
+                        return Object.keys(metadata).sort().map(key=>key+' : '+JSON.stringify(metadata[key])).join('\n');
+                    }
+                    textFormat:Text.PlainText;wrapMode:Text.WrapAnywhere
+                    font.family:'monospace';font.pixelSize:12;color:theme.muted
+                    Accessible.name:'Task metadata'
+                }
             }
         }
         Label {visible:!!pendingSave;text:'Saving “'+(pendingSave?pendingSave.draft.title:'')+'”…';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}

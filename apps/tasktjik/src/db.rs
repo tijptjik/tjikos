@@ -36,7 +36,7 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
     let op = r["action"].as_str().unwrap_or("list");
     if op == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"images":true,"protocol":1,"sqlite":true,"undo":true}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"protocol":1,"sqlite":true,"undo":true}),
         );
     }
     if op == "list" {

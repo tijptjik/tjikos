@@ -93,6 +93,18 @@ retain their existing format. Agent creates should supply a stable UUID
 printf '%s\n' '{"action":"create","request_id":"b2c65239-cf37-4182-9bd4-e642568b7f46","fields":{"title":"Verify task window","source":{"service":"agent","session":"example"},"assignee":"agent:example","project":"tjikos","acceptance":["Window opens and renders task state"]}}' | tasktjik request
 ```
 
+Tasks also have a `metadata` JSON object for programmatic identification and
+enrichment. It defaults to `{}` for new and older tasks. Set it through
+`fields.metadata` on `create` or revision-checked `edit` requests, for example
+`{"action":"create","fields":{"title":"Follow up","metadata":{"external_id":"guest-42","context":{"event":"example"},"contacted":false}}}`
+passed to `tasktjik request`. Values may be any JSON type, including nested
+objects and arrays; the top-level value must be an object. Supplying metadata
+replaces the whole object, omitting it preserves it, and `{}` clears it.
+The native and web task edit footers show sorted `key : value` pairs in monospace,
+with values represented as JSON. Metadata is read-only in those views and is
+never included in their save payloads. Update the authority as well as clients
+before using this field; supported authorities advertise `metadata: true`.
+
 Agent requests use `status` or `verify` with `id`, current `revision` and `actor`.
 Status values are `inbox`, `ready`, `in_progress`, `blocked`, `done`, `cancelled`.
 A blocked request must include `blockers: [{"reason":"Awaiting review"}]`;

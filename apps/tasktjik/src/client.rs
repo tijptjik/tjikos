@@ -224,7 +224,7 @@ fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
     }
     if action == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"images":true,"protocol":1}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"protocol":1}),
         );
     }
     if action == "create" {
@@ -494,6 +494,7 @@ pub fn render_state(mut rows: Value, request: &Value, demo: bool) -> Result<Valu
     .collect();
     let mut extra = Vec::new();
     for t in rows.iter_mut() {
+        model::defaults(t);
         let mut recurrence = t.clone();
         if !s(&recurrence["repeat"]["unit"]).is_empty()
             && recurrence["repeat"].get("value").is_none()

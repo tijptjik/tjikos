@@ -108,6 +108,7 @@ pub fn defaults(t: &mut Value) {
     }
     for (k, v) in [
         ("source", json!({})),
+        ("metadata", json!({})),
         ("assignee", json!("")),
         ("project", json!("")),
         ("blockers", json!([])),
@@ -223,6 +224,7 @@ pub fn validate(t: &mut Value) -> Result<()> {
         );
     }
     ensure!(t["source"].is_object(), "Invalid source");
+    ensure!(t["metadata"].is_object(), "metadata must be a JSON object");
     for k in ["tags", "acceptance"] {
         ensure!(
             t[k].as_array().is_some_and(|a| a.len() <= 200
@@ -421,6 +423,7 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
                 "notifyBeforeDueLeadValue",
                 "notifyBeforeDueLeadUnit",
                 "source",
+                "metadata",
                 "assignee",
                 "project",
                 "acceptance",

@@ -169,6 +169,19 @@ class NativeClientTests(unittest.TestCase):
         reservations = self.call("request", body={"action": "list"})[0]["notifications"]
         self.assertEqual(next(iter(reservations.values()))["state"], "delivered")
 
+    def test_metadata_local_storage_and_incremental_state(self):
+        metadata = {"external_id": "synthetic-42", "nested": {"enabled": False}, "values": [None, 3, "text"]}
+        task = self.call("request", body={"action": "create", "fields": {"title": "Metadata fixture", "metadata": metadata}})
+        self.assertEqual(task["metadata"], metadata)
+        self.assertEqual(self.call("state", body={})["tasks"][0]["metadata"], metadata)
+        edited = self.call("state", "--incremental", body={"action": "edit", "id": task["id"], "revision": task["revision"], "fields": {"title": "Changed title"}})["tasks"][0]
+        self.assertEqual(edited["metadata"], metadata)
+        rejected = self.call("request", body={"action": "edit", "id": edited["id"], "revision": edited["revision"], "fields": {"metadata": []}}, check=False)
+        self.assertNotEqual(rejected.returncode, 0)
+        replaced = self.call("request", body={"action": "edit", "id": edited["id"], "revision": edited["revision"], "fields": {"metadata": {"other": True}}})
+        self.assertEqual(replaced["metadata"], {"other": True})
+        self.assertEqual(self.call("state", body={})["tasks"][0]["metadata"], {"other": True})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

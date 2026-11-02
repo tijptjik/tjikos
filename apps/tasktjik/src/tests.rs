@@ -19,6 +19,99 @@ fn image_fixture() -> String {
 }
 
 #[tokio::test]
+async fn metadata_roundtrips_through_api_and_survives_edits_undo_and_snapshot() {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = app(&tmp);
+    let metadata = json!({"external_id":"synthetic-42","nested":{"enabled":false},"values":[null,3,"<b>literal</b>"],"empty":{}});
+    let mut r = mutation("create");
+    r["fields"] = json!({"title":"Synthetic metadata","metadata":metadata});
+    let (status, reply) = invoke(
+        a.clone(),
+        0,
+        Some("owner@example.test"),
+        "/api/v1/request",
+        Some(r),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reply}");
+    let task = &reply["result"];
+    assert_eq!(task["metadata"], metadata);
+    let (_, state) = invoke(
+        a.clone(),
+        0,
+        Some("owner@example.test"),
+        "/api/v1/tasks",
+        None,
+        None,
+        false,
+    )
+    .await;
+    assert_eq!(state["tasks"][0]["metadata"], metadata);
+    let run = |mut r: Value| {
+        r["request_id"] = json!(Uuid::new_v4().to_string());
+        db::request(&a.database, r, "owner@example.test", "metadata-test")
+    };
+    let edited = run(json!({"action":"edit","id":task["id"],"revision":task["revision"],"fields":{"title":"Changed title"}})).unwrap();
+    assert_eq!(edited["metadata"], metadata);
+    for invalid in [
+        Value::Null,
+        json!([]),
+        json!("text"),
+        json!(42),
+        json!(true),
+    ] {
+        assert!(run(
+            json!({"action":"create","fields":{"title":"Invalid metadata","metadata":invalid}})
+        )
+        .is_err());
+        assert!(run(json!({"action":"edit","id":edited["id"],"revision":edited["revision"],"fields":{"metadata":invalid}})).is_err());
+    }
+    assert_eq!(
+        db::tasks(&db::connect(&a.database).unwrap()).unwrap(),
+        vec![edited.clone()]
+    );
+    let replacement = json!({"replacement": [1, false, null]});
+    let replaced = run(json!({"action":"edit","id":edited["id"],"revision":edited["revision"],"fields":{"metadata":replacement}})).unwrap();
+    assert_eq!(replaced["metadata"], replacement);
+    assert!(run(json!({"action":"edit","id":edited["id"],"revision":edited["revision"],"fields":{"metadata":{}}})).is_err());
+    let cleared = run(json!({"action":"edit","id":replaced["id"],"revision":replaced["revision"],"fields":{"metadata":{}}})).unwrap();
+    assert_eq!(cleared["metadata"], json!({}));
+    let restored = run(json!({"action":"undo"})).unwrap();
+    assert_eq!(restored["metadata"], replacement);
+    let snapshot = tmp.path().join("snapshot.sqlite3");
+    db::snapshot(&a.database, &snapshot).unwrap();
+    assert_eq!(
+        db::tasks(&db::connect(&snapshot).unwrap()).unwrap()[0]["metadata"],
+        replacement
+    );
+}
+
+#[test]
+fn older_tasks_default_metadata_without_rewriting_storage() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("tasks.sqlite3");
+    let mut task = create(&path);
+    assert_eq!(task["metadata"], json!({}));
+    task.as_object_mut().unwrap().remove("metadata");
+    let body = task.to_string();
+    let c = db::connect(&path).unwrap();
+    c.execute(
+        "UPDATE tasks SET body=? WHERE id=?",
+        rusqlite::params![body, task["id"].as_str()],
+    )
+    .unwrap();
+    assert_eq!(db::tasks(&c).unwrap()[0]["metadata"], json!({}));
+    let stored: String = c
+        .query_row("SELECT body FROM tasks", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(stored, body);
+    let state = tasktjik_api::client::render_state(json!([task]), &json!({}), true).unwrap();
+    assert_eq!(state["tasks"][0]["metadata"], json!({}));
+}
+
+#[tokio::test]
 async fn images_roundtrip_through_authority_and_survive_undo_and_snapshot() {
     let tmp = tempfile::tempdir().unwrap();
     let a = app(&tmp);
