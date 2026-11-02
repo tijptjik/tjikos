@@ -249,6 +249,33 @@ fn router(app: Arc<App>) -> Router {
             }),
         )
         .route(
+            "/workflow.js",
+            get(|| async {
+                asset(
+                    "text/javascript; charset=utf-8",
+                    include_bytes!("../qml/Workflow.js"),
+                )
+            }),
+        )
+        .route(
+            "/date-code.js",
+            get(|| async {
+                asset(
+                    "text/javascript; charset=utf-8",
+                    include_bytes!("../qml/DateCode.js"),
+                )
+            }),
+        )
+        .route(
+            "/repeat.js",
+            get(|| async {
+                asset(
+                    "text/javascript; charset=utf-8",
+                    include_bytes!("../qml/Repeat.js"),
+                )
+            }),
+        )
+        .route(
             "/app.js",
             get(|| async {
                 asset(
