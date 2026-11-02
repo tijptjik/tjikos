@@ -224,7 +224,7 @@ fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
     }
     if action == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"protocol":1}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"undated_repeat":true,"metadata":true,"images":true,"protocol":1}),
         );
     }
     if action == "create" {
@@ -655,7 +655,9 @@ pub fn notify() -> Result<Value> {
         .iter()
         .cloned()
     {
-        if s(&task["due"]).is_empty() || task["status"] == "cancelled" {
+        if (s(&task["due"]).is_empty() && s(&task["repeat"]["unit"]).is_empty())
+            || task["status"] == "cancelled"
+        {
             continue;
         }
         if task["done"] == true {

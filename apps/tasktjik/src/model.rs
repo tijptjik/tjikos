@@ -41,17 +41,26 @@ fn days(v: &Value, max: u32) -> Result<Vec<u32>> {
     );
     Ok(result)
 }
+fn recurrence_anchor(task: &Value) -> Result<NaiveDate> {
+    let due = field(task, "due");
+    if !due.is_empty() {
+        return date(due);
+    }
+    let start = field(&task["repeat"], "start");
+    if !start.is_empty() {
+        return date(start);
+    }
+    date(field(task, "createdAt").split('T').next().unwrap_or(""))
+}
+
 pub fn period(task: &Value, day: NaiveDate) -> Result<String> {
     let due = field(task, "due");
-    if due.is_empty() {
-        return Ok("once".into());
-    }
-    let start = date(due)?;
     let unit = field(&task["repeat"], "unit");
     let value = &task["repeat"]["value"];
     if unit.is_empty() {
-        return Ok(due.into());
+        return Ok(if due.is_empty() { "once" } else { due }.into());
     }
+    let start = recurrence_anchor(task)?;
     if unit.starts_with("days-of-") {
         let week = unit == "days-of-the-week";
         let allowed = days(value, if week { 7 } else { 31 })?;
@@ -76,7 +85,7 @@ pub fn period(task: &Value, day: NaiveDate) -> Result<String> {
         return Ok(cursor.to_string());
     }
     if day < start {
-        return Ok(due.into());
+        return Ok(start.to_string());
     }
     let value = interval(value)?;
     if unit == "days" || unit == "weeks" {
@@ -239,10 +248,11 @@ pub fn validate(t: &mut Value) -> Result<()> {
     let unit = field(&t["repeat"], "unit");
     ensure!(t["repeat"].is_object(), "Invalid repeat");
     if !unit.is_empty() {
-        ensure!(
-            !field(t, "due").is_empty(),
-            "Repeating tasks need a due date"
-        );
+        recurrence_anchor(t)?;
+        if let Some(start) = t["repeat"].get("start") {
+            date(start.as_str().context("Invalid repeat start")?)?;
+        }
+
         ensure!(
             [
                 "days",
@@ -336,6 +346,8 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
             .clone()
     };
     defaults(&mut t);
+    let original_repeat = t["repeat"].clone();
+    let original_due = field(&t, "due").to_owned();
     let period = if let Some(p) = r["period"].as_str() {
         if p != "once" {
             date(p)?;
@@ -431,6 +443,23 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
                 if let Some(v) = fields.get(k) {
                     t[k] = v.clone();
                 }
+            }
+            if !field(&t["repeat"], "unit").is_empty()
+                && field(&t, "due").is_empty()
+                && field(&t["repeat"], "start").is_empty()
+            {
+                let anchor = if !field(&original_repeat, "unit").is_empty() {
+                    if !original_due.is_empty() {
+                        original_due.clone()
+                    } else if !field(&original_repeat, "start").is_empty() {
+                        field(&original_repeat, "start").to_owned()
+                    } else {
+                        today().to_string()
+                    }
+                } else {
+                    today().to_string()
+                };
+                t["repeat"]["start"] = json!(anchor);
             }
             if fields.contains_key("plan") && !fields.contains_key("reference") {
                 t["reference"] = t["plan"].clone();
@@ -599,7 +628,7 @@ pub fn next_period(task: &Value, current: &str) -> Result<String> {
         );
     }
     ensure!(["months", "years"].contains(&unit), "Invalid repeat unit");
-    let anchor = date(field(task, "due"))?;
+    let anchor = recurrence_anchor(task)?;
     let months =
         (current.year() - anchor.year()) * 12 + current.month() as i32 - anchor.month() as i32;
     ensure!(months >= 0, "Period precedes anchor");
@@ -614,6 +643,44 @@ pub fn next_period(task: &Value, current: &str) -> Result<String> {
 #[cfg(test)]
 mod recurrence_tests {
     use super::*;
+    #[test]
+    fn repeat_without_deadline_has_stable_anchor_and_occurrences() {
+        let created = mutate(&[], &json!({"action":"create","fields":{"title":"Synthetic undated repeat","repeat":{"unit":"weeks","value":2}}})).unwrap();
+        assert_eq!(created["due"], "");
+        assert_eq!(created["repeat"]["start"], today().to_string());
+        assert_eq!(
+            period(&created, today() + Duration::days(13)).unwrap(),
+            today().to_string()
+        );
+        assert_eq!(
+            period(&created, today() + Duration::days(14)).unwrap(),
+            (today() + Duration::days(14)).to_string()
+        );
+        let done = mutate(
+            &[created.clone()],
+            &json!({"action":"toggle","id":created["id"],"revision":created["revision"]}),
+        )
+        .unwrap();
+        assert!(done["completions"].get(today().to_string()).is_some());
+        assert!(done["completions"]
+            .get(period(&done, today() + Duration::days(14)).unwrap())
+            .is_none());
+        let month = json!({"due":"","repeat":{"unit":"months","value":1,"start":"2024-01-31"}});
+        assert_eq!(next_period(&month, "2024-02-29").unwrap(), "2024-03-31");
+        let weekday = json!({"due":"","repeat":{"unit":"days-of-the-week","value":"1,5","start":"2026-11-03"}});
+        assert_eq!(
+            period(&weekday, date("2026-11-03").unwrap()).unwrap(),
+            "2026-11-06"
+        );
+        let scheduled = mutate(&[], &json!({"action":"create","fields":{"title":"Synthetic legacy schedule","due":"2024-01-31","repeat":{"unit":"months","value":1}}})).unwrap();
+        let cleared = mutate(&[scheduled.clone()],&json!({"action":"edit","id":scheduled["id"],"revision":scheduled["revision"],"fields":{"due":"","repeat":{"unit":"months","value":1}}})).unwrap();
+        assert_eq!(cleared["repeat"]["start"], "2024-01-31");
+        assert_eq!(
+            period(&cleared, today()).unwrap(),
+            period(&scheduled, today()).unwrap()
+        );
+    }
+
     #[test]
     fn next_period_keeps_anchor_and_selected_days() {
         let task = json!({"due":"2024-01-31","repeat":{"unit":"months","value":1}});

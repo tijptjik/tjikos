@@ -182,6 +182,16 @@ class NativeClientTests(unittest.TestCase):
         self.assertEqual(replaced["metadata"], {"other": True})
         self.assertEqual(self.call("state", body={})["tasks"][0]["metadata"], {"other": True})
 
+    def test_repeating_task_without_deadline_delivers_occurrence_reminder(self):
+        task = self.call("request", body={"action": "create", "fields": {"title": "Synthetic undated repeat", "repeat": {"unit": "days", "value": 1}}})
+        self.script("quickshell", "import json\nprint(json.dumps({'ok':True}))\n")
+        self.assertEqual(task["due"], "")
+        self.assertEqual(self.call("notify")["delivered"], 1)
+        self.assertEqual(self.call("notify")["delivered"], 0)
+        current = self.call("state", body={})["tasks"][0]
+        self.assertEqual(current["period"], datetime.date.today().isoformat())
+        self.assertEqual(current["due"], "")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
