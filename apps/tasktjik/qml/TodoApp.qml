@@ -1,9 +1,14 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
+import QtCore
 import Quickshell
 import Quickshell.Io
 import "DueDate.js" as DueDate
+import "Repeat.js" as Repeat
+import "DateCode.js" as DateCode
+import "Workflow.js" as Workflow
 
 Pane {
     padding: 0
@@ -20,23 +25,129 @@ Pane {
     property var stateData: ({tasks:[],groups:[]})
     property var theme
     property string collection: 'todo'
+    property string projectId: ''
+    property string projectReturnView: 'all'
+    property string previousOverviewView: 'week'
+    readonly property string newKind: collection==='reading'?'reading':collection==='template'?'template':view==='projects' && !projectId?'project':'todo'
+    function newDefault() {newItem(newKind);}
+    function leaveProject() {projectId='';view=projectReturnView;selectVisibleTask();}
+    property var expandedTasks: ({})
+    readonly property var currentProject: (listState?.tasks || []).find(t=>t.id===projectId) || null
+    function enterProject(task) {projectReturnView=view;groupColumns.placements={};groupColumns.measuredHeights={};projectId=task.id;view='all';filter='';selectedId='';groupColumns.balance();taskScroll.contentItem.contentY=0;selectVisibleTask();}
+    function newItem(kind) {selectedId='';openEditor({title:'',kind:kind,project:kind==='todo'?projectId:'',group:currentProject?currentProject.group:'All',tags:[],due:'',repeat:{},reference:'',subtasks:[]});}
+    function addSubtask(task) {selectedId=task.id;openEditor();workflowEditor.add('task','');}
+    function projectProgress(task) {
+        let rows=(listState?.tasks || []).filter(t=>t.project===task.id && t.kind==='todo' && t.status!=='cancelled');
+        if(!['today','week','month'].includes(view))return {total:rows.length,done:rows.filter(t=>t.done).length};
+        const today=listState.today || Qt.formatDate(new Date(),'yyyy-MM-dd');
+        const start=new Date(today+'T12:00:00'),end=new Date(start);
+        if(view==='week'){start.setDate(start.getDate()-(start.getDay()+6)%7);end.setTime(start.getTime());end.setDate(end.getDate()+6);}
+        if(view==='month'){start.setDate(1);end.setMonth(end.getMonth()+1,0);}
+        const first=Qt.formatDate(start,'yyyy-MM-dd'),last=Qt.formatDate(end,'yyyy-MM-dd');
+        const within=d=>!!d && d>=first && d<=last;
+        const completed=t=>within(String(t.completedAt || '').slice(0,10)) || Object.values(t.completions || {}).some(d=>within(String(d).slice(0,10)));
+        rows=rows.filter(t=>within(effectiveDue(t)) || completed(t));
+        return {total:rows.length,done:rows.filter(completed).length};
+    }
+    function toggleExpanded(id) {const next=Object.assign({},expandedTasks);next[id]=!next[id];expandedTasks=next;}
+
     property string draftId: ''
     property string lastDraftId: ''
     property string view: 'week'
     property bool searching: false
     property bool showCompleted: false
     property bool showCancelled: false
+    property bool showBlocked: false
+    property string selectedSubtaskId: ''
     property bool showDetails: false
     property bool readingGrid: false
     property bool readingCategories: false
     property int readingSort: 0
     property int sortOrder: 0
+    property alias doubleDInterval: viewPreferences.doubleDInterval
+    property alias domainSort:viewPreferences.domainSort
+    property alias manualDomainOrderJson:viewPreferences.manualDomainOrderJson
+    readonly property var manualDomainOrder:JSON.parse(manualDomainOrderJson || '[]')
+    property var collapsedDomains:({})
+    function toggleDomain(group) {
+        collapsedDomains=Object.assign({},collapsedDomains,{[group]:!collapsedDomains[group]});
+        if(collapsedDomains[group] && selected && selected.group===group){taskSelectionActive=false;selectedSubtaskId='';}
+    }
+    function moveDomain(group,direction) {
+        const order=manualGroups(),index=order.indexOf(group),to=index+direction;
+        if(index<0 || to<0 || to>=order.length)return;
+        order.splice(index,1);order.splice(to,0,group);manualDomainOrderJson=JSON.stringify(order);domainSort='manual';groupColumns.reset();
+    }
+    function manualGroups() {
+        const available=(listState?.groups || []);
+        return manualDomainOrder.filter(g=>available.includes(g)).concat(available.filter(g=>!manualDomainOrder.includes(g)));
+    }
+    onDomainSortChanged:groupColumns.reset()
+    property alias projectSort: viewPreferences.projectSort
+    Settings {
+        id:viewPreferences
+        location:'file://'+(Quickshell.env('XDG_CONFIG_HOME') || Quickshell.env('HOME')+'/.config')+'/tasktjik/ui.ini'
+        category:'tasks'
+        property string projectSort:'first-due'
+        property string domainSort:'manual'
+        property string manualDomainOrderJson:'[]'
+        property int doubleDInterval:350
+    }
+    onProjectSortChanged: {if(dragTask && !pendingMove)cancelDrag();selectVisibleTask();}
     property bool requestBusy: false
+    property var completionQueue: []
+    property string completionMessage: ''
+    readonly property bool completing: completionQueue.length>0
+    function cancelFocusedTask() {
+        if(!taskSelectionActive || selectedSubtaskId || !selected || selected.kind!=='todo' || selected.status==='cancelled' || pendingSave || pendingPurge || pendingMove || dragTask)return;
+        completionMessage='';
+        completionQueue=completionQueue.concat([{id:selected.id,status:'cancelled',subtaskId:'',requestId:newRequestId(),sent:false}]);
+        Qt.callLater(()=>{selectVisibleTask();focusList();});
+        sendCompletion();
+    }
+    function projectCompletion(task,operation,today) {
+        if(operation.status)return Object.assign({},Workflow.project(task,'',false,today),{status:operation.status,blockers:[]});
+        return Workflow.project(task,operation.subtaskId,operation.done,today);
+    }
+    function toggleCompletion(taskId,subtaskId) {
+        if(pendingSave || pendingPurge || pendingMove || dragTask)return;
+        const task=(listState.tasks || []).find(t=>t.id===taskId);
+        if(!task)return;
+        const target=subtaskId?Workflow.workflowNode(task.subtasks,subtaskId):task;
+        if(!target)return;
+        const operation={id:taskId,subtaskId:subtaskId || '',done:!target.done,requestId:newRequestId(),sent:false};
+        if(!Workflow.project(task,operation.subtaskId,operation.done,stateData.today))return;
+        completionMessage='';completionQueue=completionQueue.concat([operation]);
+        if(!subtaskId)Qt.callLater(()=>{selectVisibleTask();focusList();});
+        sendCompletion();
+    }
+    function sendCompletion() {
+        if(!completionQueue.length || completionQueue[0].sent || requestBusy)return;
+        const operation=completionQueue[0],task=(stateData.tasks || []).find(t=>t.id===operation.id);
+        const target=task && (operation.subtaskId?Workflow.workflowNode(task.subtasks,operation.subtaskId):task);
+        if(!target || !projectCompletion(task,operation,stateData.today)) {rejectCompletion('This step changed; review its current state.');return;}
+        if(operation.status?target.status===operation.status:target.done===operation.done){completionQueue=completionQueue.slice(1);return;}
+        completionQueue=[Object.assign({},operation,{sent:true})].concat(completionQueue.slice(1));
+        request({action:operation.status?'status':operation.subtaskId?'subtask-toggle':'toggle',status:operation.status,actor:'user',id:task.id,subtask_id:operation.subtaskId,period:task.period,revision:task.revision,request_id:operation.requestId});
+    }
+    function acceptCompletion() {
+        if(completionQueue.length && completionQueue[0].sent)completionQueue=completionQueue.slice(1);
+    }
+    function rejectCompletion(message) {
+        if(!completionQueue.length)return;
+        const failed=completionQueue[0];
+        // Later changes to this task may depend on the failed step; independent tasks continue.
+        completionQueue=completionQueue.filter(op=>op.id!==failed.id);
+        completionMessage=message || errorMessage || 'Could not save the task change. Your change was restored.';
+    }
+    Timer {interval:25;repeat:true;running:app.completing;onTriggered:app.sendCompletion()}
     property var pendingSave: null
     property var retrySave: null
     property var dueToday: new Date()
     readonly property var parsedDue: DueDate.parse(dueInput.text, dueToday)
     readonly property var dueSuggestions: DueDate.suggestions(dueInput.text, dueToday)
+    readonly property var parsedRepeat: Repeat.parse(repeatInput.text)
+    property bool repeatTyping: true
     property int dueSuggestionIndex: -1
     property bool dueSuggestionsDismissed: false
     readonly property bool showDueSuggestions: dueInput.activeFocus && !dueSuggestionsDismissed && dueSuggestions.length>0
@@ -58,12 +169,14 @@ Pane {
         const state=pendingSave && !pendingSave.request.draft_id ? savingState() : stateData;
         let tasks=(state.tasks || []).slice();
         if(pendingMove && moveOperation)tasks=tasks.map(task=>task.id===moveOperation.id?
-            Object.assign({},task,{group:moveOperation.group},moveOperation.group==='Quick'?{due:state.today || Qt.formatDate(new Date(),'yyyy-MM-dd')}:{}) : task);
+            Object.assign({},task,{group:moveOperation.group},moveOperation.project!==undefined?{project:moveOperation.project}:{},moveOperation.group==='Quick'?{due:state.today || Qt.formatDate(new Date(),'yyyy-MM-dd')}:{}) : task);
         for(const operation of (pendingPurge?[pendingPurge]:[]).concat(queuedPurges)) {
             if(operation.undoRequested) {
                 if(!tasks.some(t=>t.id===operation.id))tasks.push(operation.task);
             } else tasks=tasks.filter(t=>t.id!==operation.id);
         }
+        for(const operation of completionQueue)tasks=tasks.map(task=>task.id===operation.id?
+            (projectCompletion(task,operation,state.today) || task):task);
         return Object.assign({},state,{tasks:tasks});
     }
     property var dragTask: null
@@ -76,16 +189,24 @@ Pane {
     property var dropGroups: []
     property string dropGroup: ''
     property string dropBefore: ''
+    property string dropProject:''
     property bool pendingMove: false
     property bool moveSent: false
     property var moveOperation: null
+    property var queuedMoves: []
     property string moveMessage: ''
     onSortOrderChanged: {if(dragTask && !pendingMove)cancelDrag();}
     function cancelDrag() {
-        dropGroup='';dropBefore='';dragTask=null;dragSource=null;
+        dropGroup='';dropBefore='';dropProject='';dragTask=null;dragSource=null;
     }
     function clearMove() {
-        moveTimeout.stop();pendingMove=false;moveSent=false;moveOperation=null;
+        moveTimeout.stop();pendingMove=false;moveSent=false;moveOperation=null;queuedMoves=[];
+    }
+    function acceptMove() {
+        if(!queuedMoves.length){clearMove();return;}
+        const next=queuedMoves[0];
+        moveOperation=next;queuedMoves=queuedMoves.slice(1);moveSent=false;
+        moveTimeout.restart();Qt.callLater(sendMove);
     }
     function rejectMove() {
         const id=moveOperation.id;
@@ -93,22 +214,31 @@ Pane {
         moveMessage='Could not move task: '+errorMessage;
     }
     function startDrag(task, source, width, height, point) {
-        if(pendingMove || pendingSave || pendingPurge)return;
+        if(pendingMove || pendingSave || pendingPurge || completing)return;
         dragSnapshot=stateData;dragSource=source;dragWidth=width;dragHeight=height;
         dragTask=JSON.parse(JSON.stringify(task));moveMessage='';selectedId=task.id;
         updateDrag(point);
     }
     function updateDrag(point) {
-        dragPoint=point;
+        dragPoint=point;dropProject='';
+        for(let i=0;i<drawerTargets.count;i++){
+            const target=drawerTargets.itemAt(i),p=target.mapFromItem(app,point.x,point.y),d=groupDrawer.mapFromItem(app,point.x,point.y);
+            if(groupDrawer.visible && d.y>=0 && d.y<groupDrawer.height && p.x>=0 && p.x<target.width && p.y>=0 && p.y<target.height){
+                dropGroup=target.modelData;dropBefore='';return;
+            }
+        }
         const viewport=taskScroll.mapFromItem(app,point.x,point.y);
         if(viewport.x<0 || viewport.y<0 || viewport.x>taskScroll.width || viewport.y>taskScroll.height){dropGroup='';dropBefore='';return;}
         for(const group of dropGroups) {
+            if(!group.visible)continue;
             const local=group.mapFromItem(app,point.x,point.y);
             if(local.x<0 || local.x>group.width || local.y<0 || local.y>group.height)continue;
             let before='';
             for(let i=0;i<group.rows.count;i++) {
                 const row=group.rows.itemAt(i);
-                if(row.modelData.id===dragTask.id)continue;
+                if(!row.visible || row.modelData.id===dragTask.id)continue;
+                const hit=row.mapFromItem(app,point.x,point.y);
+                if(dragTask.kind==='todo' && row.modelData.kind==='project' && hit.x>=0 && hit.x<row.width && hit.y>=0 && hit.y<row.height){dropProject=row.modelData.id;dropGroup=row.modelData.group;dropBefore='';return;}
                 if(local.y<row.y+row.gapHeight+(row.height-row.gapHeight)/2){before=row.modelData.id;break;}
             }
             dropGroup=group.modelData;dropBefore=before;return;
@@ -119,20 +249,27 @@ Pane {
         if(!dragTask)return;
         if(!dropGroup){cancelDrag();return;}
         moveOperation={id:dragTask.id,revision:dragTask.revision,group:dropGroup,before_id:sortOrder===4?dropBefore:''};
+        if(dropProject)moveOperation.project=dropProject;
         pendingMove=true;
         cancelDrag();
         moveTimeout.restart();sendMove();
     }
     function sendMove() {
         if(!pendingMove || moveSent || requestBusy)return;
+        const current=(stateData.tasks || []).find(t=>t.id===moveOperation.id);
+        if(!current){rejectMove();return;}
+        moveOperation=Object.assign({},moveOperation,{revision:current.revision});
         moveSent=true;
-        request(Object.assign({action:'move'},moveOperation));
+        if(moveOperation.project!==undefined)request({action:'edit',id:moveOperation.id,revision:moveOperation.revision,fields:{project:moveOperation.project,group:moveOperation.group}});
+        else request(Object.assign({action:'move'},moveOperation));
     }
     Timer {interval:50;repeat:true;running:app.pendingMove && !app.moveSent;onTriggered:app.sendMove()}
     Timer {id:moveTimeout;interval:15000;onTriggered:{app.clearMove();app.moveMessage='Move was not confirmed; refreshing tasks.';app.request({action:'list'});}}
     Timer {
         interval:30;repeat:true;running:!!app.dragTask && !app.pendingMove
         onTriggered:{
+            const drawerPoint=groupDrawer.mapFromItem(app,app.dragPoint.x,app.dragPoint.y);
+            if(groupDrawer.opened && drawerPoint.y>=0 && drawerPoint.y<groupDrawer.height)return;
             const p=taskScroll.mapFromItem(app,app.dragPoint.x,app.dragPoint.y);
             const flick=taskScroll.contentItem;
             if(p.x<0 || p.x>taskScroll.width || !flick || flick.contentY===undefined)return;
@@ -152,40 +289,115 @@ Pane {
             wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight
         }
     }
+    Rectangle {
+        id:groupDrawer;objectName:'drag-group-drawer';z:190
+        readonly property var groups:app.orderedGroups().filter(g=>app.tasks(g).length===0)
+        readonly property bool opened:!!app.dragTask && groups.length>0
+        x:8;width:app.width-16;height:Math.min(220,drawerFlow.implicitHeight+48)
+        y:opened?app.height-height-8:app.height+8
+        visible:opened || y<app.height
+        Behavior on y {NumberAnimation {duration:160;easing.type:Easing.OutCubic}}
+        radius:8;color:theme.background;border.color:theme.border
+        Label {x:14;y:10;text:'Move to another group';color:theme.muted;font.pixelSize:12}
+        ScrollView {
+            anchors.fill:parent;anchors.margins:12;anchors.topMargin:34;clip:true;contentWidth:availableWidth
+            Flow {
+                id:drawerFlow;width:parent.width;spacing:8
+                Repeater {
+                    id:drawerTargets;model:groupDrawer.groups
+                    Rectangle {
+                        required property string modelData
+                        objectName:'drag-group-'+modelData
+                        width:Math.min(drawerFlow.width,Math.max(100,groupLabel.implicitWidth+28));height:36;radius:5
+                        color:app.dropGroup===modelData?Qt.alpha(theme.accent,0.18):theme.surface
+                        border.color:app.dropGroup===modelData?theme.accent:'transparent'
+                        Label {id:groupLabel;anchors.centerIn:parent;text:parent.modelData==='All'?'Inbox':parent.modelData;color:theme.text;font.pixelSize:13}
+                    }
+                }
+            }
+        }
+    }
     onShowCompletedChanged: selectVisibleTask()
     onShowCancelledChanged: selectVisibleTask()
     property string filter: ''
     property string selectedId: ''
+    property bool taskSelectionActive:true
+    property string pendingD:''
+    Timer {id:doubleDTimer;interval:app.doubleDInterval;onTriggered:{const id=app.pendingD;app.pendingD='';if(id && app.taskSelectionActive && app.selectedId===id && !app.editor && !taskSettings.visible && app.selected && !['project','template'].includes(app.selected.kind))app.toggleCompletion(id,'');}}
+    function pressD() {
+        if(!taskSelectionActive || !selected)return;
+        if(selectedSubtaskId){toggleCompletion(selectedId,selectedSubtaskId);return;}
+        if(doubleDTimer.running && pendingD===selectedId){doubleDTimer.stop();pendingD='';purgeSelected();}
+        else {pendingD=selectedId;doubleDTimer.restart();}
+    }
+    TapHandler {
+        gesturePolicy:TapHandler.DragThreshold
+        onTapped:eventPoint=>{
+            const p=eventPoint.position;
+            let inside=false;
+            for(const group of app.dropGroups)for(let i=0;i<group.rows.count;i++){
+                const row=group.rows.itemAt(i),q=row.mapFromItem(app,p.x,p.y);
+                if(q.x>=0 && q.x<row.width && q.y>=0 && q.y<row.height)inside=true;
+            }
+            if(!inside){app.taskSelectionActive=false;doubleDTimer.stop();app.pendingD='';}
+        }
+    }
+    function reorderTask(direction) {
+        if(!selected || pendingSave || pendingPurge || completing || dragTask || (pendingMove && !moveOperation.keyboard))return;
+        sortOrder=4;
+        const manual=tasks(selected.group).filter(t=>(t.project || '')===(selected.project || '') && t.kind===selected.kind);
+        const at=manual.findIndex(t=>t.id===selectedId),to=at+direction;
+        if(to<0 || to>=manual.length)return;
+        const before=direction<0?manual[to]:manual[to+1];
+        const operation={id:selected.id,revision:selected.revision,group:selected.group,before_id:before?before.id:'',keyboard:true};
+        if(pendingMove){queuedMoves=queuedMoves.concat([operation]);return;}
+        moveOperation=operation;pendingMove=true;moveTimeout.restart();sendMove();
+    }
     property var editing: null
     property string editor: ''
     property string snoozeTaskId: ''
-    onSelectedIdChanged: snoozeTaskId=''
+    onSelectedSubtaskIdChanged: {doubleDTimer.stop();pendingD='';}
+    onSelectedIdChanged: {snoozeTaskId='';doubleDTimer.stop();pendingD='';}
     function orderedGroups() {
         return (listState?.groups || []).slice().sort((a,b)=>Number(b==='All' || b==='Inbox')-Number(a==='All' || a==='Inbox'));
     }
     function visualRows() {
         const rows=[];
         for(const group of dropGroups)for(let i=0;i<group.rows.count;i++) {
-            const row=group.rows.itemAt(i),p=row.mapToItem(taskScroll.contentItem,0,0);
+            const row=group.rows.itemAt(i);if(!row.visible)continue;const p=row.mapToItem(taskScroll.contentItem,0,0);
             rows.push({id:row.modelData.id,x:p.x,y:p.y,height:row.height});
         }
         return rows.sort((a,b)=>Math.abs(a.x-b.x)>1?a.x-b.x:a.y-b.y);
     }
+    function navigationRows() {
+        const rows=[];
+        for(const task of visualRows()) {
+            rows.push(Object.assign({},task,{subtaskId:'',height:Math.min(task.height,48)}));
+            for(const group of dropGroups)for(let i=0;i<group.rows.count;i++) {
+                const card=group.rows.itemAt(i);if(card.modelData.id!==task.id)continue;
+                for(const item of card.navigationItems()) {const p=item.mapToItem(taskScroll.contentItem,0,0);rows.push({id:task.id,subtaskId:item.modelData.id,x:p.x,y:p.y,height:item.height,item:item});}
+            }
+        }
+        return rows;
+    }
     function focusRow(next) {
         if(!next)return;
-        selectedId=next.id;
+        selectedId=next.id;focusList();selectedSubtaskId=next.subtaskId || '';
         const flick=taskScroll.contentItem;
         if(next.y<flick.contentY)flick.contentY=next.y;
         else if(next.y+next.height>flick.contentY+flick.height)flick.contentY=Math.max(0,Math.min(flick.contentHeight-flick.height,next.y+next.height-flick.height));
     }
-    function focusVertical(direction) {
+    function focusVertical(direction,modifiers) {
+        if(!taskSelectionActive){taskSelectionActive=true;focusRow(navigationRows().find(r=>r.id===selectedId && r.subtaskId===selectedSubtaskId));return;}
+        if(modifiers & Qt.ShiftModifier){focusList();reorderTask(direction);return;}
         if(collection==='reading'){readingPane.navigate(direction,false);return;}
-        const rows=visualRows();
+        const rows=(modifiers & Qt.ControlModifier)?visualRows().map(r=>Object.assign({},r,{subtaskId:''})):navigationRows();
         if(!rows.length)return;
-        const index=rows.findIndex(r=>r.id===selectedId);
+        const index=rows.findIndex(r=>r.id===selectedId && ((modifiers & Qt.ControlModifier) || r.subtaskId===selectedSubtaskId));
         focusRow(rows[index<0?(direction>0?0:rows.length-1):(index+direction+rows.length)%rows.length]);
     }
     function focusColumn(direction) {
+        if(!taskSelectionActive){taskSelectionActive=true;focusList();return;}
         if(collection==='reading'){readingPane.navigate(direction,true);return;}
         const rows=visualRows();
         const current=rows.find(r=>r.id===selectedId);
@@ -198,7 +410,7 @@ Pane {
         focusRow(adjacent[0]);
     }
     property var selected: (stateData.tasks || []).find(t=>t.id===selectedId) || null
-    readonly property bool imageDetails: !editor && collection!=='reading' && !dragTask && !!selected && (selected.images || []).length>0
+    readonly property bool imageDetails: taskSelectionActive && !editor && collection!=='reading' && !dragTask && !!selected && (selected.images || []).length>0
     readonly property int selectedColumn: selected ? (groupColumns.placements[selected.group] ?? Math.max(0,groupColumns.groups.indexOf(selected.group))) % groupColumns.columnCount : 0
     readonly property bool imagesOnLeft: selectedColumn>=Math.ceil(groupColumns.columnCount/2)
     onImageDetailsChanged: {if(!imageDetails)balanceTimer.restart();}
@@ -230,7 +442,8 @@ Pane {
     function reveal(section) {
         sections = Object.assign({}, sections, {[section]: true});
         Qt.callLater(() => {
-            const inputs = {group:groupInput,tags:tagsInput,due:dueInput,repeat:repeatUnit,reference:planInput,reminder:notifyInput};
+            if(section==='repeat')repeatTyping=true;
+            const inputs = {group:groupInput,tags:tagsInput,due:dueInput,repeat:repeatInput,reference:planInput,reminder:notifyInput};
             inputs[section].forceActiveFocus();
         });
     }
@@ -252,9 +465,7 @@ Pane {
         property string description
         implicitWidth:38;implicitHeight:38
         Accessible.name:description
-        ToolTip.visible:hovered
-        ToolTip.delay:500
-        ToolTip.text:description
+        TaskToolTip {theme:app.theme;visible:control.hovered;text:control.description}
         background:Rectangle {
             radius:8
             color:control.checked?theme.surface:control.hovered?theme.border:'transparent'
@@ -273,6 +484,13 @@ Pane {
                 c.lineWidth=1.5;c.lineCap='round';c.lineJoin='round';
                 if(control.symbol==='search') {
                     c.beginPath();c.arc(9,9,6,0,Math.PI*2);c.moveTo(14,14);c.lineTo(20,20);c.stroke();
+                } else if(control.symbol==='edit') {
+                    c.beginPath();c.moveTo(4,14);c.lineTo(14,4);c.lineTo(18,8);c.lineTo(8,18);c.lineTo(3,19);c.closePath();c.moveTo(12,6);c.lineTo(16,10);c.moveTo(4,14);c.lineTo(8,18);c.stroke();
+                } else if(control.symbol==='blocked') {
+                    c.strokeRect(5,9,12,10);c.beginPath();c.arc(11,9,4,Math.PI,2*Math.PI);c.moveTo(11,13);c.lineTo(11,16);c.stroke();
+                } else if(control.symbol==='settings') {
+                    c.beginPath();c.arc(11,11,6,0,Math.PI*2);c.moveTo(14,11);c.arc(11,11,3,0,Math.PI*2);c.stroke();
+                    for(let i=0;i<8;i++){const a=i*Math.PI/4;c.beginPath();c.moveTo(11+6*Math.cos(a),11+6*Math.sin(a));c.lineTo(11+9*Math.cos(a),11+9*Math.sin(a));c.stroke();}
                 } else if(control.symbol==='undo') {
                     c.beginPath();c.moveTo(3,9);c.lineTo(8,4);c.moveTo(3,9);c.lineTo(8,14);c.moveTo(3,9);c.lineTo(13,9);c.bezierCurveTo(22,9,22,19,13,19);c.stroke();
                 } else if(control.symbol==='info') {
@@ -379,21 +597,21 @@ Pane {
                             ['⌥ G','Group'],['⌥ T','Tags'],
                             ['⌥ D','Due date'],['⌥ R','Repeat'],
                             ['⌥ L','Reference / note'],['⌥ M','Reminder'],
-                            ['⌃ ↵','Save'],['⎋','Cancel']
+                            ['C','Cancel task (outside text fields)'],['⌃ ↵','Save'],['⎋','Close editor']
                         ]:collection==='reading'?[
                             ['N','Save a page'],['D','Mark read / unread'],
-                            ['T','Edit page'],['G','Edit category'],
+                            ['E / T','Edit page'],['G','Edit category'],
                             ['/','Search pages'],['↵','Open page'],
                             ['← →','Previous / next page'],['↑ ↓ / J K','Select row'],
                             ['P','Remove page'],['U / Ctrl+Z','Undo'],['⎋','Close window']
                         ]:[
                             ['N','New item'],['⇧ N','Today'],
-                            ['W','This week'],['L','Later'],
-                            ['D','Mark done'],['P','Purge task'],['U / Ctrl+Z','Undo'],
-                            ['T','Edit title'],['G','Edit group'],
+                            ['W','This week'],['M','This month'],['L','All tasks'],
+                            ['D','Mark done'],['D D','Delete task'],['C','Cancel task'],['P','Purge task'],['U / Ctrl+Z','Undo'],
+                            ['E / T','Edit task'],['G','Edit group'],
                             ['S','Snooze'],['/','Search'],
                             ['Ctrl+V','Attach clipboard image'],
-                            ['← →','Nearest task in adjacent column'],['↑ ↓ / J K','Select item'],['↵','Open reading reference'],
+                            ['← →','Nearest task in adjacent column'],['↑ ↓ / J K','Select item'],['Ctrl+Left','Back from project'],['Ctrl+↑ ↓','Skip subtasks'],['Shift+↑ ↓','Reorder manually'],['↵','Open project / reading reference'],
                             ['⎋','Close window']
                         ]
                         delegate:RowLayout {
@@ -420,6 +638,7 @@ Pane {
     property string undoToastTask: ''
     property string undoToastTitle: ''
     function purgeSelected() {
+        if(selectedSubtaskId || !taskSelectionActive)return;
         if(!selected || pendingSave || pendingMove)return;
         if([pendingPurge].concat(queuedPurges).some(p=>p && p.id===selected.id))return;
         const operation={id:selected.id,title:selected.title,revision:selected.revision,
@@ -464,7 +683,7 @@ Pane {
     }
     Timer {interval:25;repeat:true;running:!!app.pendingPurge && (!app.pendingPurge.sent || (app.pendingPurge.confirmed && app.pendingPurge.undoRequested && !app.pendingPurge.undoSent));onTriggered:app.sendPurge()}
     function undoLastAction() {
-        if(pendingSave || pendingMove)return;
+        if(pendingSave || pendingMove || completing)return;
         // Newest queued deletion can be cancelled without ever reaching the server.
         const waiting=queuedPurges.map(p=>p.id).lastIndexOf(undoToastTask);
         let index=waiting;
@@ -488,7 +707,7 @@ Pane {
             sendPurge();
         } else if(!pendingPurge)request(task?{action:'undo',id:task,undo_action:'purge'}:{action:'undo'});
     }
-    onErrorMessageChanged: {if(errorMessage){if(pendingPurge && (pendingPurge.undoSent || (pendingPurge.sent && !pendingPurge.confirmed)))rejectPurge();if(pendingMove && moveSent)rejectMove();if(dragTask)cancelDrag();if(pendingSave && pendingSave.sent)rejectSave();}}
+    onErrorMessageChanged: {if(errorMessage){if(completionQueue.length && completionQueue[0].sent)rejectCompletion();cancellingId='';if(pendingPurge && (pendingPurge.undoSent || (pendingPurge.sent && !pendingPurge.confirmed)))rejectPurge();if(pendingMove && moveSent)rejectMove();if(dragTask)cancelDrag();if(pendingSave && pendingSave.sent)rejectSave();}}
     Timer {id:toastTimer;interval:3000;onTriggered:app.undoToastTask='';}
     Rectangle {
         id:purgeToast
@@ -535,16 +754,63 @@ Pane {
     signal exitApp()
     signal openWindow()
     property bool canOpenWindow: false
-    function action(name, extra) {if(selected && !pendingSave && !pendingPurge && !pendingMove)request(Object.assign({action:name,id:selected.id,period:selected.period,revision:selected.revision},extra || {}));}
+    readonly property bool settingsOpen: taskSettings.visible
+    property var groupRename:null
+    function beginGroupRename(group) {
+        if(requestBusy || groupRename && groupRename.sent)return;
+        groupRename={source:group,sent:false,error:'',request:{action:'group-rename',source:group,groupsRevision:stateData.groupsRevision || 0,scoped:true,
+            members:tasks(group).map(t=>({id:t.id,revision:t.revision}))}};
+    }
+    function saveGroupRename(target) {
+        if(!groupRename || groupRename.sent || requestBusy || !target.trim())return;
+        target=target.trim();
+        if(target===groupRename.source){groupRename=null;focusList();return;}
+        groupRename=Object.assign({},groupRename,{target:target,sent:true,error:''});
+        request(Object.assign({},groupRename.request,{target:target}));
+    }
+    Connections {target:app
+        function onErrorMessageChanged(){if(app.errorMessage && app.groupRename && app.groupRename.sent)app.groupRename=Object.assign({},app.groupRename,{sent:false,error:app.errorMessage});}
+        function onStateDataChanged(){if(app.groupRename && app.groupRename.sent && app.groupRename.request.members.every(member=>(app.stateData.tasks || []).some(t=>t.id===member.id && t.group===app.groupRename.target && t.revision>member.revision))){app.groupRename=null;app.focusList();}}
+    }
+    property string cancellingId: ''
+    function cancelTask() {
+        if(!editing || !editing.id || editing.kind!=='todo' || requestBusy)return;
+        cancellingId=editing.id;
+        request({action:'status',id:editing.id,revision:editing.revision,period:editing.period,status:editing.status==='cancelled'?'ready':'cancelled',actor:'user'});
+    }
+    Shortcut {
+        sequence:'C';autoRepeat:false
+        enabled:app.editor==='edit' && !!app.editing && app.editing.kind==='todo' && !!app.editing.id && !app.requestBusy && !(app.Window.window && app.Window.window.activeFocusItem && app.Window.window.activeFocusItem.cursorPosition!==undefined)
+        onActivated:app.cancelTask()
+    }
+    TaskSettings {
+        id:taskSettings;objectName:'task-settings';parentWindow:app.QsWindow.window
+        theme:app.theme;stateData:app.stateData;busy:app.requestBusy;errorMessage:app.errorMessage
+        doubleDInterval:app.doubleDInterval
+        onDoubleDIntervalSelected:value=>app.doubleDInterval=value
+        domainSort:app.domainSort
+        domainGroups:app.manualGroups()
+        onDomainSortSelected:value=>app.domainSort=value
+        onMoveDomain:(group,direction)=>app.moveDomain(group,direction)
+        projectSort:app.projectSort
+        onProjectSortSelected:value=>app.projectSort=value
+        onOperation:value=>app.request(value)
+        onEditTemplate:task=>{app.selectedId=task.id;app.openEditor(task);}
+        onNewTemplate:app.newItem('template')
+    }
+    function action(name, extra) {if(name==='toggle' && selected){toggleCompletion(selected.id,'');return;}if(completing)return;if(selected && !pendingSave && !pendingPurge && !pendingMove)request(Object.assign({action:name,id:selected.id,period:selected.period,revision:selected.revision},extra || {}));}
     function openEditor(draft) {
-        if(pendingSave || pendingPurge || pendingMove)return;
-        dueToday=new Date();
+        if(pendingSave || pendingPurge || pendingMove || completing)return;
+        selectedSubtaskId='';dueToday=new Date();
         retrySave=null;
-        editing=draft || (selected ? JSON.parse(JSON.stringify(selected)) : {title:'',kind:collection,group:'All',tags:[],due:'',repeat:{},reference:''});
+        editing=draft || (selected ? JSON.parse(JSON.stringify(selected)) : {title:'',kind:collection,project:projectId,group:currentProject?currentProject.group:'All',tags:[],due:'',repeat:{},reference:'',subtasks:[]});
+        workflowEditor.reset(editing.subtasks || [],editing.workflow===true);templatePicker.currentIndex=0;
+        projectPicker.currentIndex=Math.max(0,projectPicker.model.findIndex(p=>p.id===editing.project));
+        projectOnly.checked=editing.onlyInProject!==false;
         titleInput.text=editing.title;groupInput.editText=editing.group || 'All';
         tagsInput.text=editing.tags.join(', ');dueInput.text=editing.due;
-        repeatUnit.currentIndex=Math.max(0,repeatUnit.model.indexOf(editing.repeat.unit || 'none'));
-        repeatValue.text=String(editing.repeat.value || 1);planInput.text=editing.reference || editing.plan || '';
+        repeatInput.text=editing.repeat.unit?Repeat.format(editing.repeat):'';repeatTyping=!editing.repeat.unit;
+        planInput.text=editing.reference || editing.plan || '';
         notifyInput.checked=editing.notifyBeforeDue!==false;
         leadValue.text=String(editing.notifyBeforeDueLeadValue ?? 1);
         leadUnit.currentIndex=Math.max(0,leadUnit.model.indexOf(editing.notifyBeforeDueLeadUnit || 'days'));
@@ -562,12 +828,14 @@ Pane {
     }
     function saveEditor() {
         if(editor!=='edit' || pendingSave || !titleInput.text.trim())return;
+        if(!workflowEditor.flush())return;
+        if(parsedRepeat.error){errorMessage=parsedRepeat.error;repeatTyping=true;repeatInput.forceActiveFocus();return;}
         if(parsedDue.error){errorMessage=parsedDue.error;dueInput.forceActiveFocus();return;}
         const value={action:draftId?'reading-save':editing.id?'edit':'create',draft_id:draftId,
             id:editing.id || '',revision:editing.revision,
-            fields:{kind:editing.kind || collection,title:titleInput.text,group:groupInput.editText.trim() || 'All',
+            fields:{kind:editing.kind || collection,project:projectPicker.currentValue || '',onlyInProject:projectOnly.checked,subtasks:workflowEditor.nodes,workflow:workflowEditor.sequential,title:titleInput.text,group:groupInput.editText.trim() || 'All',
                 tags:tagsInput.text.split(',').map(s=>s.trim()).filter(Boolean),due:parsedDue.value,
-                repeat:repeatUnit.currentText==='none'?{}:{unit:repeatUnit.currentText,value:repeatValue.text},
+                repeat:Object.assign({},parsedRepeat.rule,parsedRepeat.rule.unit && editing.repeat.start?{start:editing.repeat.start}:{}),
                 reference:planInput.text,notifyBeforeDue:notifyInput.checked,
                 notifyBeforeDueLeadValue:Number(leadValue.text),notifyBeforeDueLeadUnit:leadUnit.currentText}};
         const fingerprint=JSON.stringify(value);
@@ -604,9 +872,10 @@ Pane {
         const rows=collection==='reading'?readingSites():(listState?.groups || []).reduce((items,g)=>items.concat(tasks(g)),[]);
         if(!rows.some(t=>t.id===selectedId))selectedId=rows.length?rows[0].id:'';
     }
-    onViewChanged: selectVisibleTask()
+    onProjectIdChanged:groupColumns.reset()
+    onViewChanged: {groupColumns.reset();if(!projectId && view!=='projects')previousOverviewView=view;selectVisibleTask();}
     onFilterChanged: selectVisibleTask()
-    onCollectionChanged: selectVisibleTask()
+    onCollectionChanged: {groupColumns.reset();selectVisibleTask();}
     function readingSites() {
         return (listState?.tasks || []).filter(t=>t.kind==='reading' && (showCompleted || !t.done) && t.status!=='cancelled' && matchesFilter(t)).sort((a,b)=>readingSort===1?a.title.localeCompare(b.title):readingSort===2?String(a.reference || '').replace(/^https?:\/\/(www\.)?/,'').localeCompare(String(b.reference || '').replace(/^https?:\/\/(www\.)?/,'')):String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || b.id.localeCompare(a.id));
     }
@@ -614,12 +883,20 @@ Pane {
     function taskMeta(task) {
         const parts=[];
         if(task.saving)parts.push('Saving…');
+        if(task.kind==='project')return '';
+        if(task.project && !projectId){const p=(listState?.tasks || []).find(p=>p.id===task.project);if(p)parts.push(p.title);}
         if(task.status && !['ready','inbox','done','cancelled','blocked'].includes(task.status))parts.push(task.status.replace('_',' '));
         if(task.assignee)parts.push(task.assignee);
         if(task.verification && task.verification.length)parts.push('Check: '+task.verification[task.verification.length-1].outcome);
         return parts.join(' · ');
     }
     function effectiveDue(task) {
+        if(task.kind==='project') {
+            return (listState?.tasks || []).filter(t=>t.project===task.id && t.kind==='todo' && !t.done && t.status!=='cancelled')
+                .map(t=>effectiveDue(t)).filter(Boolean).sort()[0] || '';
+        }
+        const reminder=(task.workflowRows || []).filter(r=>r.kind==='reminder' && r.status==='ready').map(r=>r.due).sort()[0];
+        if(reminder && (!task.due || reminder<task.due))return reminder;
         if(task.snoozedUntil) return Qt.formatDate(new Date(task.snoozedUntil),'yyyy-MM-dd');
         return task.period && task.period!=='once' ? task.period : task.due || '';
     }
@@ -627,33 +904,28 @@ Pane {
         const due=effectiveDue(task);
         return !!due && !task.done && task.status!=='cancelled' && due < (listState?.today || Qt.formatDate(new Date(),'yyyy-MM-dd'));
     }
-    function dueLabel(task) {
-        const value=effectiveDue(task);
-        if(!value)return '·';
-        const date=new Date(value+'T12:00:00');
-        const today=new Date((listState?.today || Qt.formatDate(new Date(),'yyyy-MM-dd'))+'T12:00:00');
-        const delta=Math.round((date-today)/86400000);
-        const weekday=(today.getDay()+6)%7;
-        if(view!=='all' || (delta>=-weekday && delta<=6-weekday))return ['SUN','MON','TUE','WED','THU','FRI','SAT'][date.getDay()];
-        const days=Math.abs(delta);
-        if(days<10)return days+'D';
-        const start=delta<0?date:today,end=delta<0?today:date;
-        const months=(end.getFullYear()-start.getFullYear())*12+end.getMonth()-start.getMonth()-(end.getDate()<start.getDate()?1:0);
-        if(months<3)return Math.max(1,Math.floor(days/7))+'W';
-        if(months<12)return months+'M';
-        return Math.floor(months/12)+'Y';
+    function dueLabel(task) {return DateCode.dateCode(effectiveDue(task),listState?.today || Qt.formatDate(new Date(),'yyyy-MM-dd'),view);}
+    function compareProjectPlacement(a,b) {
+        const difference=Number(a.kind==='project')-Number(b.kind==='project');
+        return projectSort==='first'?-difference:projectSort==='last'?difference:0;
     }
     function compareTasks(a,b) {
+        const placement=compareProjectPlacement(a,b);
+        if(placement)return placement;
         if(sortOrder===4)return String(a.manualOrder || a.id.replace(/-/g,'')+'8').localeCompare(String(b.manualOrder || b.id.replace(/-/g,'')+'8')) || a.id.localeCompare(b.id);
         if(sortOrder>=2)return (sortOrder===3?-1:1)*a.title.localeCompare(b.title);
         const ad=effectiveDue(a),bd=effectiveDue(b);
         if(!ad || !bd)return ad?-1:bd?1:a.title.localeCompare(b.title);
         return (sortOrder===1?-1:1)*ad.localeCompare(bd) || a.title.localeCompare(b.title);
     }
+    Item {id:listKeyboardFocus}
     function focusList() {
-        // Pane is a focus scope: focusing it alone retains the filter's focus.
+        taskSelectionActive=true;
+        selectedSubtaskId='';
+        // Give list shortcuts their own focus target; previously focused buttons
+        // must not consume Return after selecting a task or cancelling a drag.
         filterInput.focus=false;
-        app.forceActiveFocus();
+        listKeyboardFocus.forceActiveFocus();
     }
     function filterTag(tag) {
         searching=true;
@@ -671,20 +943,27 @@ Pane {
         }).trim().toLowerCase();
         return matches && (!text || (task.title+' '+(task.tags || []).join(' ')+' '+task.group+' '+(task.reference || '')).toLowerCase().includes(text));
     }
-    function tasks(group) {
+    readonly property var tasksByGroup: {
+        const result={};
+        for(const group of (listState?.groups || []))result[group]=computeTasks(group);
+        return result;
+    }
+    onTasksByGroupChanged: selectVisibleTask()
+    function tasks(group) {return tasksByGroup?.[group] || [];}
+    function computeTasks(group) {
         const now=listState?.today || Qt.formatDate(new Date(),'yyyy-MM-dd');
-        let end=new Date(now+'T12:00:00');end.setDate(end.getDate()+6-((end.getDay()+6)%7));
+        let end=new Date(now+'T12:00:00');if(view==='month')end=new Date(end.getFullYear(),end.getMonth()+1,0,12);else end.setDate(end.getDate()+6-((end.getDay()+6)%7));
         const last=Qt.formatDate(end,'yyyy-MM-dd');
-        const rows=(listState?.tasks || []).filter(t=>(t.kind || 'todo')===collection && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && matchesFilter(t) &&
-            (view==='all' || (effectiveDue(t) && effectiveDue(t) <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now))).sort(compareTasks);
-        if(pendingMove && moveOperation && sortOrder===4 && group===moveOperation.group) {
-            const moved=rows.find(t=>t.id===moveOperation.id);
-            if(moved) {
-                const peers=rows.filter(t=>t.id!==moved.id);
-                const before=peers.findIndex(t=>t.id===moveOperation.before_id);
-                peers.splice(before<0?peers.length:before,0,moved);
-                return peers;
-            }
+        let rows=(listState?.tasks || []).filter(t=>(collection==='todo' && view==='projects' && !projectId?t.kind==='project':((t.kind || 'todo')===collection || collection==='todo' && t.kind==='project' && !projectId)) && (projectId?t.project===projectId:!t.project || (listState?.tasks || []).find(p=>p.id===t.project)?.onlyInProject!==true) && t.group===group && (showCompleted || !t.done) && (showCancelled || t.status!=='cancelled') && (showBlocked || t.status!=='blocked') && matchesFilter(t) &&
+            (t.kind==='project' || collection==='template' || view==='all' || !effectiveDue(t) || (effectiveDue(t) && effectiveDue(t) <= (view==='today'?now:last)) || (t.completedAt && Qt.formatDate(new Date(t.completedAt),'yyyy-MM-dd')===now))).sort(compareTasks);
+        if(pendingMove && moveOperation && sortOrder===4)for(const operation of [moveOperation].concat(queuedMoves)) {
+            if(group!==operation.group)continue;
+            const moved=rows.find(t=>t.id===operation.id);
+            if(!moved)continue;
+            rows=rows.filter(t=>t.id!==moved.id);
+            const before=rows.findIndex(t=>t.id===operation.before_id);
+            rows.splice(before<0?rows.length:before,0,moved);
+            rows.sort(compareProjectPlacement);
         }
         return rows;
     }
@@ -703,28 +982,36 @@ Pane {
     }
     Keys.onPressed: event=>{
         if(dragTask){if(event.key===Qt.Key_Escape && !pendingMove)cancelDrag();event.accepted=true;return;}
-        if(help.visible || dateHelp.visible)return;
+        if(help.visible || dateHelp.visible || taskSettings.visible)return;
+        if(groupRename)return;
         // An open filter must not disable list shortcuts after focus returns to a task.
         if(editor || filterInput.activeFocus){if(event.key===Qt.Key_Escape && editor){cancelEditor();event.accepted=true;}return;}
-        if(event.key===Qt.Key_N){if(event.modifiers & Qt.ShiftModifier && collection!=='reading')view='today';else {selectedId='';openEditor();}}
+        if(event.key===Qt.Key_N){if(event.modifiers & Qt.ShiftModifier && collection!=='reading')view='today';else newDefault();}
         else if(event.key===Qt.Key_L)view='all';
         else if(event.key===Qt.Key_W && collection!=='reading')view='week';
-        else if(event.key===Qt.Key_D)action('toggle');
+        else if(event.key===Qt.Key_M && collection!=='reading')view='month';
+        else if(event.key===Qt.Key_D && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))){if(!event.isAutoRepeat)pressD();}
+        else if(event.key===Qt.Key_C && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))){if(!event.isAutoRepeat)cancelFocusedTask();}
+        else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter || event.key===Qt.Key_Space) && taskSelectionActive && selectedSubtaskId){if(!event.isAutoRepeat)toggleCompletion(selectedId,selectedSubtaskId);}
+        else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && selected && selected.kind==='project')enterProject(selected);
+        else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && selected && (selected.subtasks || []).length){toggleExpanded(selected.id);}
         else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && collection==='reading')action('open-reference');
-        else if(event.key===Qt.Key_T || event.key===Qt.Key_G){if(selected){openEditor();if(event.key===Qt.Key_G)reveal('group');}}
+        else if(event.key===Qt.Key_E || event.key===Qt.Key_T || event.key===Qt.Key_G){if(selected){openEditor();if(event.key===Qt.Key_G)reveal('group');}}
         else if(event.key===Qt.Key_S){if(selected && !pendingSave)snoozeTaskId=snoozeTaskId===selectedId?'':selectedId;}
         else if(event.key===Qt.Key_Slash){searching=true;filterInput.forceActiveFocus();}
-        else if(event.key===Qt.Key_Escape){if(snoozeTaskId)snoozeTaskId='';else exitApp();}
+        else if(event.key===Qt.Key_Escape){if(snoozeTaskId)snoozeTaskId='';else if(projectId)leaveProject();else exitApp();}
+        else if(event.key===Qt.Key_Left && (event.modifiers & Qt.ControlModifier)){if(projectId)leaveProject();else if(view==='projects')view=previousOverviewView;focusList();}
         else if(event.key===Qt.Key_Left || event.key===Qt.Key_Right)focusColumn(event.key===Qt.Key_Left?-1:1);
         else if([Qt.Key_Down,Qt.Key_Up,Qt.Key_J,Qt.Key_K,Qt.Key_Tab].includes(event.key)) {
-            focusVertical([Qt.Key_Up,Qt.Key_K].includes(event.key)?-1:1);
+            focusVertical([Qt.Key_Up,Qt.Key_K].includes(event.key)?-1:1,event.modifiers);
         }
         event.accepted=true;
     }
     onStateDataChanged: {
-        if(pendingMove && moveOperation) {
+        if(cancellingId){const changed=(stateData.tasks || []).find(t=>t.id===cancellingId);if(changed && editing && changed.revision>editing.revision){cancellingId='';editor='';app.focusList();}}
+        if(pendingMove && moveOperation && moveSent) {
             const moved=(stateData.tasks || []).find(t=>t.id===moveOperation.id);
-            if(moved && moved.revision>moveOperation.revision && moved.group===moveOperation.group && (moved.events || []).slice(-1).some(e=>e.action==='move'))clearMove();
+            if(moved && moved.revision>moveOperation.revision && (moveOperation.project===undefined || moved.project===moveOperation.project) && moved.group===moveOperation.group && (moved.events || []).slice(-1).some(e=>e.action===(moveOperation.project!==undefined?'edit':'move')))acceptMove();
         }
         if(pendingPurge && pendingPurge.sent && Array.isArray(stateData.tasks)) {
             const present=stateData.tasks.some(t=>t.id===pendingPurge.id);
@@ -750,21 +1037,23 @@ Pane {
             Layout.fillWidth:true;spacing:12
             ColumnLayout {
                 Layout.fillWidth:true;spacing:3
-                Label {text:collection==='reading'?'Reading':'Tasks';font.pixelSize:24;font.weight:Font.DemiBold;color:theme.text}
-                Label {text:editor==='edit'?(draftId?'Save this page to your reading list.':editing && editing.id?'Edit details':'Add a new '+(collection==='reading'?'reading item':'task')):visibleCount()+' '+(collection==='reading'?'saved pages':('tasks · '+(view==='week'?'This week':view==='today'?'Today':'All dates')));font.pixelSize:12;color:theme.muted}
+                Label {text:currentProject?currentProject.title:collection==='reading'?'Reading':collection==='template'?'Templates':view==='projects' && !projectId?'Projects':'Tasks';font.pixelSize:24;font.weight:Font.DemiBold;color:theme.text}
+                Label {text:editor==='edit'?(draftId?'Save this page to your reading list.':editing && editing.id?'Edit details':'Add a new '+(editing && editing.kind==='project'?'project':editing && editing.kind==='template'?'template':collection==='reading'?'reading item':'task')):visibleCount()+' '+(collection==='reading'?'saved pages':view==='projects' && !projectId?'projects':collection==='template'?'templates':('tasks · '+(view==='week'?'This week':view==='today'?'Today':view==='month'?'This month':'All dates')));font.pixelSize:12;color:theme.muted}
             }
             Item {Layout.fillWidth:true}
-            Choice {visible:!editor;model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectVisibleTask();}}
+            QuietButton {text:projectReturnView==='projects'?'‹ Projects':'‹ All tasks';visible:!!projectId && !editor;onClicked:leaveProject()}
+            Choice {visible:!editor && !projectId;model:['Todo','Reading'];currentIndex:collection==='reading'?1:0;enabled:!editor;onActivated:{collection=currentIndex===1?'reading':'todo';view=collection==='reading'?'all':'week';selectVisibleTask();}}
             QuietButton {text:'Open window';visible:canOpenWindow && !editor;enabled:!pendingSave;quiet:true;onClicked:app.openWindow()}
-            QuietButton {text:collection==='reading'?'+ Save page':'+ New';visible:!editor;primary:true;enabled:!draftId && !pendingSave;onClicked:{selectedId='';openEditor();}}
+            QuietButton {objectName:'new-item';text:collection==='reading'?'+ Save page':'+ New';visible:!editor;primary:true;enabled:!draftId && !pendingSave;Accessible.name:'New '+app.newKind;onClicked:app.newDefault()}
         }
         RowLayout {
             visible:!editor;Layout.fillWidth:true;spacing:4
             Repeater {
-                model:collection==='reading'?[]:[{label:'Today',value:'today'},{label:'This week',value:'week'},{label:'All tasks',value:'all'}]
+                model:collection!=='todo'?[]:[{label:'Today',value:'today'},{label:'This week',value:'week'},{label:'This month',value:'month'},{label:'All tasks',value:'all'}].concat(projectId?[]:[{label:'Projects',value:'projects'}])
                 QuietButton {
                     required property var modelData
-                    text:modelData.label;quiet:true
+                    objectName:'view-'+modelData.value
+                    text:modelData.label;quiet:true;horizontalPadding:app.width<900?9:14
                     checked:app.view===modelData.value
                     background:Rectangle {radius:9;color:parent.checked?theme.surface:'transparent';border.color:parent.checked?theme.border:'transparent'}
                     onClicked:{app.view=modelData.value;app.focusList();}
@@ -775,10 +1064,11 @@ Pane {
             QuietButton {visible:collection==='reading';text:'Grid';quiet:!app.readingGrid;onClicked:app.readingGrid=true}
             Item {visible:collection==='reading';Layout.fillWidth:true}
             Choice {visible:collection==='reading';model:['Recently saved','Title: A–Z','Site: A–Z'];currentIndex:app.readingSort;implicitWidth:145;onActivated:app.readingSort=currentIndex}
-            Choice {visible:collection!=='reading';model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
+            Choice {objectName:'sortChoice';visible:collection!=='reading';model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
             IconButton {symbol:'search';description:collection==='reading'?'Filter saved pages (/)':'Filter tasks (/)' ;checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.focusList();}}}
             IconButton {symbol:'completed';description:collection==='reading'?'Show read pages':'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
             IconButton {symbol:collection==='reading'?'categories':'cancelled';description:collection==='reading'?'Group pages by category':'Show cancelled tasks';checkable:true;checked:collection==='reading'?app.readingCategories:app.showCancelled;onClicked:{if(collection==='reading')app.readingCategories=checked;else app.showCancelled=checked}}
+            IconButton {objectName:'blocked-toggle';visible:collection!=='reading';symbol:'blocked';description:'Show blocked tasks and workflow steps';checkable:true;checked:app.showBlocked;onClicked:app.showBlocked=checked}
             IconButton {visible:collection!=='reading';symbol:'details';description:'Show selected task details';checkable:true;checked:app.showDetails;onClicked:app.showDetails=checked}
         }
         Entry {color:theme.text;placeholderTextColor:theme.muted;id:filterInput;visible:!editor && searching;Layout.fillWidth:true;placeholderText:collection==='reading'?'Filter reading list':'Filter tasks';onTextChanged:app.filter=text;Keys.onEscapePressed:{searching=false;filter='';text='';app.focusList();}}
@@ -806,253 +1096,392 @@ Pane {
                 Item {
                     id: groupColumns
                     Layout.fillWidth:true
-                    implicitHeight:childrenRect.height
+                    implicitHeight:app.dropGroups.reduce((bottom,group)=>group.visible?Math.max(bottom,group.y+group.implicitHeight):bottom,0)
                     readonly property real spacing:32
                     readonly property int columnCount: Math.max(1, Math.floor(taskScroll.availableWidth / 420))
-                    readonly property var groups: app.orderedGroups()
+                    property var groups: []
                     property var measuredHeights: ({})
                     property var placements: ({})
+                    function reset() {groups=[];placements={};balanceTimer.restart();}
+                    function columnFor(group,index) {return (placements[group] ?? index)%columnCount;}
+                    function topFor(index,column) {
+                        let top=0;
+                        for(let i=0;i<index;i++) {
+                            const group=groups[i];
+                            if(columnFor(group,i)===column && app.tasks(group).length>0)top+=(measuredHeights[group] || 0)+28;
+                        }
+                        return top;
+                    }
                     function noteHeight(group,height) {
-                        if(app.imageDetails || app.dragTask || app.snoozeTaskId || height<=0 || Math.abs((measuredHeights[group] || 0)-height)<0.5)return;
-                        measuredHeights[group]=height;balanceTimer.restart();
+                        if(height<=0 || Math.abs((measuredHeights[group] || 0)-height)<0.5)return;
+                        measuredHeights=Object.assign({},measuredHeights,{[group]:height});
                     }
                     function balance() {
-                        if(app.imageDetails || app.dragTask || app.snoozeTaskId)return;
-                        const loads=Array(columnCount).fill(0),next={};
-                        const ordered=groups.map((g,i)=>({group:g,index:i,height:measuredHeights[g] || 30+app.tasks(g).length*48})).filter(item=>app.tasks(item.group).length>0);
-                        ordered.sort((a,b)=>Number(b.group==='All' || b.group==='Inbox')-Number(a.group==='All' || a.group==='Inbox') || b.height-a.height || a.index-b.index);
-                        for(const item of ordered) {
-                            const column=loads.indexOf(Math.min(...loads));
-                            next[item.group]=column;loads[column]+=item.height+28;
+                        const available=app.manualGroups();
+                        if(!available.length)return;
+                        if(!groups.length) {
+                            const ordered=available.slice();
+                            if(app.domainSort==='alphabetical')ordered.sort((a,b)=>a.localeCompare(b));
+                            else if(app.domainSort==='due'){
+                                const earliest=g=>app.tasks(g).filter(t=>!t.done && t.status!=='cancelled').map(t=>app.effectiveDue(t)).filter(Boolean).sort()[0] || '9999';
+                                ordered.sort((a,b)=>earliest(a).localeCompare(earliest(b)) || a.localeCompare(b));
+                            }
+                            groups=ordered;
+                        } else {
+                            const added=available.filter(g=>!groups.includes(g));
+                            if(added.length)groups=groups.concat(added);
                         }
+                        const next=Object.assign({},placements);
+                        let slot=Object.keys(next).length;
+                        // Assign once; mutations and height changes never move existing domains.
+                        for(const group of groups)if(next[group]===undefined && app.tasks(group).length)next[group]=slot++;
                         if(JSON.stringify(next)!==JSON.stringify(placements))placements=next;
                     }
-                    onGroupsChanged:balanceTimer.restart()
                     onColumnCountChanged:balanceTimer.restart()
-                    Timer {id:balanceTimer;interval:80;onTriggered:groupColumns.balance()}
-                    Connections {target:app;function onDragTaskChanged(){if(!app.dragTask)balanceTimer.restart();}}
+                    Timer {id:balanceTimer;interval:0;onTriggered:groupColumns.balance()}
+                    Connections {target:app;function onTasksByGroupChanged(){balanceTimer.restart();}}
+                    Component.onCompleted:balanceTimer.restart()
 
                     Repeater {
-                        model:groupColumns.columnCount
-                        Column {
-                            id: groupColumn
+                        model:groupColumns.groups
+                        ColumnLayout {
+                            id:groupPanel
+                            required property string modelData
                             required property int index
+                            property alias rows:groupRows
+                            readonly property int column:groupColumns.columnFor(modelData,index)
                             readonly property int leftCount:Math.ceil(groupColumns.columnCount/2)
-                            readonly property bool rightHalf:index>=leftCount
+                            readonly property bool rightHalf:column>=leftCount
                             readonly property int halfCount:rightHalf?groupColumns.columnCount-leftCount:leftCount
+                            visible:groupRows.count>0
                             width:app.imageDetails?(groupColumns.width/2-16-groupColumns.spacing*(halfCount-1))/halfCount:(groupColumns.width-groupColumns.spacing*(groupColumns.columnCount-1))/groupColumns.columnCount
-                            x:app.imageDetails?(rightHalf?groupColumns.width/2+16:0)+(index-(rightHalf?leftCount:0))*(width+groupColumns.spacing):index*(width+groupColumns.spacing)
-                            spacing:28
+                            x:app.imageDetails?(rightHalf?groupColumns.width/2+16:0)+(column-(rightHalf?leftCount:0))*(width+groupColumns.spacing):column*(width+groupColumns.spacing)
+                            y:groupColumns.topFor(index,column)
+                            spacing:6
+                            onImplicitHeightChanged:groupColumns.noteHeight(modelData,implicitHeight)
+                            Component.onCompleted:{app.dropGroups=app.dropGroups.concat([groupPanel]);groupColumns.noteHeight(modelData,implicitHeight);}
+                            Component.onDestruction:app.dropGroups=app.dropGroups.filter(g=>g!==groupPanel)
+                            Timer {id:domainClick;interval:Qt.styleHints.mouseDoubleClickInterval;onTriggered:app.toggleDomain(groupPanel.modelData)}
+                            RowLayout {
+                                Layout.fillWidth:true;spacing:8;Layout.topMargin:6;Layout.bottomMargin:8
+                                Button {
+                                    objectName:'domain-collapse-'+groupPanel.modelData
+                                    implicitWidth:24;implicitHeight:28;padding:0
+                                    Accessible.name:(app.collapsedDomains[groupPanel.modelData]?'Expand ':'Collapse ')+groupPanel.modelData
+                                    onClicked:app.toggleDomain(groupPanel.modelData)
+                                    contentItem:Text {text:app.collapsedDomains[groupPanel.modelData]?'›':'⌄';color:theme.muted;font.pixelSize:18;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
+                                    background:Rectangle {radius:4;color:parent.hovered?theme.surface:'transparent'}
+                                }
+                                Label {objectName:'group-heading-'+groupPanel.modelData;visible:!groupNameEdit.visible;text:modelData==='All'?'Inbox':modelData;font.pixelSize:13;font.weight:Font.Bold;font.letterSpacing:0.4;color:theme.text;MouseArea {anchors.fill:parent;onClicked:domainClick.restart();onDoubleClicked:{domainClick.stop();app.beginGroupRename(groupPanel.modelData);if(groupNameEdit.visible){groupNameEdit.text=parent.text;groupNameEdit.forceActiveFocus();groupNameEdit.selectAll();}}}}
+                                TextField {
+                                    id:groupNameEdit;objectName:'group-heading-edit-'+groupPanel.modelData
+                                    visible:!!app.groupRename && app.groupRename.source===groupPanel.modelData
+                                    Layout.fillWidth:true;implicitHeight:28;font.pixelSize:12;selectByMouse:true
+                                    enabled:!app.groupRename || !app.groupRename.sent
+                                    color:theme.text;padding:5
+                                    background:Rectangle {radius:4;color:theme.surface;border.color:theme.accent}
+                                    Accessible.name:'Rename group'
+                                    onAccepted:app.saveGroupRename(text)
+                                    Keys.onEscapePressed:event=>{app.groupRename=null;app.focusList();event.accepted=true;}
+                                }
+                                QuietButton {visible:groupNameEdit.visible;text:app.groupRename && app.groupRename.sent?'Saving…':'Save';enabled:!app.requestBusy && !!app.groupRename && !app.groupRename.sent;horizontalPadding:8;onClicked:app.saveGroupRename(groupNameEdit.text)}
+                                QuietButton {visible:groupNameEdit.visible;text:'Cancel';enabled:!!app.groupRename && !app.groupRename.sent;horizontalPadding:8;onClicked:{app.groupRename=null;app.focusList();}}
+                                Label {text:app.tasks(modelData).length;font.pixelSize:11;color:theme.muted}
+                            }
+                            Label {visible:!!app.groupRename && app.groupRename.source===groupPanel.modelData && !!app.groupRename.error;text:visible?app.groupRename.error:'';color:'#eb6f92';Layout.fillWidth:true;wrapMode:Text.Wrap}
                             Repeater {
-                                model:groupColumns.groups.filter((g,i)=>(groupColumns.placements[g] ?? i) % groupColumns.columnCount === groupColumn.index)
-                                ColumnLayout {
-                                    id:groupPanel
-                                    required property string modelData
-                                    property alias rows:groupRows
-                                    visible:groupRows.count>0 || !!app.dragTask
-                                    width:parent.width;spacing:6
-                                    onImplicitHeightChanged:groupColumns.noteHeight(modelData,implicitHeight)
-                                    Component.onCompleted:{app.dropGroups=app.dropGroups.concat([groupPanel]);groupColumns.noteHeight(modelData,implicitHeight);}
-                                    Component.onDestruction:app.dropGroups=app.dropGroups.filter(g=>g!==groupPanel)
-                                    RowLayout {
-                                        Layout.fillWidth:true;spacing:8
-                                        Label {text:modelData==='All'?'Inbox':modelData;font.pixelSize:12;font.weight:Font.DemiBold;color:theme.muted}
-                                        Label {text:app.tasks(modelData).length;font.pixelSize:11;color:theme.muted}
-                                    }
-                                    Repeater {
-                                        id:groupRows
-                                        model:app.tasks(groupPanel.modelData)
-                                        Rectangle {
-                                            id:taskCard
-                                            required property var modelData
-                                            property real gapHeight:app.dragTask && app.dropGroup===groupPanel.modelData && app.dropBefore===modelData.id ? app.dragHeight+6 : 0
-                                            Behavior on gapHeight {NumberAnimation {duration:120}}
-                                            opacity:app.dragTask && app.dragTask.id===modelData.id ? 0.5 : 1
-                                            Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+8+gapHeight+snoozeReveal.height;radius:4
-                                            color:"transparent"
-                                            border.color:"transparent"
-                                            Item {
-                                                id:snoozeReveal
-                                                anchors.top:cardBody.bottom;anchors.left:parent.left;anchors.right:parent.right
-                                                anchors.leftMargin:42;anchors.topMargin:8
-                                                height:app.snoozeTaskId===taskCard.modelData.id?snoozeContent.implicitHeight+12:0
-                                                visible:height>0;clip:true;z:3
-                                                Behavior on height {NumberAnimation {duration:180;easing.type:Easing.OutCubic}}
-                                                ColumnLayout {
-                                                    id:snoozeContent;width:parent.width;spacing:6
-                                                    SnoozePicker {
-                                                        Layout.fillWidth:true;ink:theme.text;accent:theme.accent
-                                                        opened:app.snoozeTaskId===taskCard.modelData.id
-                                                        onChosen:until=>{app.action('snooze',{until:until});app.snoozeTaskId='';app.focusList();}
-                                                        onCancelled:{app.snoozeTaskId='';app.focusList();}
-                                                    }
-                                                }
-                                            }
-                                            RowLayout {
-                                                id:cardBody
-                                                z:1
-                                                anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:4;anchors.topMargin:4+taskCard.gapHeight;spacing:8
-                                                Item {
-                                                    readonly property bool focusedTask: selectedId===modelData.id
-                                                    Layout.preferredWidth:30;Layout.preferredHeight:taskTitle.firstLineHeight;Layout.alignment:Qt.AlignTop
-                                                    Canvas {
-                                                        visible:parent.focusedTask
-                                                        width:12;height:12;anchors.verticalCenter:parent.verticalCenter
-                                                        property color ink:theme.accent
-                                                        onInkChanged:requestPaint()
-                                                        onPaint:{
-                                                            const c=getContext('2d');c.reset();
-                                                            c.strokeStyle=ink;c.lineWidth=1.8;c.lineCap='round';c.lineJoin='round';
-                                                            c.beginPath();c.moveTo(4,3);c.lineTo(7,6);c.lineTo(4,9);c.stroke();
-                                                        }
-                                                    }
-                                                    Label {
-                                                        visible:!parent.focusedTask
-                                                        y:3;text:app.dueLabel(modelData)
-                                                        color:app.isOverdue(modelData)?'#eb6f92':theme.muted
-                                                        font.family:'monospace';font.pixelSize:11;font.weight:Font.DemiBold
-                                                        font.underline:!!modelData.snoozedUntil
-                                                    }
-                                                }
-                                                ColumnLayout {
-                                                    Layout.fillWidth:true;spacing:3
-                                                    Label {
-                                                        id: taskTitle
-                                                        Layout.fillWidth:true
-                                                        Layout.rightMargin:statusIcons.visible?statusIcons.implicitWidth+6:0
-                                                        property real lastLineWidth: 0
-                                                        property real lastLineTop: 0
-                                                        property real firstLineHeight: 18
-                                                        text:modelData.title
-                                                        textFormat:Text.PlainText
-                                                        font.pixelSize:15
-                                                        font.weight:selectedId===modelData.id?Font.DemiBold:Font.Normal
-                                                        font.strikeout:modelData.done && modelData.status!=='cancelled'
-                                                        color:selectedId===modelData.id?theme.accent:theme.text
-                                                        wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight
-                                                        property var strikeLines: []
-                                                        onLineLaidOut: line => {
-                                                            if(line.number===0) {strikeLines=[];firstLineHeight=line.height;}
-                                                            strikeLines.push({x:line.x,y:line.y+line.height*0.52,width:Math.min(line.width,line.implicitWidth)});
-                                                            lastLineWidth=Math.min(line.width,line.implicitWidth);
-                                                            lastLineTop=line.y;
-                                                            cancelledStrike.requestPaint();
-                                                        }
-                                                        onColorChanged: cancelledStrike.requestPaint()
-                                                        Row {
-                                                            id:statusIcons
-                                                            x:taskTitle.lastLineWidth+6;y:taskTitle.lastLineTop+2
-                                                            spacing:5
-                                                            visible:blockedIcon.visible || repeatIcon.visible || imageIcon.visible
-                                                            Canvas {
-                                                                id:imageIcon;width:14;height:14
-                                                                visible:(modelData.images || []).length>0
-                                                                Accessible.name:'Has images'
-                                                                onPaint:{const c=getContext('2d');c.reset();c.strokeStyle=theme.muted;c.lineWidth=1.2;c.strokeRect(1,2,12,10);c.beginPath();c.arc(9.5,5,1,0,Math.PI*2);c.stroke();c.beginPath();c.moveTo(2,11);c.lineTo(5,7);c.lineTo(8,10);c.lineTo(10,8);c.lineTo(12,11);c.stroke();}
-                                                            }
-                                                            Canvas {
-                                                                id:blockedIcon;width:14;height:14
-                                                                visible:modelData.status==='blocked'
-                                                                Accessible.name:'Blocked'
-                                                                onPaint:{const c=getContext('2d');c.reset();c.strokeStyle='#f6c177';c.lineWidth=1.5;c.beginPath();c.arc(7,7,5.3,0,Math.PI*2);c.moveTo(3.3,10.7);c.lineTo(10.7,3.3);c.stroke();}
-                                                            }
-                                                            Canvas {
-                                                                id:repeatIcon;width:14;height:14
-                                                                visible:!!modelData.repeat && !!modelData.repeat.unit
-                                                                Accessible.name:'Repeats'
-                                                                onPaint:{const c=getContext('2d');c.reset();c.strokeStyle=theme.muted;c.lineWidth=1.4;c.lineCap='round';c.beginPath();c.arc(7,7,4.6,Math.PI*1.1,Math.PI*1.9);c.moveTo(11.4,2.4);c.lineTo(11.4,5.4);c.lineTo(8.4,5.4);c.moveTo(2.6,11.6);c.lineTo(2.6,8.6);c.lineTo(5.6,8.6);c.moveTo(11.4,8.4);c.arc(7,7,4.6,Math.PI*0.1,Math.PI*0.9);c.stroke();}
-                                                            }
-                                                        }
-                                                        Canvas {
-                                                            id: cancelledStrike
-                                                            anchors.fill:parent
-                                                            visible:modelData.status==='cancelled'
-                                                            onVisibleChanged:requestPaint()
-                                                            onWidthChanged:requestPaint()
-                                                            onHeightChanged:requestPaint()
-                                                            onPaint: {
-                                                                const ctx=getContext('2d');ctx.reset();
-                                                                ctx.strokeStyle=taskTitle.color;ctx.lineWidth=1.2;
-                                                                for(const line of taskTitle.strikeLines) {
-                                                                    ctx.beginPath();
-                                                                    for(let x=0;x<=line.width;x++) {
-                                                                        const y=line.y+1.6*Math.sin(x*Math.PI/5);
-                                                                        if(x===0)ctx.moveTo(line.x+x,y);else ctx.lineTo(line.x+x,y);
-                                                                    }
-                                                                    ctx.stroke();
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    Label {Layout.fillWidth:true;text:taskMeta(modelData);visible:text!=='';color:theme.muted;font.pixelSize:12;wrapMode:Text.Wrap}
-                                                    Flow {
-                                                        id:tagFlow
-                                                        Layout.fillWidth:true;Layout.minimumWidth:0
-                                                        spacing:8;visible:(taskCard.modelData.tags || []).length>0
-                                                        Repeater {
-                                                            model:taskCard.modelData.tags || []
-                                                            Label {
-                                                                required property string modelData
-                                                                text:'#'+modelData;textFormat:Text.PlainText
-                                                                width:Math.min(implicitWidth,tagFlow.width)
-                                                                font.pixelSize:11;color:tagMouse.containsMouse?theme.text:theme.accent
-                                                                wrapMode:Text.WrapAnywhere
-                                                                Accessible.name:'Filter by tag '+modelData
-                                                                MouseArea {
-                                                                    id:tagMouse;anchors.fill:parent;hoverEnabled:true;cursorShape:Qt.PointingHandCursor
-                                                                    onClicked:app.filterTag(parent.modelData)
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            MouseArea {
-                                                anchors.fill:parent;acceptedButtons:Qt.LeftButton
-                                                cursorShape:pressed?Qt.ClosedHandCursor:Qt.OpenHandCursor
-                                                preventStealing:true
-                                                property point pressedPoint
-                                                property bool moved: false
-                                                onPressed: mouse=>{pressedPoint=mapToItem(app,mouse.x,mouse.y);moved=false;selectedId=modelData.id;app.focusList();}
-                                                onPositionChanged: mouse=>{
-                                                    if(!pressed || app.pendingMove)return;
-                                                    const point=mapToItem(app,mouse.x,mouse.y);
-                                                    if(!moved && Math.hypot(point.x-pressedPoint.x,point.y-pressedPoint.y)>10){moved=true;app.startDrag(modelData,cardBody,taskCard.width,cardBody.implicitHeight+8,point);}
-                                                    if(moved && app.dragTask)app.updateDrag(point);
-                                                }
-                                                onReleased: {if(moved)app.finishDrag();}
-                                                onCanceled: {if(moved && !app.pendingMove)app.cancelDrag();}
-                                                onClicked:{if(!moved){selectedId=modelData.id;app.focusList();}}
-                                                onDoubleClicked:{if(!moved)app.action('toggle');}
+                                id:groupRows
+                                model:app.tasks(groupPanel.modelData)
+                                Rectangle {
+                                    id:taskCard
+                                    visible:!app.collapsedDomains[groupPanel.modelData]
+                                    required property var modelData
+                                    function navigationItems(){return app.expandedTasks[modelData.id]?subtaskContent.navigationItems():[];}
+                                    property real gapHeight:app.dragTask && app.dropGroup===groupPanel.modelData && app.dropBefore===modelData.id ? app.dragHeight+6 : 0
+                                    Behavior on gapHeight {NumberAnimation {duration:120}}
+                                    Timer {id:projectClick;interval:300;onTriggered:app.enterProject(taskCard.modelData)}
+                                    objectName:'task-'+modelData.id
+                                    opacity:app.dragTask && app.dragTask.id===modelData.id ? 0.5 : 1
+                                    border.width:app.dropProject===modelData.id?1:0
+                                    Layout.fillWidth:true;implicitHeight:cardBody.implicitHeight+8+gapHeight+snoozeReveal.height+subtaskReveal.height;radius:4
+                                    color:"transparent"
+                                    border.color:app.dropProject===modelData.id?theme.accent:"transparent"
+                                    Item {
+                                        id:snoozeReveal
+                                        anchors.top:cardBody.bottom;anchors.left:parent.left;anchors.right:parent.right
+                                        anchors.leftMargin:42;anchors.topMargin:8
+                                        height:app.snoozeTaskId===taskCard.modelData.id?snoozeContent.implicitHeight+12:0
+                                        visible:height>0;clip:true;z:3
+                                        Behavior on height {NumberAnimation {duration:180;easing.type:Easing.OutCubic}}
+                                        ColumnLayout {
+                                            id:snoozeContent;width:parent.width;spacing:6
+                                            SnoozePicker {
+                                                Layout.fillWidth:true;ink:theme.text;accent:theme.accent
+                                                opened:app.snoozeTaskId===taskCard.modelData.id
+                                                onChosen:until=>{app.action('snooze',{until:until});app.snoozeTaskId='';app.focusList();}
+                                                onCancelled:{app.snoozeTaskId='';app.focusList();}
                                             }
                                         }
                                     }
                                     Item {
-                                        Layout.fillWidth:true
-                                        implicitHeight:app.dragTask && app.dropGroup===groupPanel.modelData && app.dropBefore===''?app.dragHeight+6:groupRows.count===0?30:0
-                                        Behavior on implicitHeight {NumberAnimation {duration:120}}
-                                        Label {visible:groupRows.count===0;anchors.centerIn:parent;text:'Drop tasks here';color:theme.muted;font.pixelSize:11}
+                                        id:subtaskReveal;z:3;clip:true
+                                        anchors.top:snoozeReveal.bottom;anchors.left:parent.left;anchors.right:parent.right;anchors.leftMargin:4;anchors.rightMargin:4
+                                        visible:height>0
+                                        height:app.expandedTasks[taskCard.modelData.id]?subtaskContent.implicitHeight:0
+                                        Behavior on height {NumberAnimation {duration:160;easing.type:Easing.InOutCubic}}
+                                        SubtaskList {id:subtaskContent;width:parent.width;enabled:!!app.expandedTasks[taskCard.modelData.id]
+                                        task:taskCard.modelData;theme:app.theme;busy:!!app.pendingSave || !!app.pendingPurge || app.pendingMove;showBlocked:app.showBlocked;view:app.view;today:app.listState.today;focusedId:app.taskSelectionActive && app.selectedId===taskCard.modelData.id?app.selectedSubtaskId:''
+                                        onToggle:id=>{app.selectedSubtaskId=id;app.selectedId=taskCard.modelData.id;app.toggleCompletion(taskCard.modelData.id,id);}
+                                        onNavigate:(direction,modifiers)=>app.focusVertical(direction,modifiers)
+                                        onFocusReached:id=>app.focusRow(app.navigationRows().find(r=>r.id===taskCard.modelData.id && r.subtaskId===id))
+                                        onAdd:app.addSubtask(taskCard.modelData)
+                                        }
+                                    }
+                                    RowLayout {
+                                        id:cardBody
+                                        z:1
+                                        anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:4;anchors.topMargin:4+taskCard.gapHeight;spacing:8
+                                        Item {
+                                            id:taskMarker
+                                            readonly property bool focusedTask: app.taskSelectionActive && selectedId===modelData.id && !app.selectedSubtaskId
+                                            readonly property bool showCheck: taskCard.modelData.kind==='todo' && (cardHover.hovered || completionButton.activeFocus)
+                                            Layout.minimumWidth:30;Layout.preferredWidth:30;Layout.maximumWidth:30;Layout.preferredHeight:taskTitle.firstLineHeight;Layout.alignment:Qt.AlignTop
+                                            Canvas {
+                                                id:completionMarker;objectName:'completion-marker-'+taskCard.modelData.id
+                                                visible:taskMarker.focusedTask || morph>0
+                                                width:18;height:18;anchors.centerIn:parent
+                                                property real morph:taskMarker.showCheck?1:0
+                                                Behavior on morph {NumberAnimation {duration:160;easing.type:Easing.InOutCubic}}
+                                                property color ink:theme.accent
+                                                property color checkInk:theme.background
+                                                property bool done:taskCard.modelData.done
+                                                onMorphChanged:requestPaint()
+                                                onInkChanged:requestPaint()
+                                                onCheckInkChanged:requestPaint()
+                                                onDoneChanged:requestPaint()
+                                                onPaint:{
+                                                    const c=getContext('2d'),t=morph;c.reset();
+                                                    c.globalAlpha=taskMarker.focusedTask?1:t;
+                                                    c.strokeStyle=ink;c.lineWidth=1.5;c.lineCap='round';c.lineJoin='round';
+                                                    // One centered stroke unfolds from a chevron into the box.
+                                                    const chevron=[[7,5],[9,7],[11,9],[9,11],[7,13]];
+                                                    const box=[[2,2],[16,2],[16,16],[2,16],[2,2]];
+                                                    c.beginPath();
+                                                    for(let i=0;i<box.length;i++) {
+                                                        const x=chevron[i][0]+(box[i][0]-chevron[i][0])*t;
+                                                        const y=chevron[i][1]+(box[i][1]-chevron[i][1])*t;
+                                                        if(i===0)c.moveTo(x,y);else c.lineTo(x,y);
+                                                    }
+                                                    if(done){c.fillStyle=ink;c.globalAlpha=t;c.fill();c.globalAlpha=taskMarker.focusedTask?1:t;}
+                                                    c.stroke();
+                                                    if(done && t>0){c.globalAlpha=t;c.strokeStyle=checkInk;c.beginPath();c.moveTo(5,9);c.lineTo(8,12);c.lineTo(13,6);c.stroke();}
+                                                }
+                                                Connections {target:taskMarker;function onFocusedTaskChanged(){completionMarker.requestPaint();}}
+                                            }
+                                            Label {
+                                                objectName:'task-date-'+taskCard.modelData.id
+                                                visible:!parent.focusedTask && !taskMarker.showCheck
+                                                width:parent.width;height:parent.height
+                                                horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter
+                                                text:app.dueLabel(modelData)
+                                                color:app.isOverdue(modelData)?'#eb6f92':theme.muted
+                                                font.family:'monospace';font.pixelSize:11;font.weight:Font.DemiBold
+                                                font.underline:!!modelData.snoozedUntil
+                                            }
+                                        }
+                                        ColumnLayout {
+                                            Layout.fillWidth:true;spacing:3
+                                            Label {
+                                                id: taskTitle;objectName:'task-title-'+taskCard.modelData.id
+                                                Layout.fillWidth:true
+                                                Layout.rightMargin:Math.max(24,statusIcons.visible?statusIcons.implicitWidth+6:0)
+                                                topPadding:2;bottomPadding:2
+                                                property real lastLineWidth: 0
+                                                property real lastLineTop: 0
+                                                property real firstLineHeight: 18
+                                                text:modelData.title
+                                                textFormat:Text.PlainText
+                                                font.pixelSize:15
+                                                font.weight:Font.DemiBold
+                                                font.strikeout:modelData.done && modelData.status!=='cancelled'
+                                                color:taskSelectionActive && selectedId===modelData.id && !selectedSubtaskId?theme.accent:theme.text
+                                                wrapMode:Text.Wrap;maximumLineCount:3;elide:Text.ElideRight
+                                                property var strikeLines: []
+                                                onLineLaidOut: line => {
+                                                    if(line.number===0) {strikeLines=[];firstLineHeight=line.height;}
+                                                    strikeLines.push({x:line.x,y:line.y+line.height*0.52,width:Math.min(line.width,line.implicitWidth)});
+                                                    lastLineWidth=Math.min(line.width,line.implicitWidth);
+                                                    lastLineTop=line.y;
+                                                    if(cancelledStrike.visible)cancelledStrike.requestPaint();
+                                                }
+                                                onColorChanged: if(cancelledStrike.visible)cancelledStrike.requestPaint()
+                                                Row {
+                                                    id:statusIcons
+                                                    x:taskTitle.lastLineWidth+6;y:taskTitle.lastLineTop+2
+                                                    spacing:5
+                                                    visible:blockedIcon.visible || repeatIcon.visible || imageIcon.visible
+                                                    Canvas {
+                                                        id:imageIcon;width:14;height:14
+                                                        visible:(modelData.images || []).length>0
+                                                        Accessible.name:'Has images'
+                                                        onPaint:{const c=getContext('2d');c.reset();c.strokeStyle=theme.muted;c.lineWidth=1.2;c.strokeRect(1,2,12,10);c.beginPath();c.arc(9.5,5,1,0,Math.PI*2);c.stroke();c.beginPath();c.moveTo(2,11);c.lineTo(5,7);c.lineTo(8,10);c.lineTo(10,8);c.lineTo(12,11);c.stroke();}
+                                                    }
+                                                    Canvas {
+                                                        id:blockedIcon;width:14;height:14
+                                                        visible:modelData.status==='blocked'
+                                                        Accessible.name:'Blocked'
+                                                        onPaint:{const c=getContext('2d');c.reset();c.strokeStyle='#f6c177';c.lineWidth=1.5;c.beginPath();c.arc(7,7,5.3,0,Math.PI*2);c.moveTo(3.3,10.7);c.lineTo(10.7,3.3);c.stroke();}
+                                                    }
+                                                    Canvas {
+                                                        id:repeatIcon;width:14;height:14
+                                                        visible:!!modelData.repeat && !!modelData.repeat.unit
+                                                        Accessible.name:'Repeats'
+                                                        onPaint:{const c=getContext('2d');c.reset();c.strokeStyle=theme.muted;c.lineWidth=1.4;c.lineCap='round';c.beginPath();c.arc(7,7,4.6,Math.PI*1.1,Math.PI*1.9);c.moveTo(11.4,2.4);c.lineTo(11.4,5.4);c.lineTo(8.4,5.4);c.moveTo(2.6,11.6);c.lineTo(2.6,8.6);c.lineTo(5.6,8.6);c.moveTo(11.4,8.4);c.arc(7,7,4.6,Math.PI*0.1,Math.PI*0.9);c.stroke();}
+                                                    }
+                                                }
+                                                Canvas {
+                                                    id: cancelledStrike
+                                                    anchors.fill:parent
+                                                    visible:modelData.status==='cancelled'
+                                                    onVisibleChanged:if(visible)requestPaint()
+                                                    onWidthChanged:if(visible)requestPaint()
+                                                    onHeightChanged:if(visible)requestPaint()
+                                                    onPaint: {
+                                                        const ctx=getContext('2d');ctx.reset();
+                                                        ctx.strokeStyle=taskTitle.color;ctx.lineWidth=1.2;
+                                                        for(const line of taskTitle.strikeLines) {
+                                                            ctx.beginPath();
+                                                            for(let x=0;x<=line.width;x++) {
+                                                                const y=line.y+1.6*Math.sin(x*Math.PI/5);
+                                                                if(x===0)ctx.moveTo(line.x+x,y);else ctx.lineTo(line.x+x,y);
+                                                            }
+                                                            ctx.stroke();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            ProgressBar {
+                                                id:projectProgressBar
+                                                visible:taskCard.modelData.kind==='project'
+                                                Layout.preferredWidth:parent.width*0.7;Layout.minimumWidth:0;Layout.preferredHeight:4;Layout.alignment:Qt.AlignLeft
+                                                Layout.topMargin:5;Layout.bottomMargin:5
+                                                padding:0
+                                                from:0;to:Math.max(1,app.projectProgress(taskCard.modelData).total)
+                                                value:app.projectProgress(taskCard.modelData).done
+                                                Accessible.name:'Project progress'
+                                                background:Rectangle {radius:2;color:theme.surface}
+                                                contentItem:Item {
+                                                    Rectangle {width:parent.width*projectProgressBar.position;height:parent.height;radius:2;color:theme.accent}
+                                                }
+                                            }
+                                            Button {
+                                                id:pipButton;objectName:'subtask-pips-'+taskCard.modelData.id
+                                                visible:(taskCard.modelData.subtasks || []).length>0
+                                                Layout.fillWidth:true;padding:0;topPadding:4;bottomPadding:4
+                                                Accessible.name:'Subtasks: '+(taskCard.modelData.subtaskProgress?.done || 0)+' of '+(taskCard.modelData.subtaskProgress?.total || 0)+' complete'
+                                                TaskToolTip {theme:app.theme;visible:pipButton.hovered;text:pipButton.Accessible.name}
+                                                onClicked:app.toggleExpanded(taskCard.modelData.id)
+                                                background:Item {}
+                                                contentItem:Flow {
+                                                    spacing:5
+                                                    Repeater {
+                                                        model:taskCard.modelData.subtaskPips || []
+                                                        Rectangle {
+                                                            required property var modelData
+                                                            width:6;height:6;radius:3
+                                                            color:modelData.status==='done'?theme.accent:modelData.status==='cancelled'?'#eb6f92':'transparent'
+                                                            border.width:1;border.color:modelData.status==='done'?theme.accent:theme.muted
+                                                            opacity:modelData.status==='blocked' || modelData.status==='cancelled'?0.4:1
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Label {Layout.fillWidth:true;text:taskMeta(modelData);visible:text!=='';color:theme.muted;font.pixelSize:12;wrapMode:Text.Wrap}
+                                            Flow {
+                                                id:tagFlow
+                                                Layout.fillWidth:true;Layout.minimumWidth:0
+                                                spacing:8;visible:(taskCard.modelData.tags || []).length>0
+                                                Repeater {
+                                                    model:taskCard.modelData.tags || []
+                                                    Label {
+                                                        required property string modelData
+                                                        text:'#'+modelData;textFormat:Text.PlainText
+                                                        width:Math.min(implicitWidth,tagFlow.width)
+                                                        font.pixelSize:11;color:tagMouse.containsMouse?theme.text:theme.accent
+                                                        wrapMode:Text.WrapAnywhere
+                                                        Accessible.name:'Filter by tag '+modelData
+                                                        MouseArea {
+                                                            id:tagMouse;anchors.fill:parent;hoverEnabled:true;cursorShape:Qt.PointingHandCursor
+                                                            onClicked:app.filterTag(parent.modelData)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    AddSubtaskButton {
+                                        theme:app.theme
+                                        z:3;anchors.right:parent.right;anchors.top:parent.top;width:28;height:28
+                                        visible:taskCard.modelData.kind==='todo' && (taskCard.modelData.subtasks || []).length===0 && (cardHover.hovered || activeFocus)
+                                        onClicked:app.addSubtask(taskCard.modelData)
+                                    }
+                                    Button {
+                                        id:completionButton;objectName:'complete-'+taskCard.modelData.id
+                                        z:4;x:4;y:4+taskCard.gapHeight;width:30;height:Math.max(26,taskTitle.firstLineHeight)
+                                        visible:taskCard.modelData.kind==='todo';focusPolicy:Qt.NoFocus
+                                        enabled:!app.pendingSave && !app.pendingPurge && !app.pendingMove
+                                        Accessible.name:taskCard.modelData.done?'Reopen task':'Complete task'
+                                        background:Item {}
+                                        contentItem:Item {}
+                                        onClicked:app.toggleCompletion(taskCard.modelData.id,'')
+                                    }
+                                    HoverHandler {id:cardHover}
+                                    MouseArea {
+                                        anchors.fill:parent;acceptedButtons:Qt.LeftButton
+                                        cursorShape:pressed?Qt.ClosedHandCursor:Qt.OpenHandCursor
+                                        preventStealing:true
+                                        property point pressedPoint
+                                        property bool moved: false
+                                        onPressed: mouse=>{pressedPoint=mapToItem(app,mouse.x,mouse.y);moved=false;selectedId=modelData.id;app.focusList();}
+                                        onPositionChanged: mouse=>{
+                                            if(!pressed || app.pendingMove)return;
+                                            const point=mapToItem(app,mouse.x,mouse.y);
+                                            if(!moved && Math.hypot(point.x-pressedPoint.x,point.y-pressedPoint.y)>10){moved=true;app.startDrag(modelData,cardBody,taskCard.width,cardBody.implicitHeight+8,point);}
+                                            if(moved && app.dragTask)app.updateDrag(point);
+                                        }
+                                        onReleased: {if(moved)app.finishDrag();}
+                                        onCanceled: {if(moved && !app.pendingMove)app.cancelDrag();}
+                                        onClicked:{if(!moved){selectedId=modelData.id;app.focusList();if(modelData.kind==='project')projectClick.start();else if((modelData.subtasks || []).length)app.toggleExpanded(modelData.id);}}
+                                        onDoubleClicked:{if(!moved){projectClick.stop();selectedId=modelData.id;app.openEditor(modelData);}}
                                     }
                                 }
+                            }
+                            Item {
+                                Layout.fillWidth:true
+                                implicitHeight:app.dragTask && app.dropGroup===groupPanel.modelData && app.dropBefore===''?app.dragHeight+6:groupRows.count===0?30:0
+                                Behavior on implicitHeight {NumberAnimation {duration:120}}
+                                Label {visible:groupRows.count===0 && !!app.dragTask;anchors.centerIn:parent;text:'Drop tasks here';color:theme.muted;font.pixelSize:11}
                             }
                         }
                     }
                 }
                 ColumnLayout {
-                    visible:visibleCount()===0;Layout.fillWidth:true;Layout.topMargin:32;spacing:10
+                    objectName:'empty-state';visible:visibleCount()===0;Layout.fillWidth:true;Layout.preferredHeight:Math.max(0,taskScroll.availableHeight-14);spacing:10
+                    Item {Layout.fillHeight:true}
                     Label {text:searching && filter?'No matching tasks':'Nothing scheduled here';color:theme.text;font.pixelSize:18;Layout.alignment:Qt.AlignHCenter}
-                    Label {text:view==='all'?'Add a task to get started.':'Check All tasks for upcoming or undated items.';color:theme.muted;font.pixelSize:13;wrapMode:Text.Wrap;Layout.fillWidth:true;horizontalAlignment:Text.AlignHCenter}
+                    Label {text:view==='all'?'Add a task to get started.':'Check All tasks or change your filters.';color:theme.muted;font.pixelSize:13;wrapMode:Text.Wrap;Layout.fillWidth:true;horizontalAlignment:Text.AlignHCenter}
+                    Item {Layout.fillHeight:true}
                 }
             }
         }
         RowLayout {
             visible:!editor;Layout.fillWidth:true;spacing:4
-            QuietButton {text:collection==='reading'?(selected && selected.done?'Mark unread':'Mark read'):(selected && selected.done?'Mark undone':'Mark done');enabled:!!selected;quiet:true;onClicked:action('toggle')}
-            QuietButton {text:'Edit';enabled:!!selected;quiet:true;onClicked:openEditor()}
+            IconButton {objectName:'edit-task';symbol:'edit';description:'Edit focused task (E)';enabled:!!selected;onClicked:openEditor()}
             Item {Layout.fillWidth:true}
             IconButton {symbol:'undo';description:'Undo (U / Ctrl+Z)';onClicked:app.undoLastAction()}
             IconButton {visible:collection!=='reading';symbol:'info';description:'Due dates and snoozing';onClicked:dateHelp.open()}
             IconButton {symbol:'keyboard';description:'Keyboard shortcuts (?)';onClicked:help.open()}
+            IconButton {objectName:'settings-button';symbol:'settings';description:'Settings: groups and templates';onClicked:taskSettings.open()}
         }
         ScrollView {
             id:editorScroll;visible:editor==='edit';enabled:visible;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth;contentHeight:editorForm.implicitHeight;ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
@@ -1064,6 +1493,20 @@ Pane {
                     Label {text:'Title';color:theme.muted;font.pixelSize:12}
                     Entry {id:titleInput;Layout.fillWidth:true;placeholderText:collection==='reading'?'Page title':'What needs to be done?';font.pixelSize:18;onAccepted:if(text.trim())saveEditor()}
                 }
+                Choice {
+                    id:templatePicker;objectName:'from-template';Layout.fillWidth:true
+                    visible:!!editing && !editing.id && editing.kind==='todo'
+                    textRole:'title';valueRole:'id'
+                    model:[{id:'',title:'From Template…'}].concat((stateData.tasks || []).filter(t=>t.kind==='template'))
+                    onActivated:{const template=model[currentIndex];if(template.id){const copy=JSON.parse(JSON.stringify(template.subtasks || []));function reset(nodes){for(const n of nodes){n.id=app.newRequestId();n.done=false;reset(n.items || []);}}reset(copy);workflowEditor.reset(copy,template.workflow===true);}}
+                }
+                Choice {
+                    id:projectPicker;Layout.fillWidth:true;visible:!!editing && editing.kind==='todo'
+                    textRole:'title';valueRole:'id';Accessible.name:'Project'
+                    model:[{id:'',title:'No project'}].concat((stateData.tasks || []).filter(t=>t.kind==='project')).concat(editing && editing.project && !(stateData.tasks || []).some(t=>t.kind==='project' && t.id===editing.project)?[{id:editing.project,title:editing.project+' (legacy)'}]:[])
+                }
+                CheckBox {id:projectOnly;text:'Only show Project tasks in their project';visible:!!editing && editing.kind==='project';checked:true}
+                WorkflowEditor {id:workflowEditor;Layout.fillWidth:true;theme:app.theme;visible:!!editing && ['todo','template'].includes(editing.kind)}
                 ColumnLayout {
                     visible:!!sections.reference;Layout.fillWidth:true;spacing:6
                     Label {text:editing && editing.kind==='reading'?'Link':'Reference';color:theme.muted;font.pixelSize:12}
@@ -1157,8 +1600,19 @@ Pane {
                     Label {text:'Repeat';color:theme.muted;font.pixelSize:12}
                     RowLayout {
                         Layout.fillWidth:true;spacing:8
-                        Choice {id:repeatUnit;model:['none','days','weeks','months','years','days-of-the-week','days-of-the-month']}
-                        Entry {id:repeatValue;Layout.fillWidth:true;placeholderText:'Interval or day numbers'}
+                        Entry {
+                            id:repeatInput;objectName:'repeat-input';visible:app.repeatTyping;Layout.fillWidth:true
+                            placeholderText:'Every 2 weeks, every Monday, or the 1st of every month';Accessible.name:'Repeat schedule'
+                            onAccepted:{if(!app.parsedRepeat.error){app.repeatTyping=false;repeatEdit.forceActiveFocus();}}
+                            onEditingFinished:if(!app.parsedRepeat.error)app.repeatTyping=false
+                        }
+                        Label {visible:!app.repeatTyping;Layout.fillWidth:true;text:app.parsedRepeat.label;color:theme.text;wrapMode:Text.Wrap}
+                        IconButton {id:repeatEdit;objectName:'repeat-edit';visible:!app.repeatTyping;symbol:'edit';description:'Retype repeat schedule';onClicked:{app.repeatTyping=true;repeatInput.forceActiveFocus();repeatInput.selectAll();}}
+                    }
+                    Label {
+                        Layout.fillWidth:true;wrapMode:Text.Wrap;font.pixelSize:12
+                        text:app.parsedRepeat.error || (app.repeatTyping?app.parsedRepeat.label:'')
+                        color:app.parsedRepeat.error?'#eb6f92':theme.muted
                     }
                 }
                 RowLayout {
@@ -1171,7 +1625,8 @@ Pane {
                     id:editorActions
                     Layout.topMargin:6;spacing:8
                     QuietButton {primary:true;text:pendingSave?'Saving…':draftId?'Save and close tab':'Save';enabled:!pendingSave && titleInput.text.trim()!=='';onClicked:saveEditor()}
-                    QuietButton {text:'Cancel';enabled:!pendingSave;onClicked:cancelEditor()}
+                    QuietButton {text:'Close';enabled:!pendingSave;onClicked:cancelEditor()}
+                    QuietButton {objectName:'cancel-task';text:editing && editing.status==='cancelled'?'Restore task (C)':'Cancel task (C)';visible:!!editing && !!editing.id && editing.kind==='todo';enabled:!requestBusy && !pendingSave;onClicked:app.cancelTask()}
                 }
                 Label {
                     objectName:'task-metadata'
@@ -1189,14 +1644,15 @@ Pane {
         }
         Label {visible:!!pendingSave;text:'Saving “'+(pendingSave?pendingSave.draft.title:'')+'”…';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
         Label {visible:!!stateData.sync_message;text:stateData.sync_message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
-        Label {visible:!!errorMessage || !!moveMessage || !!stateData.message;text:errorMessage || moveMessage || stateData.message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
+        Label {visible:!!errorMessage || !!completionMessage || !!moveMessage || !!stateData.message;text:errorMessage || completionMessage || moveMessage || stateData.message || '';color:theme.accent;wrapMode:Text.Wrap;Layout.fillWidth:true}
     }
     function accepted() {
+        if(completionQueue.length && completionQueue[0].sent){acceptCompletion();return;}
         if(pendingSave) {
             if(!pendingSave.sent)return;
             const value=pendingSave.request;
             const saved=(stateData.tasks || []).find(t=>value.id?t.id===value.id:t.createKey===value.request_id);
-            if(saved)selectedId=saved.id;
+            if(saved){selectedId=saved.id;if(saved.kind==='template'){taskSettings.tab='templates';taskSettings.open();}else if(saved.kind==='project'){collection='todo';projectId='';view='projects';}}
             pendingSave=null;retrySave=null;
         }
         draftId='';editor='';app.focusList();

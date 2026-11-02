@@ -11,7 +11,7 @@ ShellRoot {
             const changed=new Set((state.tasks || []).map(t=>t.id).concat(state.removed || []));
             const tasks=(view.stateData.tasks || []).filter(t=>!changed.has(t.id)).concat(state.tasks || []);
             const groups=Array.from(new Set((view.stateData.groups || []).concat(state.groups || [])));
-            view.stateData=Object.assign({},view.stateData,state,{tasks:tasks,groups:groups});
+            view.stateData=Object.assign({},view.stateData,state,{tasks:tasks,groups:groups,groupsRevision:view.stateData.groupsRevision || 0});
         } else view.stateData=Object.assign({},view.stateData,state);
     }
     function request(value) {
@@ -42,7 +42,8 @@ ShellRoot {
                     root.applyState(JSON.parse(output));
                     view.errorMessage = '';
                     // Reconcile the optimistic row only after the server confirms it.
-                    const action = JSON.parse(backend.payload).action;
+                    const sent = JSON.parse(backend.payload), action = sent.action;
+                    if(['toggle','subtask-toggle','status'].includes(action) && view.completionQueue[0]?.requestId===sent.request_id)view.acceptCompletion();
                     if (['create', 'edit', 'snooze'].includes(action)) {
                         view.accepted();
                         Qt.callLater(() => view.forceActiveFocus());
@@ -75,10 +76,22 @@ ShellRoot {
     IpcHandler {
         target: "tasktjik"
         function status(): string {
-            return JSON.stringify({editor:view.editor, saving:!!view.pendingSave, deleting:!!view.pendingPurge, queuedDeletes:view.queuedPurges.length, busy:backend.running || root.pending.length>0, sortOrder:view.sortOrder, dragging:!!view.dragTask, moving:view.pendingMove, purgeMode:'optimistic-undo-queue', taskCount:(view.stateData.tasks || []).length});
+            return JSON.stringify({view:view.view,undatedVisible:view.dropGroups.filter(g=>g.visible).reduce((n,g)=>n+view.tasks(g.modelData).filter(t=>!view.effectiveDue(t)).length,0),project:view.projectId,projectCount:(view.stateData.tasks || []).filter(t=>t.kind==='project').length,visibleCount:view.visibleCount(),visibleEmptyGroups:view.dropGroups.filter(g=>g.visible && g.rows.count===0).length,editor:view.editor, settings:view.settingsOpen, completing:view.completing, saving:!!view.pendingSave, deleting:!!view.pendingPurge, queuedDeletes:view.queuedPurges.length, busy:backend.running || root.pending.length>0, sortOrder:view.sortOrder, dragging:!!view.dragTask, moving:view.pendingMove, purgeMode:'optimistic-undo-queue', taskCount:(view.stateData.tasks || []).length});
         }
+        function showView(name: string): bool {
+            if(!['today','week','month','all','projects'].includes(name) || view.editor || view.settingsOpen || view.completing || view.pendingSave || view.pendingPurge || view.dragTask || view.pendingMove)return false;
+            view.projectId='';view.collection='todo';view.view=name;view.focusList();
+            return true;
+        }
+        function openProject(id: string): bool {
+            if(view.editor || view.settingsOpen || view.completing || view.pendingSave || view.pendingPurge || view.dragTask || view.pendingMove || backend.running)return false;
+            const project=(view.stateData.tasks || []).find(t=>t.id===id && t.kind==='project');
+            if(!project)return false;
+            view.collection='todo';view.enterProject(project);return true;
+        }
+        function projects(): bool {return showView('projects');}
         function reload(): bool {
-            if(view.editor || view.pendingSave || view.pendingPurge || view.dragTask || view.pendingMove || backend.running || root.pending.length)return false;
+            if(view.editor || view.settingsOpen || view.completing || view.pendingSave || view.pendingPurge || view.dragTask || view.pendingMove || backend.running || root.pending.length)return false;
             Quickshell.reload(false);
             return true;
         }
