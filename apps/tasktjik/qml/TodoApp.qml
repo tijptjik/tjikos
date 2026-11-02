@@ -1691,17 +1691,51 @@ Pane {
                     QuietButton {text:'Close';enabled:!pendingSave;onClicked:cancelEditor()}
                     QuietButton {objectName:'cancel-task';text:editing && editing.status==='cancelled'?'Restore task (C)':'Cancel task (C)';visible:!!editing && !!editing.id && editing.kind==='todo';enabled:!requestBusy && !pendingSave;onClicked:app.cancelTask()}
                 }
-                Label {
+                ColumnLayout {
+                    id:metadataFooter
                     objectName:'task-metadata'
-                    Layout.fillWidth:true
-                    visible:!!editing && !!editing.id && text!==''
-                    text: {
-                        const metadata=editing && editing.metadata || {};
-                        return Object.keys(metadata).sort().map(key=>key+' : '+JSON.stringify(metadata[key])).join('\n');
-                    }
-                    textFormat:Text.PlainText;wrapMode:Text.WrapAnywhere
-                    font.family:'monospace';font.pixelSize:12;color:theme.muted
+                    Layout.fillWidth:true;Layout.topMargin:10;spacing:10
+                    readonly property var metadata:editing && editing.metadata || ({})
+                    readonly property var keys:Object.keys(metadata).sort()
+                    visible:!!editing && !!editing.id && keys.length>0
                     Accessible.name:'Task metadata'
+                    Rectangle {Layout.fillWidth:true;implicitHeight:1;color:theme.border}
+                    Flow {
+                        id:metadataFlow
+                        Layout.fillWidth:true;spacing:8
+                        Repeater {
+                            model:metadataFooter.keys
+                            delegate:Rectangle {
+                                id:metadataPair
+                                required property string modelData
+                                objectName:'metadata-pair-'+modelData
+                                readonly property var value:metadataFooter.metadata[modelData]
+                                readonly property string displayValue:value===''?'-':typeof value==='string'?value:JSON.stringify(value)
+                                width:Math.min(metadataFlow.width,Math.ceil(keyMetrics.advanceWidth)+Math.ceil(valueMetrics.boundingRect.width)+26)
+                                height:pairContent.implicitHeight+10
+                                radius:5;color:Qt.alpha(theme.surface,0.6)
+                                TextMetrics {id:keyMetrics;font:metadataKey.font;text:metadataKey.text}
+                                TextMetrics {id:valueMetrics;font:metadataValue.font;text:metadataValue.text}
+                                Row {
+                                    id:pairContent
+                                    x:8;y:5;spacing:6
+                                    Text {
+                                        id:metadataKey
+                                        text:metadataPair.modelData+' :';textFormat:Text.PlainText
+                                        font.family:'monospace';font.pixelSize:11;color:theme.muted
+                                        width:Math.min(Math.ceil(keyMetrics.advanceWidth),Math.max(0,metadataPair.width-22-Math.min(24,Math.ceil(valueMetrics.boundingRect.width))));wrapMode:Text.WrapAnywhere
+                                    }
+                                    Text {
+                                        id:metadataValue
+                                        objectName:'metadata-value-'+metadataPair.modelData
+                                        text:metadataPair.displayValue;textFormat:Text.PlainText
+                                        font.family:'monospace';font.pixelSize:11;color:theme.text
+                                        width:Math.max(0,metadataPair.width-metadataKey.width-22);wrapMode:Text.WrapAnywhere
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

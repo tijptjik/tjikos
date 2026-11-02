@@ -9,4 +9,5 @@
 
 .task-tooltip{position:fixed;z-index:1000;max-width:320px;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:12px/1.5 system-ui;pointer-events:none;box-shadow:0 3px 12px #0003}.subtasks>button:last-child,.task .actions .add-subtask{width:26px;height:26px;padding:0;border:1px solid transparent;background:transparent;border-radius:6px;font-size:19px;color:var(--muted)}.subtasks>button:last-child{margin-left:38px}.subtasks>button:last-child:hover,.task .actions .add-subtask:hover{background:var(--surface)}.subtask:focus-visible{outline:1px solid var(--accent);outline-offset:0}
 
-#task-metadata{margin-top:18px;border-top:1px solid var(--line);padding-top:12px;font:12px/1.5 monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+#task-metadata{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;border-top:1px solid var(--line);padding-top:12px;font:11px/1.5 monospace}
+.metadata-pair{display:flex;gap:6px;max-width:100%;padding:5px 8px;border-radius:5px;background:color-mix(in srgb,var(--surface) 60%,transparent);white-space:pre-wrap;overflow-wrap:anywhere}.metadata-key{color:var(--muted)}.metadata-value{min-width:0;color:var(--ink)}

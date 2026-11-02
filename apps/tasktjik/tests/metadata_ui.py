@@ -13,7 +13,7 @@ root = Path(tempfile.mkdtemp(prefix="tasktjik-metadata-ui-"))
 home = root / "qml"
 shutil.copytree(APP / "qml", home)
 metadata = {"external_id": "synthetic-42", "nested": {"enabled": False},
-            "values": [None, 3, "<b>literal</b>"], "note": "first\nsecond"}
+            "values": [None, 3, "<b>literal</b>"], "note": "first\nsecond", "empty": "", "EnglishComms": True}
 task = {"id": "fixture", "title": "Synthetic metadata task", "kind": "todo",
         "group": "All", "tags": [], "due": "", "repeat": {}, "reference": "",
         "revision": 1, "status": "ready", "done": False, "subtasks": [], "metadata": metadata}
@@ -36,8 +36,12 @@ ShellRoot {
         function open():string {
             view.selectedId='fixture';view.openEditor();input.wait(100);
             const footer=input.findChild(view,'task-metadata');
-            return JSON.stringify({text:footer.text,visible:footer.visible,font:footer.font.family,
-                plain:footer.textFormat===Text.PlainText,tabFocus:footer.activeFocusOnTab});
+            return JSON.stringify({visible:footer.visible,entries:footer.keys.map(key=>{
+                const pair=input.findChild(view,'metadata-pair-'+key);
+                const value=input.findChild(view,'metadata-value-'+key);
+                return {key:key,text:value.text,font:value.font.family,plain:value.textFormat===Text.PlainText,
+                    tabFocus:value.activeFocusOnTab,x:pair.x,y:pair.y,width:pair.width};
+            })});
         }
         function capture(path:string):void {view.grabToImage(image=>image.saveToFile(path));}
         function save():string {
@@ -50,9 +54,9 @@ ShellRoot {
             const task=JSON.parse(JSON.stringify(view.stateData.tasks[0]));task.metadata={};
             view.openEditor(task);input.wait(20);
             const footer=input.findChild(view,'task-metadata');
-            if(footer.visible || footer.text!=='')throw Error('Empty metadata displayed');
+            if(footer.visible || footer.keys.length!==0)throw Error('Empty metadata displayed');
             view.editor='';delete task.metadata;view.openEditor(task);input.wait(20);
-            if(footer.visible || footer.text!=='')throw Error('Legacy task metadata displayed');
+            if(footer.visible || footer.keys.length!==0)throw Error('Legacy task metadata displayed');
             return 'PASS';
         }
     }
@@ -82,8 +86,15 @@ with (root / "qml.log").open("w") as log:
                 time.sleep(.1)
         else:
             raise AssertionError("Metadata fixture did not start: " + str(root))
-        expected = "\n".join(key + " : " + json.dumps(metadata[key], separators=(",", ":")) for key in sorted(metadata))
-        assert result == {"text": expected, "visible": True, "font": "monospace", "plain": True, "tabFocus": False}, result
+        assert result["visible"] is True
+        assert [entry["key"] for entry in result["entries"]] == sorted(metadata)
+        for entry in result["entries"]:
+            value = metadata[entry["key"]]
+            expected = (value or "-") if isinstance(value, str) else json.dumps(value, separators=(",", ":"))
+            assert entry["text"] == expected, entry
+            assert entry["font"] == "monospace" and entry["plain"] and not entry["tabFocus"], entry
+        assert any(entry["x"] > 0 for entry in result["entries"]), result
+        assert len({entry["y"] for entry in result["entries"]}) > 1, result
         ipc("capture", root / "metadata.png")
         for _ in range(50):
             if (root / "metadata.png").exists():

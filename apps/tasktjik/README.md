@@ -101,7 +101,8 @@ passed to `tasktjik request`. Values may be any JSON type, including nested
 objects and arrays; the top-level value must be an object. Supplying metadata
 replaces the whole object, omitting it preserves it, and `{}` clears it.
 The native and web task edit footers show sorted `key : value` pairs in monospace,
-with values represented as JSON. Metadata is read-only in those views and is
+flowing horizontally and wrapping as needed. Strings display without quotes,
+empty strings display as `-`, and other values use JSON. Metadata is read-only and is
 never included in their save payloads. Update the authority as well as clients
 before using this field; supported authorities advertise `metadata: true`.
 
