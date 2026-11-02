@@ -225,15 +225,19 @@ fn apply(
             json!({"ok":true})
         }
         "dismiss" | "read" => {
+            ensure!(
+                !text(v, "id").is_empty() && text(v, "id").len() <= 128,
+                "Invalid notification ID"
+            );
             let sql = if op == "dismiss" {
                 "UPDATE notices SET dismissed=1,is_read=1 WHERE owner=?1 AND id=?2"
             } else {
                 "UPDATE notices SET is_read=1 WHERE owner=?1 AND id=?2"
             };
-            ensure!(
-                c.execute(sql, params![owner, text(v, "id")])? == 1,
-                "Unknown notification"
-            );
+            // A queued read/dismiss can outlive a nonretained notification.
+            // Absence already satisfies the operation; rejecting it blocks every
+            // later item in that device's durable outbox. Keep the owner filter.
+            c.execute(sql, params![owner, text(v, "id")])?;
             json!({"ok":true})
         }
         "history" => {
@@ -483,6 +487,45 @@ mod tests {
             f.req(&f.fi, json!({"op":"poll","visible":[n["id"]]}), 1003)["dismissed"],
             json!([n["id"]])
         );
+    }
+    #[test]
+    fn expired_dismissal_replays_without_blocking_later_notifications() {
+        let f = Fixture::new();
+        let mut old = f.notice();
+        old["history"] = json!(false);
+        old["shown"] = json!(true);
+        f.req(&f.fi, json!({"op":"publish","notice":old}), 1000);
+        // Simulate retention completing while a desktop is offline.
+        f.c.execute("DELETE FROM notices WHERE id=?1", [text(&old, "id")])
+            .unwrap();
+        let dismiss = json!({"op":"dismiss","id":old["id"],"request_id":id()});
+        assert_eq!(f.req(&f.fi, dismiss.clone(), 1001), json!({"ok":true}));
+        assert_eq!(f.req(&f.fi, dismiss, 1002), json!({"ok":true}));
+        assert_eq!(
+            f.req(&f.fi, json!({"op":"read","id":old["id"]}), 1002),
+            json!({"ok":true})
+        );
+        let next = f.notice();
+        f.req(&f.fi, json!({"op":"publish","notice":next}), 1003);
+        assert_eq!(
+            f.req(&f.fi, json!({"op":"history"}), 1004)["notices"][0]["id"],
+            next["id"]
+        );
+        // A different owner's matching ID is still untouched and undisclosed.
+        f.c.execute(
+            "UPDATE notices SET owner='other-owner' WHERE id=?1",
+            [text(&next, "id")],
+        )
+        .unwrap();
+        f.req(&f.fi, json!({"op":"dismiss","id":next["id"]}), 1005);
+        assert!(!f
+            .c
+            .query_row(
+                "SELECT dismissed FROM notices WHERE id=?1",
+                [text(&next, "id")],
+                |r| r.get::<_, bool>(0)
+            )
+            .unwrap());
     }
     #[test]
     fn another_device_cannot_overwrite_or_ack() {
