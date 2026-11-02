@@ -1,0 +1,23 @@
+{
+  "name": "@tjikos/whatsover",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./sqlite": "./src/sqlite.ts" },
+  "scripts": {
+    "build": "bun build src/index.ts src/sqlite.ts --target=bun --packages=external --outdir=dist",
+    "check": "tsc --noEmit",
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "baileys": "7.0.0-rc14",
+    "libphonenumber-js": "1.13.15",
+    "pino": "9.6.0",
+    "qrcode-terminal": "0.12.0"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "@types/qrcode-terminal": "0.12.2",
+    "typescript": "6.0.3"
+  }
+}
