@@ -224,7 +224,7 @@ fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
     }
     if action == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"undated_repeat":true,"metadata":true,"images":true,"protocol":1}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"projects":true,"workflows":true,"undated_repeat":true,"workflow_dependencies":true,"protocol":1}),
         );
     }
     if action == "create" {
@@ -442,6 +442,7 @@ impl Todo {
             "move",
             "undo",
             "attach-image",
+            "subtask-toggle",
         ]
         .contains(&action)
         {
@@ -506,6 +507,7 @@ pub fn render_state(mut rows: Value, request: &Value, demo: bool) -> Result<Valu
             .get(&period)
             .is_some_and(|v| !v.is_null() && v != false && v != ""));
         t["period"] = json!(period);
+        crate::workflow::decorate(t, model::today())?;
         extra.push(s(&t["group"]).to_owned());
     }
     extra.sort_by_key(|s| s.to_lowercase().replace('ß', "ss"));
@@ -599,19 +601,34 @@ fn send_notice(task: &Value) -> Result<()> {
     let root = std::env::var_os("NOTJIK_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home().join(".local/lib/notjik"));
-    let payload = json!({"op":"send","notice":{
+    let mut payload = json!({"op":"send","notice":{
         "title":task["title"],"body":"","app":"tasktjik","type":"todo","urgency":"normal","timeout":0,
         "id":task["id"],"icon":"","image":"","resident":false,"transient":false,"actions":[],
         "data":{"group":task["group"],"due":task["period"],"taskId":task["id"],"period":task["period"]}
     }});
+    let executable = home().join(".local/bin/tasktjik");
+    let reminder = task["subtaskId"].is_string();
+    if reminder {
+        // Standard action cards also work on clients predating subtask-aware Todo cards.
+        payload["notice"]["type"] = json!("standard");
+        payload["notice"]["body"] = json!(format!("Reminder due {}", s(&task["period"])));
+        payload["notice"]["id"] = json!(format!("{}:{}", s(&task["id"]), s(&task["subtaskId"])));
+        payload["notice"]["data"]["subtaskId"] = task["subtaskId"].clone();
+        payload["notice"]["actions"] = json!([
+            {"label":"Mark reminder done","command":[executable,"subtask-done",task["id"],task["subtaskId"]]},
+            {"label":"Dismiss reminder","command":[executable,"subtask-dismiss",task["id"],task["subtaskId"],task["period"]]}
+        ]);
+    }
     if notjik_sync::client::configured() {
         let mut notice = payload["notice"].clone();
-        notice["run"] = json!(format!("{}:{}", s(&task["id"]), s(&task["period"])));
+        notice["run"] = json!(format!("{}:{}", s(&notice["id"]), s(&task["period"])));
         let executable = home().join(".local/bin/tasktjik");
-        notice["actions"] = json!([
-            {"label":"Mark done","command":[executable,"done",task["id"],task["period"]]},
-            {"label":"Dismiss reminder","command":[executable,"dismiss",task["id"],task["period"]]}
-        ]);
+        if !reminder {
+            notice["actions"] = json!([
+                {"label":"Mark done","command":[executable,"done",task["id"],task["period"]]},
+                {"label":"Dismiss reminder","command":[executable,"dismiss",task["id"],task["period"]]}
+            ]);
+        }
         notjik_sync::client::publish(notice, "active", true)?;
         return Ok(());
     }
@@ -649,12 +666,31 @@ pub fn notify() -> Result<Value> {
     let state = todo.state(json!({}), &settings, false)?;
     let device = device()?;
     let mut delivered = 0;
-    for mut task in state["tasks"]
-        .as_array()
-        .context("Invalid task list")?
-        .iter()
-        .cloned()
-    {
+    let mut candidates = Vec::new();
+    for task in state["tasks"].as_array().context("Invalid task list")? {
+        if ["project", "template"].contains(&s(&task["kind"])) {
+            continue;
+        }
+        candidates.push(task.clone());
+        if task["done"] == true || task["status"] == "cancelled" {
+            continue;
+        }
+        for row in task["workflowRows"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|r| r["kind"] == "reminder" && r["status"] == "ready")
+        {
+            let mut reminder = task.clone();
+            reminder["title"] = json!(format!("{} · {}", s(&task["title"]), s(&row["title"])));
+            reminder["subtaskId"] = row["id"].clone();
+            reminder["due"] = row["due"].clone();
+            reminder["period"] = row["due"].clone();
+            reminder["notifyBeforeDue"] = json!(false);
+            candidates.push(reminder);
+        }
+    }
+    for mut task in candidates {
         if (s(&task["due"]).is_empty() && s(&task["repeat"]["unit"]).is_empty())
             || task["status"] == "cancelled"
         {
@@ -686,7 +722,12 @@ pub fn notify() -> Result<Value> {
         if Local::now() < due - lead {
             continue;
         }
-        let base = json!({"id":task["id"],"period":task["period"],"device":device});
+        let base = json!({"id":task["id"],"period":task["period"],"device":device,"subtask_id":task["subtaskId"]});
+        let prefix = if task["subtaskId"].is_string() {
+            format!("subtask:{}:{}:", s(&task["subtaskId"]), s(&task["period"]))
+        } else {
+            format!("{}:", s(&task["period"]))
+        };
         let mut request = base.clone();
         request["action"] = json!("claim");
         let claim = todo.request(request, &settings, false)?;
@@ -698,9 +739,7 @@ pub fn notify() -> Result<Value> {
             .context("Missing notification lease")?
             .iter()
             .filter(|(k, v)| {
-                k.starts_with(&format!("{}:", s(&task["period"])))
-                    && v["state"] == "pending"
-                    && v["device"] == device
+                k.starts_with(&prefix) && v["state"] == "pending" && v["device"] == device
             })
             .max_by_key(|(k, _)| *k)
             .context("Missing notification lease")?;
@@ -769,6 +808,18 @@ pub fn command_line(args: &[String]) -> Result<bool> {
         }
         "devices" => http(&options(&settings)?, "devices", None)?,
         "notify" => notify()?,
+        "subtask-done" => {
+            let id = args.get(1).context("Task ID required")?;
+            let subtask = args.get(2).context("Subtask ID required")?;
+            let list = todo.request(json!({"action":"list"}), &settings, false)?;
+            let task = list.as_array().context("Invalid task list")?.iter().find(|t| t["id"] == *id).context("Task no longer exists")?;
+            let rows = crate::workflow::task_rows(&task, model::today())?;
+            let row = rows.iter().find(|r| r["id"] == *subtask).context("Subtask is not active")?;
+            if row["status"] == "done" { task.clone() } else {
+                todo.request(json!({"action":"subtask-toggle","id":id,"subtask_id":subtask,"revision":task["revision"]}), &settings, false)?
+            }
+        }
+        "subtask-dismiss" => todo.request(json!({"action":"dismiss","id":args.get(1).context("Task ID required")?,"subtask_id":args.get(2).context("Subtask ID required")?,"period":args.get(3).context("Reminder date required")?}), &settings, false)?,
         "done" | "dismiss" | "snooze" => {
             let mut r = json!({"action":cmd,"id":args.get(1).context("Task ID required")?,"period":args.get(2).context("Task period required")?});
             if cmd == "snooze" {

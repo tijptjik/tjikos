@@ -36,7 +36,7 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
     let op = r["action"].as_str().unwrap_or("list");
     if op == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"undated_repeat":true,"metadata":true,"images":true,"protocol":1,"sqlite":true,"undo":true}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"projects":true,"workflows":true,"workflow_dependencies":true,"undated_repeat":true,"metadata":true,"images":true,"protocol":1,"sqlite":true,"undo":true}),
         );
     }
     if op == "list" {
@@ -116,6 +116,23 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
             current == expected,
             "Task changed since this action; undo would overwrite newer changes"
         );
+        ensure!(
+            current["kind"] != "project"
+                || previous["kind"] == "project"
+                || !before_tasks.iter().any(|t| t["project"] == id),
+            "Project has tasks; move them before undoing its creation"
+        );
+        if let Some(project) = previous["project"]
+            .as_str()
+            .filter(|p| Uuid::parse_str(p).is_ok())
+        {
+            ensure!(
+                before_tasks
+                    .iter()
+                    .any(|p| p["id"] == project && p["kind"] == "project"),
+                "Project no longer exists; restore it before undoing this task"
+            );
+        }
         let restored = if previous.is_null() {
             json!({"id":id,"deleted":true})
         } else {
@@ -164,6 +181,7 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
             "purge",
             "move",
             "attach-image",
+            "subtask-toggle",
         ]
         .contains(&op)
             && result["id"].is_string()
@@ -423,5 +441,77 @@ mod manual_move_tests {
         assert_eq!(undone["manualOrder"], moved["manualOrder"]);
         let restored = call(&path, json!({"action":"undo"})).unwrap();
         assert_eq!(model::manual_key(&restored), model::manual_key(&rows[2]));
+    }
+}
+
+#[cfg(test)]
+mod project_workflow_tests {
+    use super::*;
+    use uuid::Uuid;
+    #[test]
+    fn undo_cannot_orphan_project_members_across_devices() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("tasks.db");
+        let call = |device: &str, mut r: Value| {
+            r["request_id"] = json!(Uuid::new_v4().to_string());
+            request(&path, r, "test", device)
+        };
+        let project = call(
+            "a",
+            json!({"action":"create","fields":{"title":"Synthetic project","kind":"project"}}),
+        )
+        .unwrap();
+        let member = call("b", json!({"action":"create","fields":{"title":"Synthetic member","project":project["id"]}})).unwrap();
+        assert!(call("a", json!({"action":"undo"})).is_err());
+        call(
+            "b",
+            json!({"action":"purge","id":member["id"],"revision":member["revision"]}),
+        )
+        .unwrap();
+        call(
+            "a",
+            json!({"action":"purge","id":project["id"],"revision":project["revision"]}),
+        )
+        .unwrap();
+        assert!(call("b", json!({"action":"undo"})).is_err());
+        call("a", json!({"action":"undo"})).unwrap();
+        call("b", json!({"action":"undo"})).unwrap();
+        assert_eq!(tasks(&connect(&path).unwrap()).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn projects_templates_revision_checks_and_undo_share_the_authority() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("tasks.db");
+        let call = |mut r: Value| {
+            r["request_id"] = json!(Uuid::new_v4().to_string());
+            request(&path, r, "test", "device")
+        };
+        let project=call(json!({"action":"create","fields":{"title":"Synthetic project","kind":"project","group":"Work"}})).unwrap();
+        let template=call(json!({"action":"create","fields":{"title":"Synthetic template","kind":"template","subtasks":[{"id":"step","kind":"task","title":"First step","due":"","done":false,"items":[]}]}})).unwrap();
+        let task=call(json!({"action":"create","template_id":template["id"],"fields":{"title":"Synthetic member","project":project["id"]}})).unwrap();
+        let step = task["subtasks"][0]["id"].clone();
+        assert_ne!(step, "step");
+        let toggle = json!({"action":"subtask-toggle","id":task["id"],"revision":task["revision"],"subtask_id":step});
+        let changed = call(toggle.clone()).unwrap();
+        assert_eq!(changed["subtasks"][0]["done"], true);
+        assert!(call(toggle).is_err());
+        let restored = call(json!({"action":"undo"})).unwrap();
+        assert_eq!(restored["subtasks"][0]["done"], false);
+        let moved=call(json!({"action":"move","id":project["id"],"revision":project["revision"],"group":"Socials"})).unwrap();
+        assert_eq!(moved["group"], "Socials");
+        assert!(
+            call(json!({"action":"purge","id":project["id"],"revision":moved["revision"]}))
+                .is_err()
+        );
+        assert!(call(
+            json!({"action":"create","fields":{"title":"Bad member","project":"missing"}})
+        )
+        .is_err());
+        let stored = tasks(&connect(&path).unwrap()).unwrap();
+        assert_eq!(
+            stored.iter().find(|t| t["id"] == template["id"]).unwrap()["subtasks"][0]["done"],
+            false
+        );
     }
 }

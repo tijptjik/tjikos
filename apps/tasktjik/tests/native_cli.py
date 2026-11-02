@@ -65,6 +65,29 @@ class NativeClientTests(unittest.TestCase):
         self.assertEqual(result["result"][0]["id"], task["id"])
         self.assertEqual(self.call("state", "--demo", body={})["tasks"], [])
 
+    def test_move_into_project_and_reject_invalid_membership(self):
+        project = self.call("request", body={"action": "create", "fields": {"title": "Project", "kind": "project"}})
+        task = self.call("request", body={"action": "create", "fields": {"title": "Task"}})
+        moved = self.call("request", body={"action": "edit", "id": task["id"], "revision": task["revision"], "fields": {"group": "All", "project": project["id"]}})
+        self.assertEqual(moved["project"], project["id"])
+        rejected = self.call("request", body={"action": "edit", "id": project["id"], "revision": project["revision"], "fields": {"project": task["id"]}}, check=False)
+        self.assertNotEqual(rejected.returncode, 0)
+        rejected = self.call("request", body={"action": "edit", "id": task["id"], "revision": moved["revision"], "fields": {"project": "missing"}}, check=False)
+        self.assertNotEqual(rejected.returncode, 0)
+
+    def test_metadata_local_storage_and_incremental_state(self):
+        metadata = {"external_id": "synthetic-42", "nested": {"enabled": False}, "values": [None, 3, "text"]}
+        task = self.call("request", body={"action": "create", "fields": {"title": "Metadata fixture", "metadata": metadata}})
+        self.assertEqual(task["metadata"], metadata)
+        self.assertEqual(self.call("state", body={})["tasks"][0]["metadata"], metadata)
+        edited = self.call("state", "--incremental", body={"action": "edit", "id": task["id"], "revision": task["revision"], "fields": {"title": "Changed title"}})["tasks"][0]
+        self.assertEqual(edited["metadata"], metadata)
+        rejected = self.call("request", body={"action": "edit", "id": edited["id"], "revision": edited["revision"], "fields": {"metadata": []}}, check=False)
+        self.assertNotEqual(rejected.returncode, 0)
+        replaced = self.call("request", body={"action": "edit", "id": edited["id"], "revision": edited["revision"], "fields": {"metadata": {"other": True}}})
+        self.assertEqual(replaced["metadata"], {"other": True})
+        self.assertEqual(self.call("state", body={})["tasks"][0]["metadata"], {"other": True})
+
     def test_native_ssh_transport(self):
         log = self.root / "ssh.json"
         self.script(
@@ -169,19 +192,6 @@ class NativeClientTests(unittest.TestCase):
         reservations = self.call("request", body={"action": "list"})[0]["notifications"]
         self.assertEqual(next(iter(reservations.values()))["state"], "delivered")
 
-    def test_metadata_local_storage_and_incremental_state(self):
-        metadata = {"external_id": "synthetic-42", "nested": {"enabled": False}, "values": [None, 3, "text"]}
-        task = self.call("request", body={"action": "create", "fields": {"title": "Metadata fixture", "metadata": metadata}})
-        self.assertEqual(task["metadata"], metadata)
-        self.assertEqual(self.call("state", body={})["tasks"][0]["metadata"], metadata)
-        edited = self.call("state", "--incremental", body={"action": "edit", "id": task["id"], "revision": task["revision"], "fields": {"title": "Changed title"}})["tasks"][0]
-        self.assertEqual(edited["metadata"], metadata)
-        rejected = self.call("request", body={"action": "edit", "id": edited["id"], "revision": edited["revision"], "fields": {"metadata": []}}, check=False)
-        self.assertNotEqual(rejected.returncode, 0)
-        replaced = self.call("request", body={"action": "edit", "id": edited["id"], "revision": edited["revision"], "fields": {"metadata": {"other": True}}})
-        self.assertEqual(replaced["metadata"], {"other": True})
-        self.assertEqual(self.call("state", body={})["tasks"][0]["metadata"], {"other": True})
-
     def test_repeating_task_without_deadline_delivers_occurrence_reminder(self):
         task = self.call("request", body={"action": "create", "fields": {"title": "Synthetic undated repeat", "repeat": {"unit": "days", "value": 1}}})
         self.script("quickshell", "import json\nprint(json.dumps({'ok':True}))\n")
@@ -191,6 +201,27 @@ class NativeClientTests(unittest.TestCase):
         current = self.call("state", body={})["tasks"][0]
         self.assertEqual(current["period"], datetime.date.today().isoformat())
         self.assertEqual(current["due"], "")
+
+    def test_flow_reminder_notification_completes_only_the_reminder(self):
+        def step(id, kind="task", **fields):
+            return {"id": id, "title": id, "kind": kind, "due": "", "done": False, "items": [], **fields}
+
+        block = step("response", "flow", due=(datetime.date.today() + datetime.timedelta(days=7)).isoformat(), items=[
+            step("agree"), step("decline", "exit"), step("reminder", "reminder", offset="one week before")])
+        task = self.call("request", body={"action": "create", "fields": {"title": "Synthetic flow reminder", "subtasks": [block]}})
+        payload = self.root / "notice.json"
+        self.script("quickshell", "import sys,json,pathlib\npathlib.Path(" + repr(str(payload)) + ").write_text(pathlib.Path(sys.argv[-1]).read_text())\nprint(json.dumps({'ok':True}))\n")
+        self.assertEqual(self.call("notify")["delivered"], 1)
+        self.assertEqual(self.call("notify")["delivered"], 0)
+        notice = json.loads(payload.read_text())["notice"]
+        self.assertEqual(notice["type"], "standard")
+        self.assertEqual(notice["actions"][0]["command"][1:], ["subtask-done", task["id"], "reminder"])
+        self.call("subtask-done", task["id"], "reminder")
+        self.call("subtask-done", task["id"], "reminder")  # Idempotent completion, never a toggle back.
+        current = self.call("state", body={})["tasks"][0]
+        self.assertFalse(current["done"])
+        self.assertEqual(current["workflowRows"][0]["status"], "ready")
+        self.assertEqual(current["workflowRows"][-1]["status"], "done")
 
 
 if __name__ == "__main__":

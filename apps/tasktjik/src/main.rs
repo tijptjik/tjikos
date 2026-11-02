@@ -170,6 +170,7 @@ async fn list(State(app): State<Arc<App>>) -> Result<Json<Value>, Failure> {
             let p = model::period(t, model::today())?;
             t["done"] = json!(t["completions"].get(&p).is_some());
             t["period"] = json!(p);
+            tasktjik_api::workflow::decorate(t, model::today())?;
         }
         Ok(tasks)
     })

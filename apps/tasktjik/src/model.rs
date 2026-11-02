@@ -125,6 +125,9 @@ pub fn defaults(t: &mut Value) {
         ("verification", json!([])),
         ("events", json!([])),
         ("images", json!([])),
+        ("subtasks", json!([])),
+        ("onlyInProject", json!(true)),
+        ("workflow", json!(false)),
         ("kind", json!("todo")),
         (
             "reference",
@@ -211,8 +214,14 @@ pub fn validate(t: &mut Value) -> Result<()> {
     );
     t["group"] = json!(group);
     ensure!(
-        ["todo", "reading"].contains(&field(t, "kind")),
+        ["todo", "reading", "project", "template"].contains(&field(t, "kind")),
         "Invalid task kind"
+    );
+    crate::workflow::validate(&t["subtasks"])?;
+    ensure!(t["workflow"].is_boolean(), "Invalid workflow setting");
+    ensure!(
+        t["onlyInProject"].is_boolean(),
+        "Invalid project visibility"
     );
     for key in ["reference", "plan", "assignee", "project"] {
         ensure!(
@@ -252,7 +261,6 @@ pub fn validate(t: &mut Value) -> Result<()> {
         if let Some(start) = t["repeat"].get("start") {
             date(start.as_str().context("Invalid repeat start")?)?;
         }
-
         ensure!(
             [
                 "days",
@@ -346,6 +354,8 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
             .clone()
     };
     defaults(&mut t);
+    let original_project = t["project"].clone();
+    let original_kind = t["kind"].clone();
     let original_repeat = t["repeat"].clone();
     let original_due = field(&t, "due").to_owned();
     let period = if let Some(p) = r["period"].as_str() {
@@ -364,6 +374,7 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
         "purge",
         "move",
         "attach-image",
+        "subtask-toggle",
     ]
     .contains(&op)
     {
@@ -373,9 +384,16 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
         );
     }
     if op == "purge" {
+        ensure!(
+            field(&t, "kind") != "project" || !tasks.iter().any(|c| c["project"] == t["id"]),
+            "Move project tasks before deleting their project"
+        );
         return Ok(json!({"id":t["id"],"deleted":true}));
     }
     match op {
+        "subtask-toggle" => {
+            crate::workflow::toggle(&mut t, field(r, "subtask_id"), today())?;
+        }
         "attach-image" => {
             let (image, _) = crate::images::decode(field(r, "data"))?;
             let images = t["images"].as_array_mut().context("Invalid task images")?;
@@ -392,7 +410,9 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
                 .filter(|p| {
                     p["id"] != t["id"]
                         && field(p, "group") == group
-                        && field(p, "kind") == field(&t, "kind")
+                        && (field(p, "kind") == field(&t, "kind")
+                            || ["todo", "project"].contains(&field(p, "kind"))
+                                && ["todo", "project"].contains(&field(&t, "kind")))
                 })
                 .collect();
             peers.sort_by_key(|p| (manual_key(p), field(p, "id").to_owned()));
@@ -439,6 +459,9 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
                 "assignee",
                 "project",
                 "acceptance",
+                "subtasks",
+                "onlyInProject",
+                "workflow",
             ] {
                 if let Some(v) = fields.get(k) {
                     t[k] = v.clone();
@@ -461,6 +484,42 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
                 };
                 t["repeat"]["start"] = json!(anchor);
             }
+            if op == "create" && r["template_id"].is_string() {
+                ensure!(
+                    !fields.contains_key("subtasks"),
+                    "Choose a template or explicit subtasks"
+                );
+                let template = tasks
+                    .iter()
+                    .find(|p| p["id"] == r["template_id"] && p["kind"] == "template")
+                    .context("Template no longer exists")?;
+                t["subtasks"] = crate::workflow::instantiate(&template["subtasks"]);
+                t["templateId"] = template["id"].clone();
+                if !fields.contains_key("workflow") {
+                    t["workflow"] = json!(template["workflow"] == true);
+                }
+            }
+            ensure!(
+                original_kind != "project"
+                    || t["kind"] == "project"
+                    || !tasks.iter().any(|p| p["project"] == t["id"]),
+                "Move project tasks before changing their project kind"
+            );
+            if fields.contains_key("project")
+                && !field(&t, "project").is_empty()
+                && (op == "create" || original_project != t["project"])
+            {
+                ensure!(
+                    field(&t, "kind") == "todo",
+                    "Only tasks can belong to projects"
+                );
+                ensure!(
+                    tasks
+                        .iter()
+                        .any(|p| p["id"] == t["project"] && p["kind"] == "project"),
+                    "Project no longer exists"
+                );
+            }
             if fields.contains_key("plan") && !fields.contains_key("reference") {
                 t["reference"] = t["plan"].clone();
             }
@@ -471,6 +530,10 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
             validate(&mut t)?;
         }
         "done" | "toggle" | "status" => {
+            ensure!(
+                !["project", "template"].contains(&field(&t, "kind")),
+                "Open this project or template instead"
+            );
             let done = if op == "status" {
                 let status = field(r, "status");
                 ensure!(
@@ -551,16 +614,34 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
                 .remove(&format!("{period}:{}", today()));
         }
         "claim" | "ack" | "release" | "dismiss" => {
+            let subtask = field(r, "subtask_id");
+            let prefix = if subtask.is_empty() {
+                period.clone()
+            } else {
+                format!("subtask:{subtask}:{period}")
+            };
             let key = if ["ack", "release"].contains(&op) {
                 r["notification_key"]
                     .as_str()
                     .map(str::to_owned)
-                    .unwrap_or_else(|| format!("{period}:{}", today()))
+                    .unwrap_or_else(|| format!("{prefix}:{}", today()))
             } else {
-                format!("{period}:{}", today())
+                format!("{prefix}:{}", today())
             };
             let previous = t["notifications"].get(&key).cloned();
             if op == "claim" {
+                if !subtask.is_empty() {
+                    let rows = crate::workflow::task_rows(&t, today())?;
+                    if !rows.iter().any(|row| {
+                        row["id"] == subtask
+                            && row["kind"] == "reminder"
+                            && row["status"] == "ready"
+                            && row["due"] == period
+                    }) || t["status"] == "done"
+                    {
+                        return Ok(Value::Bool(false));
+                    }
+                }
                 if t["completions"].get(&period).is_some() || field(&t, "status") == "cancelled" {
                     return Ok(Value::Bool(false));
                 }
