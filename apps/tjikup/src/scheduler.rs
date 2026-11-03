@@ -291,6 +291,7 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
                             cancelled: &cancelled,
                             run_dir: &run_dir,
                             log: &log,
+                            log_path: &log_path,
                             status: Some((i, status_sender.clone())),
                         }
                         .execute()

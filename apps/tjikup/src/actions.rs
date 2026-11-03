@@ -130,6 +130,7 @@ pub struct Contextual<'a> {
     pub cancelled: &'a AtomicBool,
     pub run_dir: &'a Path,
     pub log: &'a File,
+    pub log_path: &'a Path,
     pub status: Option<(usize, std::sync::mpsc::Sender<(usize, String)>)>,
 }
 impl Contextual<'_> {
@@ -441,6 +442,47 @@ impl Contextual<'_> {
         })
     }
     pub fn execute(&self) -> Result<Completion> {
+        let Some(interval) = self.recipe.interval_seconds else {
+            return self.execute_now();
+        };
+        let periodic = crate::periodic::Periodic::open(&self.recipe.id, interval)?;
+        if let Some(next) = periodic.next_due()? {
+            use std::io::Write;
+            writeln!(
+                &*self.log,
+                "SKIP    ✓ {}  next due {}",
+                self.recipe.label, next
+            )?;
+            return Ok(State::Unchanged.into());
+        }
+        let completed = self.execute_now()?;
+        // A declared defer/stop, cancellation or a reported failure must not
+        // postpone the next attempt, even if the command itself returned zero.
+        let report =
+            std::fs::read_to_string(self.run_dir.join(format!("{}.report", self.recipe.id)))
+                .unwrap_or_default();
+        let log = String::from_utf8_lossy(&std::fs::read(self.log_path)?).into_owned();
+        let final_log = log
+            .rsplit_once(RETRY_BOUNDARY)
+            .map(|(_, text)| text)
+            .unwrap_or(&log);
+        if completed.state == State::Done
+            && !self.cancelled.load(std::sync::atomic::Ordering::SeqCst)
+            && !crate::report::parse(&report, final_log, true)
+                .iter()
+                .any(|event| matches!(event.icon.as_str(), "✗" | "X"))
+        {
+            let next = periodic.complete()?;
+            use std::io::Write;
+            writeln!(
+                &*self.log,
+                "SCHEDULE ✓ {}  next due {}",
+                self.recipe.label, next
+            )?;
+        }
+        Ok(completed)
+    }
+    fn execute_now(&self) -> Result<Completion> {
         if let Some(condition) = &self.recipe.when {
             if self.recipe.env.get(&condition.environment) != Some(&condition.equals) {
                 return Ok(State::Unchanged.into());

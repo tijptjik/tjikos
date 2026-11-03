@@ -86,6 +86,17 @@ drains already-running peers and blocks pending work. Nothing rolls back complet
 external mutations. SIGINT/SIGTERM cancels owned process groups and exits 130.
 Each command has a deadline, `timeout` seconds (default 300), including checks.
 
+Apply recipes may declare `interval_seconds` (1 second to 10 years), for example
+`2592000` for 30 days. A missing success receipt runs immediately; subsequent
+runs skip until that interval has elapsed. The native runner holds a per-recipe
+lock across configurations and atomically records completion only after a
+successful apply. Checks that skip, declared deferrals, reported failures,
+timeouts and cancellations never advance the interval. Receipts are private and
+stored in `$XDG_STATE_HOME/tjikup/periodic/<recipe-id>.json`. Malformed or future
+timestamps fail closed. Successful runs report the next due date; `--show-skips`
+shows it for skipped runs. This is invocation-based scheduling, not a timer.
+`capabilities` advertises `periodic_recipes: 1`.
+
 Commands are argv arrays, never implicit shell expressions. Use an explicit
 shell script for shell behavior. `cwd` defaults to the declaring document's
 folder. `env` can be set globally or per recipe. Values support `{config_dir}`,

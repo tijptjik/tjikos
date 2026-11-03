@@ -103,6 +103,8 @@ pub struct CredentialRecovery {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Recipe {
+    /// Minimum elapsed time after a successful apply; missing receipts are due.
+    pub interval_seconds: Option<u64>,
     pub operation: Option<crate::selection::Operation>,
     pub scope: Option<crate::selection::Scope>,
     #[serde(default)]
@@ -563,6 +565,21 @@ impl Config {
             argv(&manager.command)?;
         }
         for r in &self.recipes {
+            if let Some(interval) = r.interval_seconds {
+                if interval == 0
+                    || interval > 10 * 366 * 86400
+                    || r.apply.is_none()
+                    || r.git.is_some()
+                    || r.autocommit.is_some()
+                    || r.render.is_some()
+                    || r.files.is_some()
+                {
+                    bail!(
+                        "{}: interval_seconds requires an apply command and 1 second to 10 years",
+                        r.id
+                    );
+                }
+            }
             if r.operation == Some(crate::selection::Operation::Configure) && r.scope.is_none() {
                 bail!("{}: configure recipes require a home or system scope", r.id);
             }
