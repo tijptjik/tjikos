@@ -11,6 +11,12 @@ test -s "$app_dir/dist/source.sha256"
     exit 1
 }
 if [[ "${1:-}" == --check ]]; then
+    # A missing installation is drift (1), not cmp's I/O error (2). Preserve
+    # errors for existing unreadable targets and dangling symlinks.
+    if [[ ! -e "$target" && ! -L "$target" ]]; then
+        echo 'oo7-pam is not installed; run the Hyprlock keyring installation.' >&2
+        exit 1
+    fi
     cmp -s "$module" "$target" && [[ "$(stat -c '%u:%g:%a' "$target")" == 0:0:755 ]]
     exit $?
 fi
