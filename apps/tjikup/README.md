@@ -18,6 +18,22 @@ does not distinguish bootstrap releases or local builds. After an explicit
 build, use `bash apps/tjikup/scripts/install.sh --from-build` to install it;
 the default install command fetches the pinned release again.
 
+Live progress keeps its cursor at the beginning of the mutable output so terminal
+reflow does not leave duplicate activity lines. Resizing redraws the activity at
+the new dimensions without restarting any jobs. Live activity uses a single-row
+icon and ordinary text even when completed results use spacious icons.
+If a repository table is open,
+it becomes a historical snapshot: activity continues on one line, followed by a
+fresh repository summary when those jobs finish. Completed output remains in
+terminal history. An already running process keeps its old renderer after
+installation; the updated renderer applies to the next run.
+
+For rendered resize regression checks, build the app and run from this directory:
+`kitty +runpy 'import runpy; runpy.run_path("tests/terminal_reflow.py", run_name="__main__")'`.
+This uses Kitty's parser and reflow engine with isolated synthetic PTY jobs; no
+display server is needed. Set `TJIKUP_TEST_BINARY` to test a release or installed
+binary instead of `target/debug/tjikup`.
+
 Native file deployment is available through `tjikup files`; see
 [Native file and template management](docs/native-files.md) for manifests,
 conflict handling, isolated verification and recovery. MiniJinja templates can
