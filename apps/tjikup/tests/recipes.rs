@@ -687,7 +687,7 @@ fn grouped_results_keep_sections_together_across_async_completion() {
 }
 
 #[test]
-fn blocked_results_keep_groups_without_alphabetic_reordering() {
+fn blocked_results_are_quiet_unless_show_skips_preserves_their_groups() {
     let (dir, mut config) = fixture(json!([
         {"id":"fail","label":"Failure","apply":["false"],"display":{"section":"Preparation"}},
         {"id":"z","label":"Zulu","needs":["fail"],"apply":["true"],"display":{"section":"Configuration"}},
@@ -698,6 +698,18 @@ fn blocked_results_keep_groups_without_alphabetic_reordering() {
     let output = invoke(dir.path(), &config, &[]);
     assert!(!output.status.success());
     let text = String::from_utf8_lossy(&output.stderr);
+    assert!(text.contains("Failed: Failure (fail)"));
+    assert!(!text.contains("BLOCKED"));
+    assert!(!text.contains("\nConfiguration\n"));
+    assert!(!text.contains("\nServices\n"));
+    let r = receipt(dir.path());
+    for id in ["z", "s", "a"] {
+        assert_eq!(r["recipes"][id]["state"], "blocked");
+    }
+    let output = invoke(dir.path(), &config, &["--show-skips"]);
+    assert!(!output.status.success());
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(text.matches("BLOCKED").count(), 3);
     assert_eq!(text.matches("\nConfiguration\n").count(), 1);
     assert!(text.find("Zulu").unwrap() < text.find("Alpha").unwrap());
     assert!(text.find("Zulu").unwrap() < text.find("\nServices\n").unwrap());

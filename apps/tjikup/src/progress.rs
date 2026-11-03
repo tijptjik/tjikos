@@ -531,7 +531,7 @@ impl Progress {
         let mut rows = events.to_vec();
         if rows.is_empty()
             && (self.show_skips
-                || matches!(state, State::Failed | State::Stopped | State::Blocked)
+                || matches!(state, State::Failed | State::Stopped)
                 || state == State::Done
                     && !recipe.display.quiet
                     && !recipe.display.reports

@@ -242,6 +242,8 @@ that supplies no report is labelled “no status reported”, rather than invent
 skip reason. This option changes presentation only and combines with workflow
 flags such as `--skip-repo-sync`. A later skipped substep never replaces an actual
 update to the same subject. Skip rows use the dim palette.
+Tasks blocked after a failure stay quiet unless `--show-skips` is enabled;
+their blocked states are always retained in the receipt.
 
 `quiet: true` hides successful internal preparation in the default view. Failures always remain
 visible. Repository recipes use `{"repository":"dotjik","operation":"pull"}`
