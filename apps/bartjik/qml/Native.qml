@@ -10,6 +10,31 @@ import "Logic.js" as Logic
 QtObject {
     id: native
     property bool demo: false
+    property bool hyprvoiceEnabled: false
+    property string hyprvoiceState: 'unavailable'
+    onHyprvoiceEnabledChanged: {
+        hyprvoiceRetry.stop();
+        hyprvoiceReader.running=hyprvoiceEnabled && !demo;
+        if(!hyprvoiceEnabled)hyprvoiceState='unavailable';
+    }
+    property Process hyprvoiceReader: Process {
+        running: native.hyprvoiceEnabled && !native.demo
+        command: [Quickshell.env('BARTJIK_HOME')+'/bin/bartjikctl','helper','hyprvoice-status']
+        stdout: SplitParser {onRead: data => {
+            try {
+                const update=JSON.parse(data);
+                native.hyprvoiceState=['idle','recording','processing'].includes(update.state) && update.available===true ? update.state : 'unavailable';
+            } catch(e) {native.hyprvoiceState='unavailable';}
+        }}
+        onExited: (code,status) => {
+            native.hyprvoiceState='unavailable';
+            if(native.hyprvoiceEnabled && !native.demo)native.hyprvoiceRetry.restart();
+        }
+    }
+    property Timer hyprvoiceRetry: Timer {
+        interval: 3000
+        onTriggered: if(native.hyprvoiceEnabled && !native.demo)native.hyprvoiceReader.running=true
+    }
     // These singletons are shared by every renderer; no per-bar service objects.
     readonly property var players: demo ? [] : Mpris.players.values
     readonly property var tray: demo ? [] : SystemTray.items.values
@@ -116,7 +141,7 @@ QtObject {
         return [];
     }
     function snapshot() {
-        return {players:players.map(p=>({id:p.dbusName,identity:p.identity,playing:p.isPlaying,canControl:p.canControl,canQuit:p.canQuit,position:p.position,canSeek:p.canSeek,shuffle:p.shuffle,shuffleSupported:p.shuffleSupported})),
+        return {hyprvoice:hyprvoiceState,players:players.map(p=>({id:p.dbusName,identity:p.identity,playing:p.isPlaying,canControl:p.canControl,canQuit:p.canQuit,position:p.position,canSeek:p.canSeek,shuffle:p.shuffle,shuffleSupported:p.shuffleSupported})),
             tray:trayRecords.filter(r=>r.object && tray.indexOf(r.object)>=0).map(r=>({id:r.id,appId:r.object.id,title:r.object.title,status:r.object.status,hasMenu:r.object.hasMenu}))};
     }
     function act(action, id, window, rect) {

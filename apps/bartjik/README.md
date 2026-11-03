@@ -715,6 +715,18 @@ shows weekly data; request totals require the local database. Queries do not rea
 prompts, request bodies, credentials or error-message contents. No extra polling loops
 are added for panels: they share each module's existing provider updates.
 
+The tray island adds a red circle in its own leading slot while Hyprvoice records,
+then pulses it while transcription, text cleanup, or injection is in progress.
+The 10-pixel dot is centered in a regular tray icon slot. The island expands for the
+slot, then contracts when Hyprvoice is idle or unavailable. An active voice
+operation keeps the tray's auto-hidden bar visible; explicit bar hiding is still
+respected. `style.animateIcons:false` keeps the processing dot steady.
+One native helper reads Hyprvoice's local control socket every 150 ms and emits
+only state changes; it starts only when a tray module exists and never runs in
+demo mode. `bartjikctl status` reports the current `hyprvoice` state. The patched
+Hyprvoice build supports `notifications.type="errors"` to replace routine popups
+with this indicator while preserving error notifications.
+
 The comparison preset renders native tray artwork at 21 logical pixels. Greyscale
 retains luminance/detail; `monochromeIcon:false`
 avoids flattening opaque artwork into solid white blocks. Set `greyscaleIcons:false`

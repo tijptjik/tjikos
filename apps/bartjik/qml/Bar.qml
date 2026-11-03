@@ -8,10 +8,13 @@ PanelWindow {
     required property var controller
     required property string barKey
     readonly property var bar: controller.bars.find(b=>b.key===barKey)
-    readonly property var populatedIslands: (bar?.islands || []).filter(i=>i.modules.some(id=>controller.items(bar,id).some(row=>row.visible!==false))).map(i=>i.id)
+    readonly property bool voiceActive: ['recording','processing'].includes(controller.hyprvoiceState || '')
+    function trayIsland(i) {return i.modules.some(id=>bar.moduleConfigs[id]?.provider==='icontray');}
+    readonly property bool voiceVisible: voiceActive && (bar?.islands || []).some(i=>trayIsland(i))
+    readonly property var populatedIslands: (bar?.islands || []).filter(i=>(voiceActive && trayIsland(i)) || i.modules.some(id=>controller.items(bar,id).some(row=>row.visible!==false))).map(i=>i.id)
     readonly property bool horizontal: bar ? bar.side==='t' || bar.side==='b' : true
     readonly property var geometry: bar && targetScreen ? Logic.geometry(bar,targetScreen.width,targetScreen.height,groups.implicitWidth,groups.implicitHeight,targetScreen.devicePixelRatio) : {x:0,y:0,width:0,height:0}
-    readonly property bool concealed: controller.edgeStates[barKey]?.concealed || false
+    readonly property bool concealed: !voiceVisible && (controller.edgeStates[barKey]?.concealed || false)
     readonly property bool autoHide: bar?.autoHide || false
     readonly property bool edgeHovered: hover.hovered || !!controller.menuOpen(barKey)
     readonly property bool edgeFading: viewport.opacity>0
@@ -73,5 +76,5 @@ PanelWindow {
         HoverHandler {id: hover;onHoveredChanged:controller.updateEdges()}
     }
     function capture(path) {viewport.grabToImage(result=>result.saveToFile(path));}
-    function inspect() {return {key:barKey,geometry:geometry,concealed:concealed,opacity:viewport.opacity,inputRegions:maskRegions.instances.length,visible:visible,islands:groups.children.filter(c=>c.islandId).map(c=>({id:c.islandId,x:c.x,y:c.y,width:c.width,height:c.height,visible:c.visible}))};}
+    function inspect() {return {key:barKey,geometry:geometry,concealed:concealed,opacity:viewport.opacity,inputRegions:maskRegions.instances.length,visible:visible,islands:groups.children.filter(c=>c.islandId).map(c=>({id:c.islandId,x:c.x,y:c.y,width:c.width,height:c.height,visible:c.visible,hyprvoice:c.hyprvoiceState}))};}
 }

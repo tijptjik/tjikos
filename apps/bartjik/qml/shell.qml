@@ -23,7 +23,12 @@ ShellRoot {
     readonly property var screenInfo: Quickshell.screens.map(s=>({name:s.name,width:s.width,height:s.height,scale:s.devicePixelRatio}))
     readonly property alias panelShell:sharedPanelShell
     PanelShell {id:sharedPanelShell}
-    Native {id:native;demo:root.demo}
+    readonly property string hyprvoiceState: native.hyprvoiceState
+    Native {
+        id:native
+        demo:root.demo
+        hyprvoiceEnabled:root.bars.some(b=>Object.values(b.moduleConfigs).some(m=>m.provider==='icontray'))
+    }
     CryptoPanel {id:initialCryptoPanel;controller:root}
     property var cryptoPanel:initialCryptoPanel
     property var cryptoPanels:[initialCryptoPanel]
@@ -175,7 +180,7 @@ ShellRoot {
         default:throw Error('unknown operation');
         }
         return {ok:true,ready:state.ready,demo:demo,theme:state.config?.theme,error:state.error || helperError,
-            workspaceReminder:workspaceReminder,pointerError:pointer.error || '',actionError:native.navigationError || state.actionError,bars:bars.length,providers:Object.keys(state.providers || {}).length};
+            workspaceReminder:workspaceReminder,hyprvoice:hyprvoiceState,pointerError:pointer.error || '',actionError:native.navigationError || state.actionError,bars:bars.length,providers:Object.keys(state.providers || {}).length};
     }
     IpcHandler {
         target:'bartjik'

@@ -12,7 +12,11 @@ Rectangle {
     readonly property var theme: horizontal ? rawTheme : Logic.merge(rawTheme,{maxTextWidth:Math.max(0,Math.min(rawTheme.maxTextWidth,bar.verticalWidth-2*rawTheme.padding-rawTheme.iconSize-rawTheme.iconTextGap))})
     readonly property real paddingX: theme.paddingX ?? theme.padding
     readonly property real paddingY: theme.paddingY ?? theme.padding
-    readonly property bool populated: definition.modules.some(id=>controller.displayItems(bar,id).some(i=>i.visible!==false))
+    readonly property bool hasTray: definition.modules.some(id=>bar.moduleConfigs[id]?.provider==='icontray')
+    readonly property string hyprvoiceState: hasTray ? (controller.hyprvoiceState || 'unavailable') : 'unavailable'
+    readonly property bool voiceActive: hyprvoiceState==='recording' || hyprvoiceState==='processing'
+    readonly property bool hasItems: definition.modules.some(id=>controller.displayItems(bar,id).some(i=>i.visible!==false))
+    readonly property bool populated: hasItems || voiceActive
     visible: populated
     implicitWidth: !populated ? 0 : horizontal ? modules.implicitWidth+2*paddingX : bar.verticalWidth
     implicitHeight: !populated ? 0 : horizontal ? Math.max(bar.thickness,modules.implicitHeight+2*paddingY) : modules.implicitHeight+2*paddingY
