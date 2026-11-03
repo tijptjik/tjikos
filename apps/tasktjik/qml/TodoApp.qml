@@ -553,7 +553,7 @@ Pane {
         indicator: Text {text:'⌄';color:theme.muted;rightPadding:12;anchors.right:parent.right;anchors.verticalCenter:parent.verticalCenter}
         background: Rectangle {radius:10;color:control.hovered?theme.border:theme.surface;border.color:control.activeFocus?theme.accent:theme.border}
         delegate: ItemDelegate {
-            width:control.width;text:modelData
+            width:control.width;text:control.textAt(index)
             contentItem: Text {text:parent.text;color:theme.text;font.pixelSize:13;elide:Text.ElideRight}
             background:Rectangle {radius:6;color:parent.highlighted?theme.border:'transparent'}
             highlighted:control.highlightedIndex===index
