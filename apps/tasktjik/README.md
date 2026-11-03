@@ -25,12 +25,16 @@ Previews render pages using installed Chrome or Chromium in headless mode with
 a fresh, temporary profile; they never use your browser cookies or a third-party
 preview service. Python 3 fetches descriptions and fallback site images. Browser
 error pages and sign-in screens are rejected; sites that block rendering show a
-favicon fallback when available, otherwise a clear placeholder. Successful images and metadata are cached for a day under
+favicon fallback when available, otherwise a clear placeholder. Successful images
+and their metadata persist across restarts under
 `$XDG_CACHE_HOME/tasktjik/page-previews` (normally `~/.cache/tasktjik/page-previews`).
+Cached images load before any missing page is rendered and remain available until
+the cache is cleared; missing image files are regenerated on the next load.
 Pages without an available image retain a domain placeholder and their link.
-Failed previews retry after five minutes on the next load; old metadata-only
+Previews with no usable image retry after five minutes on the next load; legacy
 cache entries are refreshed automatically. Rendering requires Chrome or Chromium;
 without it, site-provided images remain available.
+Run `python3 -B tests/page_preview.py` for the cache regression checks.
 Run `python3 -B tests/reading_ui.py` for the isolated synthetic renderer check.
 
 Select a task in the desktop overview and press **Ctrl+V** to attach an image

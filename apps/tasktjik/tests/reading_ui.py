@@ -20,6 +20,7 @@ class Pages(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
+        self.server.requests += 1
         if self.path in ('/cover.png', '/favicon.ico'):
             data = self.server.image
             mime = 'image/png'
@@ -58,6 +59,7 @@ with private_compositor(isolate_pointer=True):
     cover.save(temp / 'cover.png')
     server = ThreadingHTTPServer(('127.0.0.1', 0), Pages)
     server.image = (temp / 'cover.png').read_bytes()
+    server.requests = 0
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f'http://127.0.0.1:{server.server_port}'
     cache = Path(os.environ['XDG_CACHE_HOME']) / 'tasktjik/page-previews'
@@ -157,7 +159,21 @@ ShellRoot {
             wait_for(lambda: state().get('capture') == str(temp / 'reading-empty.png'))
             errors = (temp / 'reading.log').read_text()
             assert not any(word in errors for word in ['ERROR', 'TypeError', 'ReferenceError', 'Binding loop']), errors
-            print('PASS reading list/grid, metadata/image fetch, fallback, categories, navigation/open, search:', temp)
+            # A fresh UI process must restore old artwork without network work.
+            requests = server.requests
+            for receipt in cache.glob('*.json'):
+                if json.loads(receipt.read_text()).get('image'):
+                    old = time.time() - 30 * 86400
+                    os.utime(receipt, (old, old))
+            process.terminate()
+            process.wait(timeout=5)
+            process = subprocess.Popen(['quickshell', '--path', str(home)], stdout=log, stderr=log)
+            wait_for(lambda: len(state().get('previews', {})) == 5, timeout=5)
+            assert state()['previews'] == current['previews'], state()
+            assert server.requests == requests, (server.requests, requests)
+            errors = (temp / 'reading.log').read_text()
+            assert not any(word in errors for word in ['ERROR', 'TypeError', 'ReferenceError', 'Binding loop']), errors
+            print('PASS reading list/grid, metadata/image fetch, fallback, categories, navigation/open, search, persistent cache on restart:', temp)
         except Exception:
             print(state(), (temp / 'reading.log').read_text(), flush=True)
             raise

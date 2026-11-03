@@ -13,7 +13,7 @@ KineticScrollView {
     property string selectedId: ''
     property var previews: ({})
     property var queue: []
-    property string loadingUrl: ''
+    property var loadingUrls: []
     property bool ready: false
     signal selectSite(string id)
     signal openSite(string id)
@@ -24,26 +24,33 @@ KineticScrollView {
     function domain(url) {return String(url || '').replace(/^https?:\/\//,'').split('/')[0].replace(/^www\./,'');}
     function path(url) {return String(url || '').replace(/^https?:\/\/[^/]+/,'') || '/';}
     function enqueue() {
-        queue=Array.from(new Set(sites.map(s=>s.reference).filter(url=>/^https?:\/\//.test(url || '') && previews[url]===undefined && url!==loadingUrl)));
+        queue=Array.from(new Set(sites.map(s=>s.reference).filter(url=>/^https?:\/\//.test(url || '') && previews[url]===undefined && !loadingUrls.includes(url))));
         next();
     }
     function next() {
-        if(!ready || loadingUrl || fetcher.running || !queue.length)return;
-        loadingUrl=queue[0];queue=queue.slice(1);fetcher.running=true;
+        if(!ready || loadingUrls.length || fetcher.running || !queue.length)return;
+        loadingUrls=queue;queue=[];fetcher.running=true;
     }
     onSitesChanged: if(ready)enqueue()
     Component.onCompleted: {ready=true;enqueue();}
     Process {
         id: fetcher
-        command: ['python3','-B',decodeURIComponent(Qt.resolvedUrl('page_preview.py').toString().replace('file://',''))]
+        command: ['python3','-B',decodeURIComponent(Qt.resolvedUrl('page_preview.py').toString().replace('file://','')),'--batch']
         stdinEnabled: true
-        property string output: ''
-        onStarted: {output='';write(root.loadingUrl);stdinEnabled=false;}
-        stdout: StdioCollector {onStreamFinished:fetcher.output=text}
+        onStarted: {write(JSON.stringify(root.loadingUrls));stdinEnabled=false;}
+        stdout: SplitParser {
+            onRead: data=>{
+                try {
+                    const item=JSON.parse(data);
+                    if(root.loadingUrls.includes(item.url))root.previews=Object.assign({},root.previews,{[item.url]:item.preview});
+                }catch(e){}
+            }
+        }
         onExited: {
-            let value={};try {value=JSON.parse(output);}catch(e){}
-            root.previews=Object.assign({},root.previews,{[root.loadingUrl]:value});
-            root.loadingUrl='';stdinEnabled=true;Qt.callLater(root.next);
+            const missing={};
+            root.loadingUrls.forEach(url=>{if(root.previews[url]===undefined)missing[url]={};});
+            root.previews=Object.assign({},root.previews,missing);
+            root.loadingUrls=[];stdinEnabled=true;Qt.callLater(root.next);
         }
     }
     function visualCards() {

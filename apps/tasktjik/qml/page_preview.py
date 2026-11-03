@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 
@@ -143,20 +143,41 @@ def render_page(url, cache, key):
             output.close()
 
 
+def cache_paths(url):
+    cache = Path(os.environ.get('XDG_CACHE_HOME', str(Path.home() / '.cache'))) / 'tasktjik/page-previews'
+    key = hashlib.sha256(url.encode()).hexdigest()
+    return cache, key, cache / (key + '.json')
+
+
+def cached_preview(url):
+    cache, _, receipt = cache_paths(url)
+    try:
+        saved = json.loads(receipt.read_text())
+        if not isinstance(saved, dict) or saved.get('previewVersion') != 4:
+            return None
+        if saved.get('image'):
+            image = urlsplit(saved['image'])
+            path = Path(unquote(image.path))
+            # Saved-page artwork persists until the cache is cleared. A receipt
+            # alone is not a hit if its image has been removed by cache cleanup.
+            if (image.scheme == 'file' and not image.netloc and path.parent == cache
+                    and path.is_file() and path.stat().st_size > 0):
+                return saved
+        elif time.time() - receipt.stat().st_mtime < 300:
+            return saved
+    except (ValueError, OSError, TypeError):
+        pass
+    return None
+
+
 def preview(url):
     if urlsplit(url).scheme not in ('http', 'https'):
         return {}
-    cache = Path(os.environ.get('XDG_CACHE_HOME', str(Path.home() / '.cache'))) / 'tasktjik/page-previews'
+    saved = cached_preview(url)
+    if saved is not None:
+        return saved
+    cache, key, receipt = cache_paths(url)
     cache.mkdir(parents=True, exist_ok=True, mode=0o700)
-    key = hashlib.sha256(url.encode()).hexdigest()
-    receipt = cache / (key + '.json')
-    if receipt.exists() and time.time() - receipt.stat().st_mtime < 86400:
-        try:
-            saved = json.loads(receipt.read_text())
-            if saved.get('previewVersion') == 4 and (saved.get('imageKind') == 'page' or time.time() - receipt.stat().st_mtime < 300):
-                return saved
-        except (ValueError, OSError):
-            pass
     result = {}
     icons = []
     resolved = url
@@ -213,9 +234,32 @@ def deadline(signum, frame):
     raise TimeoutError('Preview deadline exceeded')
 
 
+def preview_batch(urls):
+    pending = []
+    # Publish all disk hits before doing any network or browser work, so one
+    # uncached page cannot hold the rest of the Reading view behind its render.
+    for url in dict.fromkeys(urls):
+        saved = cached_preview(url)
+        if saved is None:
+            pending.append(url)
+        else:
+            yield {'url': url, 'preview': saved}
+    for url in pending:
+        try:
+            result = preview(url)
+        except Exception:
+            result = {}
+        yield {'url': url, 'preview': result}
+
+
 if __name__ == '__main__':
     signal.signal(signal.SIGALRM, deadline)
     try:
-        print(json.dumps(preview(sys.stdin.read().strip())))
+        request = sys.stdin.read().strip()
+        if '--batch' in sys.argv:
+            for item in preview_batch(json.loads(request)):
+                print(json.dumps(item), flush=True)
+        else:
+            print(json.dumps(preview(request)))
     except Exception:
         print('{}')
