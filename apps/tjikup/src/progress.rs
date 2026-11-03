@@ -65,6 +65,23 @@ fn clip_styled(text: &str, limit: usize) -> String {
     result
 }
 const SPINNER: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Layout {
+    columns: usize,
+    rows: usize,
+    cell: Option<(usize, usize)>,
+}
+impl Layout {
+    fn current() -> Self {
+        let mut size: libc::winsize = unsafe { std::mem::zeroed() };
+        unsafe { libc::ioctl(2, libc::TIOCGWINSZ, &mut size) };
+        Self {
+            columns: columns(),
+            rows: usize::from(size.ws_row),
+            cell: crate::graphics::geometry(),
+        }
+    }
+}
 #[derive(Clone)]
 struct Repo {
     label: String,
@@ -88,10 +105,11 @@ pub struct Progress {
     repo_open: bool,
     repo_lines: usize,
     activity_gap: bool,
-    repo_width: usize,
+    repo_layout: Layout,
+    repo_detached: bool,
     repo_last: Vec<String>,
     transient: bool,
-    transient_rows: usize,
+    transient_layout: Layout,
     cursor_hidden: bool,
     frame: usize,
     section: String,
@@ -121,10 +139,11 @@ impl Progress {
             repo_open: false,
             repo_lines: 0,
             activity_gap: false,
-            repo_width: 0,
+            repo_layout: Layout::current(),
+            repo_detached: false,
             repo_last: Vec::new(),
             transient: false,
-            transient_rows: 1,
+            transient_layout: Layout::current(),
             cursor_hidden: false,
             frame: 0,
             section: String::new(),
@@ -389,7 +408,7 @@ impl Progress {
         clip_styled(&format!("{left}{}{status}", " ".repeat(padding)), available)
     }
     fn draw_repos(&mut self) {
-        self.repo_width = columns();
+        self.repo_layout = Layout::current();
         self.repo_last.clear();
         for repo in self.repos.clone() {
             let text = self.repo_text(&repo);
@@ -410,13 +429,14 @@ impl Progress {
         if !self.tty || !self.repo_open || self.presentation.alphabetical_results {
             return;
         }
-        if self.repo_width != columns() {
-            self.clear();
-            eprint!("\x1b[{}A\r\x1b[J", self.repo_lines);
-            if let Some(graphics) = &mut self.graphics {
-                graphics.size = crate::graphics::geometry().unwrap_or(graphics.size);
-            }
-            self.draw_repos();
+        if self.repo_layout != Layout::current() {
+            // Terminal reflow invalidates the table's physical row offsets.
+            // Freeze that snapshot in history and use the single activity row
+            // until a final repository summary is ready. Never guess how far
+            // to move up through reflowed text or Kitty's two-row artwork.
+            self.repo_detached = true;
+        }
+        if self.repo_detached {
             return;
         }
         for (i, repo) in self.repos.iter().enumerate() {
@@ -461,10 +481,9 @@ impl Progress {
     }
     pub fn clear(&mut self) {
         if self.transient {
-            eprint!("\r\x1b[2K");
-            if self.transient_rows > 1 {
-                eprint!("\x1b[1B\r\x1b[2K\x1b[1A\r");
-            }
+            // The cursor is parked at the activity origin between frames.
+            // Reflow can spread this last, temporary row across several lines.
+            eprint!("\r\x1b[J");
             self.transient = false;
         }
         let _ = std::io::stderr().flush();
@@ -498,8 +517,8 @@ impl Progress {
             self.patch_repos();
         }
         // Repository tasks already animate their persistent pull/push cells.
-        // Reserve the transient activity row for work without a dedicated row.
-        if self.live && !recipe.interactive && !self.repo_recipes.contains_key(&index) {
+        // Keep their activity available if a resize detaches the table snapshot.
+        if self.live && !recipe.interactive {
             let icon = self.icon_key(&recipe.display.icon, &recipe.label);
             self.active
                 .insert(index, (plain(&recipe.label), icon, Instant::now()));
@@ -650,7 +669,8 @@ impl Progress {
             }
         }
         self.patch_repos();
-        if self.presentation.alphabetical_results {
+        if self.presentation.alphabetical_results || self.repo_detached {
+            self.remove_activity_gap();
             self.heading("Repositories");
             if self.tty {
                 self.draw_repos();
@@ -817,8 +837,19 @@ impl Progress {
             self.hide_cursor();
         }
         self.frame += 1;
+        let layout = Layout::current();
+        if self.transient && self.transient_layout != layout {
+            self.clear();
+        }
+        if let (Some(graphics), Some(size)) = (&mut self.graphics, layout.cell) {
+            graphics.size = size;
+        }
         self.patch_repos();
-        if !self.live || self.active.is_empty() {
+        let activity = self
+            .active
+            .iter()
+            .find(|(index, _)| self.repo_detached || !self.repo_recipes.contains_key(index));
+        if !self.live || activity.is_none() {
             if self.live {
                 eprint!("\x1b[?2026l");
                 let _ = std::io::stderr().flush();
@@ -829,7 +860,7 @@ impl Progress {
         // the whole line before writing makes the activity text blink.
         // One transient activity line keeps the terminal quiet. Settled results
         // have their own icons and never get repainted for animation.
-        if let Some((label, icon, started)) = self.active.values().next() {
+        if let Some((_, (label, icon, started))) = activity {
             if !self.activity_gap {
                 eprint!("\r\n");
                 self.activity_gap = true;
@@ -860,24 +891,27 @@ impl Progress {
             );
             if let Some(graphics) = &mut self.graphics {
                 if !self.transient {
-                    self.transient_rows = graphics.rows();
-                    graphics.row(icon, &prefix, &format!(" {rest}"));
-                    eprint!("\x1b[{}A\r", self.transient_rows);
+                    graphics.activity_row(icon, &prefix, &format!(" {rest}"));
+                    eprint!("\x1b[1A\r");
                 } else {
                     // Keep the sprite's cells untouched while updating the spinner,
                     // title and timer. The cursor stays on the first activity row.
                     eprint!(
-                        "\r{}\x1b[{}G{}\x1b[K",
-                        graphics.text(&prefix),
+                        "\r\x1b7{}\x1b[{}G{}\x1b[K\x1b8",
+                        prefix,
                         3 + graphics.columns(),
-                        graphics.text(&format!(" {rest}"))
+                        format_args!(" {rest}")
                     );
                 }
             } else {
-                self.transient_rows = 1;
                 eprint!("\r{prefix}{}{rest}\x1b[K", self.glyph(icon));
             }
             self.transient = true;
+            self.transient_layout = layout;
+            // A cursor left beside the timer reflows to the *last* wrapped row.
+            // Keep it at the first cell so the next frame can erase/redraw all
+            // of the activity after a width or height change.
+            eprint!("\r");
         }
         eprint!("\x1b[?2026l");
         let _ = std::io::stderr().flush();

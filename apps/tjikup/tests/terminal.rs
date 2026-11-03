@@ -678,33 +678,28 @@ fn active_row_uses_application_art_and_dimmed_subtitle() {
                 1,
                 "ticks reuse uploaded image"
             );
-            if !compact {
-                assert!(
-                    active.contains("\u{10eeee}\u{30d}"),
-                    "second icon row is present"
-                );
-            }
+            assert!(
+                !active.contains("\u{10eeee}\u{30d}"),
+                "activity artwork occupies one row"
+            );
         } else {
             assert!(active.contains("F \x1b[97mFedora"));
         }
-        if compact {
-            assert!(
-                active.contains("\x1b[90m (RPM packages)"),
-                "same dim subtitle as completed rows"
-            );
-        } else {
-            assert!(
-                active.contains("\x1b[90m\x1b]66;"),
-                "dim styling reaches two-row text"
-            );
-        }
+        assert!(
+            active.contains("\x1b[90m (RPM packages)"),
+            "mutable text uses ordinary cells with the same dim subtitle"
+        );
+        assert!(
+            !active.contains("\x1b]66;"),
+            "activity text must reflow as one row"
+        );
         fs::write(dir.path().join("release"), "").unwrap();
         let text = terminal.finish();
         if graphics {
             assert_eq!(
                 text.matches("a=T,f=32").count(),
-                1,
-                "completion reuses activity artwork"
+                if compact { 1 } else { 2 },
+                "image cache distinguishes compact activity from spacious results"
             );
         }
     }

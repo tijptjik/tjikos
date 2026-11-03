@@ -24,7 +24,7 @@ pub fn geometry() -> Option<(usize, usize)> {
 }
 pub struct Graphics {
     sprites: BTreeMap<String, String>,
-    images: BTreeMap<(String, usize, usize), u32>,
+    images: BTreeMap<(String, usize, usize, usize), u32>,
     pub size: (usize, usize),
     pub herdr: bool,
     next_id: u32,
@@ -84,7 +84,7 @@ impl Graphics {
         } else {
             "*"
         };
-        let cache = (key.to_owned(), self.size.0, self.size.1);
+        let cache = (key.to_owned(), self.size.0, self.size.1, self.rows());
         if let Some(id) = self.images.get(&cache) {
             return Some(*id);
         }
@@ -162,6 +162,15 @@ impl Graphics {
         } else {
             centred(text)
         }
+    }
+    pub fn activity_row(&mut self, label: &str, prefix: &str, rest: &str) {
+        // Keep the entire mutable row, including its sprite, on one terminal
+        // line. Content below its origin can push that origin into scrollback
+        // when the terminal shrinks and reflows.
+        let compact = self.compact;
+        self.compact = true;
+        self.row(label, prefix, rest);
+        self.compact = compact;
     }
     pub fn row(&mut self, label: &str, prefix: &str, rest: &str) {
         if let Some(id) = self.image(label) {
