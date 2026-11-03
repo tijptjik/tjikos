@@ -1,6 +1,6 @@
 diff --git a/internal/config/codex_test.go b/internal/config/codex_test.go
 new file mode 100644
-index 0000000..3e8d326
+index 0000000..a8ecb36
 --- /dev/null
 +++ b/internal/config/codex_test.go
 @@ -0,0 +1,21 @@
@@ -11,7 +11,7 @@ index 0000000..3e8d326
 +func TestCodexConfigNeedsNoAPIKey(t *testing.T) {
 +	t.Setenv("OPENAI_API_KEY", "must-not-be-used")
 +	c := DefaultConfig()
-+	c.Notifications.Type = "none"
++	c.Notifications.Type = "errors"
 +	c.Transcription.Provider = "codex"
 +	c.Transcription.Model = "gpt-4o-transcribe"
 +	c.Transcription.Language = "en"
@@ -25,6 +25,48 @@ index 0000000..3e8d326
 +		t.Fatal("inherited API key")
 +	}
 +}
+diff --git a/internal/config/save.go b/internal/config/save.go
+index 82af52a..09fd1af 100644
+--- a/internal/config/save.go
++++ b/internal/config/save.go
+@@ -283,7 +283,7 @@ keywords = []
+ 
+ [notifications]
+   enabled = true               # Enable desktop notifications
+-  type = "desktop"             # "desktop", "log", or "none"
++  type = "desktop"             # "desktop", "errors" (errors only), "log", or "none"
+ 
+   # Custom notification messages (optional - defaults shown below)
+   # Uncomment and modify to customize notification text
+diff --git a/internal/config/types.go b/internal/config/types.go
+index 898009a..95adb10 100644
+--- a/internal/config/types.go
++++ b/internal/config/types.go
+@@ -78,7 +78,7 @@ type InjectionConfig struct {
+ 
+ type NotificationsConfig struct {
+ 	Enabled  bool           `toml:"enabled"`
+-	Type     string         `toml:"type"` // "desktop", "log", "none"
++	Type     string         `toml:"type"` // "desktop", "errors", "log", "none"
+ 	Messages MessagesConfig `toml:"messages"`
+ }
+ 
+diff --git a/internal/config/validate.go b/internal/config/validate.go
+index 1354dc6..ce50237 100644
+--- a/internal/config/validate.go
++++ b/internal/config/validate.go
+@@ -167,9 +167,9 @@ func (c *Config) Validate() error {
+ 		return fmt.Errorf("invalid injection.clipboard_timeout: %v", c.Injection.ClipboardTimeout)
+ 	}
+ 
+-	validTypes := map[string]bool{"desktop": true, "log": true, "none": true}
++	validTypes := map[string]bool{"desktop": true, "errors": true, "log": true, "none": true}
+ 	if !validTypes[c.Notifications.Type] {
+-		return fmt.Errorf("invalid notifications.type: %s (must be desktop, log, or none)", c.Notifications.Type)
++		return fmt.Errorf("invalid notifications.type: %s (must be desktop, errors, log, or none)", c.Notifications.Type)
+ 	}
+ 
+ 	return nil
 diff --git a/internal/llm/adapter_openai.go b/internal/llm/adapter_openai.go
 index 03b1ab5..d20a758 100644
 --- a/internal/llm/adapter_openai.go
@@ -114,6 +156,91 @@ index 0e8cef2..57f0793 100644
  	case "openai":
  		if cfg.APIKey == "" {
  			return nil, fmt.Errorf("OpenAI API key required")
+diff --git a/internal/notify/errors_only_test.go b/internal/notify/errors_only_test.go
+new file mode 100644
+index 0000000..13f5c44
+--- /dev/null
++++ b/internal/notify/errors_only_test.go
+@@ -0,0 +1,46 @@
++package notify
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestErrorsOnlyDesktopNotifications(t *testing.T) {
++	dir := t.TempDir()
++	logPath := filepath.Join(dir, "notifications")
++	// Use a private command stub: this test must never notify the live desktop.
++	if err := os.WriteFile(filepath.Join(dir, "notify-send"), []byte("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HYPRVOICE_TEST_NOTIFICATIONS\"\n"), 0o700); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("PATH", dir)
++	t.Setenv("HYPRVOICE_TEST_NOTIFICATIONS", logPath)
++	messages := make(map[MessageType]Message)
++	for _, def := range MessageDefs {
++		messages[def.Type] = Message{Title: def.DefaultTitle, Body: def.DefaultBody, IsError: def.IsError}
++	}
++	notifier := NewNotifier("errors", messages)
++	for _, mt := range []MessageType{MsgRecordingStarted, MsgTranscribing, MsgLLMProcessing, MsgConfigReloaded, MsgOperationCancelled} {
++		notifier.Send(mt)
++	}
++	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
++		t.Fatalf("routine state changes invoked notify-send: %v", err)
++	}
++	notifier.Send(MsgRecordingAborted)
++	notifier.Send(MsgInjectionAborted)
++	notifier.Error("Synthetic transcription failure")
++	data, err := os.ReadFile(logPath)
++	if err != nil {
++		t.Fatal(err)
++	}
++	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
++	if len(lines) != 3 {
++		t.Fatalf("got %d error notifications, want 3: %s", len(lines), data)
++	}
++	for i, body := range []string{"Recording Aborted", "Injection Aborted", "Synthetic transcription failure"} {
++		if !strings.Contains(lines[i], "-a Hyprvoice -u critical Hyprvoice Error "+body) {
++			t.Fatalf("error notification %d lost critical urgency or body: %q", i, lines[i])
++		}
++	}
++}
+diff --git a/internal/notify/notify.go b/internal/notify/notify.go
+index 617d3b0..ed8d48e 100644
+--- a/internal/notify/notify.go
++++ b/internal/notify/notify.go
+@@ -15,6 +15,8 @@ func NewNotifier(notifType string, messages map[MessageType]Message) Notifier {
+ 	switch notifType {
+ 	case "desktop":
+ 		return NewDesktop(messages)
++	case "errors":
++		return &Desktop{messages: messages, errorsOnly: true}
+ 	case "log":
+ 		return NewLog(messages)
+ 	default:
+@@ -23,7 +25,8 @@ func NewNotifier(notifType string, messages map[MessageType]Message) Notifier {
+ }
+ 
+ type Desktop struct {
+-	messages map[MessageType]Message
++	messages   map[MessageType]Message
++	errorsOnly bool
+ }
+ 
+ func NewDesktop(messages map[MessageType]Message) *Desktop {
+@@ -39,6 +42,9 @@ func (d *Desktop) Send(mt MessageType) {
+ 		d.Error(msg.Body)
+ 		return
+ 	}
++	if d.errorsOnly {
++		return
++	}
+ 	d.notify(msg.Title, msg.Body)
+ }
+ 
 diff --git a/internal/provider/codex.go b/internal/provider/codex.go
 new file mode 100644
 index 0000000..7e84a13
@@ -198,6 +325,54 @@ index fb1013d..3fb55cd 100644
  	Register(&GroqProvider{})
  	Register(&MistralProvider{})
  	Register(&ElevenLabsProvider{})
+diff --git a/internal/recording/raw_pcm_test.go b/internal/recording/raw_pcm_test.go
+new file mode 100644
+index 0000000..876a77b
+--- /dev/null
++++ b/internal/recording/raw_pcm_test.go
+@@ -0,0 +1,29 @@
++package recording
++
++import (
++	"reflect"
++	"testing"
++)
++
++func TestRecorderRequestsRawPCM(t *testing.T) {
++	for _, device := range []string{"", "test-microphone"} {
++		t.Run("device="+device, func(t *testing.T) {
++			r := &recorder{config: Config{
++				SampleRate: 16000,
++				Channels:   1,
++				Format:     "s16",
++				Device:     device,
++			}}
++			// --format selects the sample encoding, not the container. Without
++			// --raw, recent pw-record versions emit AU on stdout, whose header
++			// and big-endian samples cannot be passed to the PCM-to-WAV adapter.
++			want := []string{"--raw", "--format", "s16", "--rate", "16000", "--channels", "1", "-"}
++			if device != "" {
++				want = append(want, "--target", device)
++			}
++			if got := r.buildPwRecordArgs(); !reflect.DeepEqual(got, want) {
++				t.Fatalf("pw-record arguments = %q, want raw PCM arguments %q", got, want)
++			}
++		})
++	}
++}
+diff --git a/internal/recording/recording.go b/internal/recording/recording.go
+index b53c41e..9640385 100644
+--- a/internal/recording/recording.go
++++ b/internal/recording/recording.go
+@@ -204,6 +204,8 @@ func (r *recorder) emitErr(errCh chan<- error, err error) {
+ 
+ func (r *recorder) buildPwRecordArgs() []string {
+ 	args := []string{
++		// The transcriber wraps raw PCM in WAV; stdout may otherwise be big-endian AU.
++		"--raw",
+ 		"--format", r.config.Format,
+ 		"--rate", strconv.Itoa(r.config.SampleRate),
+ 		"--channels", strconv.Itoa(r.config.Channels),
 diff --git a/internal/transcriber/adapter_openai.go b/internal/transcriber/adapter_openai.go
 index 47e8460..f6c7555 100644
 --- a/internal/transcriber/adapter_openai.go

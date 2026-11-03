@@ -15,7 +15,10 @@ git apply "$script_dir/subscription-provider.patch"
 mkdir -p cmd/codex-smoke "$cache_root/tmp"
 cp "$script_dir/smoke.go" cmd/codex-smoke/main.go
 export GOTMPDIR="$cache_root/tmp"
-go test ./internal/config ./internal/provider ./internal/llm ./internal/transcriber
+# Skip upstream microphone integration tests; keep capture argument regressions.
+CI=true go test ./internal/config ./internal/provider ./internal/llm ./internal/transcriber ./internal/recording
+# The upstream notify suite invokes the desktop; this focused test uses a stub.
+go test ./internal/notify -run '^TestErrorsOnlyDesktopNotifications$'
 output=${1:-${XDG_DATA_HOME:-$HOME/.local/share}/hyprvoice-codex}
 mkdir -p "$output"
 go build -o "$output/hyprvoice.next" ./cmd/hyprvoice
