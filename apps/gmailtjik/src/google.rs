@@ -161,7 +161,12 @@ impl Google {
         store.put("history", &final_cursor)
     }
     pub fn page(&mut self, store: &Store, label: &str, query: &str, page: &str) -> Result<Page> {
-        let mut params = vec![("maxResults", "40"), ("q", query)];
+        let query = if label == "INBOX" {
+            exclude_snoozed(query)
+        } else {
+            query.to_owned()
+        };
+        let mut params = vec![("maxResults", "40"), ("q", query.as_str())];
         if !label.is_empty() {
             params.push(("labelIds", label));
         }
@@ -269,6 +274,11 @@ impl Google {
     pub fn mark_all_read(&mut self, store: &Store, label: &str, query: &str) -> Result<usize> {
         // Collect all IDs before mutating: changing unread results while paging can skip mail.
         let query = unread_query(query);
+        let query = if label == "INBOX" {
+            exclude_snoozed(&query)
+        } else {
+            query
+        };
         let mut page = String::new();
         let mut ids = std::collections::BTreeSet::new();
         let mut seen_pages = std::collections::HashSet::new();
@@ -736,6 +746,16 @@ pub fn contact_photo(url: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// Gmail owns the wake-up schedule; its public API exposes search membership,
+/// not the snooze-until timestamp. Keep explicit non-Inbox searches unchanged.
+pub fn exclude_snoozed(query: &str) -> String {
+    if query.trim().is_empty() {
+        "-in:snoozed".into()
+    } else {
+        format!("({query}) -in:snoozed")
+    }
+}
+
 pub fn unread_query(query: &str) -> String {
     if query.trim().is_empty() {
         "is:unread".into()
@@ -797,6 +817,54 @@ mod tests {
             client: http().unwrap(),
             people_api: api.clone(),
             api,
+        }
+    }
+
+    #[test]
+    fn inbox_excludes_snoozed_but_explicit_search_can_find_it() {
+        let (api, requests, thread) = server(vec![(200, json!({})); 4]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let store = Store::open(None).unwrap();
+        google
+            .page(&store, "INBOX", "from:a OR from:b", "next")
+            .unwrap();
+        google
+            .mark_all_read(&store, "INBOX", "from:a OR from:b")
+            .unwrap();
+        google.page(&store, "", "in:snoozed", "").unwrap();
+        google
+            .page(&store, "", &exclude_snoozed("is:unread after:123"), "")
+            .unwrap();
+        thread.join().unwrap();
+        for (index, expected) in [
+            "(from:a OR from:b) -in:snoozed",
+            "((from:a OR from:b) is:unread) -in:snoozed",
+            "in:snoozed",
+            "(is:unread after:123) -in:snoozed",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let request = requests.recv().unwrap();
+            let route = request
+                .lines()
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .nth(1)
+                .unwrap();
+            let url = url::Url::parse(&format!("http://test{route}")).unwrap();
+            let params: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+            assert_eq!(&params["q"], expected);
+            if index < 2 {
+                assert_eq!(params["labelIds"], "INBOX");
+            } else {
+                assert!(!params.contains_key("labelIds"));
+            }
+            if index == 0 {
+                assert_eq!(params["pageToken"], "next");
+            }
         }
     }
 

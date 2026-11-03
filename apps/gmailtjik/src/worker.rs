@@ -217,7 +217,10 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                             let mut notifications_ok = true;
                             // Include filtered AUTH mail outside Inbox, but keep normal mail
                             // notifications scoped to Inbox. Fetching does not mark mail read.
-                            let notification_query = format!("is:unread after:{}", baseline / 1000);
+                            let notification_query = crate::google::exclude_snoozed(&format!(
+                                "is:unread after:{}",
+                                baseline / 1000
+                            ));
                             let mut notification_page =
                                 google.page(&store, "", &notification_query, "")?;
                             loop {

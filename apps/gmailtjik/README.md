@@ -247,6 +247,21 @@ Startup shows the reader even when a local draft was recovered. Choose Compose
 or Ctrl+N to resume that draft; Reply and applying a Codex draft also open the
 composer. Close keeps the draft without reopening it on the next launch.
 
+## Gmail snoozing
+
+Gmail's public API does not expose the snooze-until timestamp. Gmailtjik leaves
+the wake-up schedule with Gmail and adds `-in:snoozed` to Inbox queries,
+Inbox Mark all read, and notification scans. When Gmail returns the mail to
+Inbox, a subsequent sync can show it again. Other labels and explicit searches
+remain unchanged; use `in:snoozed` in search to find snoozed mail.
+This does not implement a local snooze scheduler or promise a wake-up notification
+for old mail: notifications still use the existing arrival-time baseline.
+The query construction is covered by synthetic HTTP tests; account-specific
+Gmail search behavior requires live verification.
+
+References: [Gmail message fields](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages),
+[Gmail search operators](https://support.google.com/mail/answer/7190?hl=en).
+
 ## Codex
 
 Install Codex CLI and sign in using `codex login`. The app launches
