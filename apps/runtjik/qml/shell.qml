@@ -107,7 +107,7 @@ ShellRoot {
     property int historyCursor: -1
     property string historyDraft: ''
     property bool navigatingHistory: false
-    property bool autoCommandPending: false
+    property bool autoActivationPending: false
     function rememberCommand(text) {
         if(!settings.history?.enabled || !text.trim() || !/^[!/?]/.test(text))return;
         if(commandHistory[commandHistory.length-1]===text)return;
@@ -186,18 +186,27 @@ ShellRoot {
         panel.acquireKeyboard();
         root.focusInput();
     }
-    function autoEnterCommand() {
-        if(!autoCommandPending || busy || providerPending || hasMore || windowEntry
+    function autoActivateResult() {
+        if(!autoActivationPending || !opened || busy || providerPending || hasMore || windowEntry
             || pendingAction!==null || results.length!==1 || total!==1 || resultQuery!==query)return;
         const row=results[0];
+        if(row.disabled || !query.trim())return;
         const menus=['/tabs','/browser','/history','/todo','/reading','/define','/synonym',
             '/cliphist','/rec','/grab','/processes','/run','/stats','/config','/bindings'];
-        if(row.provider!=='internal' || !menus.includes(row.id) || row.disabled
-            || !query.trim() || /\s/.test(query.trim()) || query.trim()===row.id)return;
+        if(row.provider==='apps') {
+            if(settings.ui.auto_launch_applications===false)return;
+        } else {
+            if(settings.ui.auto_launch_commands===false)return;
+            if(row.provider!=='commands' && (row.provider!=='internal'
+                || !menus.includes(row.id) || /\s/.test(query.trim())
+                || query.trim()===row.id))return;
+        }
         const requested=query;
-        autoCommandPending=false;
+        autoActivationPending=false;
         Qt.callLater(()=>{
-            if(root.query!==requested || root.busy || root.results.length!==1 || root.results[0].id!==row.id)return;
+            if(!root.opened || root.query!==requested || root.resultQuery!==requested || root.busy
+                || root.providerPending || root.hasMore || root.total!==1 || root.windowEntry
+                || root.pendingAction!==null || root.results.length!==1 || root.results[0].id!==row.id)return;
             root.selected=0;root.activate(false);
         });
     }
@@ -342,7 +351,7 @@ ShellRoot {
             ready=true;captureInitialMonitor();
             applyingResults=false;
             if (pendingAction!==null) {const action=pendingAction;pendingAction=null;Qt.callLater(()=>root.activate(action.switchWindow,action.closeWindow));}
-            else autoEnterCommand();
+            else autoActivateResult();
         } else if (msg.kind === 'edit') {
             searchBox.text=msg.text;
             debounce.stop();root.search();
@@ -594,8 +603,8 @@ ShellRoot {
                                 if(!root.navigatingHistory)root.historyCursor=-1;
                                 root.pointerSelection=false;root.wordSelectionEngaged=false;root.pendingAction=null;root.loadingMore=false;root.pendingSelection=-1;
                                 const previous=root.commandQuery.split(/\s+/)[0];
-                                // Deleting/backtracking must not immediately put the user back into a menu.
-                                root.autoCommandPending=!root.applyingResults && !root.navigatingHistory && text.length>root.query.length;
+                                // Deleting/backtracking and history navigation must not activate results.
+                                root.autoActivationPending=!root.applyingResults && !root.navigatingHistory && text.length>root.query.length;
                                 root.query=text;root.selected=0;
                                 if(!root.windowEntry && !root.applyingResults){
                                     const command=root.commandQuery.split(/\s+/)[0];

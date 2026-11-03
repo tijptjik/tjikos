@@ -225,6 +225,24 @@ pub fn migrate(enable: bool) -> Result<Value> {
 mod tests {
     use super::*;
     #[test]
+    fn automatic_activation_settings_are_independent_and_editable() {
+        let defaults = config::parse("").unwrap();
+        for (key, other) in [
+            ("auto_launch_applications", "auto_launch_commands"),
+            ("auto_launch_commands", "auto_launch_applications"),
+        ] {
+            let path = format!("ui.{key}");
+            assert_eq!(defaults["ui"][key], true);
+            assert!(featured(&defaults).iter().any(|(k, _)| k == &path));
+            let source = edit("", &path, &json!(false)).unwrap();
+            let disabled = config::parse(&source).unwrap();
+            assert_eq!(disabled["ui"][key], false);
+            assert_eq!(disabled["ui"][other], true);
+            assert!(edit("", &path, &json!("false")).is_err());
+        }
+    }
+
+    #[test]
     fn preserves_comments_and_rejects_invalid() {
         let src = "# header\n[ui] # settings\ncolumns = 5 # count\nview = \"grid\"\n";
         let result = edit(src, "ui.columns", &json!(6)).unwrap();

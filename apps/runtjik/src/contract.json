@@ -10,7 +10,9 @@
       "font_size": 14,
       "monitor": "focused",
       "max_results": 100,
-      "keep_alive": true
+      "keep_alive": true,
+      "auto_launch_applications": true,
+      "auto_launch_commands": true
     },
     "theme": {
       "background": "#191724",
@@ -2646,6 +2648,14 @@
     [
       "ui.keep_alive",
       "Keep the launcher warm in memory while hidden"
+    ],
+    [
+      "ui.auto_launch_applications",
+      "Activate an application automatically when typing leaves only one result"
+    ],
+    [
+      "ui.auto_launch_commands",
+      "Activate a command automatically when typing leaves only one result"
     ],
     [
       "ui.view",

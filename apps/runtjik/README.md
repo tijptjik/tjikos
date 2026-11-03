@@ -297,9 +297,15 @@ launch requests, not proof that a GUI window subsequently appeared.
 
 ## Discovery and caching
 
-When typing leaves exactly one navigation command, Runtjik opens it automatically
-(for example, `tabs` enters `/tabs`). Ambiguous results, ordinary apps/tabs, and
-action commands still wait for Enter. Deleting text does not auto-enter a menu.
+When typing leaves exactly one application or command result, Runtjik activates it
+automatically, using the normal Enter behavior. Navigation commands open their menu
+(for example, `tabs` enters `/tabs`). Ambiguous
+results, browser tabs, and other action commands still wait for Enter. Deleting
+text and browsing command history do not activate results automatically.
+
+Control applications and commands separately with `/config ui.auto_launch_applications false`
+and `/config ui.auto_launch_commands false`, or set the same keys in the `[ui]`
+section of `runtjik.conf`. Both default to `true`.
 
 Desktop applications come from XDG data directories, local and system Flatpak
 exports, and Snap desktop entries. Gio handles desktop-entry parsing, locale,
