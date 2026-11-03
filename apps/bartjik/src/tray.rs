@@ -232,6 +232,7 @@ pub async fn open_app(app: &str) -> Result<()> {
         "--user",
         "--collect",
         "--quiet",
+        "--property=ExitType=cgroup",
         "--",
         "gio",
         "launch",

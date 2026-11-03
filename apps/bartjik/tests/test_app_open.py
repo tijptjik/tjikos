@@ -131,7 +131,7 @@ class AppOpenTests(unittest.TestCase):
                 events = self.open_app(app)
                 launches = [e for e in events if e[0] == "systemd-run"]
                 self.assertEqual(len(launches), 1)
-                self.assertEqual(launches[0][1:], ["--user", "--collect", "--quiet", "--", "gio", "launch",
+                self.assertEqual(launches[0][1:], ["--user", "--collect", "--quiet", "--property=ExitType=cgroup", "--", "gio", "launch",
                                                   str(self.root / "user/applications" / filename)])
                 self.assertIn('window = "address:0xabc"', events[-1][-1])
                 self.open_app(app)

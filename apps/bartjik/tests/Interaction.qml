@@ -8,7 +8,7 @@ import "../qml" as App
 ShellRoot {
     id:root
     property var events: []
-    property var theme: ({font:'monospace',iconFont:'Material Symbols Rounded',fontSize:14,iconSize:18,minItemSize:24,maxTextWidth:200,text:'#eeeeee',muted:'#aaaaaa',accent:'#ff53a6',surface:'#222222',border:'#555555'})
+    property var theme: ({font:'monospace',iconFont:'Material Symbols Rounded',fontSize:14,iconSize:18,minItemSize:24,maxTextWidth:200,text:'#eeeeee',muted:'#aaaaaa',accent:'#ff53a6',background:'#222222',surface:'#222222',border:'#555555'})
     function act(action,context,window,row) {events=events.concat([{action:action,context:context}]);}
     PanelWindow {
         id:win;anchors{top:true;left:true}
@@ -27,9 +27,23 @@ ShellRoot {
                 moduleConfig:({text:{actions:{leftClick:['text']}}});context:icon.context
             }
         }
+        Row {
+            x:20;y:65
+            App.Part {
+                id:quotaIcon;kind:'icon';controller:root;window:win;theme:root.theme
+                row:JSON.parse(Quickshell.env('BARTJIK_TEST_QUOTA'))
+                moduleConfig:({provider:'codex'})
+                context:({bar:'fixture',barKey:'DP-2/fixture',monitor:'DP-2',module:'quota'})
+            }
+            App.Part {
+                id:quotaText;kind:'text';controller:root;window:win;theme:root.theme
+                row:quotaIcon.row;moduleConfig:quotaIcon.moduleConfig;context:quotaIcon.context
+            }
+        }
     }
     // Exercise the real island hover layer as well as standalone parts.
     function items(bar,id) {return [{id:'toggle',type:'icon',icon:{kind:'glyph',value:'X'},tooltip:'Notifications : ON'}];}
+    function displayItems(bar,id) {return items(bar,id);}
     function findStatePart(item) {
         if(item.kind==='icon' && item.context?.module==='state')return item;
         for(const child of item.children || []) {const found=findStatePart(child);if(found)return found;}
@@ -57,6 +71,8 @@ ShellRoot {
             else if(kind==='middle')input.mouseClick(icon,12,12,Qt.MiddleButton,Qt.NoModifier,0);
             else if(kind==='double')input.mouseDoubleClickSequence(icon,12,12,Qt.LeftButton,Qt.NoModifier,0);
             else if(kind==='text')input.mouseClick(text,12,12,Qt.LeftButton,Qt.NoModifier,0);
+            else if(kind==='quota-icon')input.mouseClick(quotaIcon,12,12,Qt.LeftButton,Qt.NoModifier,0);
+            else if(kind==='quota-text')input.mouseClick(quotaText,12,12,Qt.LeftButton,Qt.NoModifier,0);
             else if(kind==='up')input.mouseWheel(icon,12,12,Qt.NoButton,Qt.NoModifier,0,120,0);
             else if(kind==='down')input.mouseWheel(icon,12,12,Qt.NoButton,Qt.NoModifier,0,-120,0);
             else if(kind==='enter')input.mouseMove(icon,12,12,0,Qt.NoButton,Qt.NoModifier);

@@ -61,6 +61,9 @@ def main():
                 stderr=log,
                 env={
                     **os.environ,
+                    "BARTJIK_TEST_QUOTA": json.dumps(json.loads(
+                        (ROOT / "src/demo.json").read_text().replace("@ROOT@", str(ROOT))
+                    )["codex"][0]),
                     "QT_QPA_PLATFORM": "wayland"
                     if "--wayland" in sys.argv
                     else "offscreen",
@@ -98,6 +101,14 @@ def main():
                         ctx
                     )
 
+                for part, expected in [("icon", "chatgpt.open"), ("text", "codex-lb.open")]:
+                    event("reset")
+                    event("quota-" + part)
+                    rows = event("status")
+                    assert [r["action"] for r in rows] == [expected], rows
+                    assert rows[0]["context"]["part"] == part, rows
+                    assert rows[0]["context"]["module"] == "quota", rows
+
                 # Qt can defer a hover update until the next input delivery.
                 def moved(kind, inside):
                     event(kind)
@@ -132,7 +143,7 @@ def main():
         if errors:
             raise AssertionError("\n".join(errors))
     print(
-        "Real QML icon/text, all mouse buttons, double-click disambiguation, wheel, hover transitions, island tooltips and anchor context passed"
+        "Real QML icon/text, quota app targets, all mouse buttons, double-click disambiguation, wheel, hover transitions, island tooltips and anchor context passed"
     )
 
 
