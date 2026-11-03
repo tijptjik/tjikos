@@ -929,10 +929,15 @@ Pane {
         const difference=Number(a.kind==='project')-Number(b.kind==='project');
         return projectSort==='first'?-difference:projectSort==='last'?difference:0;
     }
+    function completionProgress(task) {
+        const progress=task.kind==='project'?projectProgress(task):task.subtaskProgress;
+        return progress && progress.total>0?progress.done/progress.total:0;
+    }
     function compareTasks(a,b) {
         const placement=compareProjectPlacement(a,b);
         if(placement)return placement;
         if(sortOrder===4)return String(a.manualOrder || a.id.replace(/-/g,'')+'8').localeCompare(String(b.manualOrder || b.id.replace(/-/g,'')+'8')) || a.id.localeCompare(b.id);
+        if(sortOrder===5)return completionProgress(b)-completionProgress(a) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
         if(sortOrder>=2)return (sortOrder===3?-1:1)*a.title.localeCompare(b.title);
         const ad=effectiveDue(a),bd=effectiveDue(b);
         if(!ad || !bd)return ad?-1:bd?1:a.title.localeCompare(b.title);
@@ -1084,7 +1089,7 @@ Pane {
             QuietButton {visible:collection==='reading';text:'Grid';quiet:!app.readingGrid;onClicked:app.readingGrid=true}
             Item {visible:collection==='reading';Layout.fillWidth:true}
             Choice {visible:collection==='reading';model:['Recently saved','Title: A–Z','Site: A–Z'];currentIndex:app.readingSort;implicitWidth:145;onActivated:app.readingSort=currentIndex}
-            Choice {objectName:'sortChoice';visible:collection!=='reading';model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
+            Choice {objectName:'sortChoice';visible:collection!=='reading';model:['Due: soonest','Due: latest','Title: A–Z','Title: Z–A','Manual','Progress'];currentIndex:app.sortOrder;implicitWidth:140;onActivated:app.sortOrder=currentIndex}
             IconButton {symbol:'search';description:collection==='reading'?'Filter saved pages (/)':'Filter tasks (/)' ;checkable:true;checked:app.searching;onClicked:{app.searching=checked;if(checked)filterInput.forceActiveFocus();else {filterInput.text='';app.focusList();}}}
             IconButton {symbol:'completed';description:collection==='reading'?'Show read pages':'Show completed tasks';checkable:true;checked:app.showCompleted;onClicked:app.showCompleted=checked}
             IconButton {symbol:collection==='reading'?'categories':'cancelled';description:collection==='reading'?'Group pages by category':'Show cancelled tasks';checkable:true;checked:collection==='reading'?app.readingCategories:app.showCancelled;onClicked:{if(collection==='reading')app.readingCategories=checked;else app.showCancelled=checked}}

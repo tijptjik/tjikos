@@ -81,7 +81,7 @@ s = s.replace('    Component.onCompleted:', '''    TestCase {id:pointer;name:"Dr
     IpcHandler {
         target:"drag-test"
         function state():string {return JSON.stringify({tasks:view.stateData.tasks,rows:view.listState.tasks,order:view.dropGroups.reduce((order,g)=>{order[g.modelData]=view.tasks(g.modelData).map(t=>t.id);return order;},{}),sort:view.sortOrder,drag:!!view.dragTask,pending:view.pendingMove,sent:view.moveSent,busy:view.requestBusy,group:view.dropGroup,before:view.dropBefore,error:view.errorMessage});}
-        function manual():void {const c=pointer.findChild(view,'sortChoice');pointer.mouseClick(c,c.width/2,c.height/2,Qt.LeftButton);pointer.wait(250);pointer.keyClick(Qt.Key_End);pointer.keyClick(Qt.Key_Return);pointer.wait(250);if(view.sortOrder!==4)throw new Error('Manual selection failed: '+view.sortOrder);}
+        function manual():void {const c=pointer.findChild(view,'sortChoice');pointer.mouseClick(c,c.width/2,c.height/2,Qt.LeftButton);pointer.wait(250);pointer.keyClick(Qt.Key_End);pointer.keyClick(Qt.Key_Up);pointer.keyClick(Qt.Key_Return);pointer.wait(250);if(view.sortOrder!==4)throw new Error('Manual selection failed: '+view.sortOrder);}
         function sort(mode:int):void {view.sortOrder=mode;}
         function groupPoint(name:string):string {const g=view.dropGroups.find(g=>g.modelData===name);pointer.wait(200);const target=g.visible?g:pointer.findChild(view,'drag-group-'+name);const p=target.mapToItem(view,g.visible?60:target.width/2,g.visible?g.height-8:target.height/2);return JSON.stringify({x:p.x,y:p.y});}
         function labels():string {return JSON.stringify({sort:pointer.findChild(view,'sortChoice').model,enable:!!pointer.findChild(view,'enableDragging')});}
@@ -166,7 +166,7 @@ with (root / 'qml.log').open('w') as log:
     try:
         wait(lambda: len(current()['tasks']) == 3 and not current()['busy'])
         assert current()['sort'] == 0
-        assert json.loads(ipc('labels')) == {'sort': ['Due: soonest', 'Due: latest', 'Title: A–Z', 'Title: Z–A', 'Manual'], 'enable': False}
+        assert json.loads(ipc('labels')) == {'sort': ['Due: soonest', 'Due: latest', 'Title: A–Z', 'Title: Z–A', 'Manual', 'Progress'], 'enable': False}
         (home / 'hold-move').touch()
         point = drag('Tech', anchor['id'])
         wait(lambda: json.loads(ipc('row', anchor['id']))['gap'] > 0)
@@ -194,7 +194,7 @@ with (root / 'qml.log').open('w') as log:
         settle()
 
         # Every automatic sort permits dragging and sorts before the write completes.
-        for mode in [1, 2, 3]:
+        for mode in [1, 2, 3, 5]:
             ipc('sort', mode)
             drop(drag('Work'))
             settle()

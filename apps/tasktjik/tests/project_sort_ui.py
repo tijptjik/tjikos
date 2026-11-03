@@ -48,6 +48,9 @@ ShellRoot {
         function state():string {return JSON.stringify({mode:view.projectSort,rows:view.tasks('All').map(t=>t.id),due:view.effectiveDue(view.stateData.tasks[1])});}
         function choose(index:int):void {const settings=input.findChild(view,'task-settings');settings.open();const choice=input.findChild(settings,'project-sort-choice');choice.currentIndex=index;choice.activated(index);settings.close();}
         function sort(index:int):void {view.sortOrder=index;}
+        function progressFixture(value:string):void {view.stateData=JSON.parse(value);}
+        function progressState():string {return JSON.stringify({sort:view.sortOrder,rows:view.tasks('All').map(t=>({id:t.id,progress:view.completionProgress(t)}))});}
+        function progressChoice():void {const choice=input.findChild(view,'sortChoice');const index=choice.model.indexOf('Progress');choice.currentIndex=index;choice.activated(index);if(view.sortOrder!==5)throw new Error('Progress selection failed');}
         function due(value:string):void {const next=JSON.parse(JSON.stringify(view.stateData));next.tasks[3].due=value;view.stateData=next;}
         function capture(path:string):void {const settings=input.findChild(view,'task-settings');settings.open();input.wait(150);settings.panelItem.grabToImage(image=>image.saveToFile(path));}
         function quit():void {Qt.quit();}
@@ -84,7 +87,7 @@ with (root / 'qml.log').open('w') as log:
         assert state_now()['rows'] == ['middle', 'project', 'empty']
         for mode, index in [('first', 0), ('last', 1)]:
             ipc('choose', index)
-            for order in range(5):
+            for order in range(6):
                 ipc('sort', order)
                 rows = state_now()['rows']
                 assert rows[-1 if mode == 'first' else 0] == 'middle', (mode, order, rows)
@@ -98,9 +101,20 @@ with (root / 'qml.log').open('w') as log:
         process = subprocess.Popen(['quickshell', '--path', str(qml)], env=env, stdout=log, stderr=log)
         wait(state_now)
         assert state_now()['mode'] == 'last' and state_now()['rows'][0] == 'middle', state_now()
+        ipc('choose', 2)
+        progress_tasks = [task('zero'), task('half'), task('quarter'), task('full'), task('also-half'), task('empty-progress')]
+        for row, done, total in zip(progress_tasks[1:], [1, 2, 3, 2, 0], [2, 8, 3, 4, 0]):
+            row['subtaskProgress'] = dict(done=done, total=total)
+        fixture = dict(tasks=progress_tasks, groups=['All'], today='2099-02-01')
+        ipc('progressFixture', json.dumps(fixture))
+        ipc('progressChoice')
+        assert state_now()['rows'] == ['full', 'also-half', 'half', 'quarter', 'empty-progress', 'zero'], ipc('progressState')
+        progress_tasks[2]['subtaskProgress']['done'] = 6
+        ipc('progressFixture', json.dumps(fixture))
+        assert state_now()['rows'] == ['full', 'quarter', 'also-half', 'half', 'empty-progress', 'zero'], state_now()
         errors = (root / 'qml.log').read_text()
         assert not any(word in errors for word in ['TypeError', 'ReferenceError', 'Binding loop', 'Cannot assign']), errors
-        print('PASS project placement across all sorts, earliest active hidden member, undated projects, reactive dates, settings and persistence:', root)
+        print('PASS project placement across all sorts, earliest active hidden member, undated projects, reactive dates, settings, persistence and reactive percentage sorting:', root)
     finally:
         if process.poll() is None:
             process.terminate();process.wait(timeout=5)
