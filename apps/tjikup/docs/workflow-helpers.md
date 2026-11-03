@@ -66,6 +66,47 @@ fleet identity and executes the remote command once. Use each command's help.
 policy. Synctjik owns enrollment, restoration, readiness and backup scheduling.
 `workflow install NAME` loads native/installers.json, verifies release identity,
 SHA-256 and installed bytes, and preserves newer installed versions.
+
+GitHub release metadata is revalidated with ETags in the private
+`$XDG_CACHE_HOME/tjikup/releases` cache (default `~/.cache`). Failed requests
+remain failures; cached metadata is only reused after a successful HTTP 304.
+`latest: true` selects GitHub's latest stable release. Versions come from
+`tag_name`, and assets are selected by exact expanded filename with their
+published SHA-256 digest and size.
+
+Flatpak release bundles use the same verification with a `flatpak-bundle` policy:
+
+```json
+{
+  "pdfcraft": {
+    "repository": "storytold/pdfcraft",
+    "latest": true,
+    "asset": "pdfcraft-{version}-linux-{arch}.flatpak",
+    "kind": "flatpak-bundle",
+    "flatpak": {
+      "app_id": "ai.storyteller.pdfcraft",
+      "branch": "stable",
+      "installation": "system"
+    }
+  }
+}
+```
+
+`installation` accepts `system` (using noninteractive sudo) or `user`. Branch
+defaults to `stable`; architecture is the native runner's architecture. The
+bundle is first staged in a temporary user installation without runtimes or
+launching the app, so verification needs space for an extra expanded copy.
+Its app ID, architecture, branch and version must match policy and the GitHub
+release. Deployment uses `flatpak install --bundle --or-update`, then verifies
+the installed ref, version and full commit against the staged bundle.
+
+`TJIKUP_OPERATION=update` skips absent apps; `install` skips present apps. Equal
+or newer installed versions are preserved. Receipts and per-app locks live in
+`$XDG_STATE_HOME/tjikup/installers/flatpak` (default `~/.local/state`). Successful
+receipts record the release asset digest and verified deployed identity. App
+data and running processes are retained; reopen an updated app to load it.
+`capabilities` advertises `flatpak_bundle_installers: 1`.
+
 `workflow desktop` owns Zed launcher preservation, icon override retirement and
 duplicate-launcher cleanup. `timing take|accept` validates report transfers;
 `progress` displays bounded transfer metrics without reading terminal input.

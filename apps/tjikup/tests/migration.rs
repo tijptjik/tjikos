@@ -37,6 +37,7 @@ fn command(root: &Path) -> Command {
         .env("DOTJIK_REPO", root)
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env("XDG_STATE_HOME", root.join("state"))
+        .env("XDG_CACHE_HOME", root.join("cache"))
         .env("PATH", root.join("bin"));
     c
 }
@@ -178,7 +179,7 @@ fn installer_digest_failure_preserves_existing_version_and_profile() {
     write(&r.join("home/profile"), "private profile");
     write(&r.join("native/installers.json"),json!({"fixture":{"repository":"owner/tool","latest":true,"asset":"tool","kind":"raw","binary":"tool","prefix":"{home}/tool/{version}","links":{"{home}/.local/bin/tool":"{prefix}/tool"}}}).to_string());
     let release=json!({"tag_name":"v1.2.3","assets":[{"name":"tool","browser_download_url":"https://github.com/owner/tool/releases/download/v1.2.3/tool","digest":format!("sha256:{}","0".repeat(64))}]}).to_string();
-    executable(&r.join("bin/curl"),&format!("#!/bin/sh\nfor arg; do\n if [ \"$save\" = yes ]; then printf bad > \"$arg\"; exit 0; fi\n [ \"$arg\" != --output ] || save=yes\ndone\nprintf '%s' '{}'\n",release));
+    executable(&r.join("bin/curl"),&format!("#!/bin/sh\nfor arg; do\n if [ \"$headers\" = yes ]; then printf 'HTTP/1.1 200 OK\\r\\n\\r\\n' > \"$arg\"; headers=no; fi\n [ \"$arg\" != --dump-header ] || headers=yes\n if [ \"$save\" = yes ]; then printf bad > \"$arg\"; exit 0; fi\n [ \"$arg\" != --output ] || save=yes\ndone\nprintf '%s' '{}'\n",release));
     let output = command(r)
         .args(["workflow", "install", "fixture"])
         .output()
@@ -366,7 +367,7 @@ fn installer_activates_verified_bytes_repairs_tampering_and_never_downgrades() {
     let digest = format!("{:x}", Sha256::digest(bytes));
     write(&r.join("native/installers.json"),json!({"fixture":{"repository":"owner/tool.name","latest":true,"asset":"tool","kind":"raw","binary":"tool","prefix":"{home}/tool/{version}","links":{"{home}/.local/bin/tool":"{prefix}/tool"}}}).to_string());
     let release = json!({"tag_name":"v1.2.3","assets":[{"name":"tool","browser_download_url":"https://github.com/owner/tool.name/releases/download/v1.2.3/tool","digest":format!("sha256:{digest}")}]});
-    executable(&r.join("bin/curl"), &format!("#!/bin/sh\nfor arg; do\n if [ \"$save\" = yes ]; then printf '#!/bin/sh\\nexit 0\\n' > \"$arg\"; exit 0; fi\n [ \"$arg\" != --output ] || save=yes\ndone\nprintf '%s' '{}'\n", release));
+    executable(&r.join("bin/curl"), &format!("#!/bin/sh\nfor arg; do\n if [ \"$headers\" = yes ]; then printf 'HTTP/1.1 200 OK\\r\\n\\r\\n' > \"$arg\"; headers=no; fi\n [ \"$arg\" != --dump-header ] || headers=yes\n if [ \"$save\" = yes ]; then printf '#!/bin/sh\\nexit 0\\n' > \"$arg\"; exit 0; fi\n [ \"$arg\" != --output ] || save=yes\ndone\nprintf '%s' '{}'\n", release));
     let run = || {
         command(r)
             .args(["workflow", "install", "fixture"])

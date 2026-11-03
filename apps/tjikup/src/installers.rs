@@ -6,11 +6,14 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs,
-    io::{Read, Write},
+    io::Read,
     os::unix::fs::{symlink, PermissionsExt},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
+
+mod flatpak;
+mod metadata;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -38,6 +41,8 @@ struct Policy {
     latest: bool,
     #[serde(default)]
     user_alias: Option<String>,
+    #[serde(default)]
+    flatpak: Option<flatpak::Policy>,
 }
 pub fn version(value: &str) -> Option<[u64; 3]> {
     let parts: Vec<_> = value
@@ -109,40 +114,7 @@ fn token() -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 fn metadata(url: &str) -> Result<Value> {
-    if !url.starts_with("https://api.github.com/repos/") {
-        bail!("unexpected metadata origin");
-    }
-    let mut command = Command::new("curl");
-    command.args([
-        "--proto",
-        "=https",
-        "--silent",
-        "--show-error",
-        "--fail",
-        "--max-time",
-        "60",
-        "--user-agent",
-        "tjikup-installer",
-        "--header",
-        "Accept: application/vnd.github+json",
-    ]);
-    // Metadata redirects are not followed. Credentials never reach asset hosts.
-    let mut header = None;
-    if let Some(token) = token() {
-        if token.contains(['\r', '\n']) {
-            bail!("invalid GitHub credential");
-        }
-        let mut file = tempfile::NamedTempFile::new()?;
-        writeln!(file, "Authorization: Bearer {token}")?;
-        command.args(["--header", &format!("@{}", file.path().display())]);
-        header = Some(file);
-    }
-    let result = command.arg(url).output()?;
-    drop(header);
-    if !result.status.success() {
-        bail!("GitHub metadata lookup failed; check network access and GitHub authentication");
-    }
-    serde_json::from_slice(&result.stdout).context("invalid GitHub release metadata")
+    metadata::fetch(url, token())
 }
 fn release(policy: &Policy) -> Result<Value> {
     let parts: Vec<_> = policy.repository.split('/').collect();
@@ -194,6 +166,71 @@ fn digest(asset: &Value) -> Result<String> {
         bail!("invalid release digest");
     }
     Ok(text.to_ascii_lowercase())
+}
+fn asset_url<'a>(policy: &Policy, asset: &'a Value, tag: &str, name: &str) -> Result<&'a str> {
+    let url = asset["browser_download_url"]
+        .as_str()
+        .context("asset URL missing")?;
+    if url
+        != format!(
+            "https://github.com/{}/releases/download/{tag}/{name}",
+            policy.repository
+        )
+    {
+        bail!("unexpected release asset origin");
+    }
+    Ok(url)
+}
+fn download_asset(asset: &Value, url: &str, target: &Path) -> Result<()> {
+    let expected = digest(asset)?;
+    run(Command::new("curl")
+        .args([
+            "--proto",
+            "=https",
+            "--proto-redir",
+            "=https",
+            "--fail",
+            "--location",
+            "--silent",
+            "--show-error",
+            "--retry",
+            "3",
+            "--connect-timeout",
+            "20",
+            "--max-time",
+            "600",
+            "--output",
+        ])
+        .arg(target)
+        .arg(url))?;
+    if binary_digest(target)? != expected
+        || asset["size"]
+            .as_u64()
+            .is_some_and(|s| fs::metadata(target).map(|m| m.len() != s).unwrap_or(true))
+    {
+        bail!("release checksum or size mismatch");
+    }
+    Ok(())
+}
+fn flatpak_receipt(policy: &flatpak::Policy) -> Result<PathBuf> {
+    let state = std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or(crate::commands::home()?.join(".local/state"));
+    let directory = state.join("tjikup/installers/flatpak");
+    fs::create_dir_all(&directory)?;
+    fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))?;
+    let key = format!(
+        "{}/{}/{}/{}",
+        policy.installation,
+        policy.app_id,
+        std::env::consts::ARCH,
+        policy.branch
+    );
+    Ok(directory.join(format!("{:x}.json", Sha256::digest(key))))
+}
+fn flatpak_report(name: &str, changed: bool, note: &str) {
+    let verb = if changed { "UPDATE" } else { "SKIP" };
+    println!("{verb:<7} ✓ {name}    {note}\n__stage_verb__:{verb}");
 }
 fn activate(policy: &Policy, link: &Path, target: &Path) -> Result<bool> {
     if let Ok(meta) = fs::symlink_metadata(link) {
@@ -288,19 +325,58 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
             },
         ),
     ]);
-    if std::env::consts::ARCH != "x86_64" && name != "obsidian" {
+    if std::env::consts::ARCH != "x86_64" && name != "obsidian" && policy.kind != "flatpak-bundle" {
         bail!("this installer policy supports x86_64 only");
     }
+    let flatpak = if policy.kind == "flatpak-bundle" {
+        Some(
+            policy
+                .flatpak
+                .as_ref()
+                .context("flatpak-bundle requires flatpak policy")?,
+        )
+    } else {
+        if policy.flatpak.is_some() {
+            bail!("flatpak policy requires kind flatpak-bundle");
+        }
+        None
+    };
+    let receipt = if !metadata_only {
+        flatpak.map(flatpak_receipt).transpose()?
+    } else {
+        None
+    };
+    let _lock = receipt
+        .as_ref()
+        .map(|p| crate::process::Lock::acquire(&p.with_extension("lock")))
+        .transpose()?;
     let declared_links: Vec<_> = policy
         .links
         .keys()
         .map(|l| PathBuf::from(expand(l, &vars)))
         .collect();
-    let present = declared_links.first().is_some_and(|p| p.is_file());
+    let present = if metadata_only {
+        false
+    } else if let Some(flatpak) = flatpak {
+        flatpak.installed()?.is_some()
+    } else {
+        declared_links.first().is_some_and(|p| p.is_file())
+    };
     let operation = std::env::var("TJIKUP_OPERATION").unwrap_or_default();
     if !metadata_only
         && ((operation == "install" && present) || (operation == "update" && !present))
     {
+        if flatpak.is_some() {
+            flatpak_report(
+                name,
+                false,
+                if present {
+                    "already installed"
+                } else {
+                    "not installed"
+                },
+            );
+        }
         return Ok(false);
     }
     for link in &declared_links {
@@ -324,6 +400,49 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
     if metadata_only {
         println!("{v}|{}", digest(asset.context("release asset missing")?)?);
         return Ok(false);
+    }
+    if let Some(flatpak) = flatpak {
+        if !flatpak.needs_update(v)? {
+            flatpak_report(name, false, "installed version is current or newer");
+            return Ok(false);
+        }
+        let asset = asset.context("release asset missing")?;
+        let url = asset_url(policy, asset, tag, &asset_name)?;
+        if asset["size"].as_u64().is_none_or(|s| s == 0) {
+            bail!("Flatpak release asset size missing or empty");
+        }
+        let temp = tempfile::tempdir()?;
+        let bundle = temp.path().join("release.flatpak");
+        let before = flatpak.installed()?.map(|installed| installed.version);
+        download_asset(asset, url, &bundle)?;
+        let installed = flatpak.install(&bundle, v)?;
+        let changed = installed.is_some();
+        if let Some(installed) = installed {
+            let receipt = receipt.context("Flatpak receipt path missing")?;
+            let mut file = tempfile::NamedTempFile::new_in(receipt.parent().unwrap())?;
+            serde_json::to_writer_pretty(
+                &mut file,
+                &serde_json::json!({
+                    "repository": policy.repository, "tag": tag, "asset": asset_name,
+                    "sha256": digest(asset)?, "installation": flatpak.installation,
+                    "installed": installed,
+                }),
+            )?;
+            file.as_file().sync_all()?;
+            file.persist(receipt)?;
+            let note = match before {
+                Some(old) => format!("{old} → {v}; reopen the app"),
+                None => format!("{v}; installed"),
+            };
+            flatpak_report(name, true, &note);
+        } else {
+            flatpak_report(
+                name,
+                false,
+                "installation changed while checking; preserved current state",
+            );
+        }
+        return Ok(changed);
     }
     let mut prefix = PathBuf::from(expand(&policy.prefix, &vars));
     let mut old_version = None;
@@ -438,59 +557,11 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
         } else {
             let asset = asset.context("release asset missing")?;
             let expected = digest(asset)?;
-            let url = asset["browser_download_url"]
-                .as_str()
-                .context("asset URL missing")?;
-            if url
-                != format!(
-                    "https://github.com/{}/releases/download/{tag}/{asset_name}",
-                    policy.repository
-                )
-            {
-                bail!("unexpected release asset origin");
-            }
+            let url = asset_url(policy, asset, tag, &asset_name)?;
             let current = fs::read_to_string(prefix.join(".installed")).unwrap_or_default();
             if !installed_binary_matches(&prefix, &target) || current.trim() != expected {
                 let download = temp.path().join("download");
-                run(Command::new("curl")
-                    .args([
-                        "--proto",
-                        "=https",
-                        "--proto-redir",
-                        "=https",
-                        "--fail",
-                        "--location",
-                        "--silent",
-                        "--show-error",
-                        "--retry",
-                        "3",
-                        "--connect-timeout",
-                        "20",
-                        "--max-time",
-                        "600",
-                        "--output",
-                    ])
-                    .arg(&download)
-                    .arg(url))?;
-                let mut file = fs::File::open(&download)?;
-                let mut hasher = Sha256::new();
-                let mut buf = [0u8; 65536];
-                loop {
-                    let count = file.read(&mut buf)?;
-                    if count == 0 {
-                        break;
-                    }
-                    hasher.update(&buf[..count]);
-                }
-                if format!("{:x}", hasher.finalize()) != expected
-                    || asset["size"].as_u64().is_some_and(|s| {
-                        fs::metadata(&download)
-                            .map(|m| m.len() != s)
-                            .unwrap_or(true)
-                    })
-                {
-                    bail!("release checksum or size mismatch");
-                }
+                download_asset(asset, url, &download)?;
                 let candidate = if policy.kind == "tar.gz" {
                     let p = temp.path().join("binary");
                     extract_binary(&download, &policy.binary, &p)?;
