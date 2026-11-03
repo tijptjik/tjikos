@@ -641,8 +641,7 @@ impl Bridge {
                     .suffix(".tmp")
                     .tempfile_in(output.parent().unwrap())?;
                 run(
-                    Command::new(std::env::current_exe()?)
-                        .arg("media-render")
+                    crate::media::converter_command()
                         .arg(source)
                         .arg(pending.path())
                         .arg(format),

@@ -9,6 +9,16 @@ use std::{
     process::{Command, Stdio},
     time::{Duration, Instant},
 };
+
+pub fn converter_command() -> Command {
+    // The bridge can outlive an atomic app update. current_exe() then resolves
+    // to a deleted pathname; procfs still opens the running executable's inode.
+    // Keep the converter on the bridge's version until the bridge restarts.
+    let mut command = Command::new("/proc/self/exe");
+    command.arg("media-render");
+    command
+}
+
 pub fn render(root: &Path, source: &Path, output: &Path, format: &str) -> Result<()> {
     for (resource, limit) in [
         (libc::RLIMIT_CPU, 20),
@@ -205,4 +215,47 @@ pub fn render(root: &Path, source: &Path, output: &Path, format: &str) -> Result
         _ => bail!("Unsupported conversion format"),
     };
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn converter_survives_executable_replacement() {
+        const CHILD: &str = "NOTJIK_TEST_REPLACED_CONVERTER";
+        const TEST: &str = "media::tests::converter_survives_executable_replacement";
+        if std::env::var_os(CHILD).is_some() {
+            let executable = std::env::current_exe().unwrap();
+            // Reproduce the installer's atomic replacement while this copy runs.
+            let replacement = executable.with_extension("pending");
+            std::fs::copy("/usr/bin/false", &replacement).unwrap();
+            std::fs::rename(replacement, &executable).unwrap();
+            assert!(!std::env::current_exe().unwrap().exists());
+            let command = converter_command();
+            // This is a Rust test executable, so inspect its test list instead
+            // of passing the production CLI's media-render argument.
+            let result = Command::new(command.get_program())
+                .arg("--list")
+                .output()
+                .unwrap();
+            assert!(result.status.success());
+            assert!(String::from_utf8_lossy(&result.stdout).contains(TEST));
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let executable = temp.path().join("notjik-test");
+        std::fs::copy(std::env::current_exe().unwrap(), &executable).unwrap();
+        let result = Command::new(executable)
+            .args(["--exact", TEST, "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
 }
