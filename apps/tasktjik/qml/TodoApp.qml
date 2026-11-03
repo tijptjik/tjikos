@@ -349,17 +349,18 @@ Pane {
         if(doubleDTimer.running && pendingD===selectedId){doubleDTimer.stop();pendingD='';purgeSelected();}
         else {pendingD=selectedId;doubleDTimer.restart();}
     }
-    TapHandler {
-        gesturePolicy:TapHandler.DragThreshold
-        onTapped:eventPoint=>{
-            const p=eventPoint.position;
-            let inside=false;
-            for(const group of app.dropGroups)for(let i=0;i<group.rows.count;i++){
-                const row=group.rows.itemAt(i),q=row.mapFromItem(app,p.x,p.y);
-                if(q.x>=0 && q.x<row.width && q.y>=0 && q.y<row.height)inside=true;
-            }
-            if(!inside){app.taskSelectionActive=false;doubleDTimer.stop();app.pendingD='';}
-        }
+    function defocusTask() {
+        if(editor || groupRename || dragTask)return;
+        taskSelectionActive=false;
+        doubleDTimer.stop();pendingD='';
+        filterInput.focus=false;
+        listKeyboardFocus.forceActiveFocus();
+    }
+    // Only unhandled clicks reach this background; controls keep their actions.
+    MouseArea {
+        anchors.fill:parent;z:-1
+        enabled:!app.editor && !app.groupRename && !app.dragTask
+        onClicked:app.defocusTask()
     }
     function reorderTask(direction) {
         if(!selected || pendingSave || pendingPurge || completing || dragTask || (pendingMove && !moveOperation.keyboard))return;
@@ -408,7 +409,7 @@ Pane {
         else if(next.y+next.height>flick.contentY+flick.height)flick.contentY=Math.max(0,Math.min(flick.contentHeight-flick.height,next.y+next.height-flick.height));
     }
     function focusVertical(direction,modifiers) {
-        if(!taskSelectionActive){taskSelectionActive=true;focusRow(navigationRows().find(r=>r.id===selectedId && r.subtaskId===selectedSubtaskId));return;}
+        if(!taskSelectionActive){restoreTaskFocus();return;}
         if(modifiers & Qt.ShiftModifier){focusList();reorderTask(direction);return;}
         if(collection==='reading'){readingPane.navigate(direction,false);return;}
         const rows=(modifiers & Qt.ControlModifier)?visualRows().map(r=>Object.assign({},r,{subtaskId:''})):navigationRows();
@@ -417,7 +418,7 @@ Pane {
         focusRow(rows[index<0?(direction>0?0:rows.length-1):(index+direction+rows.length)%rows.length]);
     }
     function focusColumn(direction) {
-        if(!taskSelectionActive){taskSelectionActive=true;focusList();return;}
+        if(!taskSelectionActive){restoreTaskFocus();return;}
         if(collection==='reading'){readingPane.navigate(direction,true);return;}
         const rows=visualRows();
         const current=rows.find(r=>r.id===selectedId);
@@ -944,6 +945,12 @@ Pane {
         return (sortOrder===1?-1:1)*ad.localeCompare(bd) || a.title.localeCompare(b.title);
     }
     Item {id:listKeyboardFocus}
+    function restoreTaskFocus() {
+        const rows=navigationRows();
+        const previous=rows.find(r=>r.id===selectedId && r.subtaskId===selectedSubtaskId)
+            || rows.find(r=>r.id===selectedId);
+        if(previous)focusRow(previous);else focusList();
+    }
     function focusList() {
         taskSelectionActive=true;
         selectedSubtaskId='';
@@ -1002,8 +1009,9 @@ Pane {
         y:taskScroll.parent.y+taskScroll.y
         width:taskScroll.width/2-16
         height:taskScroll.height
+        onBackgroundClicked:app.defocusTask()
         // Keep clicks and wheel events inside the details pane.
-        MouseArea {anchors.fill:parent;z:-1;onWheel:wheel=>{wheel.accepted=true;}}
+        MouseArea {anchors.fill:parent;z:-1;onClicked:app.defocusTask();onWheel:wheel=>{wheel.accepted=true;}}
     }
     Keys.onPressed: event=>{
         if(dragTask){if(event.key===Qt.Key_Escape && !pendingMove)cancelDrag();event.accepted=true;return;}
@@ -1111,6 +1119,7 @@ Pane {
             theme:app.theme;sites:visible?app.readingSites():[];grid:app.readingGrid;categories:app.readingCategories;selectedId:app.selectedId
             onSelectSite:id=>{app.selectedId=id;app.focusList();}
             onOpenSite:id=>{app.selectedId=id;app.action('open-reference');}
+            onBackgroundClicked:app.defocusTask()
         }
         KineticScrollView {
             id: taskScroll;objectName:'task-scroll'
@@ -1118,6 +1127,7 @@ Pane {
             visible:!editor && collection!=='reading';Layout.fillWidth:true;Layout.fillHeight:true;clip:true
             contentWidth:availableWidth
             ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
+            onBackgroundClicked:app.defocusTask()
             ColumnLayout {
                 width:taskScroll.availableWidth;spacing:14
                 Item {

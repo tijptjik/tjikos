@@ -54,6 +54,36 @@ ShellRoot {
         target:'navigation-test'
         function state():string {return JSON.stringify({selected:view.selectedId,rows:view.testGeometry()});}
         function inputState():string {return JSON.stringify(view.testInputState());}
+        function backgroundFocus():string {
+            const first=view.visualRows()[0];
+            const check=(condition,message)=>{if(!condition)throw Error(message);};
+            const click=(x,y)=>{keyboard.mouseClick(view,x,y);keyboard.wait(30);};
+            const scroll=keyboard.findChild(view,'task-scroll');
+            const gap=scroll.mapToItem(view,scroll.width/2,scroll.height-8);
+            for(const point of [{x:2,y:2},{x:30,y:30},{x:view.width/2,y:view.height-25},gap]) {
+                for(const key of [Qt.Key_Down,Qt.Key_Up,Qt.Key_Left,Qt.Key_Right]) {
+                    view.focusRow(first);
+                    click(point.x,point.y);
+                    check(!view.taskSelectionActive,'background did not clear focus '+JSON.stringify(point));
+                    keyboard.keyClick(key);
+                    check(view.taskSelectionActive && view.selectedId===first.id,'arrow did not restore same task');
+                }
+            }
+            // Controls retain their behavior and must not count as background.
+            view.focusRow(first);
+            const edit=keyboard.findChild(view,'edit-task');
+            keyboard.mouseClick(edit,edit.width/2,edit.height/2);keyboard.wait(30);
+            check(view.editor==='edit' && view.taskSelectionActive,'action click cleared selection');
+            keyboard.keyClick(Qt.Key_Escape);
+            keyboard.keyClick(Qt.Key_Slash);
+            check(view.testInputState().filterFocus,'filter not focused');
+            click(2,2);
+            check(!view.taskSelectionActive && !view.testInputState().filterFocus,'background retained filter focus');
+            keyboard.keyClick(Qt.Key_Down);
+            check(view.taskSelectionActive && view.selectedId===first.id,'filter swallowed restore arrow');
+            keyboard.keyClick(Qt.Key_Slash);keyboard.keyClick(Qt.Key_Escape);
+            return 'PASS';
+        }
         function clickRow():void {
             const first=view.visualRows()[0];
             view.focusRow(first);
@@ -133,6 +163,7 @@ with (root / 'qml.log').open('w') as log:
         ipc('select', first['id'])
         ipc('key', 'Right')
         assert state()['selected'] == expected['id']
+        assert ipc('backgroundFocus').strip() == 'PASS'
         ipc('resize', 1500)
         check_navigation(3)
         ipc('completed', 'false')

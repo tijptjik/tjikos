@@ -6,6 +6,7 @@ import Quickshell.Io
 
 Rectangle {
     id: panel
+    signal backgroundClicked()
     property var theme
     property var task: null
     property var sources: ({})
@@ -60,6 +61,7 @@ Rectangle {
         Label {text:panel.task?panel.task.title:'';textFormat:Text.PlainText;color:theme.text;font.pixelSize:16;font.weight:Font.DemiBold;Layout.fillWidth:true;wrapMode:Text.Wrap;maximumLineCount:2;elide:Text.ElideRight}
         KineticScrollView {
             id:scroll
+            onBackgroundClicked:panel.backgroundClicked()
             Layout.fillWidth:true;Layout.fillHeight:true;clip:true
             contentWidth:availableWidth
             ScrollBar.horizontal.policy:ScrollBar.AlwaysOff

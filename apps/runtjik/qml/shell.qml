@@ -503,6 +503,7 @@ ShellRoot {
             opacity: panel.placed ? 1 : 0
             MouseArea {
                 objectName: 'windowDragArea'
+                onClicked:if(todoApp.visible && !todoApp.editor && !todoApp.groupRename)todoApp.defocusTask()
                 anchors.fill: parent
                 cursorShape: Qt.OpenHandCursor
                 property point pressPoint

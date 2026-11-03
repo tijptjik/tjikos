@@ -3,6 +3,7 @@ import QtQuick.Controls
 
 ScrollView {
     id: root
+    signal backgroundClicked()
     property real wheelStep: 160
     property real wheelSpeedLimit: 2800
     property real wheelDeceleration: 8000
@@ -17,6 +18,16 @@ ScrollView {
     }
     onVisibleChanged:if(!visible)stopWheelScroll()
     onEnabledChanged:if(!enabled)stopWheelScroll()
+
+    // Flickable consumes blank viewport presses before an outer background can.
+    // Put this behind its content so controls and drag gestures retain priority.
+    // Keep it out of the content item so automatic content sizing still works.
+    MouseArea {
+        parent:root.contentItem
+        anchors.fill:parent
+        onClicked:root.backgroundClicked()
+    }
+    Binding {target:root.contentItem.contentItem;property:'z';value:1}
 
     function scrollWheel(event) {
         const flick=contentItem;

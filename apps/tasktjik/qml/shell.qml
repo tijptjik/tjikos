@@ -60,6 +60,11 @@ ShellRoot {
         title: 'Tasktjik'
         implicitWidth: 860; implicitHeight: 680
         color: '#26233a'
+        MouseArea {
+            anchors.fill:parent
+            enabled:!view.editor && !view.groupRename && !view.dragTask
+            onClicked:view.defocusTask()
+        }
         TodoApp {
             id: view
             anchors.fill: parent; anchors.margins: 20

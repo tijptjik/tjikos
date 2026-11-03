@@ -75,6 +75,18 @@ shell.write_text(shell.read_text().replace('import QtQuick\n','import QtQuick\ni
         function subfocus(id:string):string {const row=pointer.findChild(view,'subtask-'+id),chevron=pointer.findChild(view,'subtask-chevron-'+id);return JSON.stringify({selected:row.selected,chevron:chevron.visible,queue:view.completionQueue.length});}
         function select(id:string):void {view.selectedId=id;view.focusList();}
         function key(code:int):void {pointer.keyClick(code);}
+        function backgroundFocus():string {
+            const task=view.selectedId,subtask=view.selectedSubtaskId;
+            for(const key of [Qt.Key_Up,Qt.Key_Down,Qt.Key_Left,Qt.Key_Right]) {
+                // The window padding lies outside TodoApp itself.
+                pointer.mouseClick(view.parent,2,2);pointer.wait(30);
+                const chevron=pointer.findChild(view,'subtask-chevron-'+subtask);
+                if(view.taskSelectionActive || chevron.visible)throw Error('padding did not clear subtask focus');
+                pointer.keyClick(key);
+                if(!view.taskSelectionActive || view.selectedId!==task || view.selectedSubtaskId!==subtask || !chevron.visible)throw Error('arrow lost remembered subtask');
+            }
+            return 'PASS';
+        }
         function open(id:string):void {view.enterProject(view.stateData.tasks.find(t=>t.id===id));}
         function expand(id:string):void {view.toggleExpanded(id);}
         function toggle(id:string,subtask:string):void {view.toggleCompletion(id,subtask);}
@@ -117,6 +129,7 @@ with (root/'qml.log').open('w') as log:
         assert state()['subtask']==ids['instruction'] and not state()['queue'], (state()['subtask'],state()['queue'])
         focus=json.loads(ipc('subfocus',ids['instruction']))
         assert focus['selected'] and focus['chevron'], focus
+        assert ipc('backgroundFocus').strip() == 'PASS'
         ordered=[r['id'] for r in state()['rows']]
         next_top=ordered[(ordered.index(member['id'])+1)%len(ordered)]
         ipc('keymod',0x01000015,0x04000000)
