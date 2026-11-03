@@ -121,7 +121,10 @@ pub fn render(root: &Path, source: &Path, output: &Path, format: &str) -> Result
                     lib.symbol("lottie_animation_get_size")?;
                 let render: unsafe extern "C" fn(Ptr, usize, *mut u32, usize, usize, usize) =
                     lib.symbol("lottie_animation_render")?;
-                let json = CString::new(data.to_string())?;
+                // rlottie's streaming parser depends on Lottie property order.
+                // Validate through serde above, but preserve the source bytes:
+                // serializing Value sorts keys and can silently erase shapes.
+                let json = CString::new(raw)?;
                 let empty = CString::new("")?;
                 let ptr = create(json.as_ptr(), empty.as_ptr(), empty.as_ptr());
                 ensure!(!ptr.is_null(), "Invalid sticker animation");

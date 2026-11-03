@@ -594,7 +594,7 @@ impl Bridge {
             .unwrap_or(0);
         let digest = format!(
             "{:x}",
-            Sha256::digest(format!("{}{stamp}v1", path.display()).as_bytes())
+            Sha256::digest(format!("{}{stamp}v2", path.display()).as_bytes())
         );
         let out_format = if format == "webp" { "png" } else { "gif" };
         let output = telegram_dir()

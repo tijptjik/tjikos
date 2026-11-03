@@ -134,6 +134,20 @@ class NativeContracts(unittest.TestCase):
             self.run_cli("media-render",str(ROOT/"examples"/filename),str(output),kind,timeout=40)
             self.assertTrue(output.read_bytes().startswith(signature))
             self.assertEqual(output.stat().st_mode&0o777,0o600)
+            if kind == "tgs":
+                # A valid GIF header also passes for an entirely blank render.
+                # Check visible, changing pixels from the synthetic animation.
+                frames = subprocess.run([
+                    "ffmpeg", "-v", "error", "-i", str(output),
+                    "-vf", "select=eq(n\\,0)+eq(n\\,20),scale=64:64",
+                    "-fps_mode", "passthrough", "-frames:v", "2",
+                    "-f", "rawvideo", "-pix_fmt", "rgba", "pipe:1",
+                ], capture_output=True, check=True, timeout=15).stdout
+                size = 64 * 64 * 4
+                self.assertEqual(len(frames), size * 2)
+                self.assertTrue(any(frames[3:size:4]), "TGS first frame is transparent")
+                self.assertTrue(any(frames[size + 3::4]), "TGS later frame is transparent")
+                self.assertNotEqual(frames[:size], frames[size:], "TGS animation is frozen")
         with gzip.open(ROOT/"examples/demo-sticker.tgs","rb") as stream: data=json.load(stream)
         data["assets"]=[{"u":"/etc/","p":"passwd"}]
         source=self.path/"external.tgs"
