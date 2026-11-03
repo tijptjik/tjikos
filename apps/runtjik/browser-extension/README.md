@@ -20,8 +20,9 @@ errors, see [installation and troubleshooting](../docs/browser-install.md).
    If your browser build uses a different native-host directory, pass
    `--manifest-dir PATH`.
    Flatpak/Snap sandbox integration is not implemented.
-3. Install the Mozilla-signed release XPI using `about:addons` → gear →
-   **Install Add-on From File**, or use its AMO listing once published. Accept
+3. Install from the [AMO listing](https://addons.mozilla.org/en-GB/firefox/addon/runtjik/),
+   or install its Mozilla-signed release XPI using `about:addons` → gear →
+   **Install Add-on From File**. Accept
    the browsing-activity permissions. It loads automatically on every browser
    start. Requires Firefox 142+ or a compatible Zen version. The ZIP produced
    by the local build is unsigned and is not a permanent-install artifact.

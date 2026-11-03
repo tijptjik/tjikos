@@ -5,12 +5,11 @@ The bridge connects Runtjik to native Linux Zen or Firefox. It requires Firefox
 focusing uses Hyprland. Flatpak/Snap integration, Android, macOS and Windows are
 not supported by this installation guide.
 
-Version 0.3.0 was submitted to Mozilla on 2026-10-31 and was awaiting review at
-the last check. The listing below becomes usable after approval. Uploading the
-extension does not mean it has been approved; a local unsigned ZIP cannot serve
-as the permanent installation.
+Version 0.3.0 passed Mozilla's automated screening and is publicly available as
+of 2026-11-03. Mozilla may review it further. Install the signed release from
+the listing below; a local unsigned ZIP cannot serve as the permanent installation.
 
-## Install after approval
+## Install
 
 1. Build and install Runtjik using the repository's normal installation workflow.
    Its installer also registers the native messaging host. Existing installations
@@ -20,7 +19,7 @@ as the permanent installation.
    bash ~/.local/lib/runtjik/browser-extension/install-host.sh
    ```
 
-2. Open the [Runtjik Browser Bridge listing](https://addons.mozilla.org/en-US/firefox/addon/runtjik-browser-bridge/)
+2. Open the [Runtjik Browser Bridge listing](https://addons.mozilla.org/en-GB/firefox/addon/runtjik/)
    **in the Zen/Firefox profile you normally use** and install it. Accept the
    browsing-activity permissions. Alternatively, install the Mozilla-signed XPI
    through `about:addons` → gear → **Install Add-on From File**. An end user does
@@ -75,7 +74,7 @@ is required. Remove `history_profiles` to disable offline access.
 
 | Symptom | Check or action |
 | --- | --- |
-| Listing unavailable or no signed XPI yet | Check Mozilla review status; wait for approval. Do not install the unsigned build ZIP or disable signature checks. |
+| Listing unavailable | Use the current `/runtjik/` listing linked above and check its availability on AMO. Do not install the unsigned build ZIP or disable signature checks. |
 | Extension disappears after restarting | Check `about:addons` for a signed installation in the same profile. Loading through `about:debugging` is temporary. |
 | “Browser bridge disconnected” | Start the correct profile, enable the bridge, wait at least five seconds, and refresh the query. Repair host registration if necessary, then restart the browser. |
 | Browser reports missing native host | Check `~/.mozilla/native-messaging-hosts/org.tjikos.runtjik_browser.json` and that its `path` names an executable installed wrapper. The native host name is `org.tjikos.runtjik_browser`. Custom browser builds may need `install-host.sh --manifest-dir PATH`; Flatpak/Snap need integration not provided here. |
@@ -88,7 +87,7 @@ is required. Remove `history_profiles` to disable offline access.
 
 ## Release acceptance
 
-After approval, use a normal native browser profile and record the browser and
+For each signed release, use a normal native browser profile and record the browser and
 extension versions alongside these results:
 
 - Install the signed release, quit the entire browser, restart, and verify

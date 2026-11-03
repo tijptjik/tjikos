@@ -25,12 +25,12 @@ also create an unsigned extension ZIP. They never submit or sign it.
 
 ## Publication and review
 
-Version 0.3.0 has already been submitted:
-[Mozilla submission](https://addons.mozilla.org/en-US/developers/addon/runtjik-browser-bridge/versions/6645275).
-It was awaiting review at the last check on 2026-10-31. Do not resubmit that
-version while waiting. After approval, follow the
+Version 0.3.0 passed Mozilla's automated screening and is publicly available as
+of 2026-11-03; further review remains possible.
+[Mozilla submission](https://addons.mozilla.org/en-US/developers/addon/runtjik/versions/6645275).
+Follow the
 [installation and restart checklist](../docs/browser-install.md) using the
-[public listing](https://addons.mozilla.org/en-US/firefox/addon/runtjik-browser-bridge/).
+[public listing](https://addons.mozilla.org/en-GB/firefox/addon/runtjik/).
 Keep the submitted package unchanged; prepare extension changes under a new
 version. The steps below describe the publication workflow for future releases.
 
