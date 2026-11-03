@@ -1,4 +1,5 @@
 //! Kitty Unicode placeholders scroll with the text; no absolute image overlays.
+use crate::terminal_output::{eprint, eprintln};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
 use std::{

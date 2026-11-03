@@ -4,6 +4,7 @@ use crate::{
     config::{Config, Presentation, Recipe},
     graphics::Graphics,
     report::Event,
+    terminal_output::{eprint, eprintln, Frame},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -805,6 +806,7 @@ impl Progress {
         }
     }
     pub fn tick(&mut self) {
+        let _frame = Frame::new();
         // Paint the repository cells and activity line as one terminal frame.
         // Kitty (and other supporting terminals) must not display intermediate
         // cursor moves or half-written rows.

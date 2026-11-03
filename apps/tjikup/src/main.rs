@@ -24,6 +24,7 @@ mod stage_progress;
 mod system_maintenance;
 mod template_cache;
 mod templates;
+mod terminal_output;
 mod workflow;
 mod workflow_capture;
 mod workflow_files;
