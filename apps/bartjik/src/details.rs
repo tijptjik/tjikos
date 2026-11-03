@@ -171,6 +171,8 @@ pub fn quota(rows: &[Value], summary: Vec<Value>) -> Value {
         &tooltip,
         json!({}),
     );
+    result["icon"]["actions"] = json!({"leftClick":"chatgpt.open"});
+    result["text"]["actions"] = json!({"leftClick":"codex-lb.open"});
     let mut rows_out = vec![crate::config::merge(
         &field(
             "Weekly remaining",

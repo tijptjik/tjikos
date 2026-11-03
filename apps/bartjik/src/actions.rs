@@ -236,6 +236,8 @@ pub async fn execute(
         }
     } else {
         match action {
+            "chatgpt.open" => crate::tray::open_app("chatgpt").await?,
+            "codex-lb.open" => crate::tray::open_app("codex-lb").await?,
             "locale.cycle" => {
                 let _lock = FileLock::acquire("bartjik-locale.lock").await?;
                 let current = cmd(&["fcitx5-remote", "--check", "-n"]).await?;

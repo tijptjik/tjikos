@@ -53,6 +53,31 @@ fn hostile_items_and_history() {
     assert!(navigation::parse_state(b"1234567890#\x08\x10", "AAAAAAAAAAAAAAAAAAAAAA").is_err());
 }
 
+#[test]
+fn quota_parts_open_separate_apps_and_allow_overrides() {
+    use crate::*;
+    use serde_json::json;
+    let row = details::quota(&[], vec![]);
+    for row in [&row, &demo::items("codex", &json!({}))[0]] {
+        assert_eq!(
+            actions::choose(&json!({}), row, "icon", "leftClick"),
+            "chatgpt.open"
+        );
+        assert_eq!(
+            actions::choose(&json!({}), row, "text", "leftClick"),
+            "codex-lb.open"
+        );
+        assert!(actions::choose(&json!({}), row, "icon", "rightClick").is_null());
+        assert!(actions::choose(
+            &json!({"icon":{"actions":{"leftClick":null}}}),
+            row,
+            "icon",
+            "leftClick"
+        )
+        .is_null());
+    }
+}
+
 fn equivalent(a: &serde_json::Value, b: &serde_json::Value) -> bool {
     use serde_json::Value;
     match (a, b) {

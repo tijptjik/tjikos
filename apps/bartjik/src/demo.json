@@ -628,12 +628,12 @@
         "kind": "image",
         "value": "@ROOT@/qml/icons/codex.svg",
         "style": {},
-        "actions": {}
+        "actions": {"leftClick": "chatgpt.open"}
       },
       "text": {
         "value": "83%",
         "style": {},
-        "actions": {}
+        "actions": {"leftClick": "codex-lb.open"}
       },
       "actions": {},
       "panel": {

@@ -138,6 +138,9 @@ pub fn select<'a>(app: &str, clients: &'a Value) -> Option<&'a Value> {
         "spotify" => &["spotify", "com.spotify.client"],
         _ => return None,
     };
+    select_class(clients, names, app == "telegram")
+}
+fn select_class<'a>(clients: &'a Value, names: &[&str], telegram: bool) -> Option<&'a Value> {
     arr(clients)
         .iter()
         .filter(|c| {
@@ -145,12 +148,105 @@ pub fn select<'a>(app: &str, clients: &'a Value) -> Option<&'a Value> {
                 && ["class", "initialClass"].iter().any(|k| {
                     let name = s(&c[k]).to_lowercase();
                     names.iter().any(|n| {
-                        name == *n || (app == "telegram" && name.starts_with(&format!("{n}._")))
+                        name.eq_ignore_ascii_case(n)
+                            || (telegram && name.starts_with(&format!("{n}._")))
                     })
                 })
         })
         .min_by_key(|c| c["focusHistoryID"].as_i64().unwrap_or(9999))
 }
+
+fn desktop_app(app: &str) -> Result<(std::path::PathBuf, String)> {
+    let mut dirs = vec![xdg("XDG_DATA_HOME", ".local/share")];
+    dirs.extend(std::env::split_paths(
+        &std::env::var_os("XDG_DATA_DIRS").unwrap_or_else(|| "/usr/local/share:/usr/share".into()),
+    ));
+    let mut seen = std::collections::HashSet::new();
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(dir.join("applications")) else {
+            continue;
+        };
+        let mut paths: Vec<_> = entries.flatten().map(|e| e.path()).collect();
+        paths.sort();
+        for path in paths {
+            if path.extension().is_none_or(|e| e != "desktop")
+                || !seen.insert(path.file_name().unwrap().to_os_string())
+            {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let mut entry = std::collections::HashMap::new();
+            let mut main = false;
+            for line in text.lines().map(str::trim) {
+                if line.starts_with('[') {
+                    main = line == "[Desktop Entry]";
+                } else if main && !line.starts_with('#') {
+                    if let Some((key, value)) = line.split_once('=') {
+                        entry.insert(key.trim(), value.trim());
+                    }
+                }
+            }
+            let name = entry.get("Name").copied().unwrap_or("");
+            let expected = if app == "codex-lb" {
+                "Codex LB"
+            } else {
+                "ChatGPT"
+            };
+            if entry.get("Type") == Some(&"Application")
+                && entry.get("Hidden") != Some(&"true")
+                && (name.eq_ignore_ascii_case(expected)
+                    || path.file_stem().is_some_and(|id| id == app))
+            {
+                let class = entry
+                    .get("StartupWMClass")
+                    .copied()
+                    .unwrap_or(app)
+                    .to_owned();
+                return Ok((path, class));
+            }
+        }
+    }
+    anyhow::bail!("{app} desktop app is not installed")
+}
+
+pub async fn open_app(app: &str) -> Result<()> {
+    ensure!(["chatgpt", "codex-lb"].contains(&app), "Unknown app");
+    let _lock = crate::actions::FileLock::acquire(&format!("bartjik-open-{app}.lock")).await?;
+    let desktop = desktop_app(app);
+    let class = desktop
+        .as_ref()
+        .map(|(_, class)| class.as_str())
+        .unwrap_or(app);
+    let names = [app, class];
+    if let Some(client) = select_class(&workspaces::query("clients").await?, &names, false) {
+        return focus_client(client).await;
+    }
+    let (path, _) = desktop
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Give the app its own service so it survives subsequent bar restarts.
+    cmd(&[
+        "systemd-run",
+        "--user",
+        "--collect",
+        "--quiet",
+        "--",
+        "gio",
+        "launch",
+        &path.to_string_lossy(),
+    ])
+    .await?;
+    for _ in 0..100 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        if let Some(client) = select_class(&workspaces::query("clients").await?, &names, false) {
+            return focus_client(client).await;
+        }
+    }
+    anyhow::bail!("{app} did not expose a window after launch")
+}
+
 pub async fn focus(app: &str) -> Result<()> {
     ensure!(
         ["chatgpt", "telegram", "zapzap", "codex", "spotify"].contains(&app),
@@ -189,6 +285,9 @@ pub async fn focus(app: &str) -> Result<()> {
         }
     }
     let c = client.context("Tray activation did not expose a window")?;
+    focus_client(&c).await
+}
+async fn focus_client(c: &Value) -> Result<()> {
     let address = s(&c["address"]);
     ensure!(
         regex::Regex::new(r"^0x[0-9a-fA-F]+$")?.is_match(address),
@@ -209,6 +308,20 @@ pub async fn focus(app: &str) -> Result<()> {
     ])
     .await?;
     let w = s(&c["workspace"]["name"]);
+    let current_special = s(&m["specialWorkspace"]["name"]);
+    if current_special != w {
+        if let Some(special) = current_special.strip_prefix("special:") {
+            cmd(&[
+                "hyprctl",
+                "dispatch",
+                &format!(
+                    "hl.dsp.workspace.toggle_special({})",
+                    workspaces::lua(special)
+                ),
+            ])
+            .await?;
+        }
+    }
     if let Some(special) = w.strip_prefix("special:") {
         if m["specialWorkspace"]["name"] != w {
             cmd(&[

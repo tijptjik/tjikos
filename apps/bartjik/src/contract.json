@@ -92,6 +92,8 @@
     "audio.up",
     "battery.panel",
     "caffeine.toggle",
+    "chatgpt.open",
+    "codex-lb.open",
     "crypto.panel",
     "datetime.toggle",
     "locale.cycle",
