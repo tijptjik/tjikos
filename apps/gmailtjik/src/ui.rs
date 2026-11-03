@@ -179,6 +179,19 @@ impl MailApp {
     ) -> Self {
         let store =
             Store::open(dir.as_deref()).expect("Private cache must open before the UI starts");
+        if demo && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("saved-draft") {
+            store
+                .put(
+                    "composer",
+                    &Draft {
+                        to: "friend@example.test".into(),
+                        subject: "Saved synthetic draft".into(),
+                        body: "Keep this draft until I choose Compose.".into(),
+                        ..Default::default()
+                    },
+                )
+                .expect("Synthetic draft must be saved");
+        }
         let draft = store.draft().unwrap_or_default();
         let (labels, page) = if demo {
             model::demo()
@@ -345,7 +358,8 @@ impl MailApp {
         let selected = page.messages.first().cloned();
         let contacts_demo =
             demo && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("contacts");
-        let composing = contacts_demo || !draft.body.is_empty() || !draft.to.is_empty();
+        // Restore draft contents, but leave opening the composer to an explicit action.
+        let composing = contacts_demo;
         let focus = cx.focus_handle();
         focus.focus(window, cx);
         let mut this = Self {
@@ -2756,8 +2770,9 @@ impl MailApp {
                             .ghost()
                             .label("Close · keep draft")
                             .disabled(self.compose_busy)
-                            .on_click(cx.listener(|this, _, _, cx| {
+                            .on_click(cx.listener(|this, _, window, cx| {
                                 this.composing = false;
+                                this.focus.focus(window, cx);
                                 cx.notify();
                             })),
                     ),
@@ -3188,8 +3203,9 @@ impl Render for MailApp {
                                 "Compose"
                             })
                             .flex_shrink_0()
-                            .on_click(cx.listener(|this, _, _, cx| {
+                            .on_click(cx.listener(|this, _, window, cx| {
                                 this.composing = true;
+                                this.to.read(cx).focus_handle(cx).focus(window, cx);
                                 cx.notify();
                             })),
                     )

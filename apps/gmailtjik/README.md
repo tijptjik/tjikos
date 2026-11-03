@@ -243,6 +243,10 @@ a label/message or scrolls the reader. Ctrl+F focuses search and Ctrl+N opens th
 composer. Arrow keys inside text inputs keep their normal editing behavior.
 Sending still requires the Send button and recipient review.
 
+Startup shows the reader even when a local draft was recovered. Choose Compose
+or Ctrl+N to resume that draft; Reply and applying a Codex draft also open the
+composer. Close keeps the draft without reopening it on the next launch.
+
 ## Codex
 
 Install Codex CLI and sign in using `codex login`. The app launches

@@ -50,6 +50,17 @@ with private_compositor(isolate_pointer=True):
                 time.sleep(.3)
                 subprocess.run(["grim", "-o", "GMAIL", str(root / name)], check=True)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "saved-draft":
+                # Startup must show the reader even with a recovered local draft.
+                click(1320, 48)
+                capture("saved-draft-open.png")
+                click(1320, 106)
+                capture("saved-draft-closed.png")
+                subprocess.run(["wtype", "-s", "150", "-M", "ctrl", "-k", "n", "-m", "ctrl"], check=True)
+                capture("saved-draft-resumed.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "list-actions":
                 click(285, 145)
                 capture("unread-only.png")
