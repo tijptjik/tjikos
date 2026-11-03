@@ -1,3 +1,4 @@
+//@ pragma AppId tasktjik
 import QtQuick
 import QtQuick.Controls
 import Quickshell
