@@ -160,12 +160,15 @@ impl Store {
                     }
                 }
             }
-            page.messages.retain(|m| {
+            page.retain_conversations(|m| {
                 (label.is_empty() || m.label_ids.contains(&label))
                     && (label == "TRASH" || !m.label_ids.iter().any(|l| l == "TRASH"))
             });
             self.save_page(&key, &page)?;
         }
+        // A thread cache must not resurrect pre-action read/label state in the reader.
+        self.db
+            .execute("DELETE FROM kv WHERE key LIKE 'thread:%'", [])?;
         self.invalidate(id)
     }
     pub fn page(&self, key: &str) -> Result<Option<Page>> {
@@ -175,8 +178,9 @@ impl Store {
                 r.get(0)
             })
             .optional()?;
-        json.map(|s| serde_json::from_str(&s).map_err(Into::into))
-            .transpose()
+        let page: Option<Page> = json.map(|s| serde_json::from_str(&s)).transpose()?;
+        // Old message-page cursors are not interchangeable with thread-page cursors.
+        Ok(page.filter(|page| page.threaded))
     }
     pub fn save_page(&self, key: &str, page: &Page) -> Result<()> {
         self.db.execute(
@@ -231,6 +235,39 @@ mod tests {
             .unwrap();
         assert!(status.success());
         first.db.execute_batch("ROLLBACK").unwrap();
+    }
+
+    #[test]
+    fn conversation_cache_keeps_sent_members_until_the_thread_leaves_inbox() {
+        let store = Store::open(None).unwrap();
+        let page = crate::model::demo_conversations().1;
+        let key = crate::worker::key("INBOX", "", "");
+        store.save_page(&key, &page).unwrap();
+        store
+            .apply_labels("demo-0", &[], &["UNREAD".into()])
+            .unwrap();
+        assert_eq!(
+            store.page(&key).unwrap().unwrap().conversations()[0]
+                .messages
+                .len(),
+            3
+        );
+        for id in ["demo-0", "demo-received-reply", "demo-reply-0"] {
+            store.apply_labels(id, &[], &["INBOX".into()]).unwrap();
+        }
+        let cached = store.page(&key).unwrap().unwrap();
+        assert_eq!(cached.conversations().len(), 2);
+        assert!(cached.messages.iter().all(|m| m.thread_id != "thread-0"));
+    }
+
+    #[test]
+    fn old_message_pages_are_not_reused_as_thread_pages() {
+        let store = Store::open(None).unwrap();
+        let mut page = crate::model::demo().1;
+        page.threaded = false;
+        page.next = "message-cursor".into();
+        store.save_page("old", &page).unwrap();
+        assert!(store.page("old").unwrap().is_none());
     }
 
     #[test]

@@ -238,8 +238,132 @@ impl Google {
         Ok(Page {
             messages,
             next: value["nextPageToken"].as_str().unwrap_or_default().into(),
+            threaded: false,
         })
     }
+    pub fn thread_page(
+        &mut self,
+        store: &Store,
+        label: &str,
+        query: &str,
+        page: &str,
+    ) -> Result<Page> {
+        let query = if label == "INBOX" {
+            exclude_snoozed(query)
+        } else {
+            query.to_owned()
+        };
+        let mut params = vec![("maxResults", "40"), ("q", query.as_str())];
+        if !label.is_empty() {
+            params.push(("labelIds", label));
+        }
+        if label == "TRASH" || label == "SPAM" {
+            params.push(("includeSpamTrash", "true"));
+        }
+        if !page.is_empty() {
+            params.push(("pageToken", page));
+        }
+        let value = self.get("threads", &params)?;
+        let ids: Vec<_> = value["threads"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|row| row["id"].as_str())
+            .collect();
+        let token = self.auth.token()?;
+        let mut messages = Vec::new();
+        // Fetch complete conversations, including sent replies, with bounded concurrency.
+        // Do not reuse thread caches here: a new reply may change the membership.
+        for chunk in ids.chunks(6) {
+            let threads = std::thread::scope(|scope| {
+                let jobs: Vec<_> = chunk
+                    .iter()
+                    .map(|id| {
+                        let client = &self.client;
+                        let token = &token;
+                        let api = &self.api;
+                        scope.spawn(move || -> Result<Vec<Message>> {
+                            let value = read(
+                                client,
+                                token,
+                                &format!("{api}threads/{}", segment(id)),
+                                &[("format", "full")],
+                            )?;
+                            let mut messages: Vec<Message> =
+                                serde_json::from_value(value["messages"].clone())?;
+                            for message in &mut messages {
+                                fetch_text_parts(
+                                    client,
+                                    token,
+                                    api,
+                                    &message.id,
+                                    &mut message.payload,
+                                )?;
+                            }
+                            messages.sort_by_key(|m| m.internal_date.parse::<i64>().unwrap_or(0));
+                            Ok(messages)
+                        })
+                    })
+                    .collect();
+                jobs.into_iter()
+                    .map(|job| {
+                        job.join()
+                            .map_err(|_| anyhow::anyhow!("Gmail thread fetch worker stopped"))?
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })?;
+            for (id, thread) in chunk.iter().zip(threads) {
+                for message in &thread {
+                    store.save_message(message)?;
+                }
+                store.put(&format!("thread:{id}"), &thread)?;
+                messages.extend(thread);
+            }
+        }
+        Ok(Page {
+            messages,
+            next: value["nextPageToken"].as_str().unwrap_or_default().into(),
+            threaded: true,
+        })
+    }
+
+    pub fn modify_thread(
+        &mut self,
+        id: &str,
+        add: &[String],
+        remove: &[String],
+        trash: bool,
+    ) -> Result<Vec<String>> {
+        let token = self.auth.token()?;
+        let action = if trash { "trash" } else { "modify" };
+        let mut request = self
+            .client
+            .post(format!("{}threads/{}/{action}", self.api, segment(id)))
+            .bearer_auth(token);
+        if !trash {
+            request = request.json(&json!({"addLabelIds":add,"removeLabelIds":remove}));
+        }
+        let response = request.send()?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "Gmail did not confirm the conversation change ({})",
+            response.status()
+        );
+        let value: Value = response.json()?;
+        let messages = value["messages"]
+            .as_array()
+            .context("Gmail did not return the changed conversation")?;
+        messages
+            .iter()
+            .map(|m| {
+                m["id"]
+                    .as_str()
+                    .map(str::to_owned)
+                    .context("Missing changed message ID")
+            })
+            .collect()
+    }
+
     pub fn thread(&mut self, store: &Store, id: &str) -> Result<Vec<Message>> {
         let value = self.get(&format!("threads/{}", segment(id)), &[("format", "full")])?;
         let mut messages: Vec<Message> = serde_json::from_value(value["messages"].clone())?;
@@ -818,6 +942,91 @@ mod tests {
             people_api: api.clone(),
             api,
         }
+    }
+
+    #[test]
+    fn thread_pages_include_all_members_and_use_thread_cursors() {
+        let fixture = crate::model::demo_conversations().1;
+        let first = &fixture.messages[..3];
+        let second = &fixture.messages[3..4];
+        let (api, requests, thread) = server(vec![
+            (
+                200,
+                json!({"threads":[{"id":"thread-0"}],"nextPageToken":"thread-next"}),
+            ),
+            (200, json!({"messages":first})),
+            (200, json!({"threads":[{"id":"thread-2"}]})),
+            (200, json!({"messages":second})),
+        ]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let store = Store::open(None).unwrap();
+        let page = google.thread_page(&store, "INBOX", "", "").unwrap();
+        assert!(page.threaded);
+        assert_eq!(page.conversations().len(), 1);
+        assert_eq!(page.conversations()[0].messages.len(), 3);
+        assert_eq!(
+            page.conversations()[0].participants("you@example.test"),
+            "Mira Chen, me"
+        );
+        let next = google.thread_page(&store, "INBOX", "", &page.next).unwrap();
+        assert_eq!(next.conversations().len(), 1);
+        assert_eq!(next.messages[0].thread_id, "thread-2");
+        assert!(next.next.is_empty());
+        thread.join().unwrap();
+        let requests: Vec<_> = requests.try_iter().collect();
+        assert!(requests[0].starts_with("GET /threads?"));
+        assert!(requests[0].contains("labelIds=INBOX"));
+        assert!(requests[0].contains("q=-in%3Asnoozed"));
+        assert!(requests[1].starts_with("GET /threads/thread-0?format=full"));
+        assert!(requests[2].contains("pageToken=thread-next"));
+        assert!(requests[3].starts_with("GET /threads/thread-2?format=full"));
+    }
+
+    #[test]
+    fn conversation_actions_use_thread_endpoints_and_report_all_members() {
+        let (api, requests, thread) = server(vec![
+            (
+                200,
+                json!({"messages":[{"id":"a"},{"id":"b"},{"id":"sent"}]}),
+            ),
+            (
+                200,
+                json!({"messages":[{"id":"a"},{"id":"b"},{"id":"sent"}]}),
+            ),
+            (403, json!({})),
+        ]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        assert_eq!(
+            google
+                .modify_thread("conversation", &[], &["INBOX".into()], false)
+                .unwrap(),
+            ["a", "b", "sent"]
+        );
+        assert_eq!(
+            google
+                .modify_thread("conversation", &[], &[], true)
+                .unwrap()
+                .len(),
+            3
+        );
+        assert!(
+            google
+                .modify_thread("conversation", &[], &["UNREAD".into()], false)
+                .is_err()
+        );
+        thread.join().unwrap();
+        let first = requests.recv().unwrap();
+        assert!(first.starts_with("POST /threads/conversation/modify "));
+        let body: Value = serde_json::from_str(first.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(body["removeLabelIds"], json!(["INBOX"]));
+        assert!(
+            requests
+                .recv()
+                .unwrap()
+                .starts_with("POST /threads/conversation/trash ")
+        );
     }
 
     #[test]

@@ -50,6 +50,25 @@ with private_compositor(isolate_pointer=True):
                 time.sleep(.3)
                 subprocess.run(["grim", "-o", "GMAIL", str(root / name)], check=True)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "threads":
+                # Six messages form three conversations, with counts 3, 1 and 2.
+                click(885, 106)
+                capture("thread-marked-read.png")
+                subprocess.run(["wtype", "-s", "150", "-k", "Escape", "r"], check=True)
+                capture("thread-reply.png")
+                click(1320, 106)
+                subprocess.run(["wtype", "-s", "150", "a"], check=True)
+                capture("thread-archived.png")
+                # Move down by one conversation, not by one underlying message.
+                subprocess.run(["wtype", "-s", "150", "-k", "Down"], check=True)
+                capture("thread-keyboard-next.png")
+                subprocess.run(["wtype", "-s", "150", "d"], check=True)
+                capture("thread-trashed.png")
+                click(80, 274)
+                capture("thread-trash-folder.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "saved-draft":
                 # Startup must show the reader even with a recovered local draft.
                 click(1320, 48)

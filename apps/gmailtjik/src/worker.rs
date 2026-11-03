@@ -20,6 +20,7 @@ pub enum Command {
     },
     Modify {
         id: String,
+        thread: String,
         add: Vec<String>,
         remove: Vec<String>,
     },
@@ -27,7 +28,10 @@ pub enum Command {
         label: String,
         query: String,
     },
-    Trash(String),
+    Trash {
+        id: String,
+        thread: String,
+    },
     ContactPhotos(Vec<String>),
     Contacts {
         query: String,
@@ -71,7 +75,7 @@ pub enum Event {
     },
     Error(String),
     Modified {
-        id: String,
+        ids: Vec<String>,
         add: Vec<String>,
         remove: Vec<String>,
     },
@@ -210,7 +214,7 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                                 labels: labels.clone(),
                                 email: email.clone(),
                             });
-                            let page = google.page(&store, "INBOX", "", "")?;
+                            let page = google.thread_page(&store, "INBOX", "", "")?;
                             store.save_page(&key("INBOX", "", ""), &page)?;
                             let _ = events.send(Event::Inbox(page.clone()));
                             let rules = crate::rules::load(&store)?;
@@ -305,7 +309,7 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                                 });
                             }
                             google.changes(&store)?;
-                            let page = google.page(&store, &label, &query, &page)?;
+                            let page = google.thread_page(&store, &label, &query, &page)?;
                             store.save_page(&cache_key, &page)?;
                             let _ = events.send(Event::Page {
                                 ticket,
@@ -330,10 +334,22 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                             let messages = google.thread(&store, &id)?;
                             let _ = events.send(Event::Thread { id, messages });
                         }
-                        Command::Modify { id, add, remove } => {
-                            google.modify(&id, &add, &remove)?;
-                            store.apply_labels(&id, &add, &remove)?;
-                            let _ = events.send(Event::Modified { id, add, remove });
+                        Command::Modify {
+                            id,
+                            thread,
+                            add,
+                            remove,
+                        } => {
+                            let ids = if thread.is_empty() {
+                                google.modify(&id, &add, &remove)?;
+                                vec![id]
+                            } else {
+                                google.modify_thread(&thread, &add, &remove, false)?
+                            };
+                            for id in &ids {
+                                store.apply_labels(id, &add, &remove)?;
+                            }
+                            let _ = events.send(Event::Modified { ids, add, remove });
                         }
                         Command::MarkAllRead { label, query } => {
                             let result = google
@@ -348,12 +364,19 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                             }
                             let _ = events.send(Event::AllRead(result));
                         }
-                        Command::Trash(id) => {
-                            google.trash(&id)?;
+                        Command::Trash { id, thread } => {
                             let add = vec!["TRASH".into()];
                             let remove = vec!["INBOX".into()];
-                            store.apply_labels(&id, &add, &remove)?;
-                            let _ = events.send(Event::Modified { id, add, remove });
+                            let ids = if thread.is_empty() {
+                                google.trash(&id)?;
+                                vec![id]
+                            } else {
+                                google.modify_thread(&thread, &add, &remove, true)?
+                            };
+                            for id in &ids {
+                                store.apply_labels(id, &add, &remove)?;
+                            }
+                            let _ = events.send(Event::Modified { ids, add, remove });
                         }
                         Command::Contacts { query } => {
                             let contacts =

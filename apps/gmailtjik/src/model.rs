@@ -288,6 +288,107 @@ pub struct Contact {
 pub struct Page {
     pub messages: Vec<Message>,
     pub next: String,
+    #[serde(default)]
+    pub threaded: bool,
+}
+
+pub struct Conversation<'a> {
+    pub messages: Vec<&'a Message>,
+}
+
+impl Message {
+    pub fn conversation_key(&self) -> &str {
+        if self.thread_id.is_empty() {
+            &self.id
+        } else {
+            &self.thread_id
+        }
+    }
+}
+
+impl Conversation<'_> {
+    pub fn latest(&self) -> &Message {
+        self.messages[self.messages.len() - 1]
+    }
+
+    // Prefer the latest received message as the reply target, even after a sent reply.
+    pub fn message(&self) -> &Message {
+        self.messages
+            .iter()
+            .rev()
+            .find(|m| !m.label_ids.iter().any(|l| l == "SENT"))
+            .copied()
+            .unwrap_or_else(|| self.latest())
+    }
+
+    pub fn unread(&self) -> bool {
+        self.messages.iter().any(|m| m.unread())
+    }
+
+    pub fn participants(&self, account: &str) -> String {
+        let mut seen = std::collections::HashSet::new();
+        let mut names = Vec::new();
+        for message in &self.messages {
+            let from = message.header("From");
+            for (name, email) in addresses(&from).unwrap_or_else(|_| vec![(from.clone(), from)]) {
+                if seen.insert(email.to_lowercase()) {
+                    names.push(if email.eq_ignore_ascii_case(account) {
+                        "me".into()
+                    } else if name.is_empty() {
+                        email
+                    } else {
+                        name
+                    });
+                }
+            }
+        }
+        names.join(", ")
+    }
+}
+
+impl Page {
+    pub fn conversations(&self) -> Vec<Conversation<'_>> {
+        let mut positions = std::collections::HashMap::new();
+        let mut rows: Vec<Conversation<'_>> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for message in &self.messages {
+            if !seen.insert(&message.id) {
+                continue;
+            }
+            let next = rows.len();
+            let index = *positions.entry(message.conversation_key()).or_insert(next);
+            if index == next {
+                rows.push(Conversation {
+                    messages: Vec::new(),
+                });
+            }
+            rows[index].messages.push(message);
+        }
+        for row in &mut rows {
+            row.messages
+                .sort_by_key(|m| m.internal_date.parse::<i64>().unwrap_or(0));
+        }
+        // Preserve Gmail's thread-list order, including search result order.
+        rows
+    }
+
+    pub fn representatives(&self) -> Vec<Message> {
+        self.conversations()
+            .iter()
+            .map(|row| row.message().clone())
+            .collect()
+    }
+
+    pub fn retain_conversations(&mut self, matches: impl Fn(&Message) -> bool) {
+        let keep: std::collections::HashSet<String> = self
+            .messages
+            .iter()
+            .filter(|m| matches(m))
+            .map(|m| m.conversation_key().to_owned())
+            .collect();
+        self.messages
+            .retain(|m| keep.contains(m.conversation_key()));
+    }
 }
 
 pub fn demo() -> (Vec<Label>, Page) {
@@ -399,8 +500,39 @@ pub fn demo() -> (Vec<Label>, Page) {
         Page {
             messages,
             next: String::new(),
+            threaded: true,
         },
     )
+}
+
+/// Three synthetic conversations with 3, 1 and 2 messages, including a sent reply.
+pub fn demo_conversations() -> (Vec<Label>, Page) {
+    let (mut labels, mut page) = demo();
+    let first = page.messages[0].clone();
+    let mut reply = first.clone();
+    reply.id = "demo-received-reply".into();
+    reply.internal_date = "1793493000000".into();
+    reply.label_ids.retain(|l| l != "UNREAD");
+    for header in &mut reply.payload.headers {
+        if header.name == "Subject" {
+            header.value = format!("Re: {}", first.subject());
+        }
+    }
+    let sent = demo_thread(&first).pop().unwrap();
+    let single = page.messages[2].clone();
+    let last = page.messages[3].clone();
+    let mut last_reply = last.clone();
+    last_reply.id = "demo-last-reply".into();
+    last_reply.internal_date = "1793482200000".into();
+    page.messages = vec![first, reply, sent, single, last, last_reply];
+    for label in &mut labels {
+        label.messages_unread = page
+            .messages
+            .iter()
+            .filter(|m| m.unread() && m.label_ids.contains(&label.id))
+            .count() as u64;
+    }
+    (labels, page)
 }
 
 pub fn demo_thread(message: &Message) -> Vec<Message> {
@@ -442,6 +574,41 @@ On Sunday, Mira wrote:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conversations_include_sent_replies_and_aggregate_unread() {
+        let (_, page) = demo_conversations();
+        let rows = page.conversations();
+        assert_eq!(
+            rows.iter().map(|r| r.messages.len()).collect::<Vec<_>>(),
+            [3, 1, 2]
+        );
+        assert_eq!(rows[0].participants("you@example.test"), "Mira Chen, me");
+        assert!(rows[0].unread());
+        assert!(!rows[0].message().unread());
+        assert_eq!(rows[0].message().id, "demo-received-reply");
+        assert_eq!(rows[0].latest().id, "demo-reply-0");
+        assert_eq!(
+            rows[0].messages[0].subject(),
+            "A quieter place for your inbox"
+        );
+    }
+
+    #[test]
+    fn conversation_identity_is_gmail_id_not_subject() {
+        let mut page = demo_conversations().1;
+        let mut same_subject = page.messages[0].clone();
+        same_subject.id = "different-message".into();
+        same_subject.thread_id = "different-thread".into();
+        page.messages.push(same_subject.clone());
+        page.messages.push(same_subject); // Duplicate IDs do not inflate the count.
+        assert_eq!(page.conversations().len(), 4);
+        assert_eq!(page.conversations()[3].messages.len(), 1);
+        for message in &mut page.messages {
+            message.thread_id.clear();
+        }
+        assert_eq!(page.conversations().len(), 7);
+    }
     #[test]
     fn decodes_mime_headers_and_legacy_text_charsets() {
         let part = Part {

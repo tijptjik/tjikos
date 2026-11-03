@@ -194,7 +194,11 @@ impl MailApp {
         }
         let draft = store.draft().unwrap_or_default();
         let (labels, page) = if demo {
-            model::demo()
+            if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("threads") {
+                model::demo_conversations()
+            } else {
+                model::demo()
+            }
         } else {
             (
                 store.get("labels").ok().flatten().unwrap_or_default(),
@@ -355,7 +359,7 @@ impl MailApp {
         } else {
             store.get("email").ok().flatten().unwrap_or_default()
         };
-        let selected = page.messages.first().cloned();
+        let selected = page.representatives().first().cloned();
         let contacts_demo =
             demo && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("contacts");
         // Restore draft contents, but leave opening the composer to an explicit action.
@@ -591,13 +595,17 @@ impl MailApp {
                             (offset.y + px(if down { -80. } else { 80. })).min(px(0.)),
                         ));
                     } else if !self.page.messages.is_empty() {
-                        let index = self
-                            .selected
-                            .as_ref()
-                            .and_then(|m| self.page.messages.iter().position(|row| row.id == m.id))
-                            .unwrap_or(0);
+                        let index =
+                            self.selected
+                                .as_ref()
+                                .and_then(|m| {
+                                    self.page.representatives().iter().position(|row| {
+                                        row.conversation_key() == m.conversation_key()
+                                    })
+                                })
+                                .unwrap_or(0);
                         let next = if down {
-                            (index + 1).min(self.page.messages.len() - 1)
+                            (index + 1).min(self.page.conversations().len() - 1)
                         } else {
                             index.saturating_sub(1)
                         };
@@ -641,10 +649,12 @@ impl MailApp {
             }
             let id = message.id.clone();
             if self.demo {
-                self.modified(&id, &["TRASH".into()], &["INBOX".into()], cx);
+                let ids = self.conversation_ids(&id);
+                self.modified(&ids, &["TRASH".into()], &["INBOX".into()], cx);
             } else {
                 self.status = "Moving email to Trash…".into();
-                self.dispatch(Command::Trash(id));
+                let thread = message.thread_id.clone();
+                self.dispatch(Command::Trash { id, thread });
             }
             cx.notify();
         }
@@ -701,8 +711,9 @@ impl MailApp {
             let mut page = Page {
                 messages: self.demo_messages.clone(),
                 next: String::new(),
+                threaded: true,
             };
-            page.messages.retain(|m| {
+            page.retain_conversations(|m| {
                 (!self.unread_only || m.unread())
                     && (self.label.is_empty() || m.label_ids.contains(&self.label))
                     && (self.label == "TRASH" || !m.label_ids.iter().any(|l| l == "TRASH"))
@@ -712,7 +723,7 @@ impl MailApp {
                             .contains(&self.query.to_lowercase()))
             });
             self.page = page;
-            self.selected = self.page.messages.first().cloned();
+            self.selected = self.page.representatives().first().cloned();
             self.status = "Demo · synthetic mail · plain-text search".into();
             self.refresh_reader();
         } else {
@@ -723,7 +734,7 @@ impl MailApp {
                     .page(&worker::key(&self.label, &query, &self.page_token))
             {
                 self.page = page;
-                self.selected = self.page.messages.first().cloned();
+                self.selected = self.page.representatives().first().cloned();
             } else {
                 self.page = Page::default();
                 self.selected = None;
@@ -758,7 +769,7 @@ impl MailApp {
                 .map(|m| m.id.clone())
                 .collect();
             for id in &ids {
-                self.modified(id, &[], &["UNREAD".into()], cx);
+                self.modified(std::slice::from_ref(id), &[], &["UNREAD".into()], cx);
             }
             self.load(cx);
             self.status = format!("Marked {} messages read", ids.len());
@@ -796,7 +807,19 @@ impl MailApp {
             self.manual_images.clear();
         }
         if self.demo {
-            self.conversation = model::demo_thread(&message);
+            self.conversation = if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("threads")
+            {
+                let mut messages: Vec<_> = self
+                    .demo_messages
+                    .iter()
+                    .filter(|m| m.conversation_key() == message.conversation_key())
+                    .cloned()
+                    .collect();
+                messages.sort_by_key(|m| m.internal_date.parse::<i64>().unwrap_or(0));
+                messages
+            } else {
+                model::demo_thread(&message)
+            };
             self.demo_image();
         } else {
             self.images = self
@@ -817,7 +840,7 @@ impl MailApp {
         }
     }
     fn select(&mut self, index: usize, cx: &mut Context<Self>) {
-        self.selected = self.page.messages.get(index).cloned();
+        self.selected = self.page.representatives().get(index).cloned();
         self.images.clear();
         self.proposal = None;
         self.refresh_reader();
@@ -831,75 +854,114 @@ impl MailApp {
         cx: &mut Context<Self>,
     ) {
         if self.demo {
-            self.modified(&id, &add, &remove, cx);
+            let ids = self.conversation_ids(&id);
+            self.modified(&ids, &add, &remove, cx);
         } else {
             self.status = "Saving mailbox change…".into();
-            self.dispatch(Command::Modify { id, add, remove });
+            let thread = self
+                .page
+                .messages
+                .iter()
+                .chain(self.selected.iter())
+                .find(|m| m.id == id)
+                .map(|m| m.thread_id.clone())
+                .unwrap_or_default();
+            self.dispatch(Command::Modify {
+                id,
+                thread,
+                add,
+                remove,
+            });
         }
         cx.notify();
     }
-    fn modified(&mut self, id: &str, add: &[String], remove: &[String], cx: &mut Context<Self>) {
-        let selected_target = self
+    fn conversation_ids(&self, id: &str) -> Vec<String> {
+        let all = || {
+            self.page
+                .messages
+                .iter()
+                .chain(self.selected.iter())
+                .chain(self.demo_messages.iter())
+        };
+        let Some(target) = all().find(|m| m.id == id) else {
+            return vec![id.into()];
+        };
+        all()
+            .filter(|m| m.conversation_key() == target.conversation_key())
+            .map(|m| m.id.clone())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect()
+    }
+    fn modified(
+        &mut self,
+        ids: &[String],
+        add: &[String],
+        remove: &[String],
+        cx: &mut Context<Self>,
+    ) {
+        let selected = self
             .selected
             .as_ref()
-            .is_some_and(|message| message.id == id);
-        let archived = remove.iter().any(|label| label == "INBOX");
-        let successor = successor(&self.page.messages, id);
-        if let Some(before) = self
+            .map(|m| (m.id.clone(), m.conversation_key().to_owned()));
+        let successor = selected
+            .as_ref()
+            .and_then(|(id, _)| successor(&self.page.representatives(), id));
+        let mut seen = std::collections::HashSet::new();
+        for before in self
             .page
             .messages
             .iter()
             .chain(self.selected.iter())
             .chain(self.demo_messages.iter())
-            .find(|m| m.id == id)
+            .chain(self.conversation.iter())
         {
-            crate::labels::update_unread(&mut self.labels, before, add, remove);
+            if ids.contains(&before.id) && seen.insert(before.id.clone()) {
+                crate::labels::update_unread(&mut self.labels, before, add, remove);
+            }
         }
-
         for message in self
             .page
             .messages
             .iter_mut()
             .chain(self.selected.iter_mut())
             .chain(self.demo_messages.iter_mut())
+            .chain(self.conversation.iter_mut())
         {
-            if message.id == id {
+            if ids.contains(&message.id) {
                 message.label_ids.retain(|l| !remove.contains(l));
-                for l in add {
-                    if !message.label_ids.contains(l) {
-                        message.label_ids.push(l.clone());
+                for label in add {
+                    if !message.label_ids.contains(label) {
+                        message.label_ids.push(label.clone());
                     }
                 }
             }
         }
-        self.page.messages.retain(|m| {
+        self.page.retain_conversations(|m| {
             (!self.unread_only || m.unread())
                 && (self.label.is_empty() || m.label_ids.contains(&self.label))
                 && (self.label == "TRASH" || !m.label_ids.iter().any(|l| l == "TRASH"))
         });
-        let selection_removed =
-            selected_target && !self.page.messages.iter().any(|message| message.id == id);
-        if selected_target && (archived || selection_removed) {
-            if let Some(index) = successor.and_then(|next| {
-                self.page
-                    .messages
-                    .iter()
-                    .position(|message| message.id == next)
-            }) {
+        let rows = self.page.representatives();
+        if selected
+            .as_ref()
+            .is_some_and(|(_, key)| !rows.iter().any(|m| m.conversation_key() == key))
+        {
+            if let Some(index) = successor.and_then(|id| rows.iter().position(|m| m.id == id)) {
                 self.select(index, cx);
                 self.mail_scroll
                     .scroll_to_item(index, ScrollStrategy::Nearest);
             } else {
                 self.selected = None;
-                self.images.clear();
                 self.proposal = None;
+                self.refresh_reader();
             }
             self.reader_scroll.set_offset(point(px(0.), px(0.)));
         }
         self.status = if self.demo {
-            "Demo mailbox updated".into()
+            "Demo conversation updated".into()
         } else {
-            "Saved to Gmail".into()
+            "Conversation saved to Gmail".into()
         };
     }
     fn poll(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -968,11 +1030,19 @@ impl MailApp {
                         && self.page_token.is_empty()
                         && !self.loading
                     {
-                        let selected = self.selected.as_ref().map(|m| m.id.clone());
+                        let selected = self
+                            .selected
+                            .as_ref()
+                            .map(|m| m.conversation_key().to_owned());
                         self.page = page;
                         self.selected = selected
-                            .and_then(|id| self.page.messages.iter().find(|m| m.id == id).cloned())
-                            .or_else(|| self.page.messages.first().cloned());
+                            .and_then(|id| {
+                                self.page
+                                    .representatives()
+                                    .into_iter()
+                                    .find(|m| m.conversation_key() == id)
+                            })
+                            .or_else(|| self.page.representatives().first().cloned());
                     }
                     self.refresh_reader();
                     self.error.clear();
@@ -990,11 +1060,19 @@ impl MailApp {
                     cached,
                     page,
                 } if ticket == self.ticket => {
-                    let selected = self.selected.as_ref().map(|m| m.id.clone());
+                    let selected = self
+                        .selected
+                        .as_ref()
+                        .map(|m| m.conversation_key().to_owned());
                     self.page = page;
                     self.selected = selected
-                        .and_then(|id| self.page.messages.iter().find(|m| m.id == id).cloned())
-                        .or_else(|| self.page.messages.first().cloned());
+                        .and_then(|id| {
+                            self.page
+                                .representatives()
+                                .into_iter()
+                                .find(|m| m.conversation_key() == id)
+                        })
+                        .or_else(|| self.page.representatives().first().cloned());
                     self.status = if cached {
                         "Cached mail · syncing…".into()
                     } else {
@@ -1012,8 +1090,8 @@ impl MailApp {
                     self.marking_all_read = false;
                     self.error = error;
                 }
-                Event::Modified { id, add, remove } => {
-                    self.modified(&id, &add, &remove, cx);
+                Event::Modified { ids, add, remove } => {
+                    self.modified(&ids, &add, &remove, cx);
                 }
                 Event::ContactBook(rows) => {
                     self.known_contacts = rows;
@@ -2042,21 +2120,24 @@ impl MailApp {
                     .text_xs()
                     .text_color(rgb(MUTED))
                     .child(format!(
-                        "{} messages{}",
-                        self.page.messages.len(),
+                        "{} conversation{}{}",
+                        self.page.conversations().len(),
+                        if self.page.conversations().len() == 1 { "" } else { "s" },
                         if self.loading { " · syncing" } else { "" }
                     )),
             )
             .child(
                 uniform_list(
                     "mail-list",
-                    self.page.messages.len(),
+                    self.page.conversations().len(),
                     cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                        let conversations = this.page.conversations();
                         range
                             .map(|index| {
-                                let message = &this.page.messages[index];
+                                let row = &conversations[index];
+                                let message = row.message();
                                 let active =
-                                    this.selected.as_ref().is_some_and(|m| m.id == message.id);
+                                    this.selected.as_ref().is_some_and(|m| m.conversation_key() == message.conversation_key());
                                 div()
                                     .id(("mail", index))
                                     .h(px(104.))
@@ -2075,14 +2156,18 @@ impl MailApp {
                                                 div()
                                                     .flex_1()
                                                     .truncate()
-                                                    .font_weight(if message.unread() {
+                                                    .font_weight(if row.unread() {
                                                         FontWeight::SEMIBOLD
                                                     } else {
                                                         FontWeight::NORMAL
                                                     })
-                                                    .child(message.header("From")),
+                                                    .child(row.participants(&this.email)),
                                             )
-                                            .when(message.unread(), |d| {
+                                            .when(row.messages.len() > 1, |d| d.child(
+                                                div().flex_shrink_0().text_xs().text_color(rgb(MUTED))
+                                                    .child(row.messages.len().to_string())
+                                            ))
+                                            .when(row.unread(), |d| {
                                                 d.child(
                                                     div()
                                                         .size(px(6.))
@@ -2092,7 +2177,7 @@ impl MailApp {
                                             }),
                                     )
                                     .child(
-                                        div().mt_1().truncate().text_sm().child(message.subject()),
+                                        div().mt_1().truncate().text_sm().child(row.messages[0].subject()),
                                     )
                                     .child(
                                         div()
@@ -2100,7 +2185,7 @@ impl MailApp {
                                             .truncate()
                                             .text_sm()
                                             .text_color(rgb(MUTED))
-                                            .child(message.snippet.clone()),
+                                            .child(row.latest().snippet.clone()),
                                     )
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.zone = 1;
@@ -2177,7 +2262,13 @@ impl MailApp {
                 .into_any_element();
         };
         let id = message.id.clone();
-        let unread = message.unread();
+        let unread = self
+            .page
+            .conversations()
+            .iter()
+            .find(|row| row.message().conversation_key() == message.conversation_key())
+            .map(|row| row.unread())
+            .unwrap_or_else(|| message.unread());
         let starred = message.label_ids.iter().any(|l| l == "STARRED");
         let read_id = id.clone();
         let mut reader = div()

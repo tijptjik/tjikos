@@ -62,10 +62,10 @@ mail caches, credentials, captures, or Google client JSON in this repository.
 ## Search and contacts
 
 Press Enter in search to query **all Gmail mail**, including messages absent
-from the local cache. Gmail supplies search through `messages.list?q=...`:
+from the local cache. Gmail supplies conversation search through `threads.list?q=...`:
 `from:person@example.com before:2024/01/01 has:attachment`. Use Older/Newer to
 page through results. Gmail API search has documented differences from the web
-UI, including alias expansion and thread-wide matching. Offline mode can show
+UI, including alias expansion. Offline mode can show
 previously cached pages; it is not a complete offline mailbox search index.
 
 Recipient suggestions use the separate Google **People API**, including Other
@@ -297,6 +297,13 @@ CSS imports, fonts and image URLs cannot initiate network or filesystem access.
 Only raster images approved by the existing image loader are supplied. Oversize
 HTML (2 MB or 24,000 layout pixels tall) offers Text view instead of truncation.
 
+The inbox and search list use Gmail thread pagination: one row per conversation,
+grouped by Gmail's thread ID, with participant names, message counts, the original
+subject and the latest snippet. Sent replies count toward the conversation;
+any unread member marks its row unread. Archive, Trash, star and read/unread
+toolbar actions affect the whole conversation. The reply target defaults to its
+latest received message. Old message-page caches are refreshed before reuse.
+
 The reader fetches the complete Gmail thread, including sent replies, and shows
 chronological message cards. Older messages can be expanded individually. Known
 quoted reply sections are collapsed behind Show quoted history; inline answers
@@ -331,7 +338,7 @@ synthetic tests do not establish those account-specific checks. A successful
 local Codex handshake does not establish an authenticated model completion.
 Sending is never automatically retried; after an uncertain response, check Sent
 before retrying. The first version has one recoverable local composer draft,
-message-level inbox rows, and no attachment-upload UI or rich-text composer. Existing mailtjik archives and workers are independent.
+conversation inbox rows, and no attachment-upload UI or rich-text composer. Existing mailtjik archives and workers are independent.
 
 References: [Gmail search](https://developers.google.com/workspace/gmail/api/guides/filtering),
 [Gmail sync](https://developers.google.com/workspace/gmail/api/guides/sync),
