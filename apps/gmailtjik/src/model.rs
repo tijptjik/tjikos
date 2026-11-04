@@ -95,7 +95,16 @@ impl Part {
             .get("charset")
             .and_then(|label| encoding_rs::Encoding::for_label(label.as_bytes()))
             .unwrap_or(encoding_rs::UTF_8);
-        encoding.decode(&self.decoded()).0.into_owned()
+        let bytes = self.decoded();
+        // Gmail can supply UTF-8 body data while retaining a sender's legacy
+        // single-byte charset header. Prefer lossless UTF-8 in that case, but
+        // still decode real legacy bytes and explicit multibyte encodings.
+        if encoding.is_single_byte()
+            && let Ok(text) = std::str::from_utf8(&bytes)
+        {
+            return text.trim_start_matches('\u{feff}').into();
+        }
+        encoding.decode(&bytes).0.into_owned()
     }
 }
 
@@ -561,6 +570,15 @@ pub fn demo() -> (Vec<Label>, Page) {
             },
         })
         .collect();
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("reader-indents") {
+        messages[0].payload.mime_type = "text/html".into();
+        messages[0].payload.headers.push(Header {
+            name: "Content-Type".into(),
+            value: "text/html; charset=windows-1252".into(),
+        });
+        messages[0].payload.body.data =
+            URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-indents.html"));
+    }
     if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("contact-signature") {
         messages[0].payload.mime_type = "text/html".into();
         messages[0].payload.body.data =
@@ -784,6 +802,9 @@ pub fn demo_conversations() -> (Vec<Label>, Page) {
 }
 
 pub fn demo_thread(message: &Message) -> Vec<Message> {
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("reader-indents") {
+        return vec![message.clone()];
+    }
     if matches!(
         std::env::var("GMAILTJIK_DEMO_SCENE").as_deref(),
         Ok("mart-signoff" | "german-signoff" | "rich-reader" | "reader" | "inline" | "signature" | "signoff" | "contact-signature" | "message-header")
@@ -1006,6 +1027,55 @@ mod tests {
         };
         assert_eq!(part.header("Subject"), "你好");
         assert_eq!(part.decoded_text(), "café");
+    }
+    #[test]
+    fn utf8_gmail_bodies_survive_stale_legacy_charset_headers() {
+        for mime in ["text/plain", "text/html"] {
+            let text = if mime == "text/html" {
+                "<p>Renáta Exampleová · 你好</p>"
+            } else {
+                "Renáta Exampleová · 你好"
+            };
+            for charset in ["iso-8859-1", "windows-1250", "windows-1252"] {
+                let part = Part {
+                    mime_type: mime.into(),
+                    headers: vec![Header {
+                        name: "Content-Type".into(),
+                        value: format!("{mime}; charset={charset}"),
+                    }],
+                    body: Body {
+                        data: URL_SAFE_NO_PAD.encode(text),
+                        ..Body::default()
+                    },
+                    ..Part::default()
+                };
+                assert_eq!(part.decoded_text(), text);
+                let message = Message {
+                    payload: part,
+                    ..Message::default()
+                };
+                assert!(
+                    crate::reader::parse(&message, false)
+                        .markdown
+                        .contains("Renáta Exampleová")
+                );
+                if mime == "text/html" {
+                    assert_eq!(crate::html::source(&message).as_deref(), Some(text));
+                }
+            }
+        }
+        let part = Part {
+            headers: vec![Header {
+                name: "Content-Type".into(),
+                value: "text/plain; charset=utf-16le".into(),
+            }],
+            body: Body {
+                data: URL_SAFE_NO_PAD.encode(b"A\0B\0"),
+                ..Body::default()
+            },
+            ..Part::default()
+        };
+        assert_eq!(part.decoded_text(), "AB");
     }
     #[test]
     fn header_injection_is_rejected() {

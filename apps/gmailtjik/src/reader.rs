@@ -478,7 +478,12 @@ fn text_node(text: &str) -> String {
     let mut out = String::new();
     let mut whitespace = false;
     for c in text.chars() {
-        if c.is_whitespace() {
+        if c == '\u{a0}' {
+            // Composers use repeated &nbsp; for visible indentation. Keep it
+            // until block rendering can distinguish it from HTML source space.
+            out.push(c);
+            whitespace = false;
+        } else if c.is_whitespace() {
             if !whitespace {
                 out.push(' ');
             }
@@ -511,6 +516,56 @@ fn block(text: &str) -> String {
     } else {
         format!("\n\n{}\n\n", text.trim())
     }
+}
+
+fn quote_block(text: &str) -> String {
+    block(
+        &normalize(text)
+            .lines()
+            .map(|line| format!("> {line}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
+fn indented_style(style: &str) -> bool {
+    let positive_length = |value: &str| {
+        let value = value.trim().trim_end_matches("!important").trim();
+        ["rem", "px", "pt", "em", "cm", "mm", "in", "pc", "%"]
+            .iter()
+            .find_map(|unit| value.strip_suffix(unit))
+            .and_then(|number| number.trim().parse::<f32>().ok())
+            .is_some_and(|number| number > 0.)
+    };
+    // Only explicit left indentation belongs in the readable representation;
+    // ordinary all-around message/card padding is layout decoration.
+    style.split(';').any(|declaration| {
+        declaration.split_once(':').is_some_and(|(name, value)| {
+            matches!(name.trim(), "margin-left" | "padding-left") && positive_length(value)
+        })
+    })
+}
+
+fn indented_html_lines(content: &str) -> String {
+    let mut out = Vec::new();
+    let mut indented = false;
+    for line in content.lines() {
+        let leading = line.trim_start_matches(' ');
+        let next = leading.starts_with("\u{a0}\u{a0}");
+        if next != indented {
+            out.push(String::new());
+        }
+        out.push(if next {
+            format!("> {}", leading.trim_start())
+        } else {
+            line.to_owned()
+        });
+        indented = next;
+    }
+    if indented {
+        out.push(String::new());
+    }
+    out.join("\n")
 }
 
 fn marked(text: &str, marker: &str) -> String {
@@ -835,13 +890,7 @@ fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) 
             "#".repeat(tag.as_bytes()[1] as usize - b'0' as usize),
             content.trim()
         )),
-        "blockquote" => block(
-            &normalize(&content)
-                .lines()
-                .map(|line| format!("> {line}"))
-                .collect::<Vec<_>>()
-                .join("\n"),
-        ),
+        "blockquote" => quote_block(&content),
         "p" | "div" | "section" | "article" | "header" | "footer" | "address" | "main"
         | "table" | "tr" | "td" | "th" | "dl" | "dt" | "dd" => {
             let text = content.trim();
@@ -849,11 +898,14 @@ fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) 
             let bullet = ["\\* ", "\\- ", "• "]
                 .iter()
                 .find_map(|marker| text.strip_prefix(marker));
-            block(
-                &bullet
-                    .map(|text| format!("- {text}"))
-                    .unwrap_or_else(|| content.clone()),
-            )
+            let content = bullet
+                .map(|text| format!("- {text}"))
+                .unwrap_or_else(|| indented_html_lines(&content));
+            if tag == "dd" || (matches!(tag, "p" | "div") && indented_style(&style)) {
+                quote_block(&content)
+            } else {
+                block(&content)
+            }
         }
         _ => content,
     }
@@ -903,6 +955,7 @@ fn normalize(markdown: &str) -> String {
 
 fn plain_markdown(text: &str) -> String {
     let mut out = Vec::new();
+    let mut in_list = false;
     for line in text.lines() {
         let trimmed = line.trim();
         let indent = " ".repeat(
@@ -918,16 +971,33 @@ fn plain_markdown(text: &str) -> String {
             !n.is_empty() && n.len() <= 9 && n.chars().all(|c| c.is_ascii_digit())
         });
         let line = if let Some(text) = bullet {
+            in_list = true;
             format!("{indent}- {}", escape(text))
         } else if let Some((number, text)) = ordered {
+            in_list = true;
             format!("{indent}{number}. {}", escape(text))
         } else if let Some(text) = trimmed.strip_prefix("> ") {
             format!("> {}", escape(text))
         } else if trimmed.is_empty() {
             String::new()
         } else {
-            format!("{indent}{}  ", escape(trimmed))
+            let prefix = if indent.is_empty() {
+                in_list = false;
+                ""
+            } else if in_list {
+                &indent
+            } else {
+                "> "
+            };
+            format!("{prefix}{}  ", escape(trimmed))
         };
+        // Close the quote before following prose: Markdown otherwise treats an
+        // unmarked line as a lazy continuation of the preceding quote.
+        if out.last().is_some_and(|previous: &String| {
+            !previous.is_empty() && previous.starts_with("> ") != line.starts_with("> ")
+        }) {
+            out.push(String::new());
+        }
         out.push(line);
     }
     normalize(&out.join("\n"))
@@ -1155,6 +1225,54 @@ mod tests {
         assert!(!body.markdown.contains("First question"));
         assert!(body.markdown.contains("&lt;not html&gt;"));
         assert!(parse(&message, true).markdown.contains("> First question"));
+    }
+
+    #[test]
+    fn indented_prose_is_readable_without_becoming_code_or_hidden_history() {
+        let body = parse(
+            &mail("text/plain", "Before\n    Test\n    in\n\tMarkdown\nAfter"),
+            false,
+        );
+        assert_eq!(
+            body.markdown,
+            "Before  \n\n> Test  \n> in  \n> Markdown  \n\nAfter  "
+        );
+        assert!(!body.quoted);
+        assert!(body.original_layout.is_none());
+    }
+
+    #[test]
+    fn html_indents_preserve_structure_and_original_layout() {
+        for source in [
+            "<p>Before</p><div style='margin-left:40px'>Test<br>in<br>Markdown</div><p>After</p>",
+            "<p>Before</p><p style='padding-left:2rem!important'>Test<br>in<br>Markdown</p><p>After</p>",
+            "<p>Before<br>&nbsp;&nbsp;Test<br>&nbsp;&nbsp;in<br>&nbsp;&nbsp;Markdown<br>After</p>",
+            "<dl><dt>Before</dt><dd>Test<br>in<br>Markdown</dd><dt>After</dt></dl>",
+        ] {
+            let body = parse(&mail("text/html", source), false);
+            assert_eq!(
+                body.markdown
+                    .lines()
+                    .map(str::trim_end)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                "Before\n\n> Test\n> in\n> Markdown\n\nAfter",
+                "{source}"
+            );
+            assert!(
+                !body.quoted,
+                "Indentation must not be folded as reply history"
+            );
+            assert!(body.original_layout.unwrap().contains("Markdown"));
+        }
+        let body = parse(
+            &mail(
+                "text/html",
+                "<div style='padding:24px'><p style='margin-left:0'>Flush</p><p style='margin-left:-4px'>Also flush</p></div>",
+            ),
+            false,
+        );
+        assert_eq!(body.markdown, "Flush\n\nAlso flush");
     }
 
     #[test]

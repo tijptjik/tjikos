@@ -52,6 +52,31 @@ with private_compositor(isolate_pointer=True):
                 time.sleep(.3)
                 subprocess.run(["grim", "-o", "GMAIL", str(root / name)], check=True)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "reader-indents":
+                capture("reader-indents.png")
+                subprocess.run(["wl-copy", "--", "selection-pending"], check=True)
+                # Focus the selectable readable body, then copy its full content.
+                for operation in ["m 4306 2900", "b 1", "m 4792 2900", "b 0"]:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.15)
+                subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                def copied_indents():
+                    value = subprocess.check_output(["wl-paste", "--no-newline"], text=True, timeout=5)
+                    return value if value != "selection-pending" else None
+                copied = wait_for(copied_indents, timeout=5)
+                assert "Renáta Exampleová" in copied and "你好" in copied, copied
+                assert "Studio 12" in copied and "Markdown" in copied, copied
+                click(1241, 257)
+                time.sleep(1)
+                capture("reader-indents-original.png")
+                from PIL import Image, ImageChops
+                with Image.open(root / "reader-indents.png") as readable, Image.open(root / "reader-indents-original.png") as original:
+                    assert ImageChops.difference(readable.convert("RGB").crop((600, 280, 1300, 620)), original.convert("RGB").crop((600, 280, 1300, 620))).getbbox()
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "rich-reader":
                 capture("rich-original.png")
                 click(1241, 253)
