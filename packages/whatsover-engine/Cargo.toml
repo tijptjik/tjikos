@@ -7,6 +7,11 @@ publish = false
 [lib]
 crate-type = ["rlib", "cdylib"]
 
+[[bin]]
+name = "whatsover"
+path = "src/bin/whatsover.rs"
+required-features = ["native"]
+
 [features]
 default = ["native"]
 native = ["whatsapp-rust/default", "dep:whatsapp-rust-sqlite-storage", "dep:diesel", "dep:tokio", "dep:clap", "dep:qrcode"]

@@ -151,8 +151,9 @@ concurrent development invocations using isolated fixtures.
 
 ## WhatsApp scripting
 
-[Whatsover](packages/whatsover/README.md) provides a linked-device WhatsApp service,
-JSON CLI, and TypeScript client. Start with `bun run whatsover serve`, then run
-`bun run whatsover login` in another terminal to scan the QR code. Session state
-stays outside the repository. Installation and Cloudflare integration boundaries
-are documented in the package README.
+[Whatsover](packages/whatsover-engine/README.md) provides a direct Rust WhatsApp
+client with a JSON CLI. Install with
+`bash packages/whatsover-engine/scripts/install.sh`, then run `whatsover login`
+to scan the QR code. `bun run whatsover` runs the same client from the checkout.
+Session state stays outside the repository. The former Baileys desktop service
+and launcher are retired.

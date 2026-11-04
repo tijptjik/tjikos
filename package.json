@@ -4,7 +4,7 @@
   "packageManager": "bun@1.4.4",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "whatsover": "bun packages/whatsover/src/cli.ts",
+    "whatsover": "cargo run --manifest-path packages/whatsover-engine/Cargo.toml --locked --bin whatsover --",
     "build": "turbo run build",
     "check": "turbo run check",
     "demo": "turbo run demo --filter=@tjikos/mailtjik",
