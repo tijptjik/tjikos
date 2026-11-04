@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "DueDate.js" as DueDate
+import "Workflow.js" as Workflow
 
 ColumnLayout {
     id: root
@@ -11,6 +12,7 @@ ColumnLayout {
     property string selectedId: ''
     property string problem: ''
     property var selectedNode: null
+    property var dependencies: []
     spacing: 8
     component StepButton: Button {
         id:control
@@ -38,12 +40,13 @@ ColumnLayout {
         if(!stepTitle.text.trim()){problem='Give the subtask a title.';return false;}
         if(parsed.error){problem=parsed.error;return false;}
         const kind=typePicker.alternative?typePicker.currentValue:selectedNode.kind;
-        change(selectedId,(list,i)=>{list[i].title=stepTitle.text.trim();list[i].kind=kind;list[i].due=deadline.visible?parsed.value:'';list[i].offset=relative.text;});
+        change(selectedId,(list,i)=>{list[i].title=stepTitle.text.trim();list[i].kind=kind;list[i].due=deadline.visible?parsed.value:'';list[i].offset=relative.text;if(dependencies.length)list[i].requires=dependencies.slice();else delete list[i].requires;list[i].acceptCancelled=joinCancelled.checked;list[i].cancelled=cancelledStep.checked;});
         problem='';return true;
     }
     function select(node) {
         if(!flush())return;
         selectedId=node.id;selectedNode=JSON.parse(JSON.stringify(node));
+        dependencies=(node.requires || []).slice();joinCancelled.checked=node.acceptCancelled===true;cancelledStep.checked=node.cancelled===true;
         stepTitle.text=node.title;deadline.text=node.due || '';relative.text=node.offset || 'one week before';
         typePicker.currentIndex=Math.max(0,typePicker.model.findIndex(t=>t.value===node.kind));
     }
@@ -74,6 +77,7 @@ ColumnLayout {
     RowLayout {
         StepButton {text:'+ Subtask';onClicked:root.add('task','')}
         StepButton {text:'+ Flow';onClicked:root.add('flow','')}
+        StepButton {text:'+ Group';onClicked:root.add('group','')}
     }
     ColumnLayout {
         visible:!!root.selectedNode;Layout.fillWidth:true;spacing:8
@@ -91,11 +95,25 @@ ColumnLayout {
             placeholderText:'Due date (e.g. 20 November)';Accessible.name:'Step or flow deadline'
         }
         TextField {id:relative;Layout.fillWidth:true;visible:typePicker.alternative && typePicker.currentValue==='reminder';placeholderText:'one week before';Accessible.name:'Reminder relative to flow deadline'}
+        ColumnLayout {
+            visible:!typePicker.alternative
+            Label {text:'Wait for steps (empty uses the normal order)';color:root.theme.muted}
+            Repeater {
+                model:Workflow.dependencyOptions(root.nodes,root.selectedId)
+                CheckBox {
+                    required property var modelData
+                    text:modelData.title;checked:root.dependencies.includes(modelData.id)
+                    onToggled:root.dependencies=checked?root.dependencies.concat([modelData.id]):root.dependencies.filter(id=>id!==modelData.id)
+                }
+            }
+            CheckBox {id:joinCancelled;text:'Continue when dependencies are completed or cancelled';visible:root.dependencies.length>0}
+            CheckBox {id:cancelledStep;text:'Cancel this step and its dependent pathway'}
+        }
         RowLayout {
             StepButton {text:'Apply step';onClicked:root.flush()}
             StepButton {
                 text:root.selectedNode && root.selectedNode.kind==='flow'?'+ Alternative':'+ Branch subtask'
-                visible:root.selectedNode && (root.selectedNode.kind==='flow' || (typePicker.alternative && typePicker.currentValue==='task'))
+                visible:root.selectedNode && (['task','group','flow'].includes(root.selectedNode.kind) || (typePicker.alternative && typePicker.currentValue==='task'))
                 onClicked:root.add('task',root.selectedId)
             }
             StepButton {text:'Remove';onClicked:{root.change(root.selectedId,(list,i)=>list.splice(i,1));root.selectedNode=null;root.selectedId='';}}

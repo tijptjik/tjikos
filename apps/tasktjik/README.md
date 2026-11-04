@@ -348,3 +348,15 @@ Rapid turns gradually increase travel up to twofold;
 reversing direction, clicking, or dragging the scrollbar stops the previous glide.
 Wheel scrolling stops at either edge without overshooting or restarting an outward
 glide. Touchpad pixel scrolling keeps Qt's native behavior.
+
+Conditional pathways can set `requires: [stepId, ...]` on a step or flow to wait
+for those earlier steps instead of the normal sequence. A flow dependency waits
+for its selected branch to finish. Cancellation propagates only to dependent
+steps; `acceptCancelled: true` makes a join wait until every dependency is done
+or cancelled. A `group` node contains independent steps and resolves automatically.
+Reopening a dependency blocks its successors without erasing completion history.
+The desktop and web editors expose dependency selection and cancellation. On the
+desktop, **C** cancels the focused ordinary step; **C** again restores an explicitly
+cancelled step. API clients use revision-checked `subtask-cancel` with `subtask_id`.
+Template copies remap dependencies and reset completion/cancellation. Install the
+authority and clients together; capability `conditional_pathways` indicates support.

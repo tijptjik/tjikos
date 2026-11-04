@@ -10,15 +10,20 @@ function reminderDate(due, offset) {
     return date.toISOString().slice(0,10);
 }
 function decorate(task,today) {
-    const out=[];
+    const out=[],states=Object.create(null);
     function sequence(nodes,depth,cancelled,inheritedBlocked,sequential) {
         let stopped=cancelled,complete=true,previous='';
         for(const n of nodes || []) {
-            const blocked=inheritedBlocked || (sequential && !complete),wasCancelled=stopped,start=out.length;
+            const dependencies=n.requires;
+            const dependencyCancelled=dependencies && dependencies.some(id=>states[id] && states[id].cancelled);
+            const dependencyReady=dependencies && dependencies.every(id=>states[id] && (states[id].resolved || states[id].cancelled && n.acceptCancelled===true));
+            const wasCancelled=(stopped && !(dependencyReady && n.acceptCancelled===true)) || n.cancelled===true || !!dependencyCancelled && n.acceptCancelled!==true;
+            const blocked=!wasCancelled && (inheritedBlocked || (dependencies?!dependencyReady:sequential && !complete)),start=out.length,inheritedStop=stopped;
+            stopped=wasCancelled;
             let resolved;
             if(n.kind==='flow') {
                 const winner=n.items.find(c=>c.kind!=='reminder' && c.done);
-                out.push(Object.assign({},n,{depth:depth,blocked:blocked&&!stopped,dependsOn:sequential?previous:''}));
+                out.push(Object.assign({},n,{depth:depth,blocked:blocked&&!stopped,dependsOn:sequential&&!dependencies?previous:''}));
                 resolved=!!winner;
                 for(const c of n.items) {
                     const reminder=c.kind==='reminder',due=reminder?reminderDate(n.due,c.offset):n.due;
@@ -33,11 +38,14 @@ function decorate(task,today) {
                 out[start].status=wasCancelled?'cancelled':blocked?'blocked':resolved?'done':'ready';
                 if(!blocked&&!stopped&&winner&&winner.kind==='exit')stopped=true;
             } else {
-                out.push(Object.assign({},n,{status:stopped?'cancelled':blocked?'blocked':n.done?'done':'ready',depth:depth,blocked:blocked&&!stopped,dependsOn:sequential?previous:''}));
+                out.push(Object.assign({},n,{status:stopped?'cancelled':blocked?'blocked':n.done?'done':'ready',depth:depth,blocked:blocked&&!stopped,dependsOn:sequential&&!dependencies?previous:''}));
                 const result=sequence(n.items,depth+1,stopped,blocked,false);
-                resolved=n.done&&result.complete;if(result.stopped)stopped=true;
+                resolved=(n.done || n.kind==='group')&&result.complete;if(result.stopped)stopped=true;
+                if(n.kind==='group'&&!stopped&&!blocked)out[start].status=resolved?'done':'ready';
             }
-            if(!stopped)complete=complete&&resolved&&!blocked;
+            states[n.id]={resolved:!!resolved&&!blocked&&!wasCancelled,cancelled:!!wasCancelled};
+            if(wasCancelled&&!inheritedStop)stopped=false;
+            if(!stopped)complete=complete&&(wasCancelled || resolved&&!blocked);
             previous=n.id;
         }
         return {stopped:stopped,complete:complete};
@@ -55,7 +63,7 @@ function project(task,subtaskId,done,today) {
         if(!target)return null;
         if(target.done===done)return decorate(copy,today);
         const row=decorate(copy,today).workflowRows.find(r=>r.id===subtaskId);
-        if(!row || row.kind==='flow' || row.blocked || ['cancelled','blocked'].includes(row.status))return null;
+        if(!row || ['flow','group'].includes(row.kind) || row.blocked || ['cancelled','blocked'].includes(row.status))return null;
         target.done=done;
         return decorate(copy,today);
     }
@@ -67,4 +75,23 @@ function project(task,subtaskId,done,today) {
     return copy;
 }
 
-var taskWorkflow={project:project,decorate:decorate,node:workflowNode};
+function cancel(task,id,today) {
+    const copy=JSON.parse(JSON.stringify(task)),target=workflowNode(copy.subtasks,id);
+    const row=decorate(copy,today).workflowRows.find(r=>r.id===id);
+    if(!target || !row || row.blockId || !target.cancelled && (row.blocked || row.status==='cancelled'))return null;
+    target.cancelled=!target.cancelled;
+    return decorate(copy,today);
+}
+function instantiate(nodes) {
+    const copy=JSON.parse(JSON.stringify(nodes)),ids=Object.create(null);
+    function reset(list){for(const n of list){const id='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const v=Math.floor(Math.random()*16);return (c==='x'?v:(v&3)|8).toString(16);});ids[n.id]=id;n.id=id;n.done=false;delete n.cancelled;reset(n.items || []);}}
+    function remap(list){for(const n of list){if(n.requires)n.requires=n.requires.map(id=>ids[id]);remap(n.items || []);}}
+    reset(copy);remap(copy);return copy;
+}
+var taskWorkflow={project:project,decorate:decorate,node:workflowNode,cancel:cancel,instantiate:instantiate};
+
+function dependencyOptions(nodes,id) {
+    const available=[];let found=false;
+    function visit(list,choice){for(const n of list || []){if(n.id===id){found=true;return;}const start=available.length;visit(n.items,n.kind==='flow');if(found)return;if(n.kind==='flow'||choice)available.length=start;if(!choice)available.push({id:n.id,title:n.title});}}
+    visit(nodes,false);return available;
+}

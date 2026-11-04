@@ -40,6 +40,21 @@ member = request({'action':'create','template_id':template['id'],'fields':{'titl
 ids = {r['title'].lower():r['id'] for r in member['subtasks']}
 ids.update({r['title'].lower():r['id'] for r in member['subtasks'][1]['items']})
 branch = member['subtasks'][1]['items'][0]['items'][0]['id']
+receipt = step('path-received', 'group')
+receipt['title'] = 'Contribution received'
+receipt['items'] = [step('book'), step('video')]
+receipt['items'][0]['title'] = 'Books of Memories'
+receipt['items'][1]['title'] = 'To a Lifetime Together'
+pathway_request = {'action': 'create', 'fields': {'title': 'Synthetic contributor', 'project': project['id'], 'group': 'Contributions', 'workflow': True, 'subtasks': [
+    receipt, step('book-review', requires=['book']), step('video-review', requires=['video']),
+    step('book-compiled', requires=['book-review']), step('video-compiled', requires=['video-review']),
+    step('thanks', requires=['book-compiled', 'video-compiled'], acceptCancelled=True)]}}
+for stage in pathway_request['fields']['subtasks']:
+    if stage['id'].startswith(('book-', 'video-')):
+        prefix = 'Books of Memories' if stage['id'].startswith('book-') else 'To a Lifetime Together'
+        stage['title'] = prefix + ' - Contribution ' + ('Review' if stage['id'].endswith('review') else 'Compiled')
+    elif stage['id'] == 'thanks':
+        stage['title'] = 'Thank you sent'
 request({'action':'create','fields':{'title':'Within month','due':str(month_end)}})
 request({'action':'create','fields':{'title':'Next month','due':str(next_month)}})
 request({'action':'create','fields':{'title':'Undated'}})
@@ -53,13 +68,13 @@ shell = home / 'qml/shell.qml'
 shell.write_text(shell.read_text().replace('import QtQuick\n','import QtQuick\nimport QtTest\n').replace('    Component.onCompleted:', '''    TestCase {id:pointer;name:"SubtaskInput";when:false}
     IpcHandler {
         target:"subtask-test"
-        function state():string {return JSON.stringify({view:view.view,project:view.projectId,count:view.visibleCount(),expanded:view.expandedTasks,blocked:view.showBlocked,editor:view.editor,tasks:view.stateData.tasks,error:view.errorMessage,rows:view.visualRows(),empty:view.testEmpty()});}
+        function state():string {return JSON.stringify({view:view.view,project:view.projectId,count:view.visibleCount(),expanded:view.expandedTasks,blocked:view.showBlocked,editor:view.editor,tasks:view.stateData.tasks,error:view.errorMessage,busy:view.requestBusy||view.completing,rows:view.visualRows(),empty:view.testEmpty()});}
         function button(name:string):void {const button=pointer.findChild(view,name);pointer.mouseClick(button,button.width/2,button.height/2);}
         function task(id:string):void {const row=pointer.findChild(view,'task-'+id);pointer.mouseClick(row,80,12);}
         function select(id:string):void {view.selectedId=id;view.focusList();}
         function key(code:int):void {pointer.keyClick(code);}
         function has(id:string):bool {const row=pointer.findChild(view,'subtask-'+id);return !!row && row.visible;}
-        function layout(id:string):string {const row=pointer.findChild(view,'subtask-'+id),date=pointer.findChild(view,'subtask-date-'+id);const card=pointer.findChild(view,'task-'+view.selectedId);return JSON.stringify({date:date.text,dateX:date.mapToItem(view,0,0).x,cardX:card.mapToItem(view,0,0).x,dot:row.dotColor.toString(),title:row.modelData.title});}
+        function layout(id:string):string {const row=pointer.findChild(view,'subtask-'+id),date=pointer.findChild(view,'subtask-date-'+id);const card=pointer.findChild(view,'task-'+view.selectedId);return JSON.stringify({date:date.text,dateX:date.mapToItem(view,0,0).x,cardX:card.mapToItem(view,0,0).x,dot:row.dotColor.toString(),title:row.modelData.title,bold:pointer.findChild(row,'subtask-title-'+id).font.bold,strikeout:pointer.findChild(row,'subtask-title-'+id).font.strikeout});}
         function focus(id:string):void {pointer.findChild(view,'subtask-'+id).forceActiveFocus();}
         function editTemplate(id:string):void {view.openEditor(view.stateData.tasks.find(t=>t.id===id));}
         function save():void {view.saveEditor();}
@@ -122,12 +137,38 @@ with (root/'qml.log').open('w') as log:
         ipc('capture',root/'agreement.png');wait(lambda:(root/'agreement.png').exists())
         ipc('button','subtask-complete-'+ids['agreed']);wait(lambda:status(branch)=='ready')
         assert status(ids['received'])=='blocked'
+        chosen=json.loads(ipc('layout',ids['agreed']))
+        assert chosen['bold'] and not chosen['strikeout'],chosen
+        assert json.loads(ipc('layout',ids['agreement']))['strikeout']
+        assert json.loads(ipc('layout',ids['declined']))['strikeout']
+        assert json.loads(ipc('layout',ids['followup']))['strikeout']
         ipc('button','blocked-toggle');wait(lambda:ipc('has',ids['received']).strip()=='true')
         ipc('button','subtask-complete-'+ids['received']);assert status(ids['received'])=='blocked'
         ipc('button','subtask-complete-'+branch);wait(lambda:status(ids['received'])=='ready')
         ipc('button','subtask-complete-'+ids['instruction']);wait(lambda:status(ids['instruction'])=='ready')
         ipc('button','blocked-toggle');wait(lambda:not state()['blocked'])
         assert all(ipc('has',ids[name]).strip()=='false' for name in ['agreement','agreed','declined','followup','received'])
+        pathways=request(pathway_request);ipc('refresh');wait(lambda:len(state()['tasks'])==8)
+        ipc('task',pathways['id']);wait(lambda:state()['expanded'].get(pathways['id']))
+        def path_status(id):
+            task = next(t for t in state()['tasks'] if t['id'] == pathways['id'])
+            return next(r['status'] for r in task['workflowRows'] if r['id'] == id)
+        ipc('focus','video');ipc('key',ord('C'));wait(lambda:path_status('video')=='cancelled')
+        assert path_status('video-review') == 'cancelled'
+        assert path_status('thanks') == 'blocked'
+        for id in ['book','book-review','book-compiled']:
+            wait(lambda:not state()['busy']);ipc('focus',id);ipc('key',0x01000004);wait(lambda:path_status(id)=='done')
+        wait(lambda:path_status('thanks')=='ready')
+        book_style=json.loads(ipc('layout','book'))
+        assert book_style['bold'] and not book_style['strikeout'],book_style
+        assert json.loads(ipc('layout','video'))['strikeout']
+        assert json.loads(ipc('layout','path-received'))['strikeout']
+        ipc('focus','thanks');time.sleep(.2)
+        ipc('capture',root/'pathways-ready.png');wait(lambda:(root/'pathways-ready.png').exists())
+        ipc('focus','video');ipc('key',ord('C'));wait(lambda:path_status('video')=='ready')
+        assert path_status('thanks') == 'blocked'
+        assert not json.loads(ipc('layout','path-received'))['strikeout']
+        assert path_status('book-compiled') == 'done'
         ipc('editTemplate',template['id']);wait(lambda:state()['editor']=='edit')
         ipc('button','workflow-toggle');ipc('save');wait(lambda:next(t for t in state()['tasks'] if t['id']==template['id'])['workflow'] is False)
         ipc('key',0x01000000);ipc('leave');ipc('filter','no-such-fixture')

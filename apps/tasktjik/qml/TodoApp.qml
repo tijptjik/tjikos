@@ -118,13 +118,19 @@ Pane {
     property string completionMessage: ''
     readonly property bool completing: completionQueue.length>0
     function cancelFocusedTask() {
-        if(!taskSelectionActive || selectedSubtaskId || !selected || selected.kind!=='todo' || selected.status==='cancelled' || pendingSave || pendingPurge || pendingMove || dragTask)return;
+        if(!taskSelectionActive || !selected || selected.kind!=='todo' || selected.status==='cancelled' || pendingSave || pendingPurge || pendingMove || dragTask)return;
+        if(selectedSubtaskId){
+            if(!Workflow.cancel(selected,selectedSubtaskId,stateData.today))return;
+            completionQueue=completionQueue.concat([{id:selected.id,cancelStep:true,subtaskId:selectedSubtaskId,requestId:newRequestId(),sent:false}]);
+            sendCompletion();return;
+        }
         completionMessage='';
         completionQueue=completionQueue.concat([{id:selected.id,status:'cancelled',subtaskId:'',requestId:newRequestId(),sent:false}]);
         Qt.callLater(()=>{selectVisibleTask();focusList();});
         sendCompletion();
     }
     function projectCompletion(task,operation,today) {
+        if(operation.cancelStep)return Workflow.cancel(task,operation.subtaskId,today);
         if(operation.status)return Object.assign({},Workflow.project(task,'',false,today),{status:operation.status,blockers:[]});
         return Workflow.project(task,operation.subtaskId,operation.done,today);
     }
@@ -145,9 +151,9 @@ Pane {
         const operation=completionQueue[0],task=(stateData.tasks || []).find(t=>t.id===operation.id);
         const target=task && (operation.subtaskId?Workflow.workflowNode(task.subtasks,operation.subtaskId):task);
         if(!target || !projectCompletion(task,operation,stateData.today)) {rejectCompletion('This step changed; review its current state.');return;}
-        if(operation.status?target.status===operation.status:target.done===operation.done){completionQueue=completionQueue.slice(1);return;}
+        if(!operation.cancelStep && (operation.status?target.status===operation.status:target.done===operation.done)){completionQueue=completionQueue.slice(1);return;}
         completionQueue=[Object.assign({},operation,{sent:true})].concat(completionQueue.slice(1));
-        request({action:operation.status?'status':operation.subtaskId?'subtask-toggle':'toggle',status:operation.status,actor:'user',id:task.id,subtask_id:operation.subtaskId,period:task.period,revision:task.revision,request_id:operation.requestId});
+        request({action:operation.cancelStep?'subtask-cancel':operation.status?'status':operation.subtaskId?'subtask-toggle':'toggle',status:operation.status,actor:'user',id:task.id,subtask_id:operation.subtaskId,period:task.period,revision:task.revision,request_id:operation.requestId});
     }
     function acceptCompletion() {
         if(completionQueue.length && completionQueue[0].sent)completionQueue=completionQueue.slice(1);
@@ -1576,7 +1582,7 @@ Pane {
                     visible:!!editing && !editing.id && editing.kind==='todo'
                     textRole:'title';valueRole:'id'
                     model:[{id:'',title:'From Template…'}].concat((stateData.tasks || []).filter(t=>t.kind==='template'))
-                    onActivated:{const template=model[currentIndex];if(template.id){const copy=JSON.parse(JSON.stringify(template.subtasks || []));function reset(nodes){for(const n of nodes){n.id=app.newRequestId();n.done=false;reset(n.items || []);}}reset(copy);workflowEditor.reset(copy,template.workflow===true);}}
+                    onActivated:{const template=model[currentIndex];if(template.id){const copy=Workflow.instantiate(template.subtasks || []);workflowEditor.reset(copy,template.workflow===true);}}
                 }
                 Choice {
                     id:projectPicker;Layout.fillWidth:true;visible:!!editing && editing.kind==='todo'

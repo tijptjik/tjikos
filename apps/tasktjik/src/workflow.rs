@@ -3,7 +3,7 @@
 use anyhow::{bail, ensure, Context, Result};
 use chrono::{Duration, NaiveDate};
 use serde_json::{json, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 fn s<'a>(v: &'a Value, key: &str) -> &'a str {
@@ -70,17 +70,23 @@ pub fn validate(nodes: &Value) -> Result<()> {
             );
             let kind = s(n, "kind");
             ensure!(
-                ["task", "flow", "exit", "reminder"].contains(&kind),
+                ["task", "flow", "exit", "reminder", "group"].contains(&kind),
                 "Invalid subtask kind"
             );
             ensure!(
-                !choices || kind != "flow",
+                !choices || !["flow", "group"].contains(&kind),
                 "An alternative cannot be a flow block"
             );
             ensure!(
                 choices || !["exit", "reminder"].contains(&kind),
                 "Exits and reminders belong to a flow block"
             );
+            for flag in ["cancelled", "acceptCancelled"] {
+                ensure!(
+                    n.get(flag).is_none_or(Value::is_boolean),
+                    "Invalid pathway setting"
+                );
+            }
             ensure!(n["done"].is_boolean(), "Invalid subtask completion");
             ensure!(n["due"].is_string(), "Invalid subtask due date");
             if !s(n, "due").is_empty() {
@@ -133,21 +139,66 @@ pub fn validate(nodes: &Value) -> Result<()> {
         );
         Ok(())
     }
-    walk(nodes, false, 0, &mut HashSet::new())
+    walk(nodes, false, 0, &mut HashSet::new())?;
+    // Only earlier, fully visited nodes may be dependencies: no cycles or ancestors.
+    fn dependencies(nodes: &Value, available: &mut HashSet<String>, choice: bool) -> Result<()> {
+        for n in nodes.as_array().unwrap() {
+            if let Some(requires) = n.get("requires") {
+                ensure!(
+                    !choice,
+                    "Set dependencies on the flow, not its alternatives"
+                );
+                let requires = requires.as_array().context("Dependencies must be a list")?;
+                ensure!(!requires.is_empty(), "Choose at least one dependency");
+                let mut unique = HashSet::new();
+                for id in requires {
+                    let id = id.as_str().context("Invalid dependency ID")?;
+                    ensure!(available.contains(id) && unique.insert(id), "Dependencies must reference distinct earlier steps outside their own branch");
+                }
+            }
+            if n["kind"] == "flow" || choice {
+                // Conditional branch internals are private to that branch. Depend on
+                // the enclosing flow to wait for whichever alternative was chosen.
+                dependencies(&n["items"], &mut available.clone(), n["kind"] == "flow")?;
+            } else {
+                dependencies(&n["items"], available, false)?;
+            }
+            if !choice {
+                available.insert(s(n, "id").into());
+            }
+        }
+        Ok(())
+    }
+    dependencies(nodes, &mut HashSet::new(), false)
 }
 
 pub fn instantiate(nodes: &Value) -> Value {
     let mut nodes = nodes.clone();
-    fn reset(nodes: &mut Value) {
+    fn reset(nodes: &mut Value, ids: &mut HashMap<String, String>) {
         if let Some(list) = nodes.as_array_mut() {
             for node in list {
-                node["id"] = json!(Uuid::new_v4().to_string());
+                let id = Uuid::new_v4().to_string();
+                ids.insert(s(node, "id").to_owned(), id.clone());
+                node["id"] = json!(id);
+                node.as_object_mut().unwrap().remove("cancelled");
                 node["done"] = json!(false);
-                reset(&mut node["items"]);
+                reset(&mut node["items"], ids);
             }
         }
     }
-    reset(&mut nodes);
+    let mut ids = HashMap::new();
+    reset(&mut nodes, &mut ids);
+    fn remap(nodes: &mut Value, ids: &HashMap<String, String>) {
+        for node in nodes.as_array_mut().unwrap() {
+            if let Some(requires) = node.get_mut("requires").and_then(Value::as_array_mut) {
+                for id in requires {
+                    *id = json!(ids[id.as_str().unwrap()]);
+                }
+            }
+            remap(&mut node["items"], ids);
+        }
+    }
+    remap(&mut nodes, &ids);
     nodes
 }
 
@@ -174,13 +225,39 @@ fn rows_with_workflow(nodes: &Value, day: NaiveDate, workflow: bool) -> Result<V
         inherited_blocked: bool,
         sequential: bool,
         out: &mut Vec<Value>,
+        states: &mut HashMap<String, (bool, bool)>,
     ) -> Result<(bool, bool)> {
         let mut stopped = cancelled;
         let mut complete = true;
         let mut previous = String::new();
         for n in nodes.as_array().context("Invalid subtasks")? {
-            let blocked = inherited_blocked || (sequential && !complete);
-            let cancelled = stopped;
+            let dependencies = n.get("requires").and_then(Value::as_array);
+            let dependency_cancelled = dependencies.is_some_and(|ids| {
+                ids.iter().any(|id| {
+                    states
+                        .get(id.as_str().unwrap())
+                        .is_some_and(|state| state.1)
+                })
+            });
+            let dependency_ready = dependencies.is_some_and(|ids| {
+                ids.iter().all(|id| {
+                    states
+                        .get(id.as_str().unwrap())
+                        .is_some_and(|state| state.0 || (state.1 && n["acceptCancelled"] == true))
+                })
+            });
+            let blocked = inherited_blocked
+                || if dependencies.is_some() {
+                    !dependency_ready
+                } else {
+                    sequential && !complete
+                };
+            let cancelled = (stopped && !(dependency_ready && n["acceptCancelled"] == true))
+                || n["cancelled"] == true
+                || (dependency_cancelled && n["acceptCancelled"] != true);
+            let blocked = blocked && !cancelled;
+            let inherited_stop = stopped;
+            stopped = cancelled;
             let start = out.len();
             let mut resolved;
             if n["kind"] == "flow" {
@@ -191,7 +268,11 @@ fn rows_with_workflow(nodes: &Value, day: NaiveDate, workflow: bool) -> Result<V
                 let mut header = n.clone();
                 header["depth"] = json!(depth);
                 header["blocked"] = json!(blocked && !stopped);
-                header["dependsOn"] = json!(if sequential { previous.as_str() } else { "" });
+                header["dependsOn"] = json!(if sequential && dependencies.is_none() {
+                    previous.as_str()
+                } else {
+                    ""
+                });
                 out.push(header);
                 resolved = winner.is_some();
                 for c in choices {
@@ -228,8 +309,16 @@ fn rows_with_workflow(nodes: &Value, day: NaiveDate, workflow: bool) -> Result<V
                     row["blockId"] = n["id"].clone();
                     out.push(row);
                     if c["done"] == true && !cancelled && !reminder && !blocked {
-                        let (exit, branch_complete) =
-                            sequence(&c["items"], day, depth + 1, false, false, false, out)?;
+                        let (exit, branch_complete) = sequence(
+                            &c["items"],
+                            day,
+                            depth + 1,
+                            false,
+                            false,
+                            false,
+                            out,
+                            states,
+                        )?;
                         resolved &= branch_complete;
                         if exit {
                             stopped = true;
@@ -261,24 +350,56 @@ fn rows_with_workflow(nodes: &Value, day: NaiveDate, workflow: bool) -> Result<V
                 });
                 row["depth"] = json!(depth);
                 row["blocked"] = json!(blocked && !stopped);
-                row["dependsOn"] = json!(if sequential { previous.as_str() } else { "" });
+                row["dependsOn"] = json!(if sequential && dependencies.is_none() {
+                    previous.as_str()
+                } else {
+                    ""
+                });
                 out.push(row);
-                let (exit, children_complete) =
-                    sequence(&n["items"], day, depth + 1, stopped, blocked, false, out)?;
-                resolved = n["done"] == true && children_complete;
+                let (exit, children_complete) = sequence(
+                    &n["items"],
+                    day,
+                    depth + 1,
+                    stopped,
+                    blocked,
+                    false,
+                    out,
+                    states,
+                )?;
+                resolved = (n["done"] == true || n["kind"] == "group") && children_complete;
+                if n["kind"] == "group" && !stopped && !blocked {
+                    out[start]["status"] = json!(if resolved { "done" } else { "ready" });
+                }
                 if exit {
                     stopped = true;
                 }
             }
+            states.insert(
+                s(n, "id").to_owned(),
+                (resolved && !blocked && !cancelled, cancelled),
+            );
+            // Explicit cancellation affects this dependency path only. Flow exits retain legacy behavior.
+            if cancelled && !inherited_stop {
+                stopped = false;
+            }
             if !stopped {
-                complete &= resolved && !blocked;
+                complete &= cancelled || (resolved && !blocked);
             }
             previous = s(n, "id").to_owned();
         }
         Ok((stopped, complete))
     }
     let mut out = Vec::new();
-    sequence(nodes, day, 0, false, false, workflow, &mut out)?;
+    sequence(
+        nodes,
+        day,
+        0,
+        false,
+        false,
+        workflow,
+        &mut out,
+        &mut HashMap::new(),
+    )?;
     Ok(out)
 }
 
@@ -288,7 +409,10 @@ pub fn toggle(task: &mut Value, id: &str, day: NaiveDate) -> Result<()> {
         .iter()
         .find(|r| r["id"] == id)
         .context("Subtask is not active")?;
-    ensure!(row["kind"] != "flow", "Choose a flow alternative");
+    ensure!(
+        row["kind"] != "flow" && row["kind"] != "group",
+        "Complete the contained steps"
+    );
     ensure!(
         row["status"] != "cancelled",
         "Reopen the selected alternative first"
@@ -301,6 +425,39 @@ pub fn toggle(task: &mut Value, id: &str, day: NaiveDate) -> Result<()> {
         for n in nodes.as_array_mut().unwrap() {
             if n["id"] == id {
                 n["done"] = json!(n["done"] != true);
+                return true;
+            }
+            if change(&mut n["items"], id) {
+                return true;
+            }
+        }
+        false
+    }
+    ensure!(
+        change(&mut task["subtasks"], id),
+        "Subtask no longer exists"
+    );
+    Ok(())
+}
+
+pub fn cancel(task: &mut Value, id: &str, day: NaiveDate) -> Result<()> {
+    let rows = task_rows(task, day)?;
+    let row = rows
+        .iter()
+        .find(|r| r["id"] == id)
+        .context("Subtask is not active")?;
+    ensure!(
+        row.get("blockId").is_none(),
+        "Cancel the flow instead of an alternative"
+    );
+    ensure!(
+        row["cancelled"] == true || (row["status"] != "blocked" && row["status"] != "cancelled"),
+        "This pathway is not available"
+    );
+    fn change(nodes: &mut Value, id: &str) -> bool {
+        for n in nodes.as_array_mut().unwrap() {
+            if n["id"] == id {
+                n["cancelled"] = json!(n["cancelled"] != true);
                 return true;
             }
             if change(&mut n["items"], id) {

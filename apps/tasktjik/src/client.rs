@@ -224,7 +224,7 @@ fn apply(tasks: &mut Vec<Value>, request: &Value) -> Result<Value> {
     }
     if action == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"projects":true,"workflows":true,"undated_repeat":true,"groups":true,"workflow_dependencies":true,"protocol":1}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"projects":true,"workflows":true,"undated_repeat":true,"groups":true,"workflow_dependencies":true,"conditional_pathways":true,"protocol":1}),
         );
     }
     if action == "create" {
@@ -469,6 +469,7 @@ impl Todo {
             "undo",
             "attach-image",
             "subtask-toggle",
+            "subtask-cancel",
         ]
         .contains(&action)
         {

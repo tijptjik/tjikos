@@ -88,7 +88,7 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
     let op = r["action"].as_str().unwrap_or("list");
     if op == "capabilities" {
         return Ok(
-            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"projects":true,"workflows":true,"undated_repeat":true,"groups":true,"workflow_dependencies":true,"protocol":1,"sqlite":true,"undo":true}),
+            json!({"reading":true,"idempotent_create":true,"agent_tasks":true,"metadata":true,"images":true,"projects":true,"workflows":true,"undated_repeat":true,"groups":true,"workflow_dependencies":true,"conditional_pathways":true,"protocol":1,"sqlite":true,"undo":true}),
         );
     }
     if op == "list" {
@@ -282,6 +282,7 @@ pub fn request(path: &Path, r: Value, owner: &str, device: &str) -> Result<Value
             "move",
             "attach-image",
             "subtask-toggle",
+            "subtask-cancel",
         ]
         .contains(&op)
             && result["id"].is_string()

@@ -44,7 +44,7 @@ ShellRoot {
                     view.errorMessage = '';
                     // Reconcile the optimistic row only after the server confirms it.
                     const sent = JSON.parse(backend.payload), action = sent.action;
-                    if(['toggle','subtask-toggle','status'].includes(action) && view.completionQueue[0]?.requestId===sent.request_id)view.acceptCompletion();
+                    if(['toggle','subtask-toggle','subtask-cancel','status'].includes(action) && view.completionQueue[0]?.requestId===sent.request_id)view.acceptCompletion();
                     if (['create', 'edit', 'snooze'].includes(action)) {
                         view.accepted();
                         Qt.callLater(() => view.forceActiveFocus());

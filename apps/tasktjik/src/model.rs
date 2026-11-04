@@ -399,6 +399,7 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
         "move",
         "attach-image",
         "subtask-toggle",
+        "subtask-cancel",
     ]
     .contains(&op)
     {
@@ -415,6 +416,9 @@ pub fn mutate(tasks: &[Value], r: &Value) -> Result<Value> {
         return Ok(json!({"id":t["id"],"deleted":true}));
     }
     match op {
+        "subtask-cancel" => {
+            crate::workflow::cancel(&mut t, field(r, "subtask_id"), today())?;
+        }
         "subtask-toggle" => {
             crate::workflow::toggle(&mut t, field(r, "subtask_id"), today())?;
         }
