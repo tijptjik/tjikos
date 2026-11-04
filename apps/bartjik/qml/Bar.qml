@@ -8,13 +8,13 @@ PanelWindow {
     required property var controller
     required property string barKey
     readonly property var bar: controller.bars.find(b=>b.key===barKey)
-    readonly property bool voiceActive: ['recording','processing'].includes(controller.hyprvoiceState || '')
+    readonly property bool recordingActive: controller.screenRecording || ['recording','processing'].includes(controller.hyprvoiceState || '')
     function trayIsland(i) {return i.modules.some(id=>bar.moduleConfigs[id]?.provider==='icontray');}
-    readonly property bool voiceVisible: voiceActive && (bar?.islands || []).some(i=>trayIsland(i))
-    readonly property var populatedIslands: (bar?.islands || []).filter(i=>(voiceActive && trayIsland(i)) || i.modules.some(id=>controller.items(bar,id).some(row=>row.visible!==false))).map(i=>i.id)
+    readonly property bool recordingVisible: recordingActive && (bar?.islands || []).some(i=>trayIsland(i))
+    readonly property var populatedIslands: (bar?.islands || []).filter(i=>(recordingActive && trayIsland(i)) || i.modules.some(id=>controller.items(bar,id).some(row=>row.visible!==false))).map(i=>i.id)
     readonly property bool horizontal: bar ? bar.side==='t' || bar.side==='b' : true
     readonly property var geometry: bar && targetScreen ? Logic.geometry(bar,targetScreen.width,targetScreen.height,groups.implicitWidth,groups.implicitHeight,targetScreen.devicePixelRatio) : {x:0,y:0,width:0,height:0}
-    readonly property bool concealed: !voiceVisible && (controller.edgeStates[barKey]?.concealed || false)
+    readonly property bool concealed: !recordingVisible && (controller.edgeStates[barKey]?.concealed || false)
     readonly property bool autoHide: bar?.autoHide || false
     readonly property bool edgeHovered: hover.hovered || !!controller.menuOpen(barKey)
     readonly property bool edgeFading: viewport.opacity>0

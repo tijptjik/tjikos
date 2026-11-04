@@ -14,9 +14,10 @@ Rectangle {
     readonly property real paddingY: theme.paddingY ?? theme.padding
     readonly property bool hasTray: definition.modules.some(id=>bar.moduleConfigs[id]?.provider==='icontray')
     readonly property string hyprvoiceState: hasTray ? (controller.hyprvoiceState || 'unavailable') : 'unavailable'
-    readonly property bool voiceActive: hyprvoiceState==='recording' || hyprvoiceState==='processing'
+    readonly property bool screenRecording: hasTray && !!controller.screenRecording
+    readonly property bool recordingActive: screenRecording || hyprvoiceState==='recording' || hyprvoiceState==='processing'
     readonly property bool hasItems: definition.modules.some(id=>controller.displayItems(bar,id).some(i=>i.visible!==false))
-    readonly property bool populated: hasItems || voiceActive
+    readonly property bool populated: hasItems || recordingActive
     visible: populated
     implicitWidth: !populated ? 0 : horizontal ? modules.implicitWidth+2*paddingX : bar.verticalWidth
     implicitHeight: !populated ? 0 : horizontal ? Math.max(bar.thickness,modules.implicitHeight+2*paddingY) : modules.implicitHeight+2*paddingY

@@ -14,6 +14,9 @@ QtObject {
     property string hyprvoiceState: 'unavailable'
     onHyprvoiceEnabledChanged: {
         hyprvoiceRetry.stop();
+        screenRecordRetry.stop();
+        screenRecordReader.running=hyprvoiceEnabled && !demo;
+        if(!hyprvoiceEnabled)screenRecording=false;
         hyprvoiceReader.running=hyprvoiceEnabled && !demo;
         if(!hyprvoiceEnabled)hyprvoiceState='unavailable';
     }
@@ -34,6 +37,24 @@ QtObject {
     property Timer hyprvoiceRetry: Timer {
         interval: 3000
         onTriggered: if(native.hyprvoiceEnabled && !native.demo)native.hyprvoiceReader.running=true
+    }
+    property bool screenRecording: false
+    property Process screenRecordReader: Process {
+        running: native.hyprvoiceEnabled && !native.demo
+        command: [Quickshell.env('BARTJIK_HOME')+'/bin/bartjikctl','helper','screen-record-status']
+        stdout: SplitParser {onRead: data => {
+            try {const update=JSON.parse(data);native.screenRecording=update.available===true && update.recording===true;}
+            catch(e) {native.screenRecording=false;}
+        }}
+        onExited: (code,status) => {
+            native.screenRecording=false;
+            if(native.hyprvoiceEnabled && !native.demo)native.screenRecordRetry.restart();
+        }
+        onRunningChanged: if(!running)native.screenRecording=false
+    }
+    property Timer screenRecordRetry: Timer {
+        interval: 3000
+        onTriggered: if(native.hyprvoiceEnabled && !native.demo)native.screenRecordReader.running=true
     }
     // These singletons are shared by every renderer; no per-bar service objects.
     readonly property var players: demo ? [] : Mpris.players.values
@@ -149,7 +170,7 @@ QtObject {
         return [];
     }
     function snapshot() {
-        return {hyprvoice:hyprvoiceState,players:players.map(p=>({id:p.dbusName,identity:p.identity,playing:p.isPlaying,canControl:p.canControl,canQuit:p.canQuit,position:p.position,canSeek:p.canSeek,shuffle:p.shuffle,shuffleSupported:p.shuffleSupported})),
+        return {hyprvoice:hyprvoiceState,screenRecording:screenRecording,players:players.map(p=>({id:p.dbusName,identity:p.identity,playing:p.isPlaying,canControl:p.canControl,canQuit:p.canQuit,position:p.position,canSeek:p.canSeek,shuffle:p.shuffle,shuffleSupported:p.shuffleSupported})),
             tray:trayRecords.filter(r=>r.object && tray.indexOf(r.object)>=0).map(r=>({id:r.id,appId:r.object.id,title:r.object.title,status:r.object.status,hasMenu:r.object.hasMenu}))};
     }
     function act(action, id, window, rect) {

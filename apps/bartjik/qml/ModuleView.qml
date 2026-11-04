@@ -12,7 +12,8 @@ Item {
     readonly property var moduleConfig: bar.moduleConfigs[moduleId] || {}
     readonly property var entries: controller.displayItems(bar,moduleId).filter(i=>i.visible!==false)
     readonly property string hyprvoiceState: moduleConfig.provider==='icontray' ? (controller.hyprvoiceState || 'unavailable') : 'unavailable'
-    readonly property bool voiceActive: hyprvoiceState==='recording' || hyprvoiceState==='processing'
+    readonly property bool screenRecording: moduleConfig.provider==='icontray' && !!controller.screenRecording
+    readonly property bool recordingActive: screenRecording || hyprvoiceState==='recording' || hyprvoiceState==='processing'
     readonly property var voiceStyle: Logic.merge(theme,moduleConfig.style || {})
     readonly property string tailnetModule: moduleConfig.provider==='mullvad'?controller.connectivityPeer(bar,moduleId,'tailscale'):''
     readonly property bool tailnetOn: !!tailnetModule && controller.items(bar,tailnetModule)[0]?.panel?.connection==='Running'
@@ -41,7 +42,7 @@ Item {
                 context:{barKey:bar.key,bar:bar.id,monitor:bar.screen,module:moduleId,item:e.key,part:'item'}};
         });
     }
-    visible: entries.length>0 || voiceActive
+    visible: entries.length>0 || recordingActive
     implicitWidth: grid.implicitWidth
     implicitHeight: grid.implicitHeight
     onEntriesChanged: {Logic.sync(keys,entries.map(i=>i.id));Qt.callLater(updateRing);}
@@ -52,17 +53,17 @@ Item {
         id: grid
         onPositioningComplete: moduleView.updateRing()
         verticalItemAlignment: Grid.AlignVCenter
-        columns: moduleView.horizontal ? Math.max(1,keys.count+(moduleView.voiceActive ? 1 : 0)) : 1
+        columns: moduleView.horizontal ? Math.max(1,keys.count+(moduleView.recordingActive ? 1 : 0)) : 1
         columnSpacing: moduleView.spacedWorkspaces ? 0 : (moduleView.moduleConfig.style?.itemGap ?? moduleView.theme.itemGap)
         rowSpacing: moduleView.theme.itemGap
         Item {
-            objectName: 'hyprvoice-slot'
-            visible: moduleView.voiceActive
+            objectName: 'recording-slot'
+            visible: moduleView.recordingActive
             implicitWidth: Math.max(moduleView.voiceStyle.minItemSize,moduleView.voiceStyle.iconSize)
             implicitHeight: Math.max(moduleView.voiceStyle.iconSize,moduleView.voiceStyle.fontSize*1.3,moduleView.voiceStyle.minItemSize)
             Rectangle {
                 id: voiceDot
-                objectName: 'hyprvoice-indicator'
+                objectName: 'recording-indicator'
                 readonly property bool isTrayIndicator: moduleView.moduleConfig.provider==='icontray'
                 x: (parent.width-width)/2
                 y: (parent.height-height)/2
@@ -71,8 +72,8 @@ Item {
                 radius: width/2
                 color: '#ff4d5e'
                 Accessible.role: Accessible.StaticText
-                Accessible.name: moduleView.hyprvoiceState==='recording' ? 'Hyprvoice recording' : 'Hyprvoice processing'
-                readonly property bool pulsing: visible && moduleView.hyprvoiceState==='processing' && moduleView.voiceStyle.animateIcons!==false
+                Accessible.name: [moduleView.screenRecording ? 'Screen recording' : '',moduleView.hyprvoiceState==='recording' ? 'Hyprvoice recording' : moduleView.hyprvoiceState==='processing' ? 'Hyprvoice processing' : ''].filter(Boolean).join(', ')
+                readonly property bool pulsing: visible && !moduleView.screenRecording && moduleView.hyprvoiceState==='processing' && moduleView.voiceStyle.animateIcons!==false
                 onPulsingChanged: if(!pulsing)opacity=1
                 SequentialAnimation on opacity {
                     running: voiceDot.pulsing

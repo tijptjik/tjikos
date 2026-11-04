@@ -20,7 +20,7 @@ PROBE = """
     function hyprvoiceFixtureProbe() {
         const panel=panels.instances[0], dots=[], parts=[];
         function visit(q) {
-            if(q.objectName==='hyprvoice-indicator') {
+            if(q.objectName==='recording-indicator') {
                 const xy=q.mapToItem(panel.contentItem,0,0);
                 dots.push({tray:q.isTrayIndicator,visible:q.visible,opacity:q.opacity,
                     x:xy.x,y:xy.y,width:q.width,height:q.height,color:String(q.color),
@@ -34,12 +34,13 @@ PROBE = """
             for(const child of q.children || [])visit(child);
         }
         visit(panel.contentItem);
-        return {ok:true,state:root.hyprvoiceState,dots:dots,parts:parts,bar:panel.inspect()};
+        return {ok:true,state:root.hyprvoiceState,screenRecording:root.screenRecording,dots:dots,parts:parts,bar:panel.inspect()};
     }
 """
 
 FIXTURE_CASES = """case 'hyprvoiceFixture':
             if(req.state!==undefined)native.hyprvoiceState=req.state;
+            if(req.screenRecording!==undefined)native.screenRecording=req.screenRecording;
             if(req.emptyTray!==undefined)root.hyprvoiceFixtureEmptyTray=req.emptyTray;
             return hyprvoiceFixtureProbe();
         case 'hyprvoiceProbe':return hyprvoiceFixtureProbe();
@@ -174,6 +175,22 @@ def main():
                     inactive = state(value)
                     assert not tray_dot(inactive)["visible"]
                     assert layout(inactive) == baseline, (inactive, baseline)
+                # Screen recording shares the same leading slot, taking precedence over processing pulse.
+                state("idle")
+                ipc({"op": "hyprvoiceFixture", "screenRecording": True})
+                screen = wait_for(lambda: (result := probe())["screenRecording"] and result)
+                assert tray_dot(screen)["visible"] and tray_dot(screen)["opacity"] == 1
+                assert layout(screen) == active_layout
+                capture("screen-recording")
+                for voice in ("recording", "processing", "unavailable"):
+                    state(voice)
+                    time.sleep(.2)
+                    assert tray_dot(probe())["opacity"] == 1
+                    assert layout(probe()) == active_layout
+                ipc({"op": "hyprvoiceFixture", "screenRecording": False})
+                state("idle")
+                assert layout(probe()) == baseline
+                evidence["screen_recording"] = screen
                 evidence["horizontal_layout"] = {"idle": baseline, "active": active_layout}
 
                 config["style"]["animateIcons"] = False
@@ -192,12 +209,14 @@ def main():
                 wait_for(lambda: ipc({"op": "config"})["bars"][0]["side"] == "l")
                 time.sleep(.2)
                 vertical_idle = state("idle")
-                vertical_recording = state("recording")
+                ipc({"op": "hyprvoiceFixture", "screenRecording": True})
+                vertical_recording = probe()
                 active_slot(vertical_idle, vertical_recording, horizontal=False)
                 capture("vertical-recording")
+                ipc({"op": "hyprvoiceFixture", "screenRecording": False})
                 vertical_inactive = state("idle")
                 assert layout(vertical_inactive) == layout(vertical_idle)
-                state("recording")
+                ipc({"op": "hyprvoiceFixture", "screenRecording": True})
                 evidence["vertical_layout"] = {"idle": layout(vertical_idle), "active": layout(vertical_recording)}
 
                 ipc({"op": "hyprvoiceFixture", "emptyTray": True})
@@ -206,6 +225,7 @@ def main():
                 assert island["visible"] and island["width"] > 0 and island["height"] > 0, empty
                 assert tray_dot(empty)["visible"] and empty["bar"]["inputRegions"] == 2, empty
                 capture("empty-tray-recording")
+                ipc({"op": "hyprvoiceFixture", "screenRecording": False})
                 state("idle")
                 wait_for(lambda: not next(i for i in probe()["bar"]["islands"] if i["id"] == "tray")["visible"])
                 evidence["empty_tray"] = empty

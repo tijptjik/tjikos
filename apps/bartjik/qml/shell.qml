@@ -23,6 +23,7 @@ ShellRoot {
     readonly property var screenInfo: Quickshell.screens.map(s=>({name:s.name,width:s.width,height:s.height,scale:s.devicePixelRatio}))
     readonly property alias panelShell:sharedPanelShell
     PanelShell {id:sharedPanelShell}
+    readonly property bool screenRecording: native.screenRecording
     readonly property string hyprvoiceState: native.hyprvoiceState
     Native {
         id:native
@@ -187,7 +188,7 @@ ShellRoot {
         default:throw Error('unknown operation');
         }
         return {ok:true,ready:state.ready,demo:demo,theme:state.config?.theme,error:state.error || helperError,
-            workspaceReminder:workspaceReminder,hyprvoice:hyprvoiceState,pointerError:pointer.error || '',actionError:native.navigationError || state.actionError,bars:bars.length,providers:Object.keys(state.providers || {}).length};
+            workspaceReminder:workspaceReminder,hyprvoice:hyprvoiceState,screenRecording:screenRecording,pointerError:pointer.error || '',actionError:native.navigationError || state.actionError,bars:bars.length,providers:Object.keys(state.providers || {}).length};
     }
     IpcHandler {
         target:'bartjik'

@@ -832,7 +832,7 @@ shows weekly data; request totals require the local database. Queries do not rea
 prompts, request bodies, credentials or error-message contents. No extra polling loops
 are added for panels: they share each module's existing provider updates.
 
-The tray island adds a red circle in its own leading slot while Hyprvoice records,
+The tray island adds a red circle in its own leading slot while screen recording or Hyprvoice records,
 then pulses it while transcription, text cleanup, or injection is in progress.
 The 10-pixel dot is centered in a regular tray icon slot. The island expands for the
 slot, then contracts when Hyprvoice is idle or unavailable. An active voice
@@ -843,6 +843,11 @@ only state changes; it starts only when a tray module exists and never runs in
 demo mode. `bartjikctl status` reports the current `hyprvoice` state. The patched
 Hyprvoice build supports `notifications.type="errors"` to replace routine popups
 with this indicator while preserving error notifications.
+Screen recording uses the same slot and keeps the dot steady even while Hyprvoice
+processes. A read-only helper checks `screen-record.service` and its recorder
+process every 250 ms; selection and countdown do not light the dot. It clears on
+stop or failure, keeps an auto-hidden tray visible, and reports `screenRecording`
+in `bartjikctl status`. This helper also runs only with a tray and outside demo mode.
 
 The comparison preset renders native tray artwork at 21 logical pixels. Greyscale
 retains luminance/detail; `monochromeIcon:false`
