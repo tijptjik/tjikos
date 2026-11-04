@@ -1,0 +1,14 @@
+{
+  "name": "@tjikos/whatsover-relay-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run",
+    "check": "tsc --noEmit",
+    "types": "wrangler types --env-interface RelayEnv"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "wrangler": "4.156.2"
+  }
+}
