@@ -1828,27 +1828,34 @@ impl MailApp {
             .gap_2()
             .bg(rgb(BG))
             .child(
-                div().flex().items_center().gap_2().h(px(28.)).child(
-                    img(Arc::new(Image::from_bytes(
-                        ImageFormat::Svg,
-                        include_bytes!("../assets/gmailtjik.svg").to_vec(),
-                    )))
-                    .size(px(28.))
-                    .flex_shrink_0(),
-                ),
-            )
-            .child(
                 div()
-                    .mt_6()
-                    .mb_2()
-                    .text_xs()
-                    .text_color(rgb(MUTED))
-                    .truncate()
-                    .child(if self.email.is_empty() {
-                        "Not connected".into()
-                    } else {
-                        self.email.clone()
-                    }),
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .h(px(32.))
+                    .mb(px(8.))
+                    .flex_shrink_0()
+                    .child(
+                        img(Arc::new(Image::from_bytes(
+                            ImageFormat::Svg,
+                            include_bytes!("../assets/gmailtjik-app.svg").to_vec(),
+                        )))
+                        .size(px(32.))
+                        .flex_shrink_0(),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(14.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .truncate()
+                            .child(if self.email.is_empty() {
+                                "Not connected".into()
+                            } else {
+                                self.email.to_uppercase()
+                            }),
+                    ),
             );
         let labels = crate::labels::visible_rows(
             &self.labels,

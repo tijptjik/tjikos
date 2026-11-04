@@ -1,19 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <g id="frameless-artwork" transform="translate(-4.363636 -4.363636) scale(1.136364)"><title>Gmailtjik</title>
-  <desc>Rose Punk family tile with a red folded-envelope monogram.</desc>
+<title>Gmailtjik — Rose Punk refinement</title><desc>Use the shared warm ivory #fff0da for functional foreground marks, keeping identity frame colours. Original source attribution is retained in the provenance manifest.</desc><g id="frameless-artwork" transform="translate(-4.363636 -4.363636) scale(1.136364)"><defs>
+ </defs>
+<g stroke-linecap="round" stroke-linejoin="round" /><defs /><g data-material="authored" stroke-linecap="round" stroke-linejoin="round"><g data-material="authored"><title>Gmailtjik</title>
+  <desc>Rose Punk rose frame with an ivory folded-envelope monogram.</desc>
   <defs>
-    <linearGradient id="frame" x1="0" y1="0" x2=".35" y2="1">
-      <stop stop-color="#f0bec3" />
-      <stop offset=".32" stop-color="#df929d" />
-      <stop offset="1" stop-color="#a65d76" />
+    <linearGradient id="gmailtjik-frame" x1="0" y1="0" x2=".35" y2="1">
+      <stop stop-color="#e6a8b3" />
+      <stop offset=".32" stop-color="#cf899e" />
+      <stop offset="1" stop-color="#a96580" />
     </linearGradient>
-    <linearGradient id="envelope" x1="0" y1="0" x2=".3" y2="1">
-      <stop stop-color="#ff8589" />
-      <stop offset=".32" stop-color="#ed555f" />
-      <stop offset="1" stop-color="#c73d53" />
-    </linearGradient>
-  </defs>
-  <rect x="12" y="12" width="40" height="40" rx="9" fill="#26233a" stroke="url(#frame)" stroke-width="4" />
+    </defs>
+  <rect x="12" y="12" width="40" height="40" rx="9" fill="#26233a" stroke="url(#gmailtjik-frame)" stroke-width="4" />
 
-  <path d="M21 40V24L32 32L43 24V40" fill="none" stroke="url(#envelope)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
-</g></svg>
+  <path d="M21 40V23L32 31L43 23V40" fill="none" stroke="#fff0da" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" />
+</g></g></g></svg>

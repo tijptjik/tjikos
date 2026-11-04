@@ -10,14 +10,15 @@ install -m 755 "$root/dist/gmailtjik" "$new_binary"
 mv -f -- "$new_binary" "$install_home/.local/bin/gmailtjik"
 install -m 644 "$root/assets/gmailtjik-app.svg" "$data_root/icons/hicolor/scalable/apps/gmailtjik.svg"
 # Absolute Exec also works when the desktop session omits ~/.local/bin from PATH.
-python3 - "$root/examples/gmailtjik.desktop" "$data_root/applications/gmailtjik.desktop" "$install_home/.local/bin/gmailtjik" "$data_root/icons/hicolor/scalable/apps/gmailtjik.svg" <<'PY'
+# Keep the icon name so the active theme takes precedence over the hicolor fallback.
+python3 - "$root/examples/gmailtjik.desktop" "$data_root/applications/gmailtjik.desktop" "$install_home/.local/bin/gmailtjik" <<'PY'
 from pathlib import Path
 import sys
 import re
-source, destination, binary, icon = sys.argv[1:]
+source, destination, binary = sys.argv[1:]
 escaped = binary.replace('\\', '\\\\').replace('"', '\\"').replace('`', '\\`').replace('$', '\\$').replace('%', '%%')
 command = binary if re.fullmatch(r"[/A-Za-z0-9_.-]+", binary) else f'"{escaped}"'
-Path(destination).write_text(Path(source).read_text().replace('Exec=gmailtjik', f'Exec={command}').replace('Icon=gmailtjik', f'Icon={icon}'))
+Path(destination).write_text(Path(source).read_text().replace('Exec=gmailtjik', f'Exec={command}'))
 PY
 chmod 644 "$data_root/applications/gmailtjik.desktop"
 if command -v update-desktop-database >/dev/null; then update-desktop-database "$data_root/applications"; fi

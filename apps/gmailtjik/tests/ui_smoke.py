@@ -64,7 +64,7 @@ with private_compositor(isolate_pointer=True):
                 capture("thread-keyboard-next.png")
                 subprocess.run(["wtype", "-s", "150", "d"], check=True)
                 capture("thread-trashed.png")
-                click(80, 274)
+                click(80, 234)
                 capture("thread-trash-folder.png")
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
@@ -97,7 +97,7 @@ with private_compositor(isolate_pointer=True):
                 capture("counts-after-read.png")
                 click(100, 912)
                 capture("manage-labels.png")
-                click(195, 137)
+                click(195, 98)
                 capture("label-visibility.png")
                 assert (root / "inbox.png").read_bytes() != (root / "counts-after-read.png").read_bytes()
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
@@ -106,7 +106,7 @@ with private_compositor(isolate_pointer=True):
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "action-buttons":
                 click(805, 106)
                 capture("delete-button.png")
-                click(80, 342)
+                click(80, 234)
                 capture("trash-folder-after-button.png")
                 assert (root / "inbox.png").read_bytes() != (root / "delete-button.png").read_bytes()
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
@@ -124,7 +124,7 @@ with private_compositor(isolate_pointer=True):
                 # Draft protection: replying to the next message must retain the old draft.
                 subprocess.run(["wtype", "-s", "150", "r"], check=True)
                 capture("draft-protected.png")
-                click(80, 342)
+                click(80, 234)
                 capture("trash-folder.png")
                 for before, after in [("reply-focused.png", "reply-resumed.png"), ("archived.png", "trashed.png")]:
                     assert (root / before).read_bytes() != (root / after).read_bytes(), (before, after)
