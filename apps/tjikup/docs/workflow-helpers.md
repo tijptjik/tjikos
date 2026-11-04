@@ -108,7 +108,12 @@ data and running processes are retained; reopen an updated app to load it.
 `capabilities` advertises `flatpak_bundle_installers: 1`.
 
 `workflow desktop` owns Zed launcher preservation, icon override retirement and
-duplicate-launcher cleanup. `timing take|accept` validates report transfers;
+duplicate-launcher cleanup. `desktop zed --channel CHANNEL -- COMMAND ...`
+preserves declared desktop launchers and command wrappers across vendor installs,
+including failed installs. It restores wrappers replaced by the vendor's expected
+channel symlink, without following that link or changing the editor binary.
+Unexpected edits are retained and reported with a private recovery copy.
+`timing take|accept` validates report transfers;
 `progress` displays bounded transfer metrics without reading terminal input.
 
 `tjikup system --help` lists native NSS, storage, provisioning, permissions,

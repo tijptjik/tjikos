@@ -111,6 +111,68 @@ fn copy_preserve(from: &Path, to: &Path) -> Result<()> {
     }
     Ok(())
 }
+struct ZedManagedFile {
+    target: PathBuf,
+    backup: PathBuf,
+    before: Option<Vec<u8>>,
+}
+impl ZedManagedFile {
+    fn capture(target: PathBuf, backup: &Path) -> Result<Self> {
+        let saved = backup.join(target.file_name().context("missing managed filename")?);
+        let before = match fs::symlink_metadata(&target) {
+            Ok(info) => {
+                if !info.is_file() || info.uid() != unsafe { libc::geteuid() } {
+                    bail!(
+                        "managed Zed file must be a regular file owned by this user: {}",
+                        target.display()
+                    );
+                }
+                copy_preserve(&target, &saved)?;
+                Some(fs::read(&target)?)
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.into()),
+        };
+        Ok(Self {
+            target,
+            backup: saved,
+            before,
+        })
+    }
+
+    fn restore(&self, expected: impl FnOnce(&fs::Metadata) -> Result<bool>) -> Result<()> {
+        let after = match fs::symlink_metadata(&self.target) {
+            Ok(info) => Some(info),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.into()),
+        };
+        if let Some(info) = &after {
+            if info.is_file() && self.before.as_deref() == Some(fs::read(&self.target)?.as_slice())
+            {
+                return Ok(());
+            }
+            if !expected(info)
+                .with_context(|| format!("backup: {}", self.backup.parent().unwrap().display()))?
+            {
+                bail!(
+                    "unexpected managed Zed file edit: {}; backup: {}",
+                    self.target.display(),
+                    self.backup.parent().unwrap().display()
+                );
+            }
+        } else if self.before.is_none() {
+            return Ok(());
+        }
+        if self.before.is_some() {
+            let temporary = tempfile::NamedTempFile::new_in(self.target.parent().unwrap())?;
+            copy_preserve(&self.backup, temporary.path())?;
+            temporary.persist(&self.target).map_err(|e| e.error)?;
+        } else if after.is_some() {
+            fs::remove_file(&self.target)?;
+        }
+        Ok(())
+    }
+}
 fn zed(repo: &Path, args: &[String]) -> Result<i32> {
     if args.len() < 4
         || args[0] != "--channel"
@@ -145,7 +207,9 @@ fn zed(repo: &Path, args: &[String]) -> Result<i32> {
         repo.join("native/home/files-device.json")
     };
     let managed = crate::managed_files::source_path(&manifest, &ctx, &target)?.is_some();
-    if !managed {
+    let command = home.join(format!(".local/bin/zed{suffix}"));
+    let command_managed = crate::managed_files::source_path(&manifest, &ctx, &command)?.is_some();
+    if !managed && !command_managed {
         return Ok(Command::new(&args[3])
             .args(&args[4..])
             .status()?
@@ -162,66 +226,49 @@ fn zed(repo: &Path, args: &[String]) -> Result<i32> {
         .prefix("install-")
         .tempdir_in(&state)?
         .keep();
-    let before = match fs::symlink_metadata(&target) {
-        Ok(info) => {
-            if !info.is_file() || info.uid() != unsafe { libc::geteuid() } {
-                bail!("launcher must be a regular file owned by this user");
-            }
-            copy_preserve(&target, &backup.join(target.file_name().unwrap()))?;
-            Some(fs::read(&target)?)
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(e.into()),
-    };
+    let launcher = managed
+        .then(|| ZedManagedFile::capture(target.clone(), &backup))
+        .transpose()?;
+    let wrapper = command_managed
+        .then(|| ZedManagedFile::capture(command.clone(), &backup))
+        .transpose()?;
     let code = Command::new(&args[3])
         .args(&args[4..])
         .status()?
         .code()
         .unwrap_or(1);
-    if target.is_symlink() {
-        bail!(
-            "launcher changed to a symlink; backup: {}",
-            backup.display()
-        );
+    if let Some(wrapper) = wrapper {
+        wrapper.restore(|info| {
+            Ok(info.is_symlink()
+                && fs::read_link(&command)? == home.join(format!(".local/zed{suffix}.app/bin/zed")))
+        })?;
     }
-    let after = if target.exists() {
-        Some(fs::read(&target)?)
-    } else {
-        None
-    };
-    if before == after {
-        return Ok(code);
-    }
-    if let Some(after) = &after {
-        let app = home.join(format!(".local/zed{suffix}.app"));
-        let dir = app.join("share/applications");
-        let mut vendor = dir.join(format!("{id}.desktop"));
-        if !vendor.is_file() {
-            vendor = dir.join(format!("zed{suffix}.desktop"));
-        }
-        let rendered = fs::read_to_string(vendor)?
-            .replace(
-                "Icon=zed",
-                &format!(
-                    "Icon={}",
-                    app.join("share/icons/hicolor/512x512/apps/zed.png")
-                        .display()
-                ),
-            )
-            .replace(
-                "Exec=zed",
-                &format!("Exec={}", app.join("bin/zed").display()),
-            );
-        if after != rendered.as_bytes() {
-            bail!("unexpected launcher edit; backup: {}", backup.display());
-        }
-    }
-    if before.is_some() {
-        let temporary = tempfile::NamedTempFile::new_in(target.parent().unwrap())?;
-        copy_preserve(&backup.join(target.file_name().unwrap()), temporary.path())?;
-        temporary.persist(&target).map_err(|e| e.error)?;
-    } else if target.exists() {
-        fs::remove_file(&target)?;
+    if let Some(launcher) = launcher {
+        launcher.restore(|info| {
+            if !info.is_file() {
+                return Ok(false);
+            }
+            let app = home.join(format!(".local/zed{suffix}.app"));
+            let dir = app.join("share/applications");
+            let mut vendor = dir.join(format!("{id}.desktop"));
+            if !vendor.is_file() {
+                vendor = dir.join(format!("zed{suffix}.desktop"));
+            }
+            let rendered = fs::read_to_string(vendor)?
+                .replace(
+                    "Icon=zed",
+                    &format!(
+                        "Icon={}",
+                        app.join("share/icons/hicolor/512x512/apps/zed.png")
+                            .display()
+                    ),
+                )
+                .replace(
+                    "Exec=zed",
+                    &format!("Exec={}", app.join("bin/zed").display()),
+                );
+            Ok(fs::read(&target)? == rendered.as_bytes())
+        })?;
     }
     Ok(code)
 }

@@ -495,6 +495,97 @@ fn zed_restores_managed_launcher_after_failed_vendor_install_and_refuses_unexpec
 }
 
 #[test]
+fn zed_preserves_managed_command_wrappers_across_vendor_success_and_failure() {
+    for channel in ["stable", "preview", "nightly"] {
+        for installed in [false, true] {
+            for exit in [0, 7] {
+                let d = fixture();
+                let r = d.path();
+                symlink("/usr/bin/cp", r.join("bin/cp")).unwrap();
+                let suffix = if channel == "stable" {
+                    String::new()
+                } else {
+                    format!("-{channel}")
+                };
+                let relative = format!(".local/bin/zed{suffix}");
+                let wrapper = r.join("home").join(&relative);
+                fs::create_dir_all(wrapper.parent().unwrap()).unwrap();
+                let original = "#!/bin/sh\n# personal wrapper\nexit 0\n";
+                if installed {
+                    executable(&wrapper, original);
+                }
+                // The CLI can be managed without a desktop launcher declaration.
+                write(&r.join("native/home/wrapper"), "declared wrapper\n");
+                write(&r.join("native/home/files-device.json"), json!({"version":1,"id":"fixture","entries":[{"kind":"file","path":format!("{{{{ user.home }}}}/{relative}"),"source":"wrapper"}]}).to_string());
+                let editor = r.join(format!("home/.local/zed{suffix}.app/bin/zed"));
+                executable(&editor, "#!/bin/sh\n# vendor binary\n");
+                executable(&r.join("bin/vendor"), &format!("#!/bin/sh\n/usr/bin/rm -f \"$HOME/{relative}\"\n/usr/bin/ln -s \"$HOME/.local/zed{suffix}.app/bin/zed\" \"$HOME/{relative}\"\nexit {exit}\n"));
+                let out = command(r)
+                    .args([
+                        "workflow",
+                        "desktop",
+                        "zed",
+                        "--channel",
+                        channel,
+                        "--",
+                        "vendor",
+                    ])
+                    .output()
+                    .unwrap();
+                assert_eq!(
+                    out.status.code(),
+                    Some(exit),
+                    "{}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
+                if installed {
+                    assert!(!wrapper.is_symlink());
+                    assert_eq!(fs::read_to_string(&wrapper).unwrap(), original);
+                    assert_eq!(
+                        fs::metadata(&wrapper).unwrap().permissions().mode() & 0o777,
+                        0o755
+                    );
+                } else {
+                    assert!(fs::symlink_metadata(&wrapper).is_err());
+                }
+                assert_eq!(
+                    fs::read_to_string(editor).unwrap(),
+                    "#!/bin/sh\n# vendor binary\n"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn zed_refuses_unexpected_command_changes_and_preserves_recovery_copy() {
+    for replacement in ["printf 'personal edit\\n' > \"$HOME/.local/bin/zed\"", "/usr/bin/rm \"$HOME/.local/bin/zed\"; /usr/bin/ln -s /unexpected/editor \"$HOME/.local/bin/zed\""] {
+        let d = fixture();
+        let r = d.path();
+        symlink("/usr/bin/cp", r.join("bin/cp")).unwrap();
+        let wrapper = r.join("home/.local/bin/zed");
+        executable(&wrapper, "managed wrapper\n");
+        write(&r.join("native/home/wrapper"), "managed wrapper\n");
+        write(&r.join("native/home/files-device.json"), json!({"version":1,"id":"fixture","entries":[{"kind":"file","path":"{{ user.home }}/.local/bin/zed","source":"wrapper"}]}).to_string());
+        executable(&r.join("bin/vendor"), &format!("#!/bin/sh\n{replacement}\n"));
+        let out = command(r)
+            .args(["workflow", "desktop", "zed", "--channel", "stable", "--", "vendor"])
+            .output().unwrap();
+        assert!(!out.status.success());
+        let error = String::from_utf8_lossy(&out.stderr);
+        assert!(error.contains("unexpected managed Zed file edit"), "{error}");
+        assert!(error.contains("backup:"), "{error}");
+        if wrapper.is_symlink() {
+            assert_eq!(fs::read_link(&wrapper).unwrap(), Path::new("/unexpected/editor"));
+        } else {
+            assert_eq!(fs::read_to_string(&wrapper).unwrap(), "personal edit\n");
+        }
+        let backup = fs::read_dir(r.join("state/tjikup/zed-launchers")).unwrap().next().unwrap().unwrap().path();
+        assert_eq!(fs::read_to_string(backup.join("zed")).unwrap(), "managed wrapper\n");
+    }
+}
+
+#[test]
 fn icon_retirement_preserves_theme_choice_and_launcher_behavior_with_recovery() {
     let d = fixture();
     let r = d.path();
