@@ -27,6 +27,8 @@ ShellRoot {
     Native {
         id:native
         demo:root.demo
+        configuredModules:root.bars.reduce((modules,b)=>modules.concat(Object.values(b.moduleConfigs)),[])
+            .filter(m=>m.provider==='icontray' || m.provider==='playerctl')
         hyprvoiceEnabled:root.bars.some(b=>Object.values(b.moduleConfigs).some(m=>m.provider==='icontray'))
     }
     CryptoPanel {id:initialCryptoPanel;controller:root}

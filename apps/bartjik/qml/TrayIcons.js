@@ -11,7 +11,17 @@ function override(overrides, id, title, tooltip) {
 }
 
 function excluded(patterns, id, title) {
-    return patterns.some(pattern => !!override({[pattern]: true}, id, title));
+    // Match directly: the old override({[pattern]:true}, ...) path allocated
+    // a temporary object, key array and iterator for every tray item/pattern.
+    const appId=String(id || '').toLowerCase(), appTitle=String(title || '').toLowerCase();
+    for(let i=0;i<patterns.length;++i) {
+        const pattern=String(patterns[i]).toLowerCase();
+        if(pattern.endsWith('*')) {
+            const prefix=pattern.slice(0,-1);
+            if(appId.startsWith(prefix) || appTitle.startsWith(prefix))return true;
+        } else if(appId===pattern || appTitle===pattern)return true;
+    }
+    return false;
 }
 
 // Chromium tray IDs are shared by unrelated apps; identify ChatGPT by its title.

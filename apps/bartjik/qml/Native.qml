@@ -101,7 +101,15 @@ QtObject {
         return {id:id,type:type,icon:{kind:'symbol',value:icon,style:{},actions:{}},
             text:{value:text,style:{},actions:{}},tooltip:tooltip,state:{},visible:true,enabled:true,actions:actions};
     }
+    // Native rows depend on native services and module settings, not the Rust
+    // provider snapshot. Cache them in a binding so clock/workspace updates do
+    // not allocate a new tray/player model for every consumer on every bar.
+    property var configuredModules: []
+    readonly property var itemSnapshots: configuredModules.map(module=>({module:module,rows:buildItems(module)}))
     function items(module) {
+        return itemSnapshots?.find(entry=>entry.module===module)?.rows || [];
+    }
+    function buildItems(module) {
         if(module.provider === 'icontray') return trayRecords.filter(r => r.object && tray.indexOf(r.object)>=0 && !TrayIcons.excluded(module.exclude || ['Input Method'],r.object.id,r.object.title)).map(r => {
             const t=r.object;
             const row=base(r.id,'icon',t.icon,'',t.tooltipTitle + (t.tooltipDescription ? '\n'+t.tooltipDescription:''),
