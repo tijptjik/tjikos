@@ -157,3 +157,7 @@ client with a JSON CLI. Install with
 to scan the QR code. `bun run whatsover` runs the same client from the checkout.
 Session state stays outside the repository. The former Baileys desktop service
 and launcher are retired.
+
+Hosted WhatsApp and Telegram Workers now live in the HYPE repository.
+The native `whatsover` client has its own implementation, upstream dependency
+pin and release lifecycle; it does not depend on HYPE.

@@ -14,9 +14,6 @@ pub mod profiles;
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
 pub mod native;
 
-#[cfg(target_arch = "wasm32")]
-pub mod wasm;
-
 /// The inbox projection is portable across desktop SQLite and Durable Objects.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

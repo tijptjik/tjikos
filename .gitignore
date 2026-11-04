@@ -20,3 +20,8 @@ apps/runtjik/runtjik-core
 
 /apps/notjik/target
 /apps/runtjik/browser-artifacts/
+
+# Retained local state from messaging workers now owned by HYPE
+**/.wrangler/
+**/.dev.vars*
+**/worker-configuration.d.ts

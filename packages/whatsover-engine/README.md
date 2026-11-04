@@ -1,8 +1,9 @@
 # Whatsover Rust engine
 
-Shared `oxidezap/whatsapp-rust` engine for a direct desktop CLI and the
-`apps/whatsover-cloudflare` Durable Object service. The SDK is pinned by Git
-revision in Cargo.toml and dependencies are locked in Cargo.lock.
+Native `oxidezap/whatsapp-rust` engine for the TjikOS `whatsover` desktop CLI.
+The SDK is pinned by Git revision in Cargo.toml and dependencies are locked in
+Cargo.lock. HYPE owns its separate hosted WhatsApp implementation; neither
+product depends on the other or requires a coordinated release.
 
 The public desktop command is `whatsover`, backed by Rust. The former Baileys
 launcher and service setup are retired. Its private account data is kept separate
@@ -135,6 +136,5 @@ printf '%s' '{"to":"+15555550100","firstName":"Test","lastName":"Person"}' |
 cargo test --manifest-path packages/whatsover-engine/Cargo.toml --locked
 ```
 
-The Cloudflare workspace tests additionally run the compiled Rust backend inside
-workerd, exercising the actual JS/SQLite boundary, conditional buffer operations,
-state merges, full SDK startup, and Durable Object eviction recovery.
+Hosted Workers, WASM adapters and their qualification tests live in HYPE.
+This package builds and tests only the native desktop client.
