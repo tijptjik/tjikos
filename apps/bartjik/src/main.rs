@@ -2,6 +2,7 @@ mod actions;
 mod audio;
 mod battery;
 mod cache;
+mod cities;
 mod config;
 mod connectivity;
 mod demo;

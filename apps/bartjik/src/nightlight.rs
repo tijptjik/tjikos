@@ -368,7 +368,8 @@ pub fn demo() -> Value {
     row
 }
 pub async fn snapshot() -> Result<Value> {
-    let v = settings()?;
+    let mut v = settings()?;
+    label_device_location(&mut v["location"]);
     let plan = schedule(&v, Utc::now(), timezone());
     let identity = ipc("identity get")
         .await
@@ -402,6 +403,25 @@ pub async fn snapshot() -> Result<Value> {
     row["panel"] = panel(&v, &plan, enabled, active, running, now());
     row["panel"]["cities"] = read(runtime("cities")).unwrap_or(json!([]));
     Ok(row)
+}
+
+fn coordinate_name(latitude: f64, longitude: f64) -> String {
+    format!(
+        "{:.2}° {}, {:.2}° {}",
+        latitude.abs(),
+        if latitude < 0. { "S" } else { "N" },
+        longitude.abs(),
+        if longitude < 0. { "W" } else { "E" }
+    )
+}
+fn label_device_location(location: &mut Value) {
+    if location["source"] != "device" || validate_location(location).is_err() {
+        return;
+    }
+    let latitude = num(&location["latitude"]);
+    let longitude = num(&location["longitude"]);
+    location["name"] = json!(crate::cities::near(latitude, longitude)
+        .unwrap_or_else(|| coordinate_name(latitude, longitude)));
 }
 
 fn device_location() -> Result<Value> {
@@ -494,13 +514,15 @@ fn device_location() -> Result<Value> {
     result
 }
 async fn locate() -> Result<Value> {
-    tokio::task::spawn_blocking(device_location)
+    let mut location = tokio::task::spawn_blocking(device_location)
         .await?
         .map_err(|_| {
             anyhow::anyhow!(
                 "Device location unavailable. Allow location access or search for your city."
             )
-        })
+        })?;
+    label_device_location(&mut location);
+    Ok(location)
 }
 pub async fn action(name: &str, selection: &str) -> Result<String> {
     let _lock = crate::actions::FileLock::acquire("bartjik-nightlight.lock").await?;
@@ -825,5 +847,21 @@ mod tests {
         assert_eq!(a, demo());
         assert_eq!(a["panel"]["locationAgeHours"], 0.);
         assert_eq!(a["actions"]["hoverEnter"], "nightlight.panel");
+    }
+
+    #[test]
+    fn device_city_label_preserves_the_fix_and_uses_coordinates_in_remote_areas() {
+        let mut location = json!({"source":"device","name":"Device location","latitude":51.50721,"longitude":-0.12758,"timezone":"Europe/London","updatedAt":1793764800});
+        let original = location.clone();
+        label_device_location(&mut location);
+        assert_eq!(location["name"], "Near London, GB");
+        for key in ["source", "latitude", "longitude", "timezone", "updatedAt"] {
+            assert_eq!(location[key], original[key]);
+        }
+        location["latitude"] = json!(0.);
+        location["longitude"] = json!(0.);
+        label_device_location(&mut location);
+        assert_eq!(location["name"], "0.00° N, 0.00° E");
+        assert_eq!(coordinate_name(-33.8688, 151.2093), "33.87° S, 151.21° E");
     }
 }

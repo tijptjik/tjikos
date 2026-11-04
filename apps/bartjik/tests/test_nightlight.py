@@ -27,6 +27,7 @@ class NightlightTests(unittest.TestCase):
             "BARTJIK_HOME": str(APP),
             "XDG_RUNTIME_DIR": str(self.root),
             "XDG_CONFIG_HOME": str(self.root / "config"),
+            "XDG_CACHE_HOME": str(self.root / "cache"),
             "XDG_STATE_HOME": str(self.root / "state"),
             "HYPRLAND_INSTANCE_SIGNATURE": "fixture",
             "DBUS_SYSTEM_BUS_ADDRESS": "unix:path=" + str(self.root / "absent-bus"),
@@ -115,6 +116,31 @@ class NightlightTests(unittest.TestCase):
             self.assertEqual(process.returncode, 0, error)
         saved = json.loads(self.settings.read_text())
         self.assertEqual((saved["temperature"], saved["gamma"]), (4200, 90))
+
+    def test_device_city_label_is_offline_without_changing_fix_or_schedule(self):
+        self.action("temperature", "4300")
+        stored = json.loads(self.settings.read_text())
+        location = dict(name="Device location", latitude=51.50721, longitude=-0.12758,
+                        source="device", timezone="Europe/London", updatedAt=1793764800)
+        stored.update(mode="solar", location=location)
+        self.settings.write_text(json.dumps(stored))
+        original = self.settings.read_bytes()
+        # No network service is available, even though the device city resolves.
+        self.env.update(HTTPS_PROXY="http://127.0.0.1:9", HTTP_PROXY="http://127.0.0.1:9", ALL_PROXY="http://127.0.0.1:9")
+        panel = self.call("status")["panel"]
+        self.assertEqual(panel["settings"]["location"], {**location, "name": "Near London, GB"})
+        self.assertEqual(panel["settings"]["mode"], "solar")
+        self.assertEqual(self.settings.read_bytes(), original)
+        self.assertFalse(panel["enabled"])
+        stored["location"].update(latitude=0., longitude=0.)
+        self.settings.write_text(json.dumps(stored))
+        panel = self.call("status")["panel"]
+        self.assertEqual(panel["settings"]["location"]["name"], "0.00° N, 0.00° E")
+        self.assertEqual(panel["settings"]["location"]["updatedAt"], location["updatedAt"])
+        # A manually selected city keeps its chosen name.
+        stored["location"].update(source="city", name="Selected city")
+        self.settings.write_text(json.dumps(stored))
+        self.assertEqual(self.call("status")["panel"]["settings"]["location"]["name"], "Selected city")
 
     def test_supervisor_isolates_profiles_applies_changes_and_respects_idle_dimming(self):
         script = self.root / "bin/hyprsunset"

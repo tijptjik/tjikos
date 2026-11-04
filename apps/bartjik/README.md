@@ -375,6 +375,11 @@ search text, not device coordinates. A selected city stays fixed until changed.
 Device location refreshes hourly while sunset scheduling is enabled; a failed
 refresh retains the last fix and the panel marks fixes older than 24 hours.
 Use **Use device** to retry after travelling or enabling system location access.
+Device fixes show a nearby city from a bundled, offline
+[GeoNames database](docs/geonames-cities.md), labelled **Near …** because this is
+an approximate city lookup, not a boundary check. Coordinates are never sent to a
+city lookup service. Locations farther than 50 km from a listed city show their
+coordinates instead. The original fix and its age remain unchanged.
 
 Sunrise and sunset are calculated locally using NOAA's approximate solar equations,
 including polar day/night and the selected city's time zone. Times are approximate
