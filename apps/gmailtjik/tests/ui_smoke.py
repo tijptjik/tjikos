@@ -561,6 +561,8 @@ with private_compositor(isolate_pointer=True):
                 click(550, 250)
                 capture("handling-editor.png")
                 click(830, 452)
+                capture("handling-new-condition-ready.png")
+                click(550, 455)
                 subprocess.run(["wtype", "from:c@example.test"], check=True)
                 capture("handling-added-or.png")
                 click(830, 550)

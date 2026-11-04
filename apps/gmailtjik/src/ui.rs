@@ -133,6 +133,7 @@ pub struct MailApp {
     filter_editor_open: bool,
     filter_group_originals: Vec<crate::filters::Filter>,
     filter_conditions: Vec<Entity<InputState>>,
+    filter_condition_subscriptions: Vec<Subscription>,
     filter_condition_error: Option<String>,
     filter_flags: [bool; 6],
     filter_apply: bool,
@@ -526,6 +527,7 @@ impl MailApp {
             filter_editor_open: false,
             filter_group_originals: vec![],
             filter_conditions: vec![],
+            filter_condition_subscriptions: vec![],
             filter_condition_error: None,
             filter_flags: [false; 6],
             filter_apply: false,
@@ -2752,9 +2754,8 @@ impl MailApp {
         } else { crate::filters::Handling { action: filter.action.clone(), originals: source }.conditions() };
         self.filter_condition_error = conditions.as_ref().err().map(ToString::to_string);
         let conditions = conditions.unwrap_or_default();
-        self.filter_conditions = conditions.into_iter().map(|value| cx.new(|cx|
-            InputState::new(window, cx).placeholder("Gmail search, e.g. from:sender@example.com subject:receipt").default_value(value)
-        )).collect();
+        self.filter_condition_subscriptions.clear();
+        self.filter_conditions = conditions.into_iter().map(|value| self.new_filter_condition(value, window, cx)).collect();
         if self.filter_conditions.is_empty() && self.filter_condition_error.is_none() {
             self.add_filter_condition(window, cx);
         }
@@ -2930,11 +2931,23 @@ impl MailApp {
         cx.stop_propagation();
         cx.notify();
     }
-    fn add_filter_condition(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn new_filter_condition(&mut self, value: String, window: &mut Window, cx: &mut Context<Self>) -> Entity<InputState> {
         let input = cx.new(|cx| InputState::new(window, cx)
-            .placeholder("Gmail search, e.g. from:sender@example.com subject:receipt"));
+            .placeholder("Gmail search, e.g. from:sender@example.com subject:receipt").default_value(value));
+        self.filter_condition_subscriptions.push(cx.subscribe_in(&input, window, |_, _, event, window, cx| {
+            if matches!(event, InputEvent::Focus) {
+                // Rebind native text input after focus moves between dynamic rows.
+                window.refresh();
+            }
+            if matches!(event, InputEvent::Change) { cx.notify(); }
+        }));
+        input
+    }
+    fn add_filter_condition(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let input = self.new_filter_condition(String::new(), window, cx);
         input.read(cx).focus_handle(cx).focus(window, cx);
         self.filter_conditions.push(input);
+        window.refresh();
         cx.notify();
     }
     fn filters_view(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -3027,7 +3040,7 @@ impl MailApp {
                 .child(div().flex_1().min_w_0().child(Input::new(input).readonly(self.filter_busy)))
                 .child(Button::new(("remove-condition", index)).small().ghost().icon(proicon("delete"))
                     .tooltip("Remove this OR condition").disabled(self.filter_busy || self.filter_conditions.len() == 1)
-                    .on_click(cx.listener(move |this, _, _, cx| { this.filter_conditions.remove(index); cx.notify(); }))));
+                    .on_click(cx.listener(move |this, _, _, cx| { this.filter_conditions.remove(index); drop(this.filter_condition_subscriptions.remove(index)); cx.notify(); }))));
         }
         form = form.child(Button::new("add-or-condition").small().label("Add OR condition").disabled(self.filter_busy || self.filter_condition_error.is_some())
                 .on_click(cx.listener(|this, _, window, cx| this.add_filter_condition(window, cx))))
