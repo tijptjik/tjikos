@@ -98,6 +98,7 @@
     "datetime.toggle",
     "locale.cycle",
     "monitor.toggle",
+    "monitor.panel",
     "network.panel",
     "nightlight.toggle",
     "nightlight.panel",

@@ -6,7 +6,7 @@ export TMPDIR="${TMPDIR:-$PWD/target/tmp}"
 cargo build --release --locked
 mkdir -p dist/bin
 cp -uRL --reflink=auto qml dist/
-cp -uR --reflink=auto themes examples systemd docs applications dist/
+cp -uR --reflink=auto themes examples systemd docs applications hypr dist/
 cp bin/bartjik bin/bartjikctl dist/bin/
 install -m 755 "${CARGO_TARGET_DIR:-target}/release/bartjik-core" dist/bin/bartjik-core
 cp README.md dist/

@@ -6158,19 +6158,131 @@
     ],
     "result": [
       {
-        "id": "demo",
-        "type": "icon",
-        "state": {},
-        "tooltip": "Synthetic monitor-layout",
-        "visible": true,
+        "actions": {
+          "hoverEnter": "monitor.panel",
+          "leftClick": "monitor.toggle",
+          "rightClick": "monitor.panel"
+        },
         "enabled": true,
         "icon": {
+          "actions": {},
           "kind": "symbol",
-          "value": "desktop_windows",
           "style": {},
-          "actions": {}
+          "value": "desktop_windows"
         },
-        "actions": {}
+        "id": "layout",
+        "panel": {
+          "mirrorOutput": "DP-2",
+          "monitors": [
+            {
+              "availableModes": [
+                "3440x1440@119.96",
+                "3440x1440@60.00"
+              ],
+              "colour": "srgb",
+              "configured": true,
+              "connected": true,
+              "description": null,
+              "enabled": true,
+              "hardwareDetails": {
+                "hdr": true,
+                "vrrCapable": true
+              },
+              "height": 1440.0,
+              "label": "Samsung Odyssey G8",
+              "model": "Samsung Odyssey G8",
+              "name": "DP-1",
+              "settings": {
+                "cm": "auto",
+                "enabled": true,
+                "mirror": "",
+                "mode": "3440x1440@119.96",
+                "scale": 1,
+                "transform": 0,
+                "vrr": -1,
+                "x": 0,
+                "y": 0
+              },
+              "vrrActive": null,
+              "width": 3440.0
+            },
+            {
+              "availableModes": [
+                "1920x1080@60.00",
+                "1920x1080@74.97"
+              ],
+              "colour": "srgb",
+              "configured": true,
+              "connected": true,
+              "description": null,
+              "enabled": true,
+              "hardwareDetails": {
+                "hdr": false,
+                "vrrCapable": false
+              },
+              "height": 1080.0,
+              "label": "HP 23f",
+              "model": "HP 23f",
+              "name": "DP-2",
+              "settings": {
+                "cm": "auto",
+                "enabled": true,
+                "mirror": "",
+                "mode": "1920x1080@74.97",
+                "scale": 1,
+                "transform": 0,
+                "vrr": -1,
+                "x": 3440,
+                "y": 720
+              },
+              "vrrActive": null,
+              "width": 1920.0
+            },
+            {
+              "availableModes": [
+                "3840x2160@120.00",
+                "3840x2160@60.00"
+              ],
+              "colour": null,
+              "configured": true,
+              "connected": true,
+              "description": null,
+              "enabled": false,
+              "hardwareDetails": {
+                "hdr": true,
+                "vrrCapable": true
+              },
+              "height": 2160.0,
+              "label": "LG TV",
+              "model": "LG TV",
+              "name": "HDMI-A-1",
+              "settings": {
+                "cm": "auto",
+                "enabled": false,
+                "mirror": "",
+                "mode": "3840x2160@60.00",
+                "scale": 1,
+                "transform": 0,
+                "vrr": -1,
+                "x": -3840,
+                "y": -360
+              },
+              "vrrActive": null,
+              "width": 3840.0
+            }
+          ],
+          "pending": null,
+          "revision": "e23dc864553cd7dee08508ccd7c99098a2a01a0ba4de17135ead574576e0e904",
+          "rows": [],
+          "title": "Displays",
+          "tv": "HDMI-A-1"
+        },
+        "state": {
+          "active": false
+        },
+        "tooltip": "Desktop Mode",
+        "type": "icon",
+        "visible": true
       }
     ]
   },

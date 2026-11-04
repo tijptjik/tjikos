@@ -273,13 +273,60 @@ pointer reaches their activation edge, which restores normal auto-hide.
 | DND | `notjikctl status/toggle` | Paused versus unavailable; click changes actual notjik. Never creates a NotificationServer. Optional `ctl` path. |
 | caffeine | Effective `hypridle` process state | Click stops/starts hypridle as existing policy. Preset middle-click explicitly suspends. |
 | nightlight | Hyprsunset IPC, persistent schedule; optional GeoClue location | Click enables/disables the schedule. Hover or right-click opens temperature, brightness, fixed hours and sunset/sunrise controls. |
-| monitor-layout | Structured `hyprctl monitors all`; existing monitor-game-mode command | Status and toggle through the existing persisted Lua mode/reload path. Keeps desktop outputs and adds TV; optional `tv`, `commandPath`. |
+| monitor-layout | Hyprland monitor IPC and Lua rules | Hover/right-click opens Displays. Click previews the TV toggle; optional `tv` selects its connector. |
 
 The destructive optional binding is explicitly shown in
 [`examples/optional-poweroff.json`](examples/optional-poweroff.json):
 `"middleClick": ["systemctl", "poweroff"]`. Automated tests mock it and suspension;
-they never execute either command. Existing `monitor-game-mode`/`monitor-desktop-mode`
-and the Lua monitor file remain an external, documented integration boundary.
+they never execute either command.
+
+### Displays
+
+Hover or right-click Desktop Mode / Game Mode to open the display panel. The map
+shows logical sizes and positions, accounting for scale, rotation and negative
+coordinates. Connected disabled outputs stay selectable; disconnected outputs
+show their configured or last known placement and cannot be changed.
+
+Select a screen, then drag it to arrange it or edit X/Y. The controls offer
+advertised resolution/refresh combinations, valid scaling factors, rotation,
+and individual on/off switches. Adaptive sync and HDR controls appear only when
+the display reports support. Desktop and Game / TV stage the TV off/on while
+preserving the other screens. Selecting a screen never changes the layout.
+
+**TV mirror** stages HDMI-A-1 on and makes DP-2 show its desktop. Each output keeps
+its own resolution and refresh rate; the TV image is scaled to the HP screen.
+The **Use as** selector also supports choosing any connected, enabled source,
+including the reverse direction. Mirrored screens appear together in the map.
+Choose **Extend desktop**, **Desktop**, or **Game / TV** to restore independent
+placement; disabling a source also returns its copies to Extend. Self-mirroring,
+mirror chains and unavailable sources are rejected. The provider's `tv` and
+`mirrorOutput` options select the connectors used by the TV mirror shortcut.
+Hyprland uses compositing for mirrored outputs, so direct scanout is unavailable
+while mirroring.
+
+**Apply** starts a 20-second preview with centered **Keep changes** and **Revert**
+controls on every active output, even when the bar's output is disabled. A separate systemd user
+guard restores the previous layout if confirmation expires or Bartjik exits.
+If all outputs selected for the display-control bar disappear, that bar moves to
+an available output and returns when its configured output reconnects. Other bars
+keep their configured monitor selectors; explicitly disabled bars stay disabled.
+The last connected output cannot be disabled. Hotplug or external configuration
+changes invalidate a draft; Reset refreshes it from Hyprland.
+
+Only confirmed fields are saved, atomically and privately, in
+`$XDG_CONFIG_HOME/bartjik/monitors.lua`. The installed loader
+`~/.local/lib/bartjik/hypr/monitors.lua` must be sourced after the normal monitor
+rules. Dotjik's managed monitor template provides this hook; other installations
+can add `dofile(os.getenv("HOME") .. "/.local/lib/bartjik/hypr/monitors.lua")` at
+the end of their monitor configuration. Existing bit depth and other unedited
+fields stay in the base rules. Removing a saved connector/field restores its base
+setting on the next Hyprland reload. Dotjik's `monitor-game-mode` and
+`monitor-desktop-mode` helpers use the same guarded preview when Bartjik is installed.
+Editing requires a literal, connector-specific `hl.monitor` declaration in
+`hypr/monitors.lua`, as provided by Dotjik. Outputs using only a wildcard or
+computed configuration remain visible but read-only, because Hyprland would create
+a new rule with defaults instead of preserving their unedited settings.
+No physical monitor settings change during installation.
 
 ### Night light
 
@@ -515,6 +562,7 @@ dbus-run-session --config-file tests/bus.conf -- python3 -B tests/render.py /tmp
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/native.py
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/interaction.py
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/nightlight_panel.py /tmp/bartjik-nightlight
+dbus-run-session --config-file tests/bus.conf -- python3 -B tests/monitor_panel.py /tmp/bartjik-displays
 python3 -B tests/live_readonly.py  # opt-in; performs read-only API/service queries
 ```
 

@@ -511,6 +511,47 @@ fn load_path(p: PathBuf) -> Result<Value> {
 fn monitor_patch(p: &Value, screen: &Value, i: usize) -> Value {
     merge(&p[(i + 1).to_string()], &p[s(&screen["name"])])
 }
+/// Keep display controls reachable after their configured output disappears.
+/// Route only the bar containing those controls, and return it when that output returns.
+pub fn resolve_all(cfg: &Value, screens: &Value) -> Result<Vec<Value>> {
+    let mut routed = cfg.clone();
+    for bar in routed["bars"].as_array_mut().unwrap() {
+        let selectors = &bar["monitors"];
+        if bar["enabled"] == false
+            || selectors == "all"
+            || arr(screens).iter().enumerate().any(|(i, screen)| {
+                arr(selectors).contains(&screen["name"]) || arr(selectors).contains(&json!(i + 1))
+            })
+        {
+            continue;
+        }
+        let modules = merge(&cfg["modules"], &bar["modules"]);
+        if !arr(&bar["islands"]).iter().any(|island| {
+            arr(&island["modules"])
+                .iter()
+                .any(|id| modules[s(id)]["provider"] == "monitor-layout")
+        }) {
+            continue;
+        }
+        let mut probe = cfg.clone();
+        let mut candidate = bar.clone();
+        candidate["monitors"] = json!("all");
+        probe["bars"] = json!([candidate]);
+        for (i, screen) in arr(screens).iter().enumerate() {
+            if let Ok(resolved) = resolve(&probe, screen, i, false) {
+                if !resolved.is_empty() {
+                    bar["monitors"] = json!([screen["name"]]);
+                    break;
+                }
+            }
+        }
+    }
+    let mut bars = Vec::new();
+    for (i, screen) in arr(screens).iter().enumerate() {
+        bars.extend(resolve(&routed, screen, i, false)?);
+    }
+    Ok(bars)
+}
 pub fn resolve(cfg: &Value, screen: &Value, i: usize, validate: bool) -> Result<Vec<Value>> {
     let patch = monitor_patch(&cfg["perMonitor"], screen, i);
     let mut merged = merge(cfg, &patch);

@@ -288,6 +288,7 @@ struct Engine {
     error: String,
     action_error: String,
     feedback: Value,
+    monitor_change: Value,
     serial: String,
     tx: mpsc::Sender<Event>,
     alert: Arc<Mutex<battery::Alert>>,
@@ -325,7 +326,7 @@ impl Engine {
             }
         }
         crate::emit(
-            &json!({"ready":true,"config":cfg,"bars":self.bars,"providers":states,"error":self.error,"actionError":self.action_error,"panelFeedback":self.feedback,"demo":self.demo,"compositor":self.compositor}),
+            &json!({"ready":true,"config":cfg,"bars":self.bars,"providers":states,"error":self.error,"actionError":self.action_error,"panelFeedback":self.feedback,"monitorChange":self.monitor_change,"demo":self.demo,"compositor":self.compositor}),
         );
     }
     async fn reload(&mut self, force: bool) -> Result<bool> {
@@ -336,10 +337,7 @@ impl Engine {
             self.error.clear();
             return Ok(changed);
         }
-        let mut bars = vec![];
-        for (i, s) in arr(&self.screens).iter().enumerate() {
-            bars.extend(config::resolve(&cfg, s, i, false)?);
-        }
+        let mut bars = config::resolve_all(&cfg, &self.screens)?;
         let mut needed = HashMap::new();
         let mut need_ws = false;
         let mut geometry = false;
@@ -426,6 +424,20 @@ impl Engine {
         }
         if op == "reload" {
             return self.reload(true).await;
+        }
+        if op == "monitorDecision" {
+            if self.demo {
+                return Ok(false);
+            }
+            let token = s(&msg["token"]).to_owned();
+            let decision = s(&msg["decision"]).to_owned();
+            let tx = self.tx.clone();
+            tokio::spawn(async move {
+                let result = crate::monitors::decide(&token, &decision).await;
+                let error = result.err().map(|e| e.to_string()).unwrap_or_default();
+                let _ = tx.send(Event::Action(error, json!({}))).await;
+            });
+            return Ok(false);
         }
         if op == "cryptoRetry" {
             let (_, m, key) = self.context(&msg)?;
@@ -569,8 +581,15 @@ impl Engine {
                 let mut feedback = json!({});
                 if panel_action {
                     ensure!(
-                        ["locale", "mullvad", "tailscale", "battery", "nightlight"]
-                            .contains(&s(&m["provider"])),
+                        [
+                            "locale",
+                            "mullvad",
+                            "tailscale",
+                            "battery",
+                            "nightlight",
+                            "monitor-layout"
+                        ]
+                        .contains(&s(&m["provider"])),
                         "invalid panel action"
                     );
                     feedback = json!({"barKey":context["barKey"],"module":context["module"],"busy":true,"message":"","error":false});
@@ -580,7 +599,7 @@ impl Engine {
                     let result = async {
                         if panel_action {
                             let provider = s(&m["provider"]);
-                            let _lock = if ["nightlight"].contains(&provider) {
+                            let _lock = if ["nightlight", "monitor-layout"].contains(&provider) {
                                 None
                             } else {
                                 Some(
@@ -589,6 +608,14 @@ impl Engine {
                                 )
                             };
                             let message = match provider {
+                                "monitor-layout" => {
+                                    crate::monitors::action(
+                                        s(&context["action"]),
+                                        s(&context["selection"]),
+                                        &m,
+                                    )
+                                    .await?
+                                }
                                 "nightlight" => {
                                     crate::nightlight::action(
                                         s(&context["action"]),
@@ -642,7 +669,7 @@ impl Engine {
                         Ok::<_, anyhow::Error>(())
                     }
                     .await;
-                    let error = if ["nightlight"].contains(&s(&m["provider"])) {
+                    let error = if ["nightlight", "monitor-layout"].contains(&s(&m["provider"])) {
                         result
                             .as_ref()
                             .err()
@@ -687,6 +714,7 @@ pub async fn serve(demo: bool) -> Result<()> {
         error: String::new(),
         action_error: String::new(),
         feedback: json!({}),
+        monitor_change: Value::Null,
         serial: String::new(),
         tx,
         alert: Arc::new(Mutex::new(battery::Alert::new())),
@@ -702,7 +730,7 @@ pub async fn serve(demo: bool) -> Result<()> {
     let mut publish = tokio::time::interval(Duration::from_millis(30));
     let mut dirty = false;
     loop {
-        tokio::select! {read=async {ensure!(raw.len()<=1048576,"helper input limit exceeded");Ok::<_,anyhow::Error>((&mut reader).take(1048577-raw.len() as u64).read_until(b'\n',&mut raw).await?)}=>{let n=read?;if n==0{break;}ensure!(raw.len()<=1048576,"helper input limit exceeded");if let Ok(msg)=serde_json::from_slice::<Value>(&raw){match engine.message(msg).await{Ok(changed)=>dirty|=changed,Err(e)=>{engine.error=e.to_string();dirty=true;}}}raw.clear();},Some(event)=rx.recv()=>{match event{Event::Provider(key,state)=>{if let Some(w)=engine.workers.get_mut(&key){w.state=state;dirty=true;}},Event::Compositor(data,error)=>{engine.compositor=data;engine.compositor_error=error;dirty=true;},Event::Emit(v)=>crate::emit(&v),Event::Action(error,feedback)=>{engine.action_error=error;if truth(&feedback){engine.feedback=feedback;}dirty=true;}}},_=reload.tick()=>{match engine.reload(false).await{Ok(changed)=>dirty|=changed,Err(e)=>{let error=e.to_string();dirty|=engine.error!=error;engine.error=error;}}},_=publish.tick()=>{if dirty{engine.publish();dirty=false;}}}
+        tokio::select! {read=async {ensure!(raw.len()<=1048576,"helper input limit exceeded");Ok::<_,anyhow::Error>((&mut reader).take(1048577-raw.len() as u64).read_until(b'\n',&mut raw).await?)}=>{let n=read?;if n==0{break;}ensure!(raw.len()<=1048576,"helper input limit exceeded");if let Ok(msg)=serde_json::from_slice::<Value>(&raw){match engine.message(msg).await{Ok(changed)=>dirty|=changed,Err(e)=>{engine.error=e.to_string();dirty=true;}}}raw.clear();},Some(event)=rx.recv()=>{match event{Event::Provider(key,state)=>{if let Some(w)=engine.workers.get_mut(&key){w.state=state;dirty=true;}},Event::Compositor(data,error)=>{engine.compositor=data;engine.compositor_error=error;dirty=true;},Event::Emit(v)=>crate::emit(&v),Event::Action(error,feedback)=>{engine.action_error=error;if truth(&feedback){engine.feedback=feedback;}dirty=true;}}},_=reload.tick()=>{if !demo {let pending=crate::monitors::pending();if pending!=engine.monitor_change {engine.monitor_change=pending;dirty=true;}}match engine.reload(false).await{Ok(changed)=>dirty|=changed,Err(e)=>{let error=e.to_string();dirty|=engine.error!=error;engine.error=error;}}},_=publish.tick()=>{if dirty{engine.publish();dirty=false;}}}
     }
     engine.tasks.clear();
     engine.panels.cancel();

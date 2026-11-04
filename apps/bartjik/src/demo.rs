@@ -48,6 +48,9 @@ pub fn items(provider: &str, o: &Value) -> Vec<Value> {
     if provider == "datetime" {
         rows[0]["panel"] = crate::details::world_clock(&o["worldClocks"], Some(1781524800));
     }
+    if provider == "monitor-layout" {
+        return vec![crate::monitors::demo()];
+    }
     if provider == "nightlight" {
         return vec![crate::nightlight::demo()];
     }
@@ -120,6 +123,9 @@ pub fn items(provider: &str, o: &Value) -> Vec<Value> {
             };
             if let Some(t) = tip {
                 r["tooltip"] = json!(t);
+            }
+            if provider == "monitor-layout" {
+                return vec![crate::monitors::demo()];
             }
             if provider == "nightlight" {
                 r["icon"]["value"] = json!("light_mode");

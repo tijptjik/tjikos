@@ -1,0 +1,24 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const context=vm.createContext({});
+vm.runInContext(fs.readFileSync(new URL('../qml/MonitorGeometry.js',import.meta.url),'utf8'),context);
+const m=(name,x,y,mode='1920x1080@60.00',scale=1,transform=0)=>({name,connected:true,settings:{x,y,mode,scale,transform,enabled:true}});
+const monitors=[m('TV',-3840,-360,'3840x2160@60.00'),m('wide',0,0,'3440x1440@119.96'),m('HP',3440,720)];
+const plain=v=>JSON.parse(JSON.stringify(v));
+assert.deepEqual(plain(context.bounds(monitors)),{x:-3840,y:-360,width:9200,height:2160});
+assert.deepEqual(plain(context.size(m('portrait',0,0,'3840x2160@60.00',2,1))),{width:1080,height:1920});
+const fit=context.fit(context.bounds(monitors),488,200);
+for(const monitor of monitors){const z=context.size(monitor),s=monitor.settings;assert.ok(fit.x+s.x*fit.scale>=13.9);assert.ok(fit.x+(s.x+z.width)*fit.scale<=474.1);}
+assert.deepEqual(plain(context.snap(monitors[2],monitors,3420,7,30)),{x:3440,y:0});
+assert.ok(context.scales(monitors[1]).includes(1.25));
+assert.ok(!context.scales(monitors[1]).includes(1.5));
+const changed=structuredClone(monitors);changed[1].settings.x=10;
+assert.deepEqual(plain(context.changes(monitors,changed)),[{name:'wide',settings:{x:10}}]);
+changed[1].connected=false;assert.deepEqual(plain(context.changes(monitors,changed)),[]);
+const mirrored=structuredClone(monitors);mirrored[2].settings.mirror='TV';
+assert.equal(context.mirrorSource(mirrored[2],mirrored).name,'TV');
+assert.deepEqual(plain(context.bounds(mirrored)),{x:-3840,y:-360,width:7280,height:2160});
+assert.equal(context.mirrors(mirrored[0],mirrored).length,1);
+assert.equal(context.changes(monitors,mirrored)[0].settings.mirror,'TV');
+console.log('Monitor geometry: negative coordinates, aspect ratios, rotation, scaling, snapping and scoped edits passed');

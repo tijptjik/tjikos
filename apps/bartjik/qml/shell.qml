@@ -45,6 +45,7 @@ ShellRoot {
         return cryptoPanel;
     }
     DetailPanel {id:detailPanel;controller:root}
+    MonitorConfirmation {controller:root}
     Loader {
         id:workspacePreview
         active:root.bars.some(b=>Object.values(b.moduleConfigs).some(m=>m.provider==='workspaces' && m.preview?.enabled))
@@ -89,7 +90,11 @@ ShellRoot {
             availableCryptoPanel();
             if(cryptoPanel.open(context,window,row))send({op:'crypto',context:context,token:cryptoPanel.token});return;
         }
-        if(['audio.panel','network.panel','battery.panel','notifications.panel','nightlight.panel'].includes(action)){detailPanel.open(context,window,row);return;}
+        if(['audio.panel','network.panel','battery.panel','notifications.panel','nightlight.panel','monitor.panel'].includes(action)){detailPanel.open(context,window,row);return;}
+        if(action==='monitor.toggle'){
+            detailPanel.open(context,window,row);
+            if(!demo)send({op:'panelAction',context:Object.assign({},context,{action:'preset',selection:'toggle'})});return;
+        }
         if(demo)return;
         if(typeof action==='string' && native.act(action,row.id,window,context.anchor))return;
         send({op:'action',context:context});

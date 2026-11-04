@@ -601,25 +601,7 @@ pub async fn poll(m: &Value) -> Result<Vec<Value>> {
             )
         }
         "nightlight" => crate::nightlight::snapshot().await?,
-        "monitor-layout" => {
-            let rows = jc(&["hyprctl", "-j", "monitors", "all"]).await?;
-            let active = arr(&rows).iter().any(|r| {
-                r["name"] == m["tv"].as_str().unwrap_or("HDMI-A-1") && !truth(&r["disabled"])
-            });
-            item(
-                "layout",
-                None,
-                Some(if active {
-                    "sports_esports"
-                } else {
-                    "desktop_windows"
-                }),
-                "symbol",
-                json!({"active":active}),
-                if active { "Game Mode" } else { "Desktop Mode" },
-                json!({"leftClick":"monitor.toggle"}),
-            )
-        }
+        "monitor-layout" => crate::monitors::snapshot(m).await?,
         _ => anyhow::bail!("unknown provider"),
     };
     Ok(vec![row])

@@ -107,6 +107,21 @@ class NativeContracts(unittest.TestCase):
     def test_demo_never_runs_configured_commands(self):
         marker=self.root/'executed';self.path.write_text(json.dumps({'modules':{'s':{'provider':'process','command':['touch',str(marker)]}},'bars':[{'id':'s','islands':[{'id':'s','modules':['s']}]}]}))
         p=self.worker(True);self.receive(p,lambda v:v.get('ready'));self.assertFalse(marker.exists())
+    def test_display_controls_follow_surviving_output_and_return_to_primary(self):
+        self.path.write_text(json.dumps({'modules':{'display':{'provider':'monitor-layout'},'clock':{'provider':'datetime'}},'bars':[
+            {'id':'controls','monitors':['DP-1'],'islands':[{'id':'controls','modules':['display']}]},
+            {'id':'clock','monitors':['DP-1'],'islands':[{'id':'clock','modules':['clock']}]}]}))
+        p=self.worker(True)
+        state=self.receive(p,lambda v:v.get('ready') and len(v.get('bars',[]))==1)
+        self.assertEqual([(b['id'],b['screen']) for b in state['bars']],[('controls','SYNTHETIC')])
+        cfg=json.loads(self.path.read_text());cfg['bars'][0]['enabled']=False;self.path.write_text(json.dumps(cfg))
+        self.receive(p,lambda v:v.get('ready') and not v.get('bars'))
+        cfg['bars'][0]['enabled']=True;self.path.write_text(json.dumps(cfg))
+        self.receive(p,lambda v:len(v.get('bars',[]))==1)
+        p.stdin.write(json.dumps({'op':'screens','screens':[{'name':'SYNTHETIC','width':1920,'height':1080,'scale':1},{'name':'DP-1','width':3440,'height':1440,'scale':1}]})+'\n');p.stdin.flush()
+        state=self.receive(p,lambda v:len(v.get('bars',[]))==2)
+        self.assertTrue(all(b['screen']=='DP-1' for b in state['bars']))
+        self.assertEqual({b['id'] for b in state['bars']},{'controls','clock'})
     def test_init_refuses_overwrite(self):
         self.assertEqual(self.call('init').returncode,0)
         before=self.path.read_bytes();self.assertNotEqual(self.call('init').returncode,0);self.assertEqual(before,self.path.read_bytes())

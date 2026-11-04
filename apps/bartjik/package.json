@@ -5,7 +5,7 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "check": "bash scripts/check.sh",
-    "test": "cargo test --release --locked && python3 -B tests/native_contracts.py -v && python3 -B -m unittest discover -s tests -v && bun tests/logic.test.js && bun tests/codex_timeline.test.js && bun tests/battery.test.js",
+    "test": "cargo test --release --locked && python3 -B tests/native_contracts.py -v && python3 -B -m unittest discover -s tests -v && bun tests/logic.test.js && bun tests/codex_timeline.test.js && bun tests/battery.test.js && bun tests/monitor_geometry.test.js",
     "demo": "bin/bartjik --demo --config examples/demo.json"
   }
 }

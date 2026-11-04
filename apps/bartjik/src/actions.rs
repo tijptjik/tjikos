@@ -269,16 +269,7 @@ pub async fn execute(
                 }
             }
             "monitor.toggle" => {
-                let path = m["commandPath"]
-                    .as_str()
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| {
-                        home()
-                            .join(".local/bin/monitor-game-mode")
-                            .to_string_lossy()
-                            .into_owned()
-                    });
-                command(&[path, "toggle".into()], 15., 262144, &[], None).await?;
+                crate::monitors::action("preset", "toggle", m).await?;
             }
             _ => anyhow::bail!("native action must be handled by QML"),
         }

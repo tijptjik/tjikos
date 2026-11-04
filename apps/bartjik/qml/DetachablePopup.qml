@@ -156,7 +156,7 @@ PopupWindow {
             if(child===moveArea || !child.visible || child.opacity===0)continue;
             const point=child.mapFromItem(panelBody,x,y),inside=child.contains(point);
             if(child.clip && !inside)continue;
-            if(inside && (child instanceof Controls.AbstractButton || child instanceof Controls.Slider
+            if(inside && (child.panelControl===true || child instanceof Controls.AbstractButton || child instanceof Controls.Slider
                 || child instanceof Controls.RangeSlider || child instanceof Controls.ScrollBar
                 || child instanceof Controls.ComboBox || child instanceof Controls.SpinBox
                 || child instanceof TextInput || child instanceof TextEdit))return true;
