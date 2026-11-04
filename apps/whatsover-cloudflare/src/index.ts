@@ -6,6 +6,7 @@ import { ProfileDirectory, type DisplayProfile, type PrivateProfile } from "./pr
 import { AccountDatabase } from "./database";
 import { deviceStage, linkedDeviceName } from "./device-name";
 import { RelayHost } from "./relay";
+import { RelayPrewarmer } from "./prewarm";
 import { VoiceConnection, VoiceTickets } from "./voice";
 import { copyRpcValue } from "./rpc-value";
 import { MessageJournal, sameRequest, type MessageProjection, type MessageTarget, type Outbound, type TextRequest } from "./journal";
@@ -28,6 +29,8 @@ export class WhatsoverAccount extends DurableObject<Env> {
     readonly profiles: ProfileDirectory;
     readonly voiceTickets: VoiceTickets;
     readonly voice: VoiceConnection;
+    private readonly relayPrewarmer: RelayPrewarmer;
+    private prewarmOnView = false;
     private readonly phoneLookups = new PhoneLookupCache();
     private session?: WorkerSession;
     private operations: Promise<void> = Promise.resolve();
@@ -36,6 +39,13 @@ export class WhatsoverAccount extends DurableObject<Env> {
 
     constructor(ctx: DurableObjectState, env: Env) {
         super(ctx, env);
+        this.relayPrewarmer = new RelayPrewarmer(async () => {
+            const response = await this.env.RELAY.fetch(new Request(`https://relay.internal/${this.ctx.id.toString()}/prewarm`, {
+                method: "POST", signal: AbortSignal.timeout(35_000),
+            }));
+            await response.body?.cancel();
+            if (!response.ok) throw new Error("Relay prewarm unavailable");
+        }, task => this.ctx.waitUntil(task));
         ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS messaging_viewers (id TEXT PRIMARY KEY, expires INTEGER NOT NULL)");
         this.presence = new ViewerPresence({
             list: () => ctx.storage.sql.exec<{ id: string; expires: number }>("SELECT id, expires FROM messaging_viewers").toArray(),
@@ -134,11 +144,14 @@ export class WhatsoverAccount extends DurableObject<Env> {
 
     /** Organisation viewers share a session; legacy personal accounts keep their existing lifecycle. */
     async watch(viewer: string, stage?: string): Promise<SessionStatus> {
+        const previous = this.ctx.storage.sql.exec<{ expires: number }>("SELECT expires FROM messaging_viewers WHERE id=?", viewer).toArray()[0];
         this.presence.renew(viewer, Date.now());
+        if (!previous || previous.expires <= Date.now()) this.prewarmOnView = true;
         await this.ctx.storage.put("viewerManaged", true);
         await this.ctx.storage.setAlarm(Math.min(this.presence.nextExpiry(Date.now())!, Date.now() + 60_000));
-        if (await this.ctx.storage.get<boolean>("enabled")) return this.start(stage);
-        return this.status();
+        const status = await this.ctx.storage.get<boolean>("enabled") ? await this.start(stage) : this.status();
+        this.prewarmView(status.connected);
+        return status;
     }
 
     /** A departing tab never stops another operator's live session. */
@@ -154,7 +167,18 @@ export class WhatsoverAccount extends DurableObject<Env> {
 
     /** Poll incoming calls without activating the microphone or a voice socket. */
     callSnapshot(): unknown {
-        return { videoSupported: true, ...(this.session ? JSON.parse(this.session.callSnapshot()) : { incoming: [], current: null }) };
+        const snapshot = { videoSupported: true, ...(this.session ? JSON.parse(this.session.callSnapshot()) : { incoming: [], current: null }) };
+        const connected = !this.stopping && this.status().connected;
+        this.prewarmView(connected);
+        this.relayPrewarmer.incoming(connected ? snapshot.incoming : []);
+        return snapshot;
+    }
+
+    private prewarmView(connected: boolean): void {
+        if (!this.stopping && connected && this.prewarmOnView && this.presence.nextExpiry(Date.now())) {
+            this.prewarmOnView = false;
+            this.relayPrewarmer.request();
+        }
     }
 
     /** Decline an incoming offer without activating a browser media connection. */

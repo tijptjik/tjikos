@@ -12,6 +12,10 @@ WhatsApp account keys and call signaling stay in `hype-whatsover-prod`.
 
 Private interface:
 
+- Service-binding `fetch`: `POST https://relay.internal/<account>/prewarm`
+  starts the account's container and waits for its health check, returning 204.
+  It opens no media socket and sends no WhatsApp traffic. Concurrent startup and
+  call requests share readiness; the normal 60-second inactivity timeout remains.
 - Service-binding `fetch`: `GET https://relay.internal/<account>` with
   `Upgrade: websocket`. Once upgraded, use the native relay protocol documented
   in `packages/whatsover-relay/README.md`.

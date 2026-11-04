@@ -1,8 +1,9 @@
 # hype-whatsover-prod
 
 Private Cloudflare Worker service with one SQLite Durable Object per linked
-WhatsApp account. The protocol engine is Rust compiled to WebAssembly; no
-Container or remote desktop relay is used.
+WhatsApp account. The protocol engine is Rust compiled to WebAssembly. Messaging
+runs in the Worker; audio/video calls additionally use the private, on-demand
+native relay container described below.
 
 Each object owns a separate WASM instance, JS handle table, and async task queue.
 The generated static factory prevents account I/O from sharing wasm-bindgen's
@@ -146,6 +147,18 @@ durable attempt IDs to prevent automatic redials. It limits frames and commands,
 ends calls on missed heartbeats/disconnect, and drains pending WASM borrows
 before shutdown. A separate upgrade-only gateway lives in
 `apps/whatsover-voice-cloudflare`; account RPC and the native relay stay private.
+
+The bridge prewarms the native relay when a new messaging/call view opens on a
+connected account, or when the existing call-state poll first observes a new
+incoming offer (the current UI polls every three seconds). If the account is
+still connecting, view prewarming waits for a connected snapshot. Viewer
+heartbeats and repeated snapshots of the same offer do not refresh the relay.
+Startup runs in the background, coalesces concurrent requests, and is limited to
+one attempt per 30 seconds per live account object. It only checks container
+health: no call signalling, media connection, microphone or camera is started.
+Failures do not block the UI; actual call setup still performs its normal startup
+check. The relay retains its existing 60-second inactivity timeout. Deploy the
+relay's private prewarm endpoint before the updated account bridge.
 
 Hype now supplies browser microphone/playback and visible start/answer/decline,
 mute and hang-up controls. Its AudioWorklet produces 960-sample, 16 kHz PCM

@@ -46,8 +46,12 @@ export class WhatsoverRelay extends DurableObject<RelayEnv> {
         throw new Error("Voice relay did not become ready");
     }
 
-    /** Internal-only WebSocket upgrade; caller cannot inject headers or a target URL. */
+    /** Internal startup-only requests and media upgrades share the same readiness check. */
     async fetch(request: Request): Promise<Response> {
+        if (request.method === "POST" && new URL(request.url).pathname.endsWith("/prewarm") && !request.headers.has("upgrade")) {
+            await this.ready();
+            return new Response(null, { status: 204 });
+        }
         if (request.method !== "GET" || request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
             return new Response("Not found", { status: 404 });
         }
@@ -80,9 +84,10 @@ export class WhatsoverRelay extends DurableObject<RelayEnv> {
 /** Bound only to Whatsover. This deployment has no public routes or workers.dev URL. */
 export default class RelayService extends WorkerEntrypoint<RelayEnv> {
     async fetch(request: Request): Promise<Response> {
-        const account = new URL(request.url).pathname.slice(1);
-        if (!/^[a-zA-Z0-9_-]{1,80}$/.test(account)) return new Response("Not found", { status: 404 });
-        return this.env.RELAYS.getByName(account).fetch(request);
+        const url = new URL(request.url);
+        const match = /^\/([a-zA-Z0-9_-]{1,80})(\/prewarm)?$/.exec(url.pathname);
+        if (!match || url.search || (match[2] && (request.method !== "POST" || request.headers.has("upgrade")))) return new Response("Not found", { status: 404 });
+        return this.env.RELAYS.getByName(match[1]).fetch(request);
     }
 
     async probe(): Promise<{ udpReachable: boolean }> {
