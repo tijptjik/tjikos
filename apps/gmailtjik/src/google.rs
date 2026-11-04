@@ -1076,7 +1076,7 @@ impl Google {
     }
 }
 
-fn public_ip(ip: std::net::IpAddr) -> bool {
+pub(crate) fn public_ip(ip: std::net::IpAddr) -> bool {
     match ip {
         std::net::IpAddr::V4(v) => {
             !(v.is_private()

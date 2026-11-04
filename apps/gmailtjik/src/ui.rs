@@ -190,11 +190,13 @@ pub struct MailApp {
     review_send: bool,
     contacts: Vec<Contact>,
     known_contacts: Vec<Contact>,
+    sender_photos: crate::contacts::PhotoCache,
     contact_defaults: crate::contacts::Defaults,
     expanded_contact: Option<String>,
     contact_cursor: Option<usize>,
     contact_photos: std::collections::HashMap<String, Arc<Image>>,
     avatar_requested: std::collections::HashSet<String>,
+    favicon_requested: std::collections::HashSet<String>,
     contact_field: usize,
     contacts_due: Option<Instant>,
     contact_query: String,
@@ -493,6 +495,7 @@ impl MailApp {
                 .flatten()
                 .unwrap_or_default(),
             known_contacts: store.get("contacts").ok().flatten().unwrap_or_default(),
+            sender_photos: Default::default(),
             auto_images: store
                 .get("auto_remote_images")
                 .ok()
@@ -584,6 +587,7 @@ impl MailApp {
             contact_cursor: None,
             contact_photos: Default::default(),
             avatar_requested: Default::default(),
+            favicon_requested: Default::default(),
             contact_field: 0,
             contacts_due: None,
             contact_query: String::new(),
@@ -2060,6 +2064,7 @@ impl MailApp {
                 }
                 Event::ContactBook(rows) => {
                     self.known_contacts = rows;
+                    self.sender_photos.clear();
                     self.migrate_contact_defaults();
                 }
                 Event::Contacts { query, rows } if query == self.contact_query => {
@@ -2072,6 +2077,7 @@ impl MailApp {
                             urls: vec![url],
                         })
                         .collect();
+                    self.sender_photos.clear();
                     for contact in &rows {
                         if let Some(known) = self.known_contacts.iter_mut().find(|known| {
                             (known.resource_name == contact.resource_name
@@ -3624,7 +3630,7 @@ impl MailApp {
                                             .child({
                                                 let mut seen = std::collections::HashSet::new();
                                                 let participants: Vec<_> = row.avatar_participants().into_iter().filter(|(name, email)| {
-                                                    seen.insert(crate::contacts::sender_photo(&crate::contacts::mailbox(name, email), &this.known_contacts).key)
+                                                    seen.insert(this.sender_photos.get(&crate::contacts::mailbox(name, email), &this.known_contacts).key)
                                                 }).collect();
                                                 let shown = participants.len().min(5);
                                                 let extra = participants.len().saturating_sub(shown);
@@ -3733,7 +3739,7 @@ impl MailApp {
                 })
             })
             .map(|(name, email)| {
-                crate::contacts::sender_photo(
+                self.sender_photos.get(
                     &crate::contacts::mailbox(&name, &email),
                     &self.known_contacts,
                 )
@@ -3745,7 +3751,8 @@ impl MailApp {
                 .map(|request| request.key.as_str())
                 .collect();
             self.contact_photos.retain(|key, _| {
-                visible.contains(key.as_str())
+                key.starts_with("favicon:")
+                    || visible.contains(key.as_str())
                     || self.contacts.iter().any(|contact| &contact.photo == key)
             });
             self.avatar_requested
@@ -3920,7 +3927,7 @@ impl MailApp {
             .into_any_element()
     }
     fn sender_avatar_sized(&self, from: &str, size: f32) -> AnyElement {
-        let request = crate::contacts::sender_photo(from, &self.known_contacts);
+        let request = self.sender_photos.get(from, &self.known_contacts);
         div()
             .size(px(size))
             .flex_shrink_0()
@@ -4398,8 +4405,31 @@ impl MailApp {
                                         ),
                                     ),
                             );
-                            for (index, (label, url)) in page.links.iter().enumerate() {
+                            let links = page.links.clone();
+                            for (index, (label, url)) in links.iter().enumerate() {
                                 let url = url.clone();
+                                let favicon = crate::favicons::request(&url);
+                                if let Some(request) = &favicon {
+                                    if self.demo && !self.contact_photos.contains_key(&request.key)
+                                    {
+                                        if let Some(image) = image_from_bytes(
+                                            crate::contacts::identicon(&request.key),
+                                        ) {
+                                            self.contact_photos.insert(request.key.clone(), image);
+                                        }
+                                    }
+                                    if !self.demo
+                                        && self.favicon_requested.insert(request.key.clone())
+                                    {
+                                        self.dispatch(Command::ContactPhotos(vec![
+                                            request.clone(),
+                                        ]));
+                                    }
+                                }
+                                let icon = favicon
+                                    .as_ref()
+                                    .and_then(|request| self.contact_photos.get(&request.key))
+                                    .cloned();
                                 actions = actions.child(
                                     Button::new(SharedString::from(format!(
                                         "html-link-{id}-{index}"
@@ -4408,11 +4438,39 @@ impl MailApp {
                                     .small()
                                     .max_w_full()
                                     .overflow_hidden()
-                                    .icon(proicon("open"))
-                                    .label(format!(
-                                        "{}",
-                                        if label.trim().is_empty() { &url } else { label }
-                                    ))
+                                    .when(icon.is_none(), |button| {
+                                        button.icon(proicon("open")).label(
+                                            if label.trim().is_empty() {
+                                                url.clone()
+                                            } else {
+                                                label.clone()
+                                            },
+                                        )
+                                    })
+                                    .when_some(icon, |button, icon| {
+                                        button.child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap_1()
+                                                .child(
+                                                    img(icon)
+                                                        .w(px(14.))
+                                                        .h(px(14.))
+                                                        .object_fit(ObjectFit::Contain),
+                                                )
+                                                .child(if label.trim().is_empty() {
+                                                    url.clone()
+                                                } else {
+                                                    label.clone()
+                                                }),
+                                        )
+                                    })
+                                    .accessibility_label(if label.trim().is_empty() {
+                                        url.clone()
+                                    } else {
+                                        label.clone()
+                                    })
                                     .on_click(move |_, _, cx| cx.open_url(&url)),
                                 );
                             }

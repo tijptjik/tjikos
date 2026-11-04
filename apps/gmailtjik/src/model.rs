@@ -538,6 +538,16 @@ pub fn demo() -> (Vec<Label>, Page) {
             },
         })
         .collect();
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("contact-signature") {
+        messages[0].payload.mime_type = "text/html".into();
+        messages[0].payload.body.data =
+            URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-contact-signature.html"));
+    }
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("signoff") {
+        messages[0].payload.mime_type = "text/html".into();
+        messages[0].payload.body.data =
+            URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-signoff.html"));
+    }
     if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("signature") {
         messages[0].payload.mime_type = "text/html".into();
         messages[0].payload.body.data =
@@ -728,7 +738,7 @@ pub fn demo_conversations() -> (Vec<Label>, Page) {
 pub fn demo_thread(message: &Message) -> Vec<Message> {
     if matches!(
         std::env::var("GMAILTJIK_DEMO_SCENE").as_deref(),
-        Ok("reader" | "inline" | "signature")
+        Ok("reader" | "inline" | "signature" | "signoff" | "contact-signature")
     ) {
         return vec![message.clone()];
     }

@@ -77,11 +77,33 @@ fn signoff(text: &str) -> bool {
     )
 }
 
+/// An explicit closing followed by a name starts a signature even when its
+/// address/social footer cannot be classified line by line.
+fn named_signoff(text: &str) -> bool {
+    matches!(
+        text.trim()
+            .trim_end_matches(['.', ',', '!', ':', ';', '…'])
+            .trim()
+            .to_lowercase()
+            .as_str(),
+        "regards" | "cheers" | "best regards" | "kind regards" | "kind regars"
+    )
+}
+
 fn postscript(text: &str) -> bool {
     let text = text.trim().to_ascii_lowercase();
-    ["p.s.", "p.s:", "ps:", "ps.", "ps ", "p.s "]
+    if text.starts_with("...") || text.starts_with('…') {
+        return true;
+    }
+    ["p.s.", "p.p.s.", "ps.", "pps.", "p.s", "p.p.s", "ps", "pps"]
         .iter()
-        .any(|prefix| text.starts_with(prefix))
+        .any(|prefix| {
+            text.strip_prefix(prefix).is_some_and(|rest| {
+                rest.is_empty()
+                    || rest.starts_with(|c: char| c.is_whitespace() || ":.,!-—".contains(c))
+                    || prefix.ends_with('.')
+            })
+        })
 }
 
 fn reply_boundary(text: &str) -> bool {
@@ -204,7 +226,7 @@ fn identity(text: &str) -> bool {
 }
 
 /// Find a bounded signature slice, retaining a subsequent postscript and quotes.
-fn signature_range(lines: &[String], end: usize) -> Option<std::ops::Range<usize>> {
+fn signature_range(lines: &[String], end: usize, sender: &str) -> Option<std::ops::Range<usize>> {
     for start in (0..end).rev() {
         let line = lines[start].trim();
         let standard_separator = lines[start].trim_start() == "-- ";
@@ -218,7 +240,7 @@ fn signature_range(lines: &[String], end: usize) -> Option<std::ops::Range<usize
         {
             return Some(start..end);
         }
-        if line != "--" && !signoff(line) {
+        if line != "--" && !signoff(line) && !named_signoff(line) {
             continue;
         }
         let end = (start + 1..end)
@@ -229,6 +251,9 @@ fn signature_range(lines: &[String], end: usize) -> Option<std::ops::Range<usize
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
             .collect();
+        if named_signoff(line) && tail.first().is_some_and(|name| identity(name)) {
+            return Some(start..end);
+        }
         if tail.is_empty() || tail.len() > 12 || tail.iter().map(|s| s.len()).sum::<usize>() > 700 {
             continue;
         }
@@ -241,16 +266,55 @@ fn signature_range(lines: &[String], end: usize) -> Option<std::ops::Range<usize
             return Some(start..end);
         }
     }
+    let (name, email) = crate::model::addresses(sender).ok()?.into_iter().next()?;
+    if name.split_whitespace().count() < 2 || email.is_empty() {
+        return None;
+    }
+    for start in (1..end).rev() {
+        if !lines[start].trim().eq_ignore_ascii_case(name.trim()) {
+            continue;
+        }
+        let stop = (start + 1..end)
+            .find(|&n| postscript(&lines[n]))
+            .unwrap_or(end);
+        let tail = &lines[start + 1..stop];
+        if tail.len() > 24 || tail.iter().map(String::len).sum::<usize>() > 1600 {
+            continue;
+        }
+        let email_matches = tail.iter().any(|line| {
+            line.split_whitespace().any(|word| {
+                word.trim_matches(['<', '>', ',', ';'])
+                    .eq_ignore_ascii_case(&email)
+            })
+        });
+        let phone = tail.iter().any(|line| {
+            let line = line
+                .trim()
+                .trim_end_matches("(Direct Dial)")
+                .trim_end_matches("(direct dial)")
+                .trim();
+            let digits = line.chars().filter(char::is_ascii_digit).count();
+            digits >= 7 && contact(line)
+        });
+        if email_matches && phone {
+            return Some(start..stop);
+        }
+    }
     None
 }
 
+#[cfg(test)]
 pub fn plain(text: &str) -> Option<String> {
+    plain_for_sender(text, "")
+}
+
+pub fn plain_for_sender(text: &str, sender: &str) -> Option<String> {
     let lines: Vec<_> = text.lines().map(str::to_owned).collect();
     let end = lines
         .iter()
         .position(|line| reply_boundary(line))
         .unwrap_or(lines.len());
-    let range = signature_range(&lines, end)?;
+    let range = signature_range(&lines, end, sender)?;
     Some(
         lines[..range.start]
             .iter()
@@ -358,7 +422,12 @@ fn collect<'a>(
     }
 }
 
+#[cfg(test)]
 pub fn html(source: &str) -> HtmlSignature {
+    html_for_sender(source, "")
+}
+
+pub fn html_for_sender(source: &str, sender: &str) -> HtmlSignature {
     let mut doc = Html::parse_document(source);
     let all = Selector::parse("*").unwrap();
     let images = Selector::parse("img[src]").unwrap();
@@ -402,7 +471,7 @@ pub fn html(source: &str) -> HtmlSignature {
         .position(|line| line.boundary || reply_boundary(&line.text))
         .unwrap_or(lines.len());
     let texts: Vec<_> = lines.iter().map(|line| line.text.clone()).collect();
-    if let Some(range) = signature_range(&texts, end) {
+    if let Some(range) = signature_range(&texts, end, sender) {
         for line in &lines[range] {
             for piece in &line.pieces {
                 match piece {
@@ -481,6 +550,107 @@ pub fn html(source: &str) -> HtmlSignature {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sender_name_requires_matching_email_and_phone_before_folding() {
+        let source = "Your status is unclaimed.\nPlease contact the administrator.\nMira Chen\nExample Acquisition\n1384 Example Street, Suite 906\nNew York, NY 10018\n212-555-4333 (Direct Dial)\nmira@example.test\nTelegram: @example\nActive in: Claims, finance.\nPS: Keep this note.";
+        let sender = "Mira Chen <mira@example.test>";
+        let folded = plain_for_sender(source, sender).unwrap();
+        assert!(
+            folded.contains("Please contact the administrator.")
+                && folded.contains("PS: Keep this note.")
+        );
+        assert!(!folded.contains("Example Acquisition"));
+        assert!(plain_for_sender(source, "Other Person <other@example.test>").is_none());
+        assert!(
+            plain_for_sender(
+                &source.replace("212-555-4333 (Direct Dial)", "No telephone"),
+                sender
+            )
+            .is_none()
+        );
+        assert!(
+            plain_for_sender(
+                &source.replace("mira@example.test", "other@example.test"),
+                sender
+            )
+            .is_none()
+        );
+        let html = source
+            .lines()
+            .map(|line| format!("<p>{line}</p>"))
+            .collect::<String>();
+        let folded = html_for_sender(&html, sender);
+        assert!(folded.detected && !folded.collapsed.contains("Example Acquisition"));
+        assert!(folded.collapsed.contains("PS: Keep this note."));
+    }
+
+    #[test]
+    fn named_closings_fold_name_only_and_unstructured_footers_preserving_postscripts() {
+        for closing in [
+            "Regards,",
+            "Cheers,",
+            "Best Regards,",
+            "Kind Regards,",
+            "Kind Regars,",
+        ] {
+            for ps in ["PS", "P.s.", "PS:", "P.S:", "PPS", "P.P.S.", "...", "…"] {
+                let footer = "Mira Chen\nCultural Centre\nSuite 304, 30/F Example Plaza\n18, Example Road\nWebsite: https://example.test/\nFacebook: Cultural Centre\nInstagram: @example";
+                let source = format!(
+                    "The chosen book is The Letter Carrier.\n\n{closing}\n\n{footer}\n\n{ps}\nPlease bring the revised edition.\nA second postscript line."
+                );
+                let folded = plain(&source).unwrap();
+                assert!(
+                    !folded.contains("Mira Chen") && !folded.contains("Instagram"),
+                    "{folded}"
+                );
+                assert!(folded.contains("The Letter Carrier") && folded.contains(ps));
+                assert!(
+                    folded.contains("Please bring the revised edition.\nA second postscript line.")
+                );
+                let source = source
+                    .lines()
+                    .map(|line| format!("<p>{line}</p>"))
+                    .collect::<String>();
+                let folded = html(&source);
+                assert!(folded.detected);
+                assert!(
+                    !folded.collapsed.contains("Mira Chen")
+                        && !folded.collapsed.contains("Instagram")
+                );
+                assert!(
+                    folded
+                        .collapsed
+                        .contains("Please bring the revised edition.")
+                        && folded.collapsed.contains("A second postscript line.")
+                );
+            }
+            assert_eq!(
+                plain(&format!("Confirmed.\n{closing}\nMira Chen")),
+                Some("Confirmed.".into())
+            );
+            assert!(
+                plain(&format!(
+                    "Confirmed.\n{closing}\nPlease bring the book tomorrow."
+                ))
+                .is_none()
+            );
+        }
+        assert!(!postscript("Psychology department"));
+    }
+
+    #[test]
+    fn marked_signature_with_postscript_folds_only_the_signature() {
+        let source = "<p>Confirmed.</p><div class='gmail_signature'>Regards,<br>Mira Chen<br>Instagram: @example<br>P.S. Bring the new edition.<br>Keep this continuation.</div><blockquote>Earlier request</blockquote>";
+        let result = html(source);
+        assert!(result.detected);
+        assert!(!result.collapsed.contains("Mira Chen"));
+        assert!(
+            result.collapsed.contains("Bring the new edition")
+                && result.collapsed.contains("Keep this continuation")
+        );
+        assert!(result.collapsed.contains("Earlier request"));
+    }
 
     #[test]
     fn folds_explicit_signatures_but_leaves_quotes_and_body_images() {

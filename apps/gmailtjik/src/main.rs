@@ -5,6 +5,7 @@ mod background;
 mod cache;
 mod codex;
 mod contacts;
+mod favicons;
 mod filters;
 mod google;
 mod html;

@@ -525,3 +525,13 @@ Deleting a filter leaves previously processed mail unchanged.
 Replying while a different draft is open saves that draft locally and opens the
 reply. Resume saved drafts from the composer; their text and pending Gmail-save
 receipts survive reopening the app.
+
+Signature folding also recognizes a trailing block whose full name and email
+match the sender and which includes a phone number. Name-only matches are not
+enough. Postscripts remain visible; Show signature restores the complete block.
+
+HTML footer links load HTTPS `/favicon.ico` icons in a separate background worker.
+Icons are cached by origin in the private data directory's `favicons/` folder for
+seven days; failed lookups are cached for one day. PNG, JPEG, GIF, WebP and ICO
+images are bounded and reduced to 32px. Missing or unsupported icons keep the
+standard link icon. Demo mode uses synthetic icons and makes no favicon requests.

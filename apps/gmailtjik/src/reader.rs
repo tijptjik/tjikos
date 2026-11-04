@@ -93,6 +93,7 @@ impl Cache {
         expanded.hash(&mut key);
         show_signature.hash(&mut key);
         message.header("In-Reply-To").hash(&mut key);
+        message.header("From").hash(&mut key);
         for part in message.payload.walk().into_iter().filter(|part| {
             part.filename.is_empty()
                 && matches!(part.mime_type.as_str(), "text/plain" | "text/html")
@@ -131,7 +132,7 @@ pub fn parse_with_signature(
             .filter_map(|image| image.attr("src").filter(|src| !src.trim().is_empty()))
             .map(str::to_owned)
             .collect();
-        let signature_info = crate::signatures::html(&source);
+        let signature_info = crate::signatures::html_for_sender(&source, &message.header("From"));
         let signature = signature_info.detected;
         let selected_source = if show_signature {
             source
@@ -219,6 +220,7 @@ pub fn parse_with_signature(
             let (markdown, signature) = plain_body(
                 &if expanded { message.text() } else { trimmed },
                 show_signature,
+                &message.header("From"),
             );
             return ReadingBody {
                 markdown,
@@ -245,6 +247,7 @@ pub fn parse_with_signature(
     let (markdown, signature) = plain_body(
         &if expanded { message.text() } else { trimmed },
         show_signature,
+        &message.header("From"),
     );
     ReadingBody {
         markdown,
@@ -257,8 +260,8 @@ pub fn parse_with_signature(
     }
 }
 
-fn plain_body(text: &str, show_signature: bool) -> (String, bool) {
-    let collapsed = crate::signatures::plain(text);
+fn plain_body(text: &str, show_signature: bool, sender: &str) -> (String, bool) {
+    let collapsed = crate::signatures::plain_for_sender(text, sender);
     let signature = collapsed.is_some();
     let selected = if show_signature {
         text

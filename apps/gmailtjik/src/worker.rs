@@ -1166,6 +1166,7 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
         std::thread::spawn(move || image_worker(dir, rx, events, generation, completed));
     }
     let photos = crate::contacts::photo_worker(events.clone());
+    let favicons = crate::contacts::photo_worker(events.clone());
     std::thread::spawn(move || {
         let result = (|| -> Result<()> {
             let store = Store::open(Some(&dir))?;
@@ -1186,7 +1187,16 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                     }
                 };
                 if let Command::ContactPhotos(urls) = &command {
-                    let _ = photos.send(urls.clone());
+                    let (icons, portraits): (Vec<_>, Vec<_>) = urls
+                        .iter()
+                        .cloned()
+                        .partition(|request| request.key.starts_with("favicon:"));
+                    if !icons.is_empty() {
+                        let _ = favicons.send(icons);
+                    }
+                    if !portraits.is_empty() {
+                        let _ = photos.send(portraits);
+                    }
                     continue;
                 }
                 if let Command::Filters(request) = command {

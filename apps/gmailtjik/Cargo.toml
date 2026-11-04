@@ -17,7 +17,7 @@ chrono = "0.4"
 encoding_rs = "0.8"
 gpui-kit = "=0.8.1"
 html2text = "0.16"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "ico"] }
 mail-builder = "0.4"
 mailparse = "0.16"
 rand = "0.9"

@@ -574,6 +574,19 @@ with private_compositor(isolate_pointer=True):
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "contact-signature":
+                capture("contact-signature-hidden.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "signoff":
+                capture("signoff-hidden.png")
+                click(655, 720)
+                capture("signoff-expanded.png")
+                assert (root / "signoff-hidden.png").read_bytes() != (root / "signoff-expanded.png").read_bytes()
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "signature":
                 capture("signature-hidden.png")
                 from PIL import Image

@@ -52,7 +52,26 @@ pub fn sender_details(from: &str, contacts: &[Contact]) -> Person {
         .ok()
         .and_then(|rows| rows.into_iter().next())
         .unwrap_or_else(|| (from.into(), String::new()));
-    let candidates: Vec<_> = people(contacts)
+    // Resolve only matching People records, retaining all of their aliases.
+    // Grouping the entire address book for each visible sender stalls rendering.
+    let ids: HashSet<_> = contacts
+        .iter()
+        .filter(|contact| contact.email.eq_ignore_ascii_case(&email))
+        .filter(|contact| !contact.resource_name.is_empty())
+        .map(|contact| contact.resource_name.as_str())
+        .collect();
+    let relevant: Vec<_> = contacts
+        .iter()
+        .filter(|contact| {
+            if contact.resource_name.is_empty() {
+                contact.email.eq_ignore_ascii_case(&email)
+            } else {
+                ids.contains(contact.resource_name.as_str())
+            }
+        })
+        .cloned()
+        .collect();
+    let candidates: Vec<_> = people(&relevant)
         .into_iter()
         .filter(|person| {
             person
@@ -249,6 +268,28 @@ pub struct PhotoRequest {
     pub urls: Vec<String>,
 }
 
+/// Sender identity resolution is stable until the contact book changes.
+/// Keep it out of repeated hover redraws, including already-loaded avatars.
+#[derive(Default)]
+pub struct PhotoCache(std::cell::RefCell<std::collections::HashMap<String, PhotoRequest>>);
+impl PhotoCache {
+    pub fn clear(&self) {
+        self.0.borrow_mut().clear();
+    }
+    pub fn get(&self, from: &str, contacts: &[Contact]) -> PhotoRequest {
+        if let Some(request) = self.0.borrow().get(from) {
+            return request.clone();
+        }
+        let request = sender_photo(from, contacts);
+        let mut entries = self.0.borrow_mut();
+        if entries.len() >= 4096 {
+            entries.clear();
+        }
+        entries.insert(from.to_owned(), request.clone());
+        request
+    }
+}
+
 pub fn mailbox(name: &str, email: &str) -> String {
     if name.is_empty() {
         return email.to_owned();
@@ -362,6 +403,20 @@ pub fn photo_worker(
         let mut cache = std::collections::HashMap::<String, Vec<u8>>::new();
         while let Ok(requests) = rx.recv() {
             for request in requests {
+                if request.key.starts_with("favicon:") {
+                    let bytes = request
+                        .urls
+                        .first()
+                        .map(|url| crate::favicons::cached(url))
+                        .unwrap_or_default();
+                    if !bytes.is_empty() {
+                        let _ = events.send(crate::worker::Event::ContactPhoto {
+                            url: request.key,
+                            bytes,
+                        });
+                    }
+                    continue;
+                }
                 let bytes = cache.get(&request.key).cloned().unwrap_or_else(|| {
                     request
                         .urls
@@ -419,6 +474,66 @@ mod tests {
             ..Default::default()
         }
     }
+    #[test]
+    fn sender_photo_cache_refreshes_identity_after_contact_book_changes() {
+        let cache = super::PhotoCache::default();
+        let mut contacts = vec![contact("Alice", "alice@example.test")];
+        let before = cache.get("alice@example.test", &contacts);
+        assert_eq!(
+            before.key,
+            super::sender_photo("alice@example.test", &contacts).key
+        );
+        contacts[0].photo = "https://example.test/alice.png".into();
+        cache.clear();
+        let after = cache.get("alice@example.test", &contacts);
+        assert_ne!(before.key, after.key);
+        assert_eq!(
+            after.key,
+            super::sender_photo("alice@example.test", &contacts).key
+        );
+        assert_eq!(after.urls, cache.get("alice@example.test", &contacts).urls);
+    }
+
+    #[test]
+    #[ignore = "synthetic timing probe; run explicitly in release mode"]
+    fn sender_photo_render_cost() {
+        let contacts: Vec<_> = (0..5000)
+            .map(|i| Contact {
+                resource_name: format!("people/{i}"),
+                name: format!("Person {i}"),
+                email: format!("person{i}@example.test"),
+                photo: String::new(),
+            })
+            .collect();
+        let started = std::time::Instant::now();
+        for _ in 0..5 {
+            for i in 0..100 {
+                std::hint::black_box(super::sender_photo(
+                    &format!("person{i}@example.test"),
+                    &contacts,
+                ));
+            }
+        }
+        eprintln!(
+            "100 uncached sender lookups / 5000 contacts: {:.2} ms per redraw",
+            started.elapsed().as_secs_f64() * 1000. / 5.
+        );
+        let cache = super::PhotoCache::default();
+        for i in 0..100 {
+            cache.get(&format!("person{i}@example.test"), &contacts);
+        }
+        let started = std::time::Instant::now();
+        for _ in 0..1000 {
+            for i in 0..100 {
+                std::hint::black_box(cache.get(&format!("person{i}@example.test"), &contacts));
+            }
+        }
+        eprintln!(
+            "100 cached sender lookups / 5000 contacts: {:.3} ms per redraw",
+            started.elapsed().as_secs_f64()
+        );
+    }
+
     #[test]
     fn sender_details_preserve_people_and_fall_back_for_unknown_senders() {
         let contacts = vec![
