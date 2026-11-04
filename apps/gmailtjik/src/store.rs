@@ -69,7 +69,7 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 
 pub struct Store {
-    db: Connection,
+    pub(crate) db: Connection,
 }
 
 impl Store {
@@ -90,9 +90,60 @@ impl Store {
             "PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;
             CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY, value TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS searches(key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+            CREATE TABLE IF NOT EXISTS searches(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS partial_searches(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS deleted_messages(id TEXT PRIMARY KEY);",
         )?;
-        Ok(Self { db })
+        // An already-running sync process can finish an older read after a
+        // permanent deletion. Enforce tombstones inside SQLite so those writers
+        // cannot restore deleted content, even before their binary is reopened.
+        for operation in ["INSERT", "UPDATE"] {
+            db.execute_batch(&format!(
+                "CREATE TRIGGER IF NOT EXISTS messages_deleted_{operation}
+                 BEFORE {operation} ON messages
+                 WHEN EXISTS(SELECT 1 FROM deleted_messages WHERE id=NEW.id)
+                 BEGIN SELECT RAISE(IGNORE); END;"
+            ))?;
+            for table in ["searches", "partial_searches"] {
+                db.execute_batch(&format!(
+                    "CREATE TRIGGER IF NOT EXISTS {table}_deleted_{operation}
+                     AFTER {operation} ON {table}
+                     WHEN EXISTS(
+                         SELECT 1 FROM json_each(NEW.value,'$.messages') AS member
+                         JOIN deleted_messages AS deleted
+                         ON deleted.id=json_extract(member.value,'$.id')
+                     ) BEGIN
+                         UPDATE {table} SET value=json_set(NEW.value,'$.messages',json((
+                             SELECT json_group_array(json(member.value))
+                             FROM json_each(NEW.value,'$.messages') AS member
+                             WHERE NOT EXISTS(SELECT 1 FROM deleted_messages AS deleted
+                                 WHERE deleted.id=json_extract(member.value,'$.id'))
+                         )),'$.next','') WHERE key=NEW.key;
+                     END;"
+                ))?;
+            }
+            db.execute_batch(&format!(
+                "CREATE TRIGGER IF NOT EXISTS threads_deleted_{operation}
+                 AFTER {operation} ON kv
+                 WHEN EXISTS(
+                     SELECT 1 FROM json_each(CASE WHEN NEW.key LIKE 'thread:%'
+                         THEN NEW.value ELSE '[]' END) AS member
+                     JOIN deleted_messages AS deleted
+                     ON deleted.id=json_extract(member.value,'$.id')
+                 ) BEGIN
+                     UPDATE kv SET value=(
+                         SELECT json_group_array(json(member.value))
+                         FROM json_each(NEW.value) AS member
+                         WHERE NOT EXISTS(SELECT 1 FROM deleted_messages AS deleted
+                             WHERE deleted.id=json_extract(member.value,'$.id'))
+                     ) WHERE key=NEW.key;
+                 END;"
+            ))?;
+        }
+        let store = Self { db };
+        store.init_actions()?;
+        store.init_cache()?;
+        Ok(store)
     }
     pub fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>> {
         let json: Option<String> = self
@@ -114,8 +165,11 @@ impl Store {
             .db
             .query_row("SELECT value FROM messages WHERE id=?", [id], |r| r.get(0))
             .optional()?;
-        json.map(|s| serde_json::from_str(&s).map_err(Into::into))
-            .transpose()
+        let mut message: Option<Message> = json.map(|s| serde_json::from_str(&s)).transpose()?;
+        if let Some(message) = &mut message {
+            self.normalize_observed(std::slice::from_mut(message))?;
+        }
+        Ok(message)
     }
     pub fn save_message(&self, message: &Message) -> Result<()> {
         self.db.execute(
@@ -125,28 +179,91 @@ impl Store {
         Ok(())
     }
     pub fn invalidate(&self, id: &str) -> Result<()> {
+        self.invalidate_cached_message(id)?;
         self.db.execute("DELETE FROM messages WHERE id=?", [id])?;
         Ok(())
     }
     pub fn invalidate_all(&self) -> Result<()> {
         self.db.execute("DELETE FROM messages", [])?;
+        self.invalidate_page_freshness()?;
         Ok(())
     }
     pub fn invalidate_mail_views(&self) -> Result<()> {
         self.db.execute_batch(
-            "DELETE FROM messages; DELETE FROM searches; DELETE FROM kv WHERE key LIKE 'thread:%';",
+            "DELETE FROM messages; DELETE FROM searches; DELETE FROM partial_searches;
+             DELETE FROM kv WHERE key LIKE 'thread:%'; DELETE FROM mail_summaries;",
         )?;
+        self.invalidate_page_freshness()?;
+        Ok(())
+    }
+    /// Forget only Gmail-confirmed permanent deletions, atomically across every
+    /// cache source. One prepared insert per ID avoids SQLite variable limits.
+    pub fn remove_messages(&self, ids: &[String]) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let transaction = self.db.unchecked_transaction()?;
+        {
+            let mut insert =
+                transaction.prepare("INSERT OR IGNORE INTO deleted_messages(id) VALUES(?)")?;
+            for id in ids {
+                insert.execute([id])?;
+            }
+        }
+        transaction.execute(
+            "DELETE FROM messages WHERE id IN (SELECT id FROM deleted_messages)",
+            [],
+        )?;
+        for table in ["searches", "partial_searches"] {
+            // Deletion can shift any Gmail search's pagination. Keep useful
+            // snapshots but require a fresh response before following a cursor.
+            transaction.execute(
+                &format!(
+                    "UPDATE {table} SET value=json_set(value,'$.messages',json((
+                         SELECT json_group_array(json(member.value))
+                         FROM json_each({table}.value,'$.messages') AS member
+                         WHERE NOT EXISTS(SELECT 1 FROM deleted_messages AS deleted
+                             WHERE deleted.id=json_extract(member.value,'$.id'))
+                     )),'$.next','')"
+                ),
+                [],
+            )?;
+        }
+        transaction.execute(
+            "UPDATE kv SET value=(
+                 SELECT json_group_array(json(member.value)) FROM json_each(kv.value) AS member
+                 WHERE NOT EXISTS(SELECT 1 FROM deleted_messages AS deleted
+                     WHERE deleted.id=json_extract(member.value,'$.id'))
+             ) WHERE key LIKE 'thread:%'",
+            [],
+        )?;
+        transaction.execute(
+            "DELETE FROM kv WHERE key LIKE 'thread:%' AND value='[]'",
+            [],
+        )?;
+        transaction.commit()?;
         Ok(())
     }
     pub fn apply_labels(&self, id: &str, add: &[String], remove: &[String]) -> Result<()> {
-        let mut stmt = self.db.prepare("SELECT key,value FROM searches")?;
+        self.update_summary_labels(id, add, remove)?;
+        let mut stmt = self.db.prepare(
+            "SELECT 'searches',key,value FROM searches
+             UNION ALL SELECT 'partial_searches',key,value FROM partial_searches",
+        )?;
         let rows = stmt
-            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
-        for (key, value) in rows {
+        for (table, key, value) in rows {
             let (label, query, _): (String, String, String) = serde_json::from_str(&key)?;
-            if !query.is_empty() {
-                self.db.execute("DELETE FROM searches WHERE key=?", [key])?;
+            if !query.is_empty() && query != "is:unread" {
+                self.db
+                    .execute(&format!("DELETE FROM {table} WHERE key=?"), [key])?;
                 continue;
             }
             let mut page: Page = serde_json::from_str(&value)?;
@@ -163,8 +280,12 @@ impl Store {
             page.retain_conversations(|m| {
                 (label.is_empty() || m.label_ids.contains(&label))
                     && (label == "TRASH" || !m.label_ids.iter().any(|l| l == "TRASH"))
+                    && (query != "is:unread" || m.unread())
             });
-            self.save_page(&key, &page)?;
+            self.db.execute(
+                &format!("UPDATE {table} SET value=? WHERE key=?"),
+                params![serde_json::to_string(&page)?, key],
+            )?;
         }
         // A thread cache must not resurrect pre-action read/label state in the reader.
         self.db
@@ -187,6 +308,98 @@ impl Store {
             "INSERT OR REPLACE INTO searches VALUES(?,?)",
             params![key, serde_json::to_string(page)?],
         )?;
+        self.db
+            .execute("DELETE FROM partial_searches WHERE key=?", [key])?;
+        self.mark_page_fresh(key)?;
+        Ok(())
+    }
+
+    /// Preserve progress without replacing a completed view or inventing a cursor.
+    pub fn save_partial_page(&self, key: &str, page: &Page) -> Result<()> {
+        if !page.threaded || page.messages.is_empty() {
+            return Ok(());
+        }
+        if let Some(previous) = self.partial_page(key)?
+            && previous.conversations().len() > page.conversations().len()
+        {
+            return Ok(());
+        }
+        let mut partial = page.clone();
+        partial.next.clear();
+        for message in &mut partial.messages {
+            message.summary_only = true;
+            message.payload.body = Default::default();
+            message.payload.parts.clear();
+        }
+        self.db.execute(
+            "INSERT INTO partial_searches(key,value)
+             SELECT ?,? WHERE NOT EXISTS(
+                 SELECT 1 FROM searches WHERE key=? AND json_extract(value,'$.threaded')=1
+             )
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![key, serde_json::to_string(&partial)?, key],
+        )?;
+        Ok(())
+    }
+
+    fn partial_page(&self, key: &str) -> Result<Option<Page>> {
+        let json: Option<String> = self
+            .db
+            .query_row(
+                "SELECT value FROM partial_searches WHERE key=?",
+                [key],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let page: Option<Page> = json.map(|json| serde_json::from_str(&json)).transpose()?;
+        Ok(page.filter(|page| page.threaded))
+    }
+
+    /// Exact snapshots win, including confirmed empty pages. A folder's first
+    /// page can fall back to known local membership; arbitrary Gmail searches
+    /// and remote pagination cannot be reconstructed safely offline.
+    pub fn cached_page(&self, label: &str, query: &str, token: &str) -> Result<Option<Page>> {
+        let base = self.cached_folder_page(label, query, token)?;
+        let mut page = base.clone().unwrap_or_default();
+        self.project_page(label, query, token, &mut page)?;
+        if !label.is_empty()
+            && token.is_empty()
+            && matches!(query.trim(), "" | "is:unread")
+            && base.as_ref().is_some_and(|base| {
+                !base.messages.is_empty() && page.conversations().len() < base.conversations().len()
+            })
+            && page.conversations().len() < 25
+        {
+            // Pending archives may exhaust the saved first page while older
+            // cached conversations remain. Fill locally so rapid triage keeps
+            // moving even before Gmail acknowledges those actions.
+            let mut candidates =
+                self.indexed_folder_candidates(label, query, self.optimistic_candidate_limit()?)?;
+            self.project_page(label, query, token, &mut candidates)?;
+            if candidates.conversations().len() > page.conversations().len() {
+                candidates.next.clear();
+                page = candidates;
+            }
+        }
+        Ok(if base.is_some() || !page.messages.is_empty() {
+            Some(page)
+        } else {
+            None
+        })
+    }
+
+    pub fn rate_limit_until(&self) -> Result<u64> {
+        Ok(self.get("rate_limit_until")?.unwrap_or(0))
+    }
+
+    pub fn defer_requests(&self, until: u64) -> Result<()> {
+        self.db.execute(
+            "INSERT INTO kv(key,value) VALUES('rate_limit_until',?1)
+             ON CONFLICT(key) DO UPDATE SET value=CAST(MAX(
+                 CAST(kv.value AS INTEGER), CAST(excluded.value AS INTEGER)
+             ) AS TEXT)",
+            [until.to_string()],
+        )?;
         Ok(())
     }
     pub fn draft(&self) -> Result<Draft> {
@@ -197,6 +410,406 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn permanent_deletion_scrubs_every_cache_and_preserves_other_thread_members() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut page = crate::model::demo_conversations().1;
+        page.next = "old-page-token".into();
+        let deleted = vec!["demo-0".into(), "demo-2".into()];
+        let full_key = crate::worker::key("INBOX", "", "");
+        let partial_key = crate::worker::key("INBOX", "is:unread", "");
+        let search_key = crate::worker::key("", "synthetic", "old-page-token");
+        {
+            let store = Store::open(Some(dir.path())).unwrap();
+            for message in &page.messages {
+                store.save_message(message).unwrap();
+            }
+            store.save_page(&full_key, &page).unwrap();
+            store.save_page(&search_key, &page).unwrap();
+            store.save_partial_page(&partial_key, &page).unwrap();
+            for thread in page.conversations() {
+                store
+                    .put(
+                        &format!("thread:{}", thread.message().thread_id),
+                        &thread.messages,
+                    )
+                    .unwrap();
+            }
+            store.put("email", &"synthetic@example.test").unwrap();
+            store.remove_messages(&deleted).unwrap();
+        }
+        let store = Store::open(Some(dir.path())).unwrap();
+        for id in &deleted {
+            assert!(store.message(id).unwrap().is_none());
+        }
+        assert!(store.message("demo-reply-0").unwrap().is_some());
+        for cached in [
+            store.page(&full_key).unwrap().unwrap(),
+            store.page(&search_key).unwrap().unwrap(),
+            store.partial_page(&partial_key).unwrap().unwrap(),
+            store.cached_page("design", "", "").unwrap().unwrap(),
+        ] {
+            assert!(cached.next.is_empty());
+            assert!(
+                cached
+                    .messages
+                    .iter()
+                    .all(|message| !deleted.contains(&message.id))
+            );
+            assert!(
+                cached
+                    .messages
+                    .iter()
+                    .any(|message| message.id == "demo-reply-0")
+            );
+        }
+        let thread: Vec<Message> = store.get("thread:thread-0").unwrap().unwrap();
+        assert_eq!(thread.len(), 2);
+        assert!(thread.iter().all(|message| message.id != "demo-0"));
+        assert!(
+            store
+                .get::<Vec<Message>>("thread:thread-2")
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            store.get::<String>("email").unwrap().unwrap(),
+            "synthetic@example.test"
+        );
+    }
+
+    #[test]
+    fn old_sync_writers_cannot_resurrect_permanently_deleted_mail() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let store = Store::open(Some(dir.path())).unwrap();
+        let old_writer = Store::open(Some(dir.path())).unwrap();
+        let mut page = crate::model::demo().1;
+        page.next = "stale-next".into();
+        let deleted = &page.messages[0];
+        let key = crate::worker::key("INBOX", "", "");
+        store.remove_messages(&[deleted.id.clone()]).unwrap();
+        // Raw SQL models the existing process's pre-tombstone cache methods.
+        for _ in 0..2 {
+            old_writer
+                .db
+                .execute(
+                    "INSERT OR REPLACE INTO messages VALUES(?,?)",
+                    params![deleted.id, serde_json::to_string(deleted).unwrap()],
+                )
+                .unwrap();
+            for table in ["searches", "partial_searches"] {
+                old_writer
+                    .db
+                    .execute(
+                        &format!("INSERT OR REPLACE INTO {table} VALUES(?,?)"),
+                        params![key, serde_json::to_string(&page).unwrap()],
+                    )
+                    .unwrap();
+                old_writer
+                    .db
+                    .execute(
+                        &format!("UPDATE {table} SET value=? WHERE key=?"),
+                        params![serde_json::to_string(&page).unwrap(), key],
+                    )
+                    .unwrap();
+            }
+            old_writer.put("thread:stale", &page.messages).unwrap();
+            old_writer
+                .db
+                .execute(
+                    "UPDATE kv SET value=? WHERE key='thread:stale'",
+                    [serde_json::to_string(&page.messages).unwrap()],
+                )
+                .unwrap();
+        }
+        assert!(store.message(&deleted.id).unwrap().is_none());
+        for cached in [
+            store.page(&key).unwrap().unwrap(),
+            store.partial_page(&key).unwrap().unwrap(),
+            store.cached_page("design", "", "").unwrap().unwrap(),
+        ] {
+            assert!(cached.next.is_empty());
+            assert!(
+                cached
+                    .messages
+                    .iter()
+                    .all(|message| message.id != deleted.id)
+            );
+        }
+        let thread: Vec<Message> = store.get("thread:stale").unwrap().unwrap();
+        assert_eq!(thread.len(), page.messages.len() - 1);
+        assert!(thread.iter().all(|message| message.id != deleted.id));
+    }
+
+    #[test]
+    fn permanent_deletion_is_atomic_and_empty_input_keeps_pagination() {
+        let store = Store::open(None).unwrap();
+        let mut page = crate::model::demo().1;
+        page.next = "valid-next".into();
+        let key = crate::worker::key("INBOX", "", "");
+        let message = &page.messages[0];
+        store.save_message(message).unwrap();
+        store.save_page(&key, &page).unwrap();
+        store.remove_messages(&[]).unwrap();
+        assert_eq!(store.page(&key).unwrap().unwrap().next, "valid-next");
+        store
+            .db
+            .execute_batch(
+                "CREATE TRIGGER synthetic_failure BEFORE DELETE ON messages
+             BEGIN SELECT RAISE(ABORT,'synthetic cache failure'); END;",
+            )
+            .unwrap();
+        assert!(store.remove_messages(&[message.id.clone()]).is_err());
+        store
+            .db
+            .execute_batch("DROP TRIGGER synthetic_failure")
+            .unwrap();
+        assert!(store.message(&message.id).unwrap().is_some());
+        assert_eq!(
+            store.page(&key).unwrap().unwrap().messages.len(),
+            page.messages.len()
+        );
+        assert_eq!(
+            store
+                .db
+                .query_row("SELECT COUNT(*) FROM deleted_messages", [], |r| r
+                    .get::<_, u64>(0))
+                .unwrap(),
+            0
+        );
+        let mut ids: Vec<String> = (0..1200).map(|id| format!("gone-{id}")).collect();
+        ids.push(message.id.clone());
+        store.remove_messages(&ids).unwrap();
+        assert!(store.message(&message.id).unwrap().is_none());
+        assert!(store.page(&key).unwrap().unwrap().next.is_empty());
+    }
+
+    #[test]
+    fn emptied_partial_view_can_use_other_known_folder_messages() {
+        let store = Store::open(None).unwrap();
+        let mut partial = crate::model::demo().1;
+        let other = partial.messages[1].clone();
+        store.save_message(&other).unwrap();
+        partial.messages.truncate(1);
+        let removed = partial.messages[0].id.clone();
+        store
+            .save_partial_page(&crate::worker::key("INBOX", "", ""), &partial)
+            .unwrap();
+        store
+            .apply_labels(&removed, &[], &["INBOX".into()])
+            .unwrap();
+        let cached = store.cached_page("INBOX", "", "").unwrap().unwrap();
+        assert_eq!(cached.messages.len(), 1);
+        assert_eq!(cached.messages[0].id, other.id);
+    }
+
+    #[test]
+    fn partial_views_survive_restart_without_replacing_complete_pages() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let key = crate::worker::key("INBOX", "", "");
+        let mut page = crate::model::demo().1;
+        page.next = "valid-next-page".into();
+        {
+            let store = Store::open(Some(dir.path())).unwrap();
+            store.save_partial_page(&key, &page).unwrap();
+            let mut fewer = page.clone();
+            fewer.messages.truncate(1);
+            store.save_partial_page(&key, &fewer).unwrap();
+        }
+        let store = Store::open(Some(dir.path())).unwrap();
+        assert!(store.page(&key).unwrap().is_none());
+        let cached = store.cached_page("INBOX", "", "").unwrap().unwrap();
+        assert_eq!(cached.messages.len(), 5);
+        assert!(cached.next.is_empty());
+        assert!(cached.messages.iter().all(|message| {
+            message.summary_only
+                && message.payload.body.data.is_empty()
+                && message.payload.parts.is_empty()
+        }));
+        let mut complete = page.clone();
+        complete.messages.truncate(2);
+        store.save_page(&key, &complete).unwrap();
+        store.save_partial_page(&key, &page).unwrap();
+        let cached = store.cached_page("INBOX", "", "").unwrap().unwrap();
+        assert_eq!(cached.messages.len(), 2);
+        assert_eq!(cached.next, "valid-next-page");
+        let empty = Page {
+            threaded: true,
+            ..Default::default()
+        };
+        store.save_page(&key, &empty).unwrap();
+        store.save_message(&page.messages[0]).unwrap();
+        assert!(
+            store
+                .cached_page("INBOX", "", "")
+                .unwrap()
+                .unwrap()
+                .messages
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn legacy_exact_views_keep_messages_but_discard_message_cursors() {
+        let store = Store::open(None).unwrap();
+        let key = crate::worker::key("", "from:synthetic@example.test", "");
+        let mut legacy = crate::model::demo_conversations().1;
+        legacy.threaded = false;
+        legacy.next = "obsolete-message-page-token".into();
+        store.save_page(&key, &legacy).unwrap();
+        assert!(store.page(&key).unwrap().is_none());
+        let cached = store
+            .cached_page("", "from:synthetic@example.test", "")
+            .unwrap()
+            .unwrap();
+        assert!(cached.threaded && cached.next.is_empty());
+        assert_eq!(cached.messages.len(), legacy.messages.len());
+        assert_eq!(cached.conversations().len(), 3);
+        let mut smaller = legacy.clone();
+        smaller.threaded = true;
+        smaller.messages.truncate(1);
+        store.save_partial_page(&key, &smaller).unwrap();
+        assert_eq!(
+            store
+                .cached_page("", "from:synthetic@example.test", "")
+                .unwrap()
+                .unwrap()
+                .conversations()
+                .len(),
+            3
+        );
+    }
+
+    #[test]
+    fn folder_fallback_is_bounded_sorted_and_never_guesses_search_or_pagination() {
+        let store = Store::open(None).unwrap();
+        let source = crate::model::demo().1.messages.remove(0);
+        for index in 0..32 {
+            let mut message = source.clone();
+            message.id = format!("message-{index}");
+            message.thread_id = format!("thread-{index}");
+            message.internal_date = index.to_string();
+            message.label_ids = vec!["target".into()];
+            if index % 2 == 0 {
+                message.label_ids.push("UNREAD".into());
+            }
+            if index == 30 {
+                message.label_ids.push("TRASH".into());
+            }
+            if index == 31 {
+                message.label_ids.push("SPAM".into());
+            }
+            if index == 29 {
+                store.put("thread:thread-29", &vec![message]).unwrap();
+            } else if index == 28 {
+                store
+                    .save_page(
+                        &crate::worker::key("other", "", ""),
+                        &Page {
+                            messages: vec![message],
+                            threaded: true,
+                            next: "other-cursor".into(),
+                        },
+                    )
+                    .unwrap();
+            } else {
+                store.save_message(&message).unwrap();
+            }
+        }
+        let cached = store.cached_page("target", "", "").unwrap().unwrap();
+        assert_eq!(cached.conversations().len(), 25);
+        assert_eq!(cached.messages[0].id, "message-29");
+        assert_eq!(cached.messages.last().unwrap().id, "message-5");
+        assert!(cached.next.is_empty());
+        assert!(
+            cached
+                .messages
+                .iter()
+                .all(|message| message.summary_only && message.payload.body.data.is_empty())
+        );
+        assert_eq!(
+            store
+                .cached_page("target", "is:unread", "")
+                .unwrap()
+                .unwrap()
+                .conversations()
+                .len(),
+            15
+        );
+        assert!(
+            store
+                .cached_page("target", "from:synthetic@example.test", "")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            store
+                .cached_page("target", "", "remote-next")
+                .unwrap()
+                .is_none()
+        );
+        assert!(store.cached_page("", "", "").unwrap().is_none());
+    }
+
+    #[test]
+    fn fallback_keeps_known_sent_members_and_partial_views_follow_actions() {
+        let store = Store::open(None).unwrap();
+        let page = crate::model::demo_conversations().1;
+        for message in &page.messages {
+            store.save_message(message).unwrap();
+        }
+        let cached = store.cached_page("INBOX", "", "").unwrap().unwrap();
+        assert!(
+            cached
+                .conversations()
+                .iter()
+                .any(|thread| thread.messages.len() == 3)
+        );
+        let key = crate::worker::key("INBOX", "is:unread", "");
+        store.save_partial_page(&key, &page).unwrap();
+        for message in &page.messages {
+            store
+                .apply_labels(&message.id, &[], &["UNREAD".into()])
+                .unwrap();
+        }
+        assert!(
+            store
+                .cached_page("INBOX", "is:unread", "")
+                .unwrap()
+                .unwrap()
+                .messages
+                .is_empty()
+        );
+        let key = crate::worker::key("INBOX", "", "");
+        store.save_partial_page(&key, &page).unwrap();
+        for id in ["demo-0", "demo-received-reply", "demo-reply-0"] {
+            store.apply_labels(id, &[], &["INBOX".into()]).unwrap();
+        }
+        let cached = store.cached_page("INBOX", "", "").unwrap().unwrap();
+        assert!(
+            cached
+                .messages
+                .iter()
+                .all(|message| message.thread_id != "thread-0")
+        );
+        store.invalidate_mail_views().unwrap();
+        assert!(store.cached_page("INBOX", "", "").unwrap().is_none());
+    }
+
+    #[test]
+    fn rate_limit_deadline_is_shared_and_can_only_move_forward() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let first = Store::open(Some(dir.path())).unwrap();
+        let second = Store::open(Some(dir.path())).unwrap();
+        assert_eq!(first.rate_limit_until().unwrap(), 0);
+        first.defer_requests(100).unwrap();
+        second.defer_requests(200).unwrap();
+        first.defer_requests(150).unwrap();
+        assert_eq!(first.rate_limit_until().unwrap(), 200);
+        assert_eq!(second.rate_limit_until().unwrap(), 200);
+    }
+
     #[test]
     fn database_lock_probe() {
         let Some(path) = std::env::var_os("GMAILTJIK_TEST_LOCK_DB") else {

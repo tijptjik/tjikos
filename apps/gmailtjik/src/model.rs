@@ -16,6 +16,9 @@ pub struct Label {
 pub struct Message {
     pub id: String,
     pub thread_id: String,
+    /// List previews carry headers and snippets; their body must be fetched on open.
+    #[serde(default)]
+    pub summary_only: bool,
     #[serde(default)]
     pub label_ids: Vec<String>,
     #[serde(default)]
@@ -379,6 +382,27 @@ impl Page {
             .collect()
     }
 
+    pub fn selection(&self, current: Option<&Message>) -> Option<Message> {
+        let rows = self.representatives();
+        let mut selected = current
+            .and_then(|current| {
+                rows.iter()
+                    .find(|row| row.conversation_key() == current.conversation_key())
+            })
+            .or_else(|| rows.first())?
+            .clone();
+        // A later list batch must not replace an already opened body with headers.
+        if let Some(current) = current
+            && current.id == selected.id
+            && !current.summary_only
+            && selected.summary_only
+        {
+            selected.payload = current.payload.clone();
+            selected.summary_only = false;
+        }
+        Some(selected)
+    }
+
     pub fn retain_conversations(&mut self, matches: impl Fn(&Message) -> bool) {
         let keep: std::collections::HashSet<String> = self
             .messages
@@ -456,6 +480,7 @@ pub fn demo() -> (Vec<Label>, Page) {
         .map(|(i, (from, subject, snippet, body, label))| Message {
             id: format!("demo-{i}"),
             thread_id: format!("thread-{i}"),
+            summary_only: false,
             label_ids: vec!["INBOX".into(), label.into()]
                 .into_iter()
                 .chain((i < 2).then(|| "UNREAD".into()))
@@ -574,6 +599,42 @@ On Sunday, Mira wrote:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progressive_previews_preserve_selection_and_opened_content() {
+        let original = demo().1;
+        let selected = original.messages[1].clone();
+        let mut summaries = original.clone();
+        for message in &mut summaries.messages {
+            message.summary_only = true;
+            message.payload.body = Body::default();
+            message.payload.parts.clear();
+            message.label_ids.retain(|label| label != "UNREAD");
+        }
+        let mut partial = summaries.clone();
+        partial.messages.truncate(2);
+        let kept = partial.selection(Some(&selected)).unwrap();
+        assert_eq!(kept.id, selected.id);
+        assert!(!kept.summary_only);
+        assert_eq!(kept.text(), selected.text());
+        assert!(!kept.unread());
+        assert_eq!(summaries.selection(Some(&kept)).unwrap().id, selected.id);
+        summaries.messages.remove(1);
+        assert_eq!(
+            summaries.selection(Some(&kept)).unwrap().id,
+            original.messages[0].id
+        );
+        let roundtrip: Page =
+            serde_json::from_str(&serde_json::to_string(&partial).unwrap()).unwrap();
+        assert!(
+            roundtrip
+                .messages
+                .iter()
+                .all(|message| message.summary_only)
+        );
+        let legacy: Message = serde_json::from_str(r#"{"id":"old","threadId":"thread"}"#).unwrap();
+        assert!(!legacy.summary_only);
+    }
 
     #[test]
     fn conversations_include_sent_replies_and_aggregate_unread() {
