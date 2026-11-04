@@ -5,7 +5,7 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "check": "bash scripts/check.sh",
-    "test": "bun test tests/due_date.test.ts tests/repeat.test.ts tests/date_code.test.ts tests/workflow_projection.test.ts && cargo test --release --locked && python3 -B tests/native_cli.py"
+    "test": "bun test tests/due_date.test.ts tests/repeat.test.ts tests/date_code.test.ts tests/workflow_projection.test.ts && cargo test --release --locked && python3 -B tests/contribution_merge.py && python3 -B tests/native_cli.py"
   },
   "dependencies": {
     "@tjikos/notjik-sync": "workspace:*"

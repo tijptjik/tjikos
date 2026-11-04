@@ -360,3 +360,13 @@ desktop, **C** cancels the focused ordinary step; **C** again restores an explic
 cancelled step. API clients use revision-checked `subtask-cancel` with `subtask_id`.
 Template copies remap dependencies and reset completion/cancellation. Install the
 authority and clients together; capability `conditional_pathways` indicates support.
+
+`scripts/merge_contributions.py --snapshot PRIVATE_STATE_JSON --project PROJECT_ID
+--output PRIVATE_PLAN_JSON` prepares a Wedding contribution consolidation, preserving
+per-contribution receipt/review/compilation progress, contact metadata and original
+records in the private plan. It replaces the book/video templates with one combined
+template and retains the shorter non-English flow. Review the plan before running
+`--output PRIVATE_PLAN_JSON --apply`; application checks capability and revisions,
+edits survivors before removing duplicates, and journals acknowledged requests.
+A batch is resumable, but not atomic; stop and replan if another client changes a
+record. Keep the plan and its receipt file outside the repository as recovery evidence.
