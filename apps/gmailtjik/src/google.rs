@@ -247,6 +247,7 @@ impl Google {
             threaded: false,
         })
     }
+    #[cfg(test)]
     pub fn thread_page(
         &mut self,
         store: &Store,
@@ -511,6 +512,7 @@ impl Google {
         }
         Ok(())
     }
+    #[cfg(test)]
     pub fn mark_all_read(&mut self, store: &Store, label: &str, query: &str) -> Result<usize> {
         self.mark_all_read_ids(label, query, |ids| {
             for id in ids {
@@ -521,6 +523,7 @@ impl Google {
         .map(|ids| ids.len())
     }
 
+    #[cfg(test)]
     pub fn mark_all_read_ids(
         &mut self,
         label: &str,

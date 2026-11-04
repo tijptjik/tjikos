@@ -24,6 +24,7 @@ with private_compositor(isolate_pointer=True):
     binary = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else APP / "target/debug/gmailtjik"
     with (root / "gmailtjik.log").open("w") as log:
         process = subprocess.Popen([str(binary), "--demo"], stdout=log, stderr=log)
+        process_started = time.monotonic()
         try:
             def client():
                 if process.poll() is not None:
@@ -49,6 +50,231 @@ with private_compositor(isolate_pointer=True):
             def capture(name):
                 time.sleep(.3)
                 subprocess.run(["grim", "-o", "GMAIL", str(root / name)], check=True)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "optimistic":
+                from PIL import Image
+
+                def selected_body():
+                    subprocess.run(["wl-copy", "--", "selection-not-copied"], check=True)
+                    click(650, 310)
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                    return wait_for(lambda: (value if (value := subprocess.check_output(
+                        ["wl-paste", "--no-newline"], text=True, timeout=5)) != "selection-not-copied" else None), timeout=5)
+
+                started = time.monotonic()
+                subprocess.run(["wtype", "-s", "70", "-k", "Escape", "a", "a"], check=True)
+                capture("optimistic-archived-before-api.png")
+                assert time.monotonic() - started < 2, "UI waited for synthetic 6-second delivery"
+                assert selected_body() == "Full content of synthetic conversation 03."
+                click(80, 132)
+                capture("optimistic-starred-during-api.png")
+                assert selected_body() == "Full content of synthetic conversation 05."
+                click(80, 98)
+                capture("optimistic-return-during-api.png")
+                assert selected_body() == "Full content of synthetic conversation 03."
+                # First archive fails, second succeeds. The failed row returns
+                # without moving selection or undoing the later archive.
+                time.sleep(max(0, started + 8 - time.monotonic()))
+                capture("optimistic-failure.png")
+                assert selected_body() == "Full content of synthetic conversation 03."
+                with Image.open(root / "optimistic-failure.png") as shot:
+                    pixels = shot.convert("RGB").crop((960, 620, 1405, 950)).get_flattened_data()
+                    assert sum(pixel == (235, 111, 146) for pixel in pixels) > 20, "Failure notice missing"
+                # Rapid opposite toggles are visible immediately and preserve
+                # their final state while delivery remains in progress.
+                click(957, 106)
+                click(957, 106)
+                click(890, 106)
+                click(890, 106)
+                capture("optimistic-opposite-stars.png")
+                click(80, 132)
+                capture("optimistic-starred-final.png")
+                assert selected_body() == "Full content of synthetic conversation 05."
+                click(80, 98)
+                time.sleep(3)
+                capture("optimistic-inbox-final.png")
+                assert selected_body() == "Full content of synthetic conversation 03."
+                with Image.open(root / "optimistic-failure.png") as before, Image.open(root / "optimistic-inbox-final.png") as after:
+                    def badge_ink(shot):
+                        return [pixel == (165, 160, 186) for pixel in shot.convert("RGB").crop((193, 90, 214, 105)).get_flattened_data()]
+                    assert badge_ink(before) == badge_ink(after), "Unread count drifted after opposite toggles"
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "empty-folders":
+                from PIL import Image
+
+                def rows(name, count):
+                    with Image.open(root / name) as shot:
+                        shot = shot.convert("RGB")
+                        for index in range(5):
+                            pixels = shot.crop((245, 190 + 104 * index, 530, 278 + 104 * index)).get_flattened_data()
+                            ink = sum(pixel in ((229, 229, 229), (165, 160, 186)) for pixel in pixels)
+                            assert (ink > 20) if index < count else (ink == 0), (name, index, ink)
+
+                def confirm_button(name):
+                    with Image.open(root / name) as shot:
+                        shot = shot.convert("RGB")
+                        points = [(x, y) for y in range(150, 400) for x in range(245, 560)
+                                  if shot.getpixel((x, y)) == (235, 111, 146)]
+                        assert len(points) > 100, name
+                        return ((min(x for x, _ in points) + max(x for x, _ in points)) // 2,
+                                (min(y for _, y in points) + max(y for _, y in points)) // 2)
+
+                def no_empty_action(name):
+                    with Image.open(root / name) as shot:
+                        pixels = shot.convert("RGB").crop((430, 120, 550, 150)).get_flattened_data()
+                        assert not any(pixel == (235, 111, 146) for pixel in pixels), name
+
+                rows("inbox.png", 5)
+                no_empty_action("inbox.png")
+                click(80, 234)
+                capture("empty-spam-before.png")
+                rows("empty-spam-before.png", 3)
+                click(480, 135)
+                capture("empty-spam-confirm.png")
+                confirm_button("empty-spam-confirm.png")
+                click(280, 256)  # Cancel must preserve every message.
+                capture("empty-spam-cancelled.png")
+                rows("empty-spam-cancelled.png", 3)
+                click(480, 135)
+                subprocess.run(["wtype", "-k", "Escape"], check=True)
+                capture("empty-spam-escaped.png")
+                rows("empty-spam-escaped.png", 3)
+                click(480, 135)
+                click(80, 268)  # Switching folders cancels the Spam confirmation.
+                capture("empty-trash-before.png")
+                rows("empty-trash-before.png", 2)
+                click(80, 234)
+                capture("empty-spam-return.png")
+                rows("empty-spam-return.png", 3)
+                click(280, 135)  # Only one of the three Spam messages is unread.
+                capture("empty-spam-unread.png")
+                rows("empty-spam-unread.png", 1)
+                click(480, 135)
+                capture("empty-spam-filtered-confirm.png")
+                click(*confirm_button("empty-spam-filtered-confirm.png"))
+                capture("empty-spam-done.png")
+                rows("empty-spam-done.png", 0)
+                click(280, 135)  # Read messages must also have been deleted.
+                capture("empty-spam-all-done.png")
+                rows("empty-spam-all-done.png", 0)
+                click(80, 268)
+                capture("empty-trash-untouched.png")
+                rows("empty-trash-untouched.png", 2)
+                click(480, 135)
+                capture("empty-trash-confirm.png")
+                click(*confirm_button("empty-trash-confirm.png"))
+                capture("empty-trash-done.png")
+                rows("empty-trash-done.png", 0)
+                click(80, 98)
+                capture("empty-inbox-preserved.png")
+                rows("empty-inbox-preserved.png", 5)
+                no_empty_action("empty-inbox-preserved.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "cache-failure":
+                from PIL import Image
+
+                def cached_rows(name, selected=True):
+                    with Image.open(root / name) as shot:
+                        shot = shot.convert("RGB")
+                        for index in range(7):
+                            pixels = shot.crop((245, 190 + 104 * index, 530, 278 + 104 * index)).get_flattened_data()
+                            ink = sum(pixel in ((229, 229, 229), (165, 160, 186)) for pixel in pixels)
+                            assert (ink > 20) if index < 6 else (ink == 0), (name, index, ink)
+                        if selected:
+                            assert shot.getpixel((235, 310)) == (57, 53, 75), name
+
+                def selected_body():
+                    subprocess.run(["wl-copy", "--", "selection-not-copied"], check=True)
+                    click(650, 310)
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+
+                    def copied():
+                        value = subprocess.check_output(["wl-paste", "--no-newline"], text=True, timeout=5)
+                        return value if value != "selection-not-copied" else None
+
+                    return wait_for(copied, timeout=5)
+
+                def failure_visible(name):
+                    with Image.open(root / name) as shot:
+                        pixels = shot.convert("RGB").crop((230, 945, 1405, 974)).get_flattened_data()
+                        assert sum(pixel == (235, 111, 146) for pixel in pixels) > 10, name
+
+                cached_rows("inbox.png", selected=False)
+                click(400, 330)
+                time.sleep(max(0, process_started + 3 - time.monotonic()))
+                capture("cache-after-failure.png")
+                cached_rows("cache-after-failure.png")
+                failure_visible("cache-after-failure.png")
+                assert selected_body() == "Full content of synthetic conversation 02."
+                # Retrying must retain the cached list and opened message even
+                # while Gmail is unavailable, and when the retry fails as well.
+                click(546, 98)
+                capture("cache-refreshing.png")
+                cached_rows("cache-refreshing.png")
+                assert selected_body() == "Full content of synthetic conversation 02."
+                time.sleep(2)
+                capture("cache-retry-failed.png")
+                cached_rows("cache-retry-failed.png")
+                failure_visible("cache-retry-failed.png")
+                assert selected_body() == "Full content of synthetic conversation 02."
+                click(80, 132)
+                capture("cache-other-folder.png")
+                click(80, 98)
+                capture("cache-folder-return.png")
+                cached_rows("cache-folder-return.png")
+                assert selected_body() == "Full content of synthetic conversation 02."
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "quick-folder":
+                from PIL import Image
+
+                def row_ink(name, index):
+                    with Image.open(root / name) as shot:
+                        pixels = shot.convert("RGB").crop((245, 190 + 104 * index, 530, 278 + 104 * index)).get_flattened_data()
+                        return sum(pixel in ((229, 229, 229), (165, 160, 186)) for pixel in pixels)
+
+                def selected_body():
+                    subprocess.run(["wl-copy", "--", "selection-not-copied"], check=True)
+                    click(650, 310)
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+
+                    def copied():
+                        value = subprocess.check_output(["wl-paste", "--no-newline"], text=True, timeout=5)
+                        return value if value != "selection-not-copied" else None
+
+                    return wait_for(copied, timeout=5)
+
+                # The first six rows are usable while the remaining summaries
+                # are still delayed by the synthetic folder source.
+                for index in range(6):
+                    assert row_ink("inbox.png", index) > 20, index
+                assert row_ink("inbox.png", 6) == 0
+                click(400, 330)
+                capture("quick-selected-early.png")
+                assert selected_body() == "Full content of synthetic conversation 02."
+                time.sleep(max(0, process_started + 6.5 - time.monotonic()))
+                capture("quick-complete.png")
+                for name in ("quick-selected-early.png", "quick-complete.png"):
+                    with Image.open(root / name) as shot:
+                        assert shot.convert("RGB").getpixel((235, 310)) == (57, 53, 75), name
+                assert selected_body() == "Full content of synthetic conversation 02."
+                assert row_ink("quick-complete.png", 6) > 20
+                with Image.open(root / "inbox.png") as first, Image.open(root / "quick-complete.png") as complete:
+                    assert first.crop((244, 151, 550, 177)).tobytes() != complete.crop((244, 151, 550, 177)).tobytes()
+                # From row 2, exactly 23 moves reach row 25. Further Down cannot
+                # select a duplicate row appended by a later progressive batch.
+                subprocess.run(["wtype", "-s", "20", "-k", "Escape", *sum((["-k", "Down"] for _ in range(23)), [])], check=True)
+                capture("quick-last-thread.png")
+                assert selected_body() == "Full content of synthetic conversation 25."
+                subprocess.run(["wtype", "-k", "Escape", "-k", "Down"], check=True)
+                assert selected_body() == "Full content of synthetic conversation 25."
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
 
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "threads":
                 # Six messages form three conversations, with counts 3, 1 and 2.

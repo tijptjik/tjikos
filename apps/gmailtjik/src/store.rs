@@ -188,6 +188,7 @@ impl Store {
         self.invalidate_page_freshness()?;
         Ok(())
     }
+    #[cfg(test)]
     pub fn invalidate_mail_views(&self) -> Result<()> {
         self.db.execute_batch(
             "DELETE FROM messages; DELETE FROM searches; DELETE FROM partial_searches;
@@ -244,6 +245,7 @@ impl Store {
         transaction.commit()?;
         Ok(())
     }
+    #[cfg(test)]
     pub fn apply_labels(&self, id: &str, add: &[String], remove: &[String]) -> Result<()> {
         self.update_summary_labels(id, add, remove)?;
         let mut stmt = self.db.prepare(
@@ -292,6 +294,7 @@ impl Store {
             .execute("DELETE FROM kv WHERE key LIKE 'thread:%'", [])?;
         self.invalidate(id)
     }
+    #[cfg(test)]
     pub fn page(&self, key: &str) -> Result<Option<Page>> {
         let json: Option<String> = self
             .db

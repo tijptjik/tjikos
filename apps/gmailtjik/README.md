@@ -234,7 +234,8 @@ are suppressed because Starred already represents them.
 
 The UI uses bundled Proicons. Outside text inputs, `r` replies to the selected
 email and focuses the composer body, `a` archives it, and `d` moves it to Trash.
-Delete also moves to Trash; it never permanently deletes mail. Existing drafts
+Delete also moves to Trash; permanent deletion requires the separate confirmed
+Empty Spam or Empty Trash action. Existing drafts
 are preserved, and replying again to the same message resumes its draft.
 
 Press `?` outside an input for the shortcut guide. Escape returns focus to
@@ -302,7 +303,56 @@ grouped by Gmail's thread ID, with participant names, message counts, the origin
 subject and the latest snippet. Sent replies count toward the conversation;
 any unread member marks its row unread. Archive, Trash, star and read/unread
 toolbar actions affect the whole conversation. The reply target defaults to its
-latest received message. Old message-page caches are refreshed before reuse.
+latest received message. Older cached message pages remain readable, with their
+incompatible pagination cursors removed until the next successful refresh.
+
+Folder navigation reads a private SQLite index of headers and label membership
+first. It returns up to 25 conversations without scanning or decoding email
+bodies; selection and scroll position are remembered separately for each view.
+Saved lists and full conversation bodies open immediately. A fresh saved view is
+reused for 60 seconds; Refresh explicitly bypasses freshness. A missing or stale
+view refreshes in the background, with new previews appearing in batches of six.
+Folder reads, selected-message reads, images, queued actions and background sync
+have independent workers. Obsolete requests cannot replace the current view.
+
+Successful preview batches are saved immediately, including when another request
+in the same batch fails. They survive folder changes and app restarts without
+replacing a completed saved view. When an exact first-page folder snapshot is
+missing, known local messages can supply up to 25 cached conversations; arbitrary
+searches and older-page cursors are not guessed. Failed refreshes keep the saved
+rows visible and identify them as cached.
+
+Recognized Google rate limits stop immediate retries. A per-account cooldown,
+shared through the private database, honors Retry-After or defaults to 60 seconds.
+Cached lists and already downloaded thread bodies remain available during it.
+An already running background service adopts this behavior on its next restart.
+
+Archive, Trash, star and read/unread actions update the list immediately after
+their intent is saved in the private database. Pending intents are applied over
+server snapshots, so refreshes and folder changes cannot undo them. Cached bodies
+are retained, and older known conversations refill the first 25 rows while mail
+is archived. Mark all read and confirmed Empty Spam/Trash also enter the queue;
+arbitrary Gmail searches wait for the API to identify matching messages before
+changing their read state locally.
+
+The bottom-right activity counter shows pending changes. A per-account delivery
+lock preserves FIFO order across the GUI and background service, and the queue
+survives app restarts. Temporary connection/rate-limit failures back off and
+retry. Permanent failures restore the affected local state while preserving
+later intents, and remain in **Gmail activity** until dismissed or retried.
+Partial bulk successes remain applied. Retry appends a new intent after any
+later actions.
+
+Confirmed sends are saved to the queue before the composer closes, so another
+draft can be started immediately. Failed sends and draft saves retain their
+contents behind **Review draft**. Once Gmail might have received a send, draft
+creation or permanent deletion, an uncertain outcome is never replayed
+automatically; check Gmail and review it again. Normal mailbox label changes are
+idempotent and can retry safely. A running sync service must be restarted to
+deliver queued changes while the GUI is closed; installation leaves it running.
+
+Synthetic slow-delivery/rollback check:
+`GMAILTJIK_DEMO_SCENE=optimistic bun run --cwd apps/gmailtjik test:ui`.
 
 The reader fetches the complete Gmail thread, including sent replies, and shows
 chronological message cards. Older messages can be expanded individually. Known
@@ -336,8 +386,8 @@ runs the otherwise ignored live Codex test using synthetic email only.
 Live Gmail/People OAuth, sync, and sending need an authorized Google account;
 synthetic tests do not establish those account-specific checks. A successful
 local Codex handshake does not establish an authenticated model completion.
-Sending is never automatically retried; after an uncertain response, check Sent
-before retrying. The first version has one recoverable local composer draft,
+Sending is never automatically retried after possible dispatch; after an uncertain
+response, check Sent before retrying. The first version has one recoverable local composer draft,
 conversation inbox rows, and no attachment-upload UI or rich-text composer. Existing mailtjik archives and workers are independent.
 
 References: [Gmail search](https://developers.google.com/workspace/gmail/api/guides/filtering),
@@ -348,6 +398,8 @@ References: [Gmail search](https://developers.google.com/workspace/gmail/api/gui
 [GPUI Kit](https://gpui-kit.com/docs/getting-started).
 
 Synthetic HTML and divider check: `GMAILTJIK_DEMO_SCENE=html bun run --cwd apps/gmailtjik test:ui`.
+Synthetic progressive folder check: `GMAILTJIK_DEMO_SCENE=quick-folder bun run --cwd apps/gmailtjik test:ui`.
+Synthetic failed-refresh cache check: `GMAILTJIK_DEMO_SCENE=cache-failure bun run --cwd apps/gmailtjik test:ui`.
 
 Install the built app with `bash scripts/install.sh gmailtjik` from the workspace root. This installs `~/.local/bin/gmailtjik`, its desktop entry and the approved rose icon for launcher discovery.
 
@@ -360,3 +412,18 @@ The message-list header offers an Unread toggle for the current label/search and
 Mark all read for every matching unread message across all result pages. The
 filter does not change the search text. Bulk changes remove only the UNREAD
 label, preserve mail and drafts, and report failed or partially completed batches.
+
+Spam and Trash also offer **Empty Spam** / **Empty Trash**. Confirming **Delete
+permanently** deletes every message in that folder across all pages, regardless
+of the Unread toggle or search filter. Cancel or Escape leaves the folder alone;
+changing folders dismisses the confirmation. Other folders have no empty action.
+Only confirmed deletions are removed from the cache; errors report partial
+completion and preserve the remaining messages. Permanent deletion is not retried
+automatically.
+
+Existing connections with only `gmail.modify` must reconnect once in **Settings →
+Sync → Gmail account**, using the private Desktop OAuth client JSON path. Google
+requires the full-mail scope above for permanent deletion. The app explains the
+missing permission before attempting to empty a folder; reconnecting does not
+delete mail. To preview the controls without an account, use
+`GMAILTJIK_DEMO_SCENE=empty-folders apps/gmailtjik/dist/gmailtjik --demo`.

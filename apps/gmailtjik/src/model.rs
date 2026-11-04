@@ -514,6 +514,63 @@ pub fn demo() -> (Vec<Label>, Page) {
         messages[0].payload.body.data =
             URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-email.html"));
     }
+    if matches!(
+        std::env::var("GMAILTJIK_DEMO_SCENE").as_deref(),
+        Ok("quick-folder" | "cache-failure" | "optimistic")
+    ) {
+        let sample = messages[0].clone();
+        messages = (1..=25)
+            .map(|index| {
+                let mut message = sample.clone();
+                message.id = format!("quick-message-{index}");
+                message.thread_id = format!("quick-thread-{index}");
+                message.snippet = format!("Preview for synthetic conversation {index:02}.");
+                message.internal_date = (1793491200000_i64 - index * 60000).to_string();
+                if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("optimistic")
+                    && index % 5 == 0
+                {
+                    message.label_ids.push("STARRED".into());
+                }
+                message.payload.body.data = URL_SAFE_NO_PAD.encode(format!(
+                    "Full content of synthetic conversation {index:02}."
+                ));
+                for header in &mut message.payload.headers {
+                    match header.name.as_str() {
+                        "Subject" => header.value = format!("Quick folder {index:02}"),
+                        "Message-ID" => header.value = format!("<quick-{index}@example.test>"),
+                        _ => {}
+                    }
+                }
+                message
+            })
+            .collect();
+    }
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("empty-folders") {
+        labels.push(Label {
+            id: "SPAM".into(),
+            name: "Spam".into(),
+            messages_unread: 0,
+        });
+        // Keep ordinary Inbox mail alongside read/unread messages in each folder.
+        let sample = messages[0].clone();
+        for (label, count) in [("SPAM", 3), ("TRASH", 2)] {
+            for index in 0..count {
+                let mut message = sample.clone();
+                message.id = format!("empty-{label}-{index}");
+                message.thread_id = message.id.clone();
+                message.label_ids = vec![label.into()];
+                if index == 0 {
+                    message.label_ids.push("UNREAD".into());
+                }
+                for header in &mut message.payload.headers {
+                    if header.name == "Subject" {
+                        header.value = format!("Synthetic {label} message {}", index + 1);
+                    }
+                }
+                messages.push(message);
+            }
+        }
+    }
     for label in &mut labels {
         label.messages_unread = messages
             .iter()

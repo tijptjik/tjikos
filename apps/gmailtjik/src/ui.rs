@@ -1,4 +1,5 @@
 use crate::{
+    actions::{Action as MailAction, ActionState, QueuedAction},
     codex::{self, Action, Proposal},
     model::{self, Contact, Draft, Label, Message, Page},
     store::Store,
@@ -30,6 +31,17 @@ const TEXT: u32 = 0xe5e5e5;
 const MUTED: u32 = 0xa5a0ba;
 const ACCENT: u32 = 0xff53a6;
 const BORDER: u32 = 0x393546;
+
+fn optimistic_demo() -> bool {
+    std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("optimistic")
+}
+
+#[derive(Clone)]
+struct FolderPosition {
+    selected: Option<Message>,
+    list: UniformListScrollHandle,
+    reader: ScrollHandle,
+}
 
 fn proicon(name: &str) -> Icon {
     let bytes: &[u8] = match name {
@@ -102,6 +114,16 @@ pub struct MailApp {
     zone: usize,
     mail_scroll: UniformListScrollHandle,
     reader_scroll: ScrollHandle,
+    view_key: String,
+    folder_positions: std::collections::HashMap<String, FolderPosition>,
+    queue: Vec<QueuedAction>,
+    queue_expanded: bool,
+    queue_checked: Instant,
+    cache_revision: i64,
+    demo_delivery: Option<(QueuedAction, Instant)>,
+    counted_labels: std::collections::HashMap<String, Vec<String>>,
+    counted_progress: std::collections::HashMap<i64, std::collections::HashSet<String>>,
+    label_counts_after: u64,
     collapsed_labels: std::collections::HashSet<String>,
     label_cursor: String,
     label_visibility: crate::labels::Preferences,
@@ -114,6 +136,7 @@ pub struct MailApp {
     sender: Option<mpsc::Sender<Command>>,
     events: Option<mpsc::Receiver<Event>>,
     labels: Vec<Label>,
+    raw_labels: Vec<Label>,
     page: Page,
     demo_messages: Vec<Message>,
     selected: Option<Message>,
@@ -121,6 +144,9 @@ pub struct MailApp {
     query: String,
     unread_only: bool,
     marking_all_read: bool,
+    confirm_empty_folder: Option<String>,
+    emptying_folder: Option<String>,
+    empty_folder_error: Option<String>,
     page_token: String,
     previous: Vec<String>,
     ticket: u64,
@@ -139,6 +165,7 @@ pub struct MailApp {
     body: Entity<TextareaState>,
     instruction: Entity<InputState>,
     draft: Draft,
+    pending_draft_save: Option<i64>,
     composing: bool,
     compose_busy: bool,
     review_send: bool,
@@ -193,7 +220,7 @@ impl MailApp {
                 .expect("Synthetic draft must be saved");
         }
         let draft = store.draft().unwrap_or_default();
-        let (labels, page) = if demo {
+        let (mut labels, page) = if demo {
             if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("threads") {
                 model::demo_conversations()
             } else {
@@ -203,12 +230,24 @@ impl MailApp {
             (
                 store.get("labels").ok().flatten().unwrap_or_default(),
                 store
-                    .page(&worker::key("INBOX", "", ""))
+                    .cached_page("INBOX", "", "")
                     .ok()
                     .flatten()
                     .unwrap_or_default(),
             )
         };
+        let mut label_counts_after = store
+            .get::<u64>("labels_counts_observed_at")
+            .ok()
+            .flatten()
+            .unwrap_or(0);
+        if !demo
+            && let Ok(Some((at, saved))) = store.get::<(u64, Vec<Label>)>("local_label_counts")
+            && at > label_counts_after
+        {
+            label_counts_after = at;
+            labels = saved;
+        }
         let input = |placeholder: &'static str,
                      value: String,
                      window: &mut Window,
@@ -366,6 +405,11 @@ impl MailApp {
         let composing = contacts_demo;
         let focus = cx.focus_handle();
         focus.focus(window, cx);
+        let pending_draft_save = store
+            .get::<i64>("pending_draft_save")
+            .ok()
+            .flatten()
+            .filter(|id| *id > 0);
         let mut this = Self {
             panes: cx.new(|_| ResizableState::default()),
             inbox_width: store
@@ -426,11 +470,22 @@ impl MailApp {
             zone: 1,
             mail_scroll: UniformListScrollHandle::new(),
             reader_scroll: ScrollHandle::new(),
+            view_key: worker::key("INBOX", "", ""),
+            folder_positions: Default::default(),
+            queue: store.actions().unwrap_or_default(),
+            queue_expanded: false,
+            queue_checked: Instant::now(),
+            cache_revision: store.cache_revision().unwrap_or_default(),
+            demo_delivery: None,
+            counted_labels: Default::default(),
+            counted_progress: Default::default(),
+            label_counts_after,
             demo,
             dir,
             store,
             sender,
             events,
+            raw_labels: labels.clone(),
             labels,
             demo_messages: page.messages.clone(),
             page,
@@ -439,6 +494,9 @@ impl MailApp {
             query: String::new(),
             unread_only: false,
             marking_all_read: false,
+            confirm_empty_folder: None,
+            emptying_folder: None,
+            empty_folder_error: None,
             page_token: String::new(),
             previous: vec![],
             ticket: 0,
@@ -460,6 +518,7 @@ impl MailApp {
             subject,
             body,
             instruction,
+            pending_draft_save,
             draft,
             composing,
             compose_busy: false,
@@ -482,6 +541,37 @@ impl MailApp {
             _subscriptions: subscriptions,
         };
         this.migrate_contact_defaults();
+        this.queue_expanded = this.queue.iter().any(|a| a.state == ActionState::Failed);
+        if demo && optimistic_demo() {
+            for message in &this.demo_messages {
+                this.store.save_message(message).unwrap();
+                this.store
+                    .put(
+                        &format!("thread:{}", message.thread_id),
+                        &vec![message.clone()],
+                    )
+                    .unwrap();
+            }
+            for label in ["INBOX", "STARRED", "TRASH", "design"] {
+                let mut page = this.page.clone();
+                page.retain_conversations(|m| m.label_ids.iter().any(|l| l == label));
+                this.store
+                    .save_page(&worker::key(label, "", ""), &page)
+                    .unwrap();
+            }
+            let (events, receiver) = mpsc::channel();
+            this.events = Some(receiver);
+            let labels = this.labels.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(8));
+                let _ = events.send(Event::Ready {
+                    labels,
+                    email: "you@example.test".into(),
+                    counts_observed_at: 0,
+                });
+            });
+            this.load(cx);
+        }
         if !demo {
             this.load(cx);
             if let Some(link) = open {
@@ -489,6 +579,72 @@ impl MailApp {
             }
         } else {
             this.refresh_reader();
+        }
+        if demo && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("empty-folders") {
+            this.load(cx);
+        }
+        if demo && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("cache-failure") {
+            let mut partial = this.page.clone();
+            partial.messages.truncate(6);
+            this.store
+                .save_partial_page(&worker::key("INBOX", "", ""), &partial)
+                .unwrap();
+            this.load(cx);
+            this.loading = true;
+            this.error.clear();
+            let ticket = this.ticket;
+            let (events, receiver) = mpsc::channel();
+            this.events = Some(receiver);
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(1500));
+                let _ = events.send(Event::LoadError {
+                    ticket,
+                    error: "Google is temporarily limiting requests (synthetic 403).".into(),
+                });
+            });
+        }
+        if demo && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("quick-folder") {
+            let messages = this.demo_messages.clone();
+            let (events, receiver) = mpsc::channel();
+            this.events = Some(receiver);
+            this.ticket = 1;
+            this.page = Page::default();
+            this.selected = None;
+            this.loading = true;
+            this.status = "Loading conversations…".into();
+            this.refresh_reader();
+            std::thread::spawn(move || {
+                for (delay, count) in [(250, 6), (2250, 12), (2000, 25)] {
+                    std::thread::sleep(Duration::from_millis(delay));
+                    let page = Page {
+                        messages: messages
+                            .iter()
+                            .take(count)
+                            .cloned()
+                            .map(|mut message| {
+                                message.summary_only = true;
+                                message.payload.body = model::Body::default();
+                                message.payload.parts.clear();
+                                message
+                            })
+                            .collect(),
+                        next: String::new(),
+                        threaded: true,
+                    };
+                    if events
+                        .send(Event::Page {
+                            ticket: 1,
+                            cached: false,
+                            complete: count == 25,
+                            page,
+                        })
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+                let _ = events.send(Event::Loaded { ticket: 1 });
+            });
         }
         if contacts_demo {
             this.to.read(cx).focus_handle(cx).focus(window, cx);
@@ -513,7 +669,9 @@ impl MailApp {
         let key = event.keystroke.key.as_str();
         if key == "escape" {
             self.shortcuts = false;
+            self.queue_expanded = false;
             self.label_menu = None;
+            self.confirm_empty_folder = None;
             self.focus.focus(window, cx);
         } else if event.keystroke.modifiers.control && key == "f" {
             self.search.read(cx).focus_handle(cx).focus(window, cx);
@@ -621,6 +779,11 @@ impl MailApp {
         cx.notify();
     }
     fn reply(&mut self, message: &Message, window: &mut Window, cx: &mut Context<Self>) {
+        if message.summary_only {
+            self.status = "Loading the full conversation before replying…".into();
+            cx.notify();
+            return;
+        }
         let reply = Draft::reply(message);
         let has_draft = self.draft != Draft::default();
         let same_reply = !reply.in_reply_to.is_empty()
@@ -648,23 +811,26 @@ impl MailApp {
                 return;
             }
             let id = message.id.clone();
-            if self.demo {
+            if self.demo && !optimistic_demo() {
                 let ids = self.conversation_ids(&id);
                 self.modified(&ids, &["TRASH".into()], &["INBOX".into()], cx);
             } else {
-                self.status = "Moving email to Trash…".into();
                 let thread = message.thread_id.clone();
-                self.dispatch(Command::Trash { id, thread });
+                self.enqueue_mail_action(MailAction::Trash { id, thread }, cx);
             }
             cx.notify();
         }
     }
     fn changed(&mut self, cx: &mut Context<Self>) {
+        let before = self.draft.clone();
         self.draft.to = self.to.read(cx).value().to_string();
         self.draft.cc = self.cc.read(cx).value().to_string();
         self.draft.bcc = self.bcc.read(cx).value().to_string();
         self.draft.subject = self.subject.read(cx).value().to_string();
         self.draft.body = self.body.read(cx).value().to_string();
+        if self.draft == before {
+            return;
+        }
         self.review_send = false;
         if let Err(error) = self.store.put("composer", &self.draft) {
             self.error = format!("Draft could not be saved locally: {error}");
@@ -672,6 +838,19 @@ impl MailApp {
         cx.notify();
     }
     fn set_draft(&mut self, draft: Draft, window: &mut Window, cx: &mut Context<Self>) {
+        self.replace_draft(draft, true, window, cx);
+    }
+    fn replace_draft(
+        &mut self,
+        draft: Draft,
+        persist: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.pending_draft_save = None;
+        if persist {
+            let _ = self.store.put("pending_draft_save", &0_i64);
+        }
         for (input, value) in [
             (&self.to, &draft.to),
             (&self.cc, &draft.cc),
@@ -686,7 +865,11 @@ impl MailApp {
         self.draft = draft;
         self.composing = true;
         self.contacts.clear();
-        self.changed(cx);
+        self.review_send = false;
+        if persist && let Err(error) = self.store.put("composer", &self.draft) {
+            self.error = format!("Draft could not be saved locally: {error}");
+        }
+        cx.notify();
     }
     fn dispatch(&mut self, command: Command) {
         if let Some(sender) = &self.sender {
@@ -695,10 +878,389 @@ impl MailApp {
                 self.loading = false;
                 self.compose_busy = false;
                 self.marking_all_read = false;
+                self.emptying_folder = None;
             }
         }
     }
+    fn enqueue_mail_action(&mut self, action: MailAction, cx: &mut Context<Self>) -> bool {
+        let seeds: Vec<_> = match &action {
+            MailAction::Labels { id, thread, .. } | MailAction::Trash { id, thread } => self
+                .page
+                .messages
+                .iter()
+                .chain(self.selected.iter())
+                .chain(self.conversation.iter())
+                .filter(|m| {
+                    if thread.is_empty() {
+                        &m.id == id
+                    } else {
+                        &m.thread_id == thread
+                    }
+                })
+                .cloned()
+                .collect(),
+            MailAction::MarkAllRead { .. } | MailAction::EmptyFolder { .. } => {
+                self.page.messages.clone()
+            }
+            _ => vec![],
+        };
+        let description = action.description();
+        let save = matches!(action, MailAction::SaveDraft { .. });
+        match self.store.enqueue_action(action, &seeds) {
+            Ok(id) => {
+                if save {
+                    self.pending_draft_save = Some(id);
+                }
+                self.error.clear();
+                self.empty_folder_error = None;
+                self.status = format!("{description} · queued for Gmail");
+                self.dispatch(Command::WakeActions);
+                self.reconcile_queue(cx);
+                true
+            }
+            Err(error) => {
+                self.marking_all_read = false;
+                self.emptying_folder = None;
+                self.error = format!("Could not save this action: {error}. No change was queued.");
+                cx.notify();
+                false
+            }
+        }
+    }
+    fn reconcile_queue(&mut self, cx: &mut Context<Self>) {
+        let Ok(queue) = self.store.actions() else {
+            return;
+        };
+        let previous_counts_after = self.label_counts_after;
+        for previous in &self.queue {
+            if !matches!(previous.state, ActionState::Queued | ActionState::Running) {
+                continue;
+            }
+            if let Ok(Some(done)) = self.store.action(previous.id) {
+                if !done.confirmed_ids.is_empty() || done.state == ActionState::Succeeded {
+                    self.label_counts_after = self.label_counts_after.max(done.completed_at);
+                }
+                let (add, remove) = done.action.changes();
+                for seed in &done.seeds {
+                    if done.confirmed_ids.contains(&seed.id)
+                        && self
+                            .counted_progress
+                            .entry(done.id)
+                            .or_default()
+                            .insert(seed.id.clone())
+                    {
+                        let mut before = seed.clone();
+                        before.label_ids = self
+                            .counted_labels
+                            .entry(seed.id.clone())
+                            .or_insert_with(|| seed.label_ids.clone())
+                            .clone();
+                        crate::labels::update_unread(&mut self.raw_labels, &before, &add, &remove);
+                        before.label_ids.retain(|label| !remove.contains(label));
+                        for label in &add {
+                            if !before.label_ids.contains(label) {
+                                before.label_ids.push(label.clone());
+                            }
+                        }
+                        self.counted_labels
+                            .insert(seed.id.clone(), before.label_ids);
+                    }
+                }
+                match &done.action {
+                    MailAction::EmptyFolder { label }
+                    | MailAction::MarkAllRead { label, query: _ }
+                        if done.state == ActionState::Succeeded
+                            && (matches!(&done.action, MailAction::EmptyFolder { .. })
+                                || matches!(&done.action, MailAction::MarkAllRead { query, .. } if query.is_empty())) =>
+                    {
+                        if let Some(row) = self.raw_labels.iter_mut().find(|row| &row.id == label) {
+                            row.messages_unread = 0;
+                        }
+                    }
+                    _ => {}
+                }
+                if matches!(done.state, ActionState::Succeeded | ActionState::Failed) {
+                    self.counted_progress.remove(&done.id);
+                }
+            }
+        }
+        if self.label_counts_after != previous_counts_after {
+            let _ = self.store.put(
+                "local_label_counts",
+                &(self.label_counts_after, &self.raw_labels),
+            );
+        }
+        self.queue_expanded |= queue.iter().any(|a| {
+            a.state == ActionState::Failed
+                && !self
+                    .queue
+                    .iter()
+                    .any(|old| old.id == a.id && old.state == ActionState::Failed)
+        });
+        self.marking_all_read = queue.iter().any(|a| {
+            matches!(a.state, ActionState::Queued | ActionState::Running)
+                && matches!(a.action, MailAction::MarkAllRead { .. })
+        });
+        self.emptying_folder = queue.iter().find_map(|a| {
+            if matches!(a.state, ActionState::Queued | ActionState::Running)
+                && let MailAction::EmptyFolder { label } = &a.action
+            {
+                Some(label.clone())
+            } else {
+                None
+            }
+        });
+        if let Some(id) = self.pending_draft_save
+            && let Ok(Some(saved)) = self.store.action(id)
+            && saved.state == ActionState::Succeeded
+            && !saved.result.draft_id.is_empty()
+        {
+            // A different window may already have dismissed the receipt.
+            // Bind by durable action ID, never by equal subject/body text.
+            let _ = self.store.acknowledge_draft_save(id);
+            self.draft.gmail_id = saved.result.draft_id;
+            self.pending_draft_save = None;
+        }
+        for action in &queue {
+            if action.state != ActionState::Succeeded {
+                continue;
+            }
+            self.status = format!("{} · saved to Gmail", action.action.description());
+            let _ = self.store.dismiss_action(action.id);
+        }
+        self.queue = queue
+            .into_iter()
+            .filter(|a| a.state != ActionState::Succeeded)
+            .collect();
+        self.labels = self.raw_labels.clone();
+        let _ = self.store.project_labels(&mut self.labels);
+        // Re-project confirmed snapshots plus the remaining intents. This also
+        // rolls back a failed action without undoing later queued changes.
+        let query = if self.unread_only {
+            crate::google::unread_query(&self.query)
+        } else {
+            self.query.clone()
+        };
+        let old = self.selected.clone();
+        let next = old
+            .as_ref()
+            .and_then(|m| successor(&self.page.representatives(), &m.id));
+        if let Ok(page) = self
+            .store
+            .cached_page(&self.label, &query, &self.page_token)
+        {
+            self.page = page
+                .or_else(|| {
+                    if self.label.is_empty() && query.is_empty() {
+                        old.as_ref()
+                            .and_then(|m| self.store.cached_thread(&m.thread_id).ok().flatten())
+                            .map(|messages| Page {
+                                messages,
+                                threaded: true,
+                                ..Default::default()
+                            })
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_default();
+            let candidate = old
+                .as_ref()
+                .filter(|old| {
+                    self.page
+                        .messages
+                        .iter()
+                        .any(|m| m.conversation_key() == old.conversation_key())
+                })
+                .cloned()
+                .or_else(|| {
+                    next.and_then(|id| self.page.messages.iter().find(|m| m.id == id).cloned())
+                });
+            self.selected = self.page.selection(candidate.as_ref());
+            if old.as_ref().map(|m| m.conversation_key())
+                != self.selected.as_ref().map(|m| m.conversation_key())
+            {
+                self.refresh_reader();
+            } else {
+                self.show_cached_thread();
+            }
+        }
+        self.cache_revision = self.store.cache_revision().unwrap_or(self.cache_revision);
+        self.queue_checked = Instant::now();
+        cx.notify();
+    }
+    fn show_cached_thread(&mut self) {
+        let Some(selected) = self.selected.clone() else {
+            self.conversation.clear();
+            self.images.clear();
+            self.thread_images.clear();
+            return;
+        };
+        if self
+            .conversation
+            .first()
+            .is_none_or(|m| m.thread_id != selected.thread_id)
+        {
+            self.images.clear();
+            self.thread_images.clear();
+            self.html_resources.clear();
+            self.image_generation += 1;
+        }
+        if let Ok(Some(messages)) = self.store.cached_thread(&selected.thread_id) {
+            let page = Page {
+                messages,
+                ..Default::default()
+            };
+            self.selected = page.selection(Some(&selected));
+            self.conversation = page.messages;
+        } else {
+            self.conversation = vec![selected];
+        }
+    }
+    fn queue_panel(&self, cx: &mut Context<Self>) -> AnyElement {
+        let mut panel = div()
+            .occlude()
+            .absolute()
+            .bottom(px(48.))
+            .right(px(16.))
+            .w(px(450.))
+            .max_h(px(360.))
+            .p_4()
+            .rounded_xl()
+            .border_1()
+            .border_color(rgb(BORDER))
+            .bg(rgb(BG))
+            .shadow_lg()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("Gmail activity"),
+                    )
+                    .child(
+                        Button::new("close-queue")
+                            .small()
+                            .ghost()
+                            .label("Close")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.queue_expanded = false;
+                                cx.notify();
+                            })),
+                    ),
+            );
+        let mut rows = div()
+            .id("queue-rows")
+            .min_h_0()
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_3();
+        for entry in self.queue.iter().take(50) {
+            let id = entry.id;
+            let action = entry.action.clone();
+            let failed = entry.state == ActionState::Failed;
+            let pending_note = if !entry.error.is_empty() {
+                format!("Waiting to retry · {}", entry.error)
+            } else if entry.state == ActionState::Running {
+                "Syncing with Gmail…".into()
+            } else {
+                "Saved on this device · waiting for Gmail".into()
+            };
+            let mut row = div()
+                .p_3()
+                .rounded_lg()
+                .bg(rgb(SURFACE))
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(action.description()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(if failed { 0xeb6f92 } else { MUTED }))
+                        .child(if failed {
+                            entry.error.clone()
+                        } else {
+                            pending_note
+                        }),
+                );
+            if failed {
+                let mut buttons = div().flex().gap_2();
+                if action.retry_safe() {
+                    buttons = buttons.child(
+                        Button::new(("retry-action", id as usize))
+                            .small()
+                            .label("Retry")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                match this.store.retry_action(id) {
+                                    Ok(_) => {
+                                        this.dispatch(Command::WakeActions);
+                                        this.reconcile_queue(cx);
+                                    }
+                                    Err(error) => {
+                                        this.error = error.to_string();
+                                        cx.notify();
+                                    }
+                                }
+                            })),
+                    );
+                } else if let MailAction::Send { draft } | MailAction::SaveDraft { draft } = action
+                {
+                    buttons = buttons.child(Button::new(("recover-action", id as usize)).small().label("Review draft")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            if this.draft != Draft::default() && this.draft != draft {
+                                this.error = "Finish or clear your current draft before reopening this one.".into();
+                            } else {
+                                this.set_draft(draft.clone(), window, cx);
+                                this.queue_expanded = false;
+                                this.status = "Review the failed action and check Gmail before sending again.".into();
+                            }
+                            cx.notify();
+                        })));
+                }
+                buttons = buttons.child(
+                    Button::new(("dismiss-action", id as usize))
+                        .small()
+                        .ghost()
+                        .label("Dismiss")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Err(error) = this.store.dismiss_action(id) {
+                                this.error = error.to_string();
+                            }
+                            this.reconcile_queue(cx);
+                        })),
+                );
+                row = row.child(buttons);
+            }
+            rows = rows.child(row);
+        }
+        if self.queue.is_empty() {
+            rows = rows.child(
+                div()
+                    .text_color(rgb(MUTED))
+                    .child("All changes are synced."),
+            );
+        }
+        panel = panel.child(rows);
+        panel.into_any_element()
+    }
     fn load(&mut self, cx: &mut Context<Self>) {
+        self.load_force(false, cx);
+    }
+    fn load_force(&mut self, force: bool, cx: &mut Context<Self>) {
+        self.confirm_empty_folder = None;
+        self.empty_folder_error = None;
         self.ticket += 1;
         self.error.clear();
         self.images.clear();
@@ -707,7 +1269,34 @@ impl MailApp {
         } else {
             self.query.clone()
         };
-        if self.demo {
+        let view_key = worker::key(&self.label, &query, &self.page_token);
+        if view_key != self.view_key {
+            if self.folder_positions.len() >= 64 {
+                self.folder_positions.clear();
+            }
+            self.folder_positions.insert(
+                self.view_key.clone(),
+                FolderPosition {
+                    selected: self.selected.clone(),
+                    list: self.mail_scroll.clone(),
+                    reader: self.reader_scroll.clone(),
+                },
+            );
+            if let Some(position) = self.folder_positions.get(&view_key) {
+                self.selected = position.selected.clone();
+                self.mail_scroll = position.list.clone();
+                self.reader_scroll = position.reader.clone();
+            } else {
+                self.selected = None;
+                self.mail_scroll = UniformListScrollHandle::new();
+                self.reader_scroll = ScrollHandle::new();
+            }
+            self.view_key = view_key;
+        }
+        if self.demo
+            && !optimistic_demo()
+            && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() != Ok("cache-failure")
+        {
             let mut page = Page {
                 messages: self.demo_messages.clone(),
                 next: String::new(),
@@ -723,37 +1312,133 @@ impl MailApp {
                             .contains(&self.query.to_lowercase()))
             });
             self.page = page;
-            self.selected = self.page.representatives().first().cloned();
+            self.selected = self.page.selection(self.selected.as_ref());
             self.status = "Demo · synthetic mail · plain-text search".into();
             self.refresh_reader();
         } else {
             self.loading = true;
-            self.status = "Syncing with Gmail…".into();
-            if let Ok(Some(page)) =
-                self.store
-                    .page(&worker::key(&self.label, &query, &self.page_token))
+            self.status = "Loading conversations…".into();
+            if let Ok(Some(page)) = self
+                .store
+                .cached_page(&self.label, &query, &self.page_token)
             {
+                self.selected = page.selection(self.selected.as_ref());
                 self.page = page;
-                self.selected = self.page.representatives().first().cloned();
+                self.status = "Cached conversations · refreshing…".into();
             } else {
                 self.page = Page::default();
                 self.selected = None;
             }
-            self.dispatch(Command::Load {
-                ticket: self.ticket,
-                label: self.label.clone(),
-                query,
-                page: self.page_token.clone(),
-            });
+            self.refresh_reader();
+            if self.demo {
+                self.loading = false;
+                if optimistic_demo() {
+                    self.status = "Synthetic cache · Gmail delivery deliberately delayed".into();
+                } else {
+                    self.error = "Showing saved conversations. Refresh failed: Google is temporarily limiting requests (synthetic 403).".into();
+                }
+            } else {
+                self.dispatch(Command::Load {
+                    ticket: self.ticket,
+                    label: self.label.clone(),
+                    query,
+                    page: self.page_token.clone(),
+                    force,
+                });
+            }
         }
         self.last_sync = Instant::now();
         cx.notify();
+    }
+    fn empty_folder(&mut self, cx: &mut Context<Self>) {
+        let Some(label) = self.confirm_empty_folder.take() else {
+            return;
+        };
+        if self.emptying_folder.is_some()
+            || label != self.label
+            || !matches!(label.as_str(), "SPAM" | "TRASH")
+        {
+            return;
+        }
+        // Ignore responses already queued before this destructive operation.
+        self.ticket += 1;
+        self.image_generation += 1;
+        self.loading = false;
+        self.error.clear();
+        self.empty_folder_error = None;
+        self.emptying_folder = Some(label.clone());
+        self.status = format!(
+            "Emptying {}…",
+            if label == "SPAM" { "Spam" } else { "Trash" }
+        );
+        if self.demo && !optimistic_demo() {
+            let before = self.demo_messages.len();
+            self.demo_messages.retain(|m| !m.label_ids.contains(&label));
+            let count = before - self.demo_messages.len();
+            for row in &mut self.labels {
+                row.messages_unread = self
+                    .demo_messages
+                    .iter()
+                    .filter(|m| m.unread() && m.label_ids.contains(&row.id))
+                    .count() as u64;
+            }
+            self.folder_emptied(label, Ok(count), cx);
+        } else {
+            self.enqueue_mail_action(MailAction::EmptyFolder { label }, cx);
+        }
+        cx.notify();
+    }
+    fn folder_emptied(
+        &mut self,
+        label: String,
+        result: Result<usize, String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.emptying_folder = None;
+        self.page_token.clear();
+        self.previous.clear();
+        self.conversation.clear();
+        self.proposal = None;
+        match result {
+            Ok(count) => {
+                self.load(cx);
+                if let Some(row) = self.labels.iter_mut().find(|row| row.id == label) {
+                    row.messages_unread = 0;
+                }
+                self.status = format!(
+                    "{} emptied · {count} message{} permanently deleted",
+                    if label == "SPAM" { "Spam" } else { "Trash" },
+                    if count == 1 { "" } else { "s" },
+                );
+            }
+            Err(error) => {
+                // Reload confirmed cache changes without starting a folder
+                // refresh that could hide the deletion result behind an error.
+                self.ticket += 1;
+                self.loading = false;
+                let query = if self.unread_only {
+                    crate::google::unread_query(&self.query)
+                } else {
+                    self.query.clone()
+                };
+                self.page = self
+                    .store
+                    .cached_page(&self.label, &query, "")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                self.selected = self.page.selection(self.selected.as_ref());
+                self.refresh_reader();
+                self.empty_folder_error = Some(error.clone());
+                self.error = error;
+            }
+        }
     }
     fn mark_all_read(&mut self, cx: &mut Context<Self>) {
         if self.marking_all_read {
             return;
         }
-        if self.demo {
+        if self.demo && !optimistic_demo() {
             let ids: Vec<_> = self
                 .demo_messages
                 .iter()
@@ -775,12 +1460,13 @@ impl MailApp {
             self.status = format!("Marked {} messages read", ids.len());
         } else {
             self.marking_all_read = true;
-            self.error.clear();
-            self.status = "Marking all matching unread mail as read…".into();
-            self.dispatch(Command::MarkAllRead {
-                label: self.label.clone(),
-                query: self.query.clone(),
-            });
+            self.enqueue_mail_action(
+                MailAction::MarkAllRead {
+                    label: self.label.clone(),
+                    query: self.query.clone(),
+                },
+                cx,
+            );
         }
         cx.notify();
     }
@@ -806,7 +1492,22 @@ impl MailApp {
             self.expanded_messages.clear();
             self.manual_images.clear();
         }
-        if self.demo {
+        if self.demo && !optimistic_demo() {
+            if matches!(
+                std::env::var("GMAILTJIK_DEMO_SCENE").as_deref(),
+                Ok("quick-folder" | "cache-failure")
+            ) {
+                if let Some(full) = self
+                    .demo_messages
+                    .iter()
+                    .find(|row| row.id == message.id)
+                    .cloned()
+                {
+                    self.selected = Some(full.clone());
+                    self.conversation = vec![full];
+                }
+                return;
+            }
             self.conversation = if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("threads")
             {
                 let mut messages: Vec<_> = self
@@ -822,6 +1523,9 @@ impl MailApp {
             };
             self.demo_image();
         } else {
+            // Read the local full conversation synchronously; network work is
+            // only a background refresh and never gates opening cached mail.
+            self.show_cached_thread();
             self.images = self
                 .thread_images
                 .get(&message.id)
@@ -830,7 +1534,7 @@ impl MailApp {
             if !message.thread_id.is_empty() {
                 self.dispatch(Command::Thread(message.thread_id.clone()));
             }
-            if !self.thread_images.contains_key(&message.id) {
+            if !message.summary_only && !self.thread_images.contains_key(&message.id) {
                 self.dispatch(Command::Images {
                     generation: self.image_generation,
                     message,
@@ -853,11 +1557,10 @@ impl MailApp {
         remove: Vec<String>,
         cx: &mut Context<Self>,
     ) {
-        if self.demo {
+        if self.demo && !optimistic_demo() {
             let ids = self.conversation_ids(&id);
             self.modified(&ids, &add, &remove, cx);
         } else {
-            self.status = "Saving mailbox change…".into();
             let thread = self
                 .page
                 .messages
@@ -866,12 +1569,15 @@ impl MailApp {
                 .find(|m| m.id == id)
                 .map(|m| m.thread_id.clone())
                 .unwrap_or_default();
-            self.dispatch(Command::Modify {
-                id,
-                thread,
-                add,
-                remove,
-            });
+            self.enqueue_mail_action(
+                MailAction::Labels {
+                    id,
+                    thread,
+                    add,
+                    remove,
+                },
+                cx,
+            );
         }
         cx.notify();
     }
@@ -965,6 +1671,48 @@ impl MailApp {
         };
     }
     fn poll(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.demo && optimistic_demo() {
+            if self.demo_delivery.is_none() {
+                if let Ok(Some(action)) = self.store.claim_action(crate::auth::now()) {
+                    self.demo_delivery = Some((action, Instant::now()));
+                    self.reconcile_queue(cx);
+                }
+            }
+            if self.demo_delivery.as_ref().is_some_and(|(action, since)| {
+                since.elapsed() >= Duration::from_millis(if action.id == 1 { 6000 } else { 600 })
+            }) {
+                let (action, _) = self.demo_delivery.take().unwrap();
+                if action.id == 1 {
+                    self.store.fail_action(action.id, "Synthetic Gmail failure. This change was restored; later changes are preserved.").unwrap();
+                } else {
+                    let ids: Vec<_> = self
+                        .demo_messages
+                        .iter()
+                        .filter(|m| match &action.action {
+                            MailAction::Labels { id, thread, .. }
+                            | MailAction::Trash { id, thread } => {
+                                if thread.is_empty() {
+                                    &m.id == id
+                                } else {
+                                    &m.thread_id == thread
+                                }
+                            }
+                            MailAction::MarkAllRead { label, .. }
+                            | MailAction::EmptyFolder { label } => {
+                                label.is_empty() || m.label_ids.contains(label)
+                            }
+                            _ => false,
+                        })
+                        .map(|m| m.id.clone())
+                        .collect();
+                    if matches!(action.action, MailAction::EmptyFolder { .. }) {
+                        self.store.remove_messages(&ids).unwrap();
+                    }
+                    self.store.complete_action(action.id, &ids).unwrap();
+                }
+                self.reconcile_queue(cx);
+            }
+        }
         if self.html_renderer.poll() {
             cx.notify();
         }
@@ -988,16 +1736,7 @@ impl MailApp {
         let notify = !events.is_empty();
         for event in events {
             match event {
-                Event::AllRead(result) => {
-                    self.marking_all_read = false;
-                    self.page_token.clear();
-                    self.previous.clear();
-                    self.load(cx);
-                    match result {
-                        Ok(count) => self.status = format!("Marked {count} messages read"),
-                        Err(error) => self.error = error,
-                    }
-                }
+                Event::QueueChanged => self.reconcile_queue(cx),
                 Event::OpenMail(message) => {
                     self.ticket += 1;
                     self.loading = false;
@@ -1023,62 +1762,85 @@ impl MailApp {
                     self.connecting = false;
                     self.error = error;
                 }
-                Event::Inbox(page) => {
+                Event::Inbox(mut page) => {
+                    let _ = self.store.project_page("INBOX", "", "", &mut page);
                     if self.label == "INBOX"
                         && !self.unread_only
                         && self.query.is_empty()
                         && self.page_token.is_empty()
                         && !self.loading
                     {
-                        let selected = self
-                            .selected
-                            .as_ref()
-                            .map(|m| m.conversation_key().to_owned());
+                        self.selected = page.selection(self.selected.as_ref());
                         self.page = page;
-                        self.selected = selected
-                            .and_then(|id| {
-                                self.page
-                                    .representatives()
-                                    .into_iter()
-                                    .find(|m| m.conversation_key() == id)
-                            })
-                            .or_else(|| self.page.representatives().first().cloned());
+                        self.refresh_reader();
+                        self.error.clear();
+                        self.status = "Inbox synced · checks every 30 seconds".into();
                     }
-                    self.refresh_reader();
-                    self.error.clear();
-                    self.status = "Inbox synced · checks every 30 seconds".into();
                 }
                 Event::SyncError(error) => {
                     self.error = error;
                 }
-                Event::Ready { labels, email } => {
-                    self.labels = labels;
+                Event::Ready {
+                    labels,
+                    email,
+                    counts_observed_at,
+                } => {
+                    if !self
+                        .queue
+                        .iter()
+                        .any(|a| matches!(a.state, ActionState::Queued | ActionState::Running))
+                        && counts_observed_at > self.label_counts_after
+                    {
+                        self.raw_labels = labels;
+                        self.label_counts_after = counts_observed_at;
+                        self.counted_labels.clear();
+                        self.counted_progress.clear();
+                    } else {
+                        for label in labels {
+                            if let Some(current) =
+                                self.raw_labels.iter_mut().find(|row| row.id == label.id)
+                            {
+                                current.name = label.name;
+                            } else {
+                                self.raw_labels.push(label);
+                            }
+                        }
+                    }
+                    self.labels = self.raw_labels.clone();
+                    let _ = self.store.project_labels(&mut self.labels);
                     self.email = email;
                 }
                 Event::Page {
                     ticket,
                     cached,
-                    page,
+                    complete,
+                    mut page,
                 } if ticket == self.ticket => {
-                    let selected = self
-                        .selected
-                        .as_ref()
-                        .map(|m| m.conversation_key().to_owned());
+                    let query = if self.unread_only {
+                        crate::google::unread_query(&self.query)
+                    } else {
+                        self.query.clone()
+                    };
+                    let _ =
+                        self.store
+                            .project_page(&self.label, &query, &self.page_token, &mut page);
+                    let previous = self.selected.as_ref().map(|m| m.id.clone());
+                    self.selected = page.selection(self.selected.as_ref());
                     self.page = page;
-                    self.selected = selected
-                        .and_then(|id| {
-                            self.page
-                                .representatives()
-                                .into_iter()
-                                .find(|m| m.conversation_key() == id)
-                        })
-                        .or_else(|| self.page.representatives().first().cloned());
                     self.status = if cached {
-                        "Cached mail · syncing…".into()
+                        if complete {
+                            "Saved conversations · up to date".into()
+                        } else {
+                            "Cached conversations · refreshing…".into()
+                        }
+                    } else if !complete {
+                        "Loading conversations…".into()
                     } else {
                         "Up to date".into()
                     };
-                    if !cached {
+                    let changed = previous.as_deref()
+                        != self.selected.as_ref().map(|message| message.id.as_str());
+                    if changed {
                         self.refresh_reader();
                     }
                 }
@@ -1086,12 +1848,17 @@ impl MailApp {
                 Event::Loaded { ticket } if ticket == self.ticket => {
                     self.loading = false;
                 }
-                Event::Error(error) => {
-                    self.marking_all_read = false;
-                    self.error = error;
+                Event::LoadError { ticket, error } if ticket == self.ticket => {
+                    self.loading = false;
+                    self.error = if self.page.messages.is_empty() {
+                        format!("No cached conversations for this view yet. {error}")
+                    } else {
+                        format!("Showing saved conversations. Refresh failed: {error}")
+                    };
+                    self.status = "Cached conversations".into();
                 }
-                Event::Modified { ids, add, remove } => {
-                    self.modified(&ids, &add, &remove, cx);
+                Event::Error(error) => {
+                    self.error = error;
                 }
                 Event::ContactBook(rows) => {
                     self.known_contacts = rows;
@@ -1125,13 +1892,19 @@ impl MailApp {
                         self.contact_photos.insert(url, image);
                     }
                 }
-                Event::Thread { id, messages }
+                Event::Thread { id, mut messages }
                     if self
                         .selected
                         .as_ref()
                         .is_some_and(|message| message.thread_id == id) =>
                 {
-                    self.conversation = messages;
+                    let _ = self.store.project_messages(&mut messages);
+                    let full = Page {
+                        messages,
+                        ..Default::default()
+                    };
+                    self.selected = full.selection(self.selected.as_ref());
+                    self.conversation = full.messages;
                     for message in self.conversation.clone() {
                         if self.message_open(&message.id)
                             && !self.thread_images.contains_key(&message.id)
@@ -1177,26 +1950,17 @@ impl MailApp {
                     }
                     self.thread_images.insert(id, images);
                 }
-                Event::Saved { original, id } => {
-                    self.compose_busy = false;
-                    if self.draft == original {
-                        self.draft.gmail_id = id;
-                        let _ = self.store.put("composer", &self.draft);
-                    }
-                    self.status = "Draft saved to Gmail".into();
-                }
-                Event::Sent => {
-                    self.compose_busy = false;
-                    self.set_draft(Draft::default(), window, cx);
-                    self.composing = false;
-                    self.status = "Sent".into();
-                }
-                Event::ComposeFailed(error) => {
-                    self.compose_busy = false;
-                    self.review_send = false;
-                    self.error = error;
-                }
                 _ => {}
+            }
+        }
+        if !self.demo && self.queue_checked.elapsed() >= Duration::from_millis(500) {
+            self.queue_checked = Instant::now();
+            if self
+                .store
+                .cache_revision()
+                .is_ok_and(|revision| revision != self.cache_revision)
+            {
+                self.reconcile_queue(cx);
             }
         }
         let agent_events: Vec<_> = self
@@ -1265,6 +2029,15 @@ impl MailApp {
     }
     fn assist(&mut self, cx: &mut Context<Self>) {
         if self.assistant_busy {
+            return;
+        }
+        if self
+            .selected
+            .as_ref()
+            .is_some_and(|message| message.summary_only)
+        {
+            self.status = "Loading the full conversation…".into();
+            cx.notify();
             return;
         }
         let instruction = self.instruction.read(cx).value().to_string();
@@ -1529,6 +2302,20 @@ impl MailApp {
             .child(div().text_color(rgb(ACCENT)).child(self.push_note.clone()));
         div().id("sync-settings-scroll").flex_1().min_w_0().h_full().overflow_y_scroll().p_6().flex().flex_col().gap_4()
             .child(div().text_2xl().child("Sync"))
+            .child(div().p_5().rounded_xl().bg(rgb(SURFACE)).flex().flex_col().gap_3()
+                .child(div().text_lg().child("Gmail account"))
+                .child(div().text_color(rgb(MUTED)).child("Reconnect to grant permission for Empty Spam and Empty Trash. Google will ask for access that includes permanently deleting mail."))
+                .child(Input::new(&self.oauth_path))
+                .child(Button::new("reconnect-google").label(if self.connecting { "Waiting for browser sign-in…" } else { "Reconnect Gmail" })
+                    .disabled(self.demo || self.connecting || self.emptying_folder.is_some())
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        let path = this.oauth_path.read(cx).value().trim().to_string();
+                        if path.is_empty() { this.error = "Enter the private OAuth client JSON path.".into(); }
+                        else { this.connecting = true; this.error.clear(); this.dispatch(Command::Connect(PathBuf::from(path))); }
+                        cx.notify();
+                    })))
+                .when(!self.error.is_empty(), |d| d.child(div().text_color(rgb(0xeb6f92)).child(self.error.clone())))
+            )
             .child(div().text_color(rgb(ACCENT)).child(status))
             .child(div().text_color(rgb(MUTED)).child("Push wakes the background service promptly. Watches renew daily. A catch-up runs every five minutes while push is connected; polling resumes every 30 seconds if push fails."))
             .child(form).into_any_element()
@@ -2099,7 +2886,7 @@ impl MailApp {
                             .icon(proicon("arrow-sync"))
                             .tooltip("Refresh mail")
                             .disabled(self.loading)
-                            .on_click(cx.listener(|this, _, _, cx| this.load(cx))),
+                            .on_click(cx.listener(|this, _, _, cx| this.load_force(true, cx))),
                     ),
             )
             .child(
@@ -2117,21 +2904,53 @@ impl MailApp {
                     .child(Button::new("mark-all-read").small().ghost().icon(proicon("mail-open"))
                         .label(if self.marking_all_read { "Marking read…" } else { "Mark all read" })
                         .tooltip("Mark all unread messages in this label or search as read, across all pages")
-                        .disabled(self.marking_all_read || self.loading)
+                        .disabled(self.marking_all_read || self.loading || self.emptying_folder.is_some())
                         .on_click(cx.listener(|this, _, _, cx| this.mark_all_read(cx))))
+                    .when(matches!(self.label.as_str(), "SPAM" | "TRASH"), |d| d.child(
+                        Button::new("empty-folder").small().ghost().icon(proicon("delete"))
+                            .label(if self.emptying_folder.as_ref() == Some(&self.label) { "Emptying…" }
+                                else if self.label == "SPAM" { "Empty Spam" } else { "Empty Trash" })
+                            .text_color(rgb(0xeb6f92))
+                            .tooltip("Permanently delete every message in this folder, across all pages")
+                            .disabled(self.emptying_folder.is_some() || self.marking_all_read)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.confirm_empty_folder = Some(this.label.clone());
+                                cx.notify();
+                            }))
+                    ))
             )
+            .when_some(self.confirm_empty_folder.clone(), |d, label| d.child(
+                div().mx_4().mb_3().p_3().rounded_lg().bg(rgb(RAISED)).flex().flex_col().gap_3()
+                    .child(div().font_weight(FontWeight::SEMIBOLD)
+                        .child(format!("Empty {}?", if label == "SPAM" { "Spam" } else { "Trash" })))
+                    .child(div().text_sm().child("Every message in this folder will be permanently deleted, across all pages. This cannot be undone."))
+                    .when(self.unread_only || !self.query.is_empty(), |d| d.child(
+                        div().text_sm().text_color(rgb(MUTED)).child("Unread and search filters do not limit this action.")
+                    ))
+                    .child(div().flex().flex_wrap().gap_2()
+                        .child(Button::new("cancel-empty-folder").small().label("Cancel")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.confirm_empty_folder = None;
+                                cx.notify();
+                            })))
+                        .child(Button::new("confirm-empty-folder").small().primary().label("Delete permanently")
+                            .bg(rgb(0xeb6f92)).text_color(rgb(BG))
+                            .on_click(cx.listener(|this, _, _, cx| this.empty_folder(cx)))))
+            ))
             .child(
                 div()
                     .px_4()
                     .pb_3()
                     .text_xs()
                     .text_color(rgb(MUTED))
-                    .child(format!(
+                    .child(if self.loading && self.page.messages.is_empty() {
+                        "Loading conversations…".into()
+                    } else { format!(
                         "{} conversation{}{}",
                         self.page.conversations().len(),
                         if self.page.conversations().len() == 1 { "" } else { "s" },
-                        if self.loading { " · syncing" } else { "" }
-                    )),
+                        if self.loading { " · loading" } else { "" }
+                    ) }),
             )
             .child(
                 uniform_list(
@@ -2298,6 +3117,7 @@ impl MailApp {
                             .icon(proicon("arrow-reply"))
                             .label("Reply")
                             .tooltip("Reply (r)")
+                            .disabled(message.summary_only)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 if let Some(message) = this.selected.clone() {
                                     this.reply(&message, window, cx);
@@ -2374,6 +3194,27 @@ impl MailApp {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(message.subject()),
             );
+        if message.summary_only {
+            return div()
+                .id("reader")
+                .track_scroll(&self.reader_scroll)
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .overflow_y_scroll()
+                .child(
+                    reader
+                        .child(div().text_sm().child(message.header("From")))
+                        .child(div().text_color(rgb(MUTED)).child(message.snippet))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(MUTED))
+                                .child("Loading full conversation…"),
+                        ),
+                )
+                .into_any_element();
+        }
         reader = reader.child(
             div()
                 .flex()
@@ -2843,6 +3684,10 @@ impl MailApp {
         .into_any_element()
     }
     fn composer(&self, cx: &mut Context<Self>) -> AnyElement {
+        let saving = self.queue.iter().any(|a| {
+            matches!(a.state, ActionState::Queued | ActionState::Running)
+                && matches!(a.action, MailAction::SaveDraft { .. })
+        });
         let mut composer = div()
             .id("composer")
             .flex()
@@ -3103,8 +3948,12 @@ impl MailApp {
                             } else {
                                 "Send →"
                             })
-                            .disabled(self.compose_busy || (!self.demo && self.email.is_empty()))
-                            .on_click(cx.listener(|this, _, _, cx| {
+                            .disabled(
+                                self.compose_busy
+                                    || saving
+                                    || (!self.demo && self.email.is_empty()),
+                            )
+                            .on_click(cx.listener(|this, _, window, cx| {
                                 if let Err(error) = this.draft.validate() {
                                     this.error = error.to_string();
                                 } else if !this.review_send {
@@ -3113,19 +3962,39 @@ impl MailApp {
                                     this.review_send = false;
                                     this.status = "Demo only: no message sent".into();
                                 } else {
-                                    this.compose_busy = true;
-                                    this.dispatch(Command::Send(this.draft.clone()));
+                                    if this.enqueue_mail_action(
+                                        MailAction::Send {
+                                            draft: this.draft.clone(),
+                                        },
+                                        cx,
+                                    ) {
+                                        // enqueue_action atomically cleared only the matching
+                                        // persisted draft; do not overwrite another window.
+                                        this.replace_draft(Draft::default(), false, window, cx);
+                                        this.composing = false;
+                                        this.review_send = false;
+                                    }
                                 }
                                 cx.notify();
                             })),
                     )
                     .child(
                         Button::new("save-gmail")
-                            .label("Save to Gmail")
-                            .disabled(self.compose_busy || self.demo || self.email.is_empty())
+                            .label(if saving {
+                                "Save queued…"
+                            } else {
+                                "Save to Gmail"
+                            })
+                            .disabled(
+                                self.compose_busy || saving || self.demo || self.email.is_empty(),
+                            )
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.compose_busy = true;
-                                this.dispatch(Command::Save(this.draft.clone()));
+                                this.enqueue_mail_action(
+                                    MailAction::SaveDraft {
+                                        draft: this.draft.clone(),
+                                    },
+                                    cx,
+                                );
                                 cx.notify();
                             })),
                     )
@@ -3249,7 +4118,18 @@ impl Render for MailApp {
         } else {
             self.reader(cx)
         };
+        let pending = self
+            .queue
+            .iter()
+            .filter(|a| matches!(a.state, ActionState::Queued | ActionState::Running))
+            .count();
+        let failed = self
+            .queue
+            .iter()
+            .filter(|a| a.state == ActionState::Failed)
+            .count();
         div()
+            .relative()
             .track_focus(&self.focus)
             .capture_key_down(cx.listener(Self::contact_key))
             .on_key_down(cx.listener(Self::key))
@@ -3334,20 +4214,33 @@ impl Render for MailApp {
                         ))),
                     )
                     .child(
-                        div()
+                        div().flex().items_center().justify_between().gap_3()
+                        .child(div().flex_1().min_w_0()
                             .text_xs()
-                            .text_color(rgb(if self.error.is_empty() {
+                            .text_color(rgb(if self.error.is_empty() && self.empty_folder_error.is_none() {
                                 MUTED
                             } else {
                                 0xeb6f92
                             }))
-                            .child(if self.error.is_empty() {
+                            .child(if let Some(error) = &self.empty_folder_error {
+                                error.clone()
+                            } else if self.error.is_empty() {
                                 format!("{} · Keyboard: {} · ? shortcuts", self.status, ["labels", "messages", "reader"][self.zone])
                             } else {
                                 self.error.clone()
-                            }),
+                            }))
+                        .when(!self.queue.is_empty(), |d| d.child(
+                            Button::new("mail-activity").small().ghost()
+                                .text_color(rgb(if failed > 0 { 0xeb6f92 } else { MUTED }))
+                                .label(if failed > 0 { format!("{failed} failed · {pending} pending") }
+                                    else { format!("{pending} pending") })
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.queue_expanded = !this.queue_expanded;
+                                    cx.notify();
+                                }))
+                        )),
                     ),
-            ).into_any_element()
+            ).when(self.queue_expanded, |d| d.child(self.queue_panel(cx))).into_any_element()
     }
 }
 
