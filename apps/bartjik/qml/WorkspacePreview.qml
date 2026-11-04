@@ -101,6 +101,10 @@ DetachablePopup {
         if(!controller.demo)Hyprland.dispatch('hl.dsp.focus({ window = "address:'+address+'" })');
         close();
     }
+    function closeOffscreen(address) {
+        if(!/^0x[0-9a-fA-F]+$/.test(address))return;
+        if(!controller.demo)Hyprland.dispatch('hl.dsp.window.close({ window = "address:'+address+'" })');
+    }
     function close() {opened=false;resetDetach();delay.stop();hide.stop();selectedKey='';hoverKey='';pending=null;}
     function capture(path) {body.grabToImage(result=>result.saveToFile(path));}
     function inspect() {return {card:{x:attachedPosition().x,y:attachedPosition().y,width:body.width,height:body.height},opened:panelVisible,detached:detached,dragging:dragging,placement:placement(),sourceMonitor:targetScreen?.name || '',width:implicitWidth,height:implicitHeight,desktopWidth:desktop.width,desktopHeight:desktop.height,key:selectedKey,pending:delay.running,anchorX:anchorX,anchorY:anchorY,windows:sourceList.length,captured:thumbs.children.filter(c=>c.captured===true).length,
@@ -213,6 +217,7 @@ DetachablePopup {
                         side:notch.modelData
                         theme:popup.theme
                         onActivated:address=>popup.focusOffscreen(address)
+                        onCloseRequested:address=>popup.closeOffscreen(address)
                     }
                 }
             }

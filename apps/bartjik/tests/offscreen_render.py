@@ -34,14 +34,17 @@ with tempfile.TemporaryDirectory(prefix='bartjik-inset-') as td:
             return {ok:true,probe:workspacePreview.item?.offscreenProbe(),barIcons:panels.instances.map(p=>p.offscreenBarIcons())};
         case 'status':break;''');p.write_text(s)
     p=temp/'qml/PanelButton.qml';p.write_text(p.read_text().replace('PanelToolTip {', "PanelToolTip {objectName:'test-panel-tooltip'"))
-    p=temp/'qml/WorkspacePreview.qml';s=p.read_text().replace('import QtQuick\n','import QtQuick\nimport QtTest\n',1).replace('    id:popup', "    id:popup\n    TestEvent {id:offscreenInput}\n    property string lastTestFocus:''").replace('if(!controller.demo)Hyprland.dispatch', 'lastTestFocus=address;if(!controller.demo)Hyprland.dispatch').replace('    function inspect()', '''    function offscreenButtons() {
+    p=temp/'qml/WorkspacePreview.qml';s=p.read_text().replace('import QtQuick\n','import QtQuick\nimport QtTest\n',1).replace('    id:popup', "    id:popup\n    TestEvent {id:offscreenInput}\n    property string lastTestFocus:''\n    property string lastTestClose:''").replace("function focusOffscreen(address) {", "function focusOffscreen(address) {lastTestFocus=address;").replace("function closeOffscreen(address) {", "function closeOffscreen(address) {lastTestClose=address;").replace('    function inspect()', '''    function offscreenButtons() {
         let buttons=[];
         function visit(q) {if(q.objectName==='offscreen-app-button')buttons.push(q);for(const c of q.children || [])visit(c);}
         visit(offscreenInset);return buttons;
     }
     function interactOffscreen(action) {
         const button=offscreenButtons()[0];
+        if(action==='hover')lastTestClose='';
         if(action==='hover')offscreenInput.mouseMove(button,button.width/2,button.height/2,0,Qt.NoButton,Qt.NoModifier);
+        else if(action==='middle')offscreenInput.mouseClick(button,button.width/2,button.height/2,Qt.MiddleButton,Qt.NoModifier,0);
+        else if(action==='right')offscreenInput.mouseClick(button,button.width/2,button.height/2,Qt.RightButton,Qt.NoModifier,0);
         else if(action==='click')offscreenInput.mouseClick(button,button.width/2,button.height/2,Qt.LeftButton,Qt.NoModifier,0);
     }
     function offscreenProbe() {
@@ -53,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix='bartjik-inset-') as td:
         visit(offscreenInset);
         const button=offscreenButtons()[0];
         const tip=button?.data.find(c=>c.objectName==='test-panel-tooltip');
-        return {focus:lastTestFocus,tooltip:tip?{hovered:button.hovered,enabled:button.enabled,visible:tip.visible,text:tip.text,color:String(tip.background.color),radius:tip.background.radius}:null,state:inspect(),icons:icons.map(i=>({status:i.status,x:i.mapToItem(offscreenInset,0,0).x})),
+        return {focus:lastTestFocus,closed:lastTestClose,tooltip:tip?{hovered:button.hovered,enabled:button.enabled,visible:tip.visible,text:tip.text,color:String(tip.background.color),radius:tip.background.radius}:null,state:inspect(),icons:icons.map(i=>({status:i.status,x:i.mapToItem(offscreenInset,0,0).x})),
             midpoint:offscreenInset.width/2,desktopBottom:desktop.y+desktop.height};
     }
     function inspect()''');p.write_text(s)
@@ -104,6 +107,11 @@ with tempfile.TemporaryDirectory(prefix='bartjik-inset-') as td:
                         tip=ipc({'op':'offscreenTest'})['probe']['tooltip']
                         assert tip and tip['visible'] and tip['color']=='#1f1d2e' and tip['radius']==8,tip
                         assert tip['text']=='Project notes — Kitty',tip
+                        focused=ipc({'op':'offscreenTest'})['probe']['focus']
+                        right=ipc({'op':'offscreenTest','interaction':'right'})['probe']
+                        assert right['closed']=='' and right['focus']==focused and right['state']['opened'],right
+                        middle=ipc({'op':'offscreenTest','interaction':'middle'})['probe']
+                        assert middle['closed']=='0xa1' and middle['focus']==focused and middle['state']['opened'],middle
                         clicked=ipc({'op':'offscreenTest','interaction':'click'})['probe']
                         assert clicked['focus']=='0xa1' and not clicked['state']['opened'],clicked
                 # Switching the hovered workspace must replace the inset's content.
@@ -115,4 +123,4 @@ with tempfile.TemporaryDirectory(prefix='bartjik-inset-') as td:
             process.terminate();process.wait(timeout=5)
 errors=[s for s in (dest/'render.log').read_text().splitlines() if any(e in s for e in ('WARN scene','ERROR','ReferenceError','TypeError','Binding loop'))]
 assert not errors,errors
-print('PASS: independent left/right preview notches, single-side and empty states, exact-window clicks, themed tooltips, hovered workspace changes, and no bar icons on both monitors.')
+print('PASS: independent left/right preview notches, single-side and empty states, exact-window left-click focus and middle-click close without dismissing, ignored right clicks, themed tooltips, hovered workspace changes, and no bar icons on both monitors.')

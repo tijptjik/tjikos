@@ -9,6 +9,7 @@ Item {
     required property var theme
     required property string side
     signal activated(string address)
+    signal closeRequested(string address)
     implicitWidth:Math.max(0,windows.length*28-4)
     implicitHeight:24
     Row {
@@ -38,6 +39,12 @@ Item {
                     fillMode:Image.PreserveAspectFit;smooth:true
                 }
                 onClicked:strip.activated(modelData.address)
+                MouseArea {
+                    anchors.fill:parent
+                    acceptedButtons:Qt.MiddleButton
+                    onClicked:strip.closeRequested(app.modelData.address)
+                    onWheel:event=>{event.accepted=false;}
+                }
             }
         }
     }
