@@ -83,6 +83,9 @@
         "@tjikos/tjik-ui": "workspace:*",
       },
     },
+    "packages/messaging-bridge": {
+      "name": "@tjikos/messaging-bridge",
+    },
     "packages/notification-history": {
       "name": "@tjikos/notification-history",
       "version": "0.1.0",
@@ -350,6 +353,8 @@
     "@tjikos/greetjik": ["@tjikos/greetjik@workspace:apps/greetjik"],
 
     "@tjikos/mailtjik": ["@tjikos/mailtjik@workspace:apps/mailtjik"],
+
+    "@tjikos/messaging-bridge": ["@tjikos/messaging-bridge@workspace:packages/messaging-bridge"],
 
     "@tjikos/notification-history": ["@tjikos/notification-history@workspace:packages/notification-history"],
 

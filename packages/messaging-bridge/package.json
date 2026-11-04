@@ -1,0 +1,7 @@
+{
+  "name": "@tjikos/messaging-bridge",
+  "private": true,
+  "type": "module",
+  "exports": { "./presence": "./src/presence.ts", "./types": "./src/types.ts" },
+  "scripts": { "test": "bun test" }
+}
