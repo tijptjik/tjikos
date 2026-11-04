@@ -509,10 +509,53 @@ pub fn demo() -> (Vec<Label>, Page) {
             },
         })
         .collect();
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("signature") {
+        messages[0].payload.mime_type = "text/html".into();
+        messages[0].payload.body.data =
+            URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-signature.html"));
+        messages[0].snippet =
+            "Please review the sample; the delivery desk number belongs to the message.".into();
+        for header in &mut messages[0].payload.headers {
+            if header.name == "Subject" {
+                header.value = "Studio delivery details".into();
+            }
+        }
+    }
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("inline") {
+        messages[0].payload.mime_type = "multipart/alternative".into();
+        messages[0].payload.body = Body::default();
+        messages[0].payload.parts = vec![
+            Part {
+                mime_type: "text/plain".into(),
+                body: Body { data: URL_SAFE_NO_PAD.encode("[image: first.png]\nBetween the pictures.\n[image: second.png]\nAfter both pictures.\n\nOn Monday, Mira wrote:\n> Older synthetic notes."), ..Body::default() },
+                ..Part::default()
+            },
+            Part {
+                mime_type: "text/html".into(),
+                body: Body { data: URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-inline.html")), ..Body::default() },
+                ..Part::default()
+            },
+        ];
+        messages[0].snippet = "Inline pictures stay between the message paragraphs.".into();
+    }
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("reader") {
+        messages[0].payload.mime_type = "text/html".into();
+        messages[0].payload.body.data =
+            URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-readable.html"));
+        messages[0].snippet = "A simple message with consistent typography and lists.".into();
+    }
     if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("html") {
         messages[0].payload.mime_type = "text/html".into();
         messages[0].payload.body.data =
             URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-email.html"));
+        messages[0].snippet = "I've corrected the sample details below.".into();
+        for header in &mut messages[0].payload.headers {
+            if header.name == "Subject" {
+                header.value = "Re: Studio sample details and artwork".into();
+            }
+        }
+        let thread = demo_html_thread(&messages[0]);
+        messages.splice(0..1, thread);
     }
     if matches!(
         std::env::var("GMAILTJIK_DEMO_SCENE").as_deref(),
@@ -618,6 +661,15 @@ pub fn demo_conversations() -> (Vec<Label>, Page) {
 }
 
 pub fn demo_thread(message: &Message) -> Vec<Message> {
+    if matches!(
+        std::env::var("GMAILTJIK_DEMO_SCENE").as_deref(),
+        Ok("reader" | "inline" | "signature")
+    ) {
+        return vec![message.clone()];
+    }
+    if message.id == "demo-0" && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("html") {
+        return demo_html_thread(message);
+    }
     let mut messages = vec![message.clone()];
     if message.id == "demo-0" {
         let mut reply = message.clone();
@@ -650,6 +702,54 @@ On Sunday, Mira wrote:
         ));
         messages.push(reply);
     }
+    messages
+}
+
+/// A realistic reply chain for checking wrapping, collapsed rows and HTML rendering.
+/// Every address, date, reference and message in this scene is synthetic.
+fn demo_html_thread(latest: &Message) -> Vec<Message> {
+    let history = [
+        (
+            "Mira Chen - Studio sample review <mira@example.test>",
+            "Here is the first synthetic sample for review.\nThe artwork and sample details are attached below.",
+            false,
+        ),
+        (
+            "You <you@example.test>",
+            "Could you check the sample information and send the complete artwork?\nThe delivery date needs a correction.",
+            true,
+        ),
+        (
+            "Mira Chen <mira@example.test>",
+            "I'll update the date and send the full image.\nThe project reference is <https://example.test/studio/sample-details>.",
+            false,
+        ),
+    ];
+    let mut messages: Vec<_> = history
+        .into_iter()
+        .enumerate()
+        .map(|(index, (from, body, sent))| {
+            let mut message = latest.clone();
+            message.id = format!("demo-html-history-{index}");
+            message.internal_date = (1793491200000_i64 - (3 - index) as i64 * 3600000).to_string();
+            message.label_ids = vec![if sent { "SENT" } else { "INBOX" }.into()];
+            message.snippet = body.replace('\n', " ");
+            message.payload.mime_type = "text/plain".into();
+            message.payload.body.data = URL_SAFE_NO_PAD.encode(body);
+            for header in &mut message.payload.headers {
+                match header.name.as_str() {
+                    "From" => header.value = from.into(),
+                    "To" if sent => header.value = "Mira Chen <mira@example.test>".into(),
+                    "Message-ID" => {
+                        header.value = format!("<synthetic-history-{index}@example.test>")
+                    }
+                    _ => {}
+                }
+            }
+            message
+        })
+        .collect();
+    messages.push(latest.clone());
     messages
 }
 

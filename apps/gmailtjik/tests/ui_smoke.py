@@ -13,8 +13,9 @@ from private_compositor import private_compositor, wait_for
 
 with private_compositor(isolate_pointer=True):
     root = Path(os.environ["XDG_RUNTIME_DIR"]).parent
+    output_height = 1400 if os.environ.get("GMAILTJIK_DEMO_SCENE") in ("inline", "signature") else 1000
     subprocess.run(["hyprctl", "output", "create", "headless", "GMAIL"], check=True, stdout=subprocess.DEVNULL)
-    subprocess.run(["hyprctl", "eval", 'hl.monitor({output="GMAIL",mode="1440x1000@60",position="-3000x0",scale=1})'], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["hyprctl", "eval", f'hl.monitor({{output="GMAIL",mode="1440x{output_height}@60",position="-3000x0",scale=1}})'], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["hyprctl", "eval", 'hl.dispatch(hl.dsp.focus({monitor="GMAIL"}))'], check=True, stdout=subprocess.DEVNULL)
     pointer_source = APP.parent / "runtjik/tests"
     subprocess.run(["wayland-scanner", "client-header", str(pointer_source / "virtual_pointer.xml"), str(root / "pointer.h")], check=True)
@@ -40,7 +41,7 @@ with private_compositor(isolate_pointer=True):
             print("WINDOW=" + json.dumps(window), flush=True)
             click_pointer = subprocess.Popen([str(root / "pointer"), "GMAIL"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
             def click(x, y):
-                move = f"m {round(x / 1440 * 10000)} {round(y / 1000 * 10000)}"
+                move = f"m {round(x / 1440 * 10000)} {round(y / output_height * 10000)}"
                 for operation in [move, move, "b 1", "b 0"]:
                     click_pointer.stdin.write(operation + "\n")
                     click_pointer.stdin.flush()
@@ -386,13 +387,210 @@ with private_compositor(isolate_pointer=True):
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "reader":
+                capture("reader-normalized.png")
+                # Selection and clipboard stay inside this synthetic compositor.
+                subprocess.run(["wl-copy", "--", "selection-not-copied"], check=True)
+                operations = ["m 4271 3410", "m 4271 3410", "b 1"]
+                operations += [f"m {x} 3410" for x in range(4290, 4620, 40)]
+                operations += ["b 0"]
+                for operation in operations:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.15)
+                subprocess.run(["wtype", "-M", "ctrl", "-k", "c", "-m", "ctrl"], check=True)
+                def copied_selection():
+                    value = subprocess.check_output(["wl-paste", "--no-newline"], text=True, timeout=5)
+                    return value if value != "selection-not-copied" else None
+                copied = wait_for(copied_selection, timeout=5)
+                capture("reader-selection.png")
+                assert copied == "ello,", copied
+                click(990, 690)
+                capture("reader-quotes.png")
+                click(990, 762)
+                capture("reader-quotes-hidden.png")
+                click(655, 307)
+                time.sleep(1)
+                capture("reader-original-dark.png")
+                click(760, 307)
+                time.sleep(1)
+                capture("reader-original-colours.png")
+                click(655, 307)
+                capture("reader-restored.png")
+                from PIL import Image
+                def light_surface_fraction(name):
+                    with Image.open(root / name) as shot:
+                        pixels = list(shot.convert("RGB").crop((610, 330, 1370, 650)).get_flattened_data())
+                    return sum(r > 220 and g > 220 and b > 210 for r, g, b in pixels) / len(pixels)
+                assert light_surface_fraction("reader-normalized.png") < .05
+                assert light_surface_fraction("reader-original-dark.png") < .05
+                assert light_surface_fraction("reader-original-colours.png") > .5
+                assert light_surface_fraction("reader-restored.png") < .05
+                for before, after in [("reader-normalized.png", "reader-quotes.png"), ("reader-quotes.png", "reader-quotes-hidden.png"), ("reader-original-dark.png", "reader-original-colours.png")]:
+                    assert (root / before).read_bytes() != (root / after).read_bytes(), (before, after)
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "signature":
+                capture("signature-hidden.png")
+                from PIL import Image
+                from collections import Counter
+                def signature_pixels(name):
+                    with Image.open(root / name) as shot:
+                        return Counter(shot.convert("RGB").crop((590, 320, 1390, output_height - 145)).get_flattened_data())
+                def signature_control(name, kind):
+                    # The independent signature/quote controls precede Reply
+                    # at the bottom of the naturally sized message card.
+                    with Image.open(root / name) as shot:
+                        shot = shot.convert("RGB")
+                        border_rows = [y for y in range(225, output_height - 180)
+                                       if shot.getpixel((1000, y)) == (57, 53, 70)
+                                       and shot.getpixel((1300, y)) == (57, 53, 70)]
+                    assert border_rows, name
+                    click(990, border_rows[-1] - (85 if kind == "signature" else 55))
+                def selected_body():
+                    subprocess.run(["wl-copy", "--", "signature-selection-pending"], check=True)
+                    click(650, 341)
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                    def copied():
+                        value = subprocess.check_output(["wl-paste", "--no-newline"], text=True, timeout=5)
+                        return value if value != "signature-selection-pending" else None
+                    return wait_for(copied, timeout=5)
+                colours = signature_pixels("signature-hidden.png")
+                assert colours[(240, 190, 50)] == 0
+                assert colours[(255, 83, 166)] == 120 * 60
+                assert colours[(70, 160, 220)] == 120 * 60
+                # The phone number inside the request is message content;
+                # only the trailing contact block should be collapsed.
+                copied = selected_body()
+                assert "+1 202 555 0142" in copied, copied
+                assert "+1 202 555 0118" not in copied, copied
+                assert "Mira Chen" not in copied, copied
+                signature_control("signature-hidden.png", "signature")
+                capture("signature-expanded.png")
+                assert signature_pixels("signature-expanded.png")[(240, 190, 50)] == 96 * 64
+                copied = selected_body()
+                assert "+1 202 555 0142" in copied and "+1 202 555 0118" in copied, copied
+                signature_control("signature-expanded.png", "quote")
+                capture("signature-and-quotes.png")
+                assert signature_pixels("signature-and-quotes.png")[(240, 190, 50)] == 96 * 64
+                copied = selected_body()
+                assert "Older synthetic delivery notes" in copied and "+1 202 555 0118" in copied, copied
+                signature_control("signature-and-quotes.png", "signature")
+                capture("signature-hidden-quotes-open.png")
+                assert signature_pixels("signature-hidden-quotes-open.png")[(240, 190, 50)] == 0
+                copied = selected_body()
+                assert "Older synthetic delivery notes" in copied and "+1 202 555 0118" not in copied, copied
+                signature_control("signature-hidden-quotes-open.png", "quote")
+                capture("signature-recollapsed.png")
+                click(655, 307)
+                time.sleep(1)
+                capture("signature-original-hidden.png")
+                assert signature_pixels("signature-original-hidden.png")[(240, 190, 50)] == 0
+                signature_control("signature-original-hidden.png", "signature")
+                time.sleep(1)
+                capture("signature-original-expanded.png")
+                assert signature_pixels("signature-original-expanded.png")[(240, 190, 50)] == 96 * 64
+                click(655, 307)
+                capture("signature-readable-expanded.png")
+                assert signature_pixels("signature-readable-expanded.png")[(240, 190, 50)] == 96 * 64
+                signature_control("signature-readable-expanded.png", "signature")
+                capture("signature-final-hidden.png")
+                assert signature_pixels("signature-final-hidden.png")[(240, 190, 50)] == 0
+                for name in ("signature-expanded.png", "signature-and-quotes.png", "signature-hidden-quotes-open.png", "signature-original-hidden.png", "signature-original-expanded.png", "signature-final-hidden.png"):
+                    colours = signature_pixels(name)
+                    assert colours[(255, 83, 166)] == 120 * 60, name
+                    assert colours[(70, 160, 220)] == 120 * 60, name
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "inline":
+                capture("inline-normalized.png")
+                from PIL import Image, ImageChops
+                palette = {
+                    "pink": (255, 83, 166),
+                    "blue": (70, 160, 220),
+                    "orange": (255, 150, 40),
+                    "purple": (170, 90, 220),
+                    "green": (40, 210, 100),
+                    "yellow": (240, 210, 40),
+                }
+                def image_patch(name, colour):
+                    with Image.open(root / name) as shot:
+                        body = shot.convert("RGB").crop((590, 320, 1390, output_height - 145))
+                    difference = ImageChops.difference(body, Image.new("RGB", body.size, palette[colour]))
+                    red, green, blue = difference.split()
+                    mask = ImageChops.lighter(ImageChops.lighter(red, green), blue).point(lambda value: 255 if value == 0 else 0)
+                    return mask.getbbox(), mask.histogram()[255]
+                bounds = {}
+                for colour in ("pink", "blue", "orange", "purple"):
+                    box, count = image_patch("inline-normalized.png", colour)
+                    assert box and count == 120 * 60, (colour, box, count)
+                    assert (box[2] - box[0], box[3] - box[1]) == (120, 60), (colour, box)
+                    bounds[colour] = box
+                assert bounds["pink"][3] < bounds["orange"][1]
+                assert image_patch("inline-normalized.png", "green")[1] == 0
+                yellow, count = image_patch("inline-normalized.png", "yellow")
+                assert yellow and count > 1000 and yellow[1] > bounds["orange"][3]
+                click(990, 664)
+                capture("inline-quotes.png")
+                green, count = image_patch("inline-quotes.png", "green")
+                assert green and count == 80 * 30, (green, count)
+                assert green[1] > bounds["orange"][3]
+                click(990, 776)
+                capture("inline-quotes-hidden.png")
+                assert image_patch("inline-quotes-hidden.png", "green")[1] == 0
+                click(655, 307)
+                time.sleep(1)
+                capture("inline-original.png")
+                for colour in ("pink", "blue", "orange", "purple"):
+                    box, count = image_patch("inline-original.png", colour)
+                    assert box and count >= 7000, (colour, box, count)
+                click(655, 307)
+                capture("inline-restored.png")
+                for colour in ("pink", "blue", "orange", "purple"):
+                    assert image_patch("inline-restored.png", colour)[1] == 120 * 60
+                # Resize the actual reader while retaining native-size images
+                # and the order of the paragraphs surrounding them.
+                y = round(450 / output_height * 10000)
+                operations = [f"m 3972 {y}", f"m 3972 {y}", "b 1"]
+                operations += [f"m {x} {y}" for x in range(3972, 5801, 100)]
+                operations += ["b 0"]
+                for operation in operations:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.1)
+                capture("inline-resized.png")
+                resized = {}
+                for colour in ("pink", "blue", "orange", "purple"):
+                    box, count = image_patch("inline-resized.png", colour)
+                    assert box and count == 120 * 60, (colour, box, count)
+                    assert (box[2] - box[0], box[3] - box[1]) == (120, 60)
+                    resized[colour] = box
+                assert resized["pink"][3] < resized["orange"][1]
+                assert image_patch("inline-resized.png", "green")[1] == 0
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "html":
                 time.sleep(2)
                 capture("html-before.png")
+                # The synthetic thread has three older, multiline messages.
+                # Their collapsed sender/preview rows must retain their height
+                # above the latest message, even when its HTML is much taller
+                # than the viewport.
+                capture("html-dark.png")
+                click(760, 541)
+                time.sleep(1)
+                capture("html-light.png")
+                click(760, 541)
+                time.sleep(1)
                 pointer = subprocess.Popen([str(root / "pointer"), "GMAIL"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
                 try:
                     operations = ["m 3972 4500", "m 3972 4500", "b 1"]
-                    operations += [f"m {x} 4500" for x in range(3972, 5001, 100)]
+                    operations += [f"m {x} 4500" for x in range(3972, 5801, 100)]
                     operations += ["b 0"]
                     for operation in operations:
                         pointer.stdin.write(operation + "\n")
@@ -404,14 +602,82 @@ with private_compositor(isolate_pointer=True):
                     pointer.wait(timeout=5)
                 time.sleep(2)
                 capture("html-resized.png")
-                click(1120, 735)
+                # Scroll the actual reader, including while the pointer is over
+                # HTML. A horizontal table viewport must not trap vertical wheel
+                # input or crop the end of the body.
+                for operation in ["m 7600 7000", "m 7600 7000", "s 1600"]:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.2)
+                capture("html-bottom.png")
+                # This table has a minimum width, unlike the responsive image.
+                # Drag the visible horizontal scrollbar to reveal its final
+                # column, then return to the start before exercising quotes.
+                operations = ["m 7083 7160", "m 7083 7160", "b 1"]
+                operations += [f"m {x} 7160" for x in range(7283, 9500, 200)]
+                operations += ["b 0"]
+                for operation in operations:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.1)
+                capture("html-right.png")
+                operations = ["m 8542 7160", "m 8542 7160", "b 1"]
+                operations += [f"m {x} 7160" for x in range(8342, 5800, -200)]
+                operations += ["b 0"]
+                for operation in operations:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.1)
+                capture("html-left.png")
+                from PIL import Image
+                from collections import Counter
+                # Complex mail defaults to a genuinely dark document, while
+                # the explicit original-colours view restores light panels.
+                def html_light_fraction(name):
+                    with Image.open(root / name) as shot:
+                        pixels = list(shot.convert("RGB").crop((620, 565, 1360, 840)).get_flattened_data())
+                    return sum(r > 220 and g > 220 and b > 210 for r, g, b in pixels) / len(pixels)
+                assert html_light_fraction("html-dark.png") < .05
+                assert html_light_fraction("html-light.png") > .5
+                with Image.open(root / "html-bottom.png") as shot:
+                    colours = Counter(shot.convert("RGB").get_flattened_data())
+                assert colours[(255, 83, 166)] > 25000
+                assert colours[(70, 160, 220)] > 25000
+                # Compare the table itself, excluding the pointer and scrollbar:
+                # the final column must move into view and dragging back must
+                # restore exactly the original content, not merely move a thumb.
+                def table_pixels(name):
+                    with Image.open(root / name) as capture_image:
+                        return capture_image.crop((880, 300, 1340, 385)).tobytes()
+                assert table_pixels("html-right.png") != table_pixels("html-bottom.png")
+                assert table_pixels("html-left.png") == table_pixels("html-bottom.png")
+                click(1115, 775)
                 time.sleep(1)
+                for operation in ["m 7600 7000", "m 7600 7000", "s 1600"]:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.2)
                 capture("html-quotes.png")
-                click(1280, 203)
+                click(1115, 775)
                 time.sleep(1)
-                capture("html-light.png")
-                click(1060, 311)
+                for operation in ["s -1600"]:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.2)
+                capture("html-top.png")
+                click(915, 541)
                 capture("html-text.png")
+                click(915, 541)
+                time.sleep(1)
+                click(1050, 254)
+                capture("html-expanded-message.png")
+                for before, after in [("html-dark.png", "html-light.png"), ("html-resized.png", "html-bottom.png"), ("html-bottom.png", "html-right.png"), ("html-right.png", "html-left.png"), ("html-bottom.png", "html-quotes.png"), ("html-top.png", "html-text.png"), ("html-top.png", "html-expanded-message.png")]:
+                    assert (root / before).read_bytes() != (root / after).read_bytes(), (before, after)
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 

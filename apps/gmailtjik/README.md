@@ -284,19 +284,47 @@ assistant directory. Email content is treated as untrusted quoted data.
 
 ## Reading and images
 
-HTML mail uses Blitz for HTML/CSS layout and CPU-rendered tiles in the GPUI reader,
-including tables and approved inline images. Drag the inbox/reader divider to
-resize the panes; the inbox width is saved privately, and HTML reflows after a
-short debounce. Rendering runs on a background thread with a bounded cache.
+Ordinary messages open in a selectable **Readable view**. HTML is converted to
+Markdown structure, preserving headings, paragraphs, lists, emphasis and safe
+links while removing sender fonts, colours, backgrounds and empty spacing.
+Simple wrapper tables and signature logos do not force the original layout.
+Quoted history remains collapsed until requested. Approved inline images remain
+between their surrounding paragraphs, with their aspect ratio and colours intact.
+Markdown resolves only already-approved image bytes; images still pass through
+the existing image loader and remote-image setting. Inline images are not repeated
+in the attachment list, and quoted images remain hidden with their quoted history.
 
-HTML links open in the browser. Use **Text · select and copy** for selectable
-text; rasterized HTML does not yet have text selection or full accessibility.
-Light/dark email backing can be switched without inverting image pixels. Author
-colours are preserved, so unusually styled messages may need light backing.
+Recognized signatures are collapsed behind **Show signature** in both reading
+views, including their logos and contact blocks. Detection uses explicit email
+client signature markup, Gmail signature-image URLs, standard signature separators,
+and short contact blocks after a standalone closing line. Ambiguous body text stays
+visible. **Hide signature** collapses it again; signature and quoted-history
+controls work independently, and the original message is retained.
+
+Messages with data tables, multiple content columns or image-led layouts open in
+**Original layout**, using Blitz HTML/CSS layout and CPU-rendered tiles, including
+approved inline images. Each HTML message can switch between Readable view and
+Original layout. Complex layouts default to dark surfaces with readable text,
+links and borders. **Original colours** restores the sender's colours when needed;
+image pixels remain unchanged in either mode. Layout detection is heuristic, and
+the per-message switch provides a manual override.
+
+Drag the inbox/reader divider to
+resize the panes; the inbox width is saved privately, and HTML reflows after a
+short debounce. Inline images fit the reading width without changing their
+aspect ratio. Tables that cannot fit retain their full contents behind a
+horizontal scrollbar. Message cards and collapsed previews keep their natural
+height as the conversation scrolls. Rendering runs on a background thread with
+a bounded cache.
+
+Links open in the browser. Readable view supports selecting and copying text;
+rasterized Original layout does not yet have text selection or full accessibility.
 Scripts, forms and embeds are removed. Blitz has an offline resource provider:
 CSS imports, fonts and image URLs cannot initiate network or filesystem access.
 Only raster images approved by the existing image loader are supplied. Oversize
-HTML (2 MB or 24,000 layout pixels tall) offers Text view instead of truncation.
+HTML (2 MB, 24,000 layout pixels tall, 4,800 pixels wide, or 48 million total
+pixels) falls back to Readable view instead of truncation. Long emails are rendered in
+consecutive tiles, including content extending below the document's main box.
 
 The inbox and search list use Gmail thread pagination: one row per conversation,
 grouped by Gmail's thread ID, with participant names, message counts, the original
@@ -360,7 +388,9 @@ quoted reply sections are collapsed behind Show quoted history; inline answers
 are preserved. Quote recognition is heuristic, and the original text is always
 available. Per-message Reply retains Gmail threading headers.
 
-Approved CID and remote raster images appear in their HTML positions. Plain-text views show image attachments below the body. Remote HTTPS images
+Approved CID and remote raster images appear in their original positions in both
+Readable view and Original layout. Unreferenced image attachments appear below
+the body. Remote HTTPS images
 load automatically for open messages by default. **Settings → Reading → Remote images**
 switches between Auto and Ask, persisted per account. Ask provides a
 per-message Load remote images button. Requests use no Google credentials or
@@ -380,6 +410,7 @@ cargo test --manifest-path apps/gmailtjik/Cargo.toml --locked
 After building, `bun run --cwd apps/gmailtjik test:ui` captures the synthetic
 inbox, composer, proposal, search, and retained draft on an isolated Wayland
 output. It requires Hyprland, grim, wtype, a C compiler and wayland-scanner.
+The HTML scene also uses Python Pillow to verify horizontal scrolling.
 Captures stay under `/tmp`. `bun run --cwd apps/gmailtjik test:codex` explicitly
 runs the otherwise ignored live Codex test using synthetic email only.
 
@@ -398,6 +429,9 @@ References: [Gmail search](https://developers.google.com/workspace/gmail/api/gui
 [GPUI Kit](https://gpui-kit.com/docs/getting-started).
 
 Synthetic HTML and divider check: `GMAILTJIK_DEMO_SCENE=html bun run --cwd apps/gmailtjik test:ui`.
+Synthetic normalized reader check: `GMAILTJIK_DEMO_SCENE=reader bun run --cwd apps/gmailtjik test:ui`.
+Synthetic inline-image check: `GMAILTJIK_DEMO_SCENE=inline bun run --cwd apps/gmailtjik test:ui`.
+Synthetic signature check: `GMAILTJIK_DEMO_SCENE=signature bun run --cwd apps/gmailtjik test:ui`.
 Synthetic progressive folder check: `GMAILTJIK_DEMO_SCENE=quick-folder bun run --cwd apps/gmailtjik test:ui`.
 Synthetic failed-refresh cache check: `GMAILTJIK_DEMO_SCENE=cache-failure bun run --cwd apps/gmailtjik test:ui`.
 

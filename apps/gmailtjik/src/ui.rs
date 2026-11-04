@@ -5,12 +5,13 @@ use crate::{
     store::Store,
     worker::{self, Command, Event},
 };
-use gpui_kit::base::Disableable;
+use gpui_kit::base::{Disableable, InteractiveElementExt};
 use gpui_kit::component::{
     Icon, Sizable, Theme, ThemeMode,
     button::{Button, ButtonVariants},
     input::{Input, InputEvent, InputState, Textarea, TextareaState},
     resizable::{ResizableState, h_resizable, resizable_panel},
+    scroll::{Scrollbar, ScrollbarMode},
     text::TextView,
 };
 use gpui_kit::{prelude::*, *};
@@ -106,9 +107,11 @@ pub struct MailApp {
     html_width: u32,
     html_width_candidate: (u32, Instant),
     html_tiles: std::collections::HashMap<u64, Vec<(u32, Arc<Image>)>>,
+    html_scroll: std::collections::HashMap<String, ScrollHandle>,
     html_renderer: crate::html::Renderer,
     html_resources: std::collections::HashMap<String, crate::html::Resources>,
-    text_messages: std::collections::HashSet<String>,
+    layout_messages: std::collections::HashMap<String, bool>,
+    reading_bodies: crate::reader::Cache,
     focus: FocusHandle,
     shortcuts: bool,
     zone: usize,
@@ -184,6 +187,7 @@ pub struct MailApp {
     conversation: Vec<Message>,
     thread_images: std::collections::HashMap<String, Vec<(String, Arc<Image>)>>,
     expanded_quotes: std::collections::HashSet<String>,
+    expanded_signatures: std::collections::HashSet<String>,
     expanded_messages: std::collections::HashSet<String>,
     manual_images: std::collections::HashSet<String>,
     light_images: bool,
@@ -421,9 +425,11 @@ impl MailApp {
             html_width: 600,
             html_width_candidate: (600, Instant::now()),
             html_tiles: Default::default(),
+            html_scroll: Default::default(),
             html_renderer: crate::html::Renderer::new(),
             html_resources: Default::default(),
-            text_messages: Default::default(),
+            layout_messages: Default::default(),
+            reading_bodies: Default::default(),
             settings: demo && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("rules"),
             settings_reading: false,
             settings_sync: false,
@@ -449,6 +455,7 @@ impl MailApp {
             conversation: vec![],
             thread_images: Default::default(),
             expanded_quotes: Default::default(),
+            expanded_signatures: Default::default(),
             expanded_messages: Default::default(),
             manual_images: Default::default(),
             collapsed_labels: store
@@ -1104,6 +1111,7 @@ impl MailApp {
             self.images.clear();
             self.thread_images.clear();
             self.html_resources.clear();
+            self.html_scroll.clear();
             self.image_generation += 1;
         }
         if let Ok(Some(messages)) = self.store.cached_thread(&selected.thread_id) {
@@ -1476,6 +1484,7 @@ impl MailApp {
             self.images.clear();
             self.thread_images.clear();
             self.html_resources.clear();
+            self.html_scroll.clear();
             return;
         };
         if self
@@ -1487,8 +1496,10 @@ impl MailApp {
             self.images.clear();
             self.thread_images.clear();
             self.html_resources.clear();
+            self.html_scroll.clear();
             self.image_generation += 1;
             self.expanded_quotes.clear();
+            self.expanded_signatures.clear();
             self.expanded_messages.clear();
             self.manual_images.clear();
         }
@@ -2125,6 +2136,94 @@ impl MailApp {
         cx.notify();
     }
     fn demo_image(&mut self) {
+        if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("signature") {
+            let mut resources = Vec::new();
+            for (source, width, height, left, right) in [
+                (
+                    "cid:body-art",
+                    240,
+                    60,
+                    [255, 83, 166, 255],
+                    [70, 160, 220, 255],
+                ),
+                (
+                    "https://ci3.googleusercontent.com/mail-sig/synthetic-logo",
+                    96,
+                    64,
+                    [240, 190, 50, 255],
+                    [240, 190, 50, 255],
+                ),
+            ] {
+                let image = image::RgbaImage::from_fn(width, height, |x, _| {
+                    image::Rgba(if x < width / 2 { left } else { right })
+                });
+                let mut bytes = std::io::Cursor::new(Vec::new());
+                image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+                resources.push((source.to_string(), bytes.into_inner()));
+            }
+            self.thread_images.insert(
+                "demo-0".into(),
+                resources
+                    .iter()
+                    .filter_map(|(source, bytes)| {
+                        image_from_bytes(bytes.clone()).map(|image| (source.clone(), image))
+                    })
+                    .collect(),
+            );
+            self.html_resources.insert("demo-0".into(), resources);
+            return;
+        }
+        if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("inline") {
+            let mut resources = Vec::new();
+            for (source, width, height, left, right) in [
+                (
+                    "cid:demo-inline@mail",
+                    240,
+                    60,
+                    [255, 83, 166, 255],
+                    [70, 160, 220, 255],
+                ),
+                (
+                    "https://images.example.test/approved.png",
+                    240,
+                    60,
+                    [255, 150, 40, 255],
+                    [170, 90, 220, 255],
+                ),
+                (
+                    "cid:quoted-art",
+                    80,
+                    30,
+                    [40, 210, 100, 255],
+                    [40, 210, 100, 255],
+                ),
+                (
+                    "unrelated.png",
+                    40,
+                    30,
+                    [240, 210, 40, 255],
+                    [240, 210, 40, 255],
+                ),
+            ] {
+                let image = image::RgbaImage::from_fn(width, height, |x, _| {
+                    image::Rgba(if x < width / 2 { left } else { right })
+                });
+                let mut bytes = std::io::Cursor::new(Vec::new());
+                image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+                resources.push((source.to_string(), bytes.into_inner()));
+            }
+            self.thread_images.insert(
+                "demo-0".into(),
+                resources
+                    .iter()
+                    .filter_map(|(source, bytes)| {
+                        image_from_bytes(bytes.clone()).map(|image| (source.clone(), image))
+                    })
+                    .collect(),
+            );
+            self.html_resources.insert("demo-0".into(), resources);
+            return;
+        }
         if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("html") {
             let image = image::RgbaImage::from_fn(240, 60, |x, _| {
                 if x < 120 {
@@ -2135,13 +2234,18 @@ impl MailApp {
             });
             let mut bytes = std::io::Cursor::new(Vec::new());
             if image.write_to(&mut bytes, image::ImageFormat::Png).is_ok() {
-                self.html_resources.insert(
-                    "demo-0".into(),
-                    vec![("cid:demo-art".into(), bytes.into_inner())],
-                );
+                let bytes = bytes.into_inner();
+                if let Some(image) = image_from_bytes(bytes.clone()) {
+                    self.thread_images
+                        .insert("demo-0".into(), vec![("cid:demo-art".into(), image)]);
+                }
+                self.html_resources
+                    .insert("demo-0".into(), vec![("cid:demo-art".into(), bytes)]);
             }
         }
-        if self.selected.as_ref().is_some_and(|m| m.id == "demo-0") {
+        if self.selected.as_ref().is_some_and(|m| m.id == "demo-0")
+            && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() != Ok("reader")
+        {
             let image = Image::from_bytes(
                 ImageFormat::Svg,
                 include_bytes!("../assets/demo-card.svg").to_vec(),
@@ -3097,14 +3201,15 @@ impl MailApp {
             .unwrap_or_else(|| message.unread());
         let starred = message.label_ids.iter().any(|l| l == "STARRED");
         let read_id = id.clone();
+        // Let the conversation keep its natural height inside the scroll viewport.
+        // Constraining this flex column to the viewport can squeeze message cards
+        // and clip their contents when a long HTML body is inserted.
         let mut reader = div()
-            .id("reader")
-            .track_scroll(&self.reader_scroll)
             .flex()
             .flex_col()
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
+            .flex_shrink_0()
+            .w_full()
+            .min_w_0()
             .p_6()
             .gap_4()
             .child(
@@ -3224,21 +3329,7 @@ impl MailApp {
                 .child(format!(
                     "{} messages · oldest first",
                     self.conversation.len().max(1)
-                ))
-                .child(
-                    Button::new("image-backing")
-                        .ghost()
-                        .small()
-                        .label(if self.light_images {
-                            "Dark email / image backing"
-                        } else {
-                            "Light email / image backing"
-                        })
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.light_images = !this.light_images;
-                            cx.notify();
-                        })),
-                ),
+                )),
         );
         let messages = if self.conversation.is_empty() {
             vec![message]
@@ -3249,18 +3340,37 @@ impl MailApp {
             let id = message.id.clone();
             if !self.message_open(&id) {
                 let message = message.clone();
+                let preview = crate::quotes::body(&message)
+                    .0
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 reader = reader.child(
                     Button::new(SharedString::from(format!("expand-{id}")))
                         .ghost()
-                        .label(format!(
-                            "▸ {} · {}",
-                            message.header("From"),
-                            crate::quotes::body(&message)
-                                .0
-                                .chars()
-                                .take(65)
-                                .collect::<String>()
+                        .w_full()
+                        .h(px(64.))
+                        .p_3()
+                        .icon(proicon("chevron-right"))
+                        .accessibility_label(format!(
+                            "Expand message from {}",
+                            message.header("From")
                         ))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(message.header("From")),
+                                )
+                                .child(div().truncate().text_color(rgb(MUTED)).child(preview)),
+                        )
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.expanded_messages.insert(message.id.clone());
                             if !this.demo && !this.thread_images.contains_key(&message.id) {
@@ -3275,12 +3385,23 @@ impl MailApp {
                 );
                 continue;
             }
-            let (trimmed, quoted) = crate::quotes::body(&message);
             let expanded = self.expanded_quotes.contains(&id);
-            let body = if expanded { message.text() } else { trimmed };
+            let show_signature = self.expanded_signatures.contains(&id);
+            let reading =
+                self.reading_bodies
+                    .get_with_signature(&message, expanded, show_signature);
+            let has_signature = reading.signature
+                || self.thread_images.get(&id).is_some_and(|images| {
+                    images
+                        .iter()
+                        .any(|(source, _)| crate::signatures::signature_image(source))
+                });
+            let quoted = reading.quoted;
             let mut card = div()
                 .flex()
                 .flex_col()
+                .flex_shrink_0()
+                .min_w_0()
                 .gap_3()
                 .p_4()
                 .rounded_lg()
@@ -3289,27 +3410,34 @@ impl MailApp {
                 .child(
                     div()
                         .flex()
+                        .gap_3()
                         .justify_between()
                         .child(
                             div()
+                                .flex_1()
+                                .min_w_0()
                                 .text_sm()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .child(message.header("From")),
                         )
                         .child(
-                            div().text_xs().text_color(rgb(MUTED)).child(
-                                message
-                                    .internal_date
-                                    .parse::<i64>()
-                                    .ok()
-                                    .and_then(chrono::DateTime::from_timestamp_millis)
-                                    .map(|date| {
-                                        date.with_timezone(&chrono::Local)
-                                            .format("%d %b · %H:%M")
-                                            .to_string()
-                                    })
-                                    .unwrap_or_default(),
-                            ),
+                            div()
+                                .flex_shrink_0()
+                                .text_xs()
+                                .text_color(rgb(MUTED))
+                                .child(
+                                    message
+                                        .internal_date
+                                        .parse::<i64>()
+                                        .ok()
+                                        .and_then(chrono::DateTime::from_timestamp_millis)
+                                        .map(|date| {
+                                            date.with_timezone(&chrono::Local)
+                                                .format("%d %b · %H:%M")
+                                                .to_string()
+                                        })
+                                        .unwrap_or_default(),
+                                ),
                         ),
                 )
                 .child(
@@ -3318,25 +3446,50 @@ impl MailApp {
                         .text_color(rgb(MUTED))
                         .child(format!("To: {}", message.header("To"))),
                 );
-            let html = crate::html::source(&message);
-            let use_html = html.is_some() && !self.text_messages.contains(&id);
+            let html = reading.original_layout.clone();
+            let mut use_html = html.is_some()
+                && self
+                    .layout_messages
+                    .get(&id)
+                    .copied()
+                    .unwrap_or(reading.complex);
             if let Some(html) = html {
                 let toggle_id = id.clone();
+                let next_layout = !use_html;
                 card = card.child(
-                    Button::new(SharedString::from(format!("html-toggle-{id}")))
-                        .ghost()
-                        .small()
-                        .label(if use_html {
-                            "Text · select and copy"
-                        } else {
-                            "HTML · Blitz"
-                        })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if !this.text_messages.remove(&toggle_id) {
-                                this.text_messages.insert(toggle_id.clone());
-                            }
-                            cx.notify();
-                        })),
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(
+                            Button::new(SharedString::from(format!("html-toggle-{id}")))
+                                .ghost()
+                                .small()
+                                .label(if use_html {
+                                    "Readable view"
+                                } else {
+                                    "Original layout"
+                                })
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.layout_messages.insert(toggle_id.clone(), next_layout);
+                                    cx.notify();
+                                })),
+                        )
+                        .when(use_html, |row| {
+                            row.child(
+                                Button::new(SharedString::from(format!("colours-{id}")))
+                                    .ghost()
+                                    .small()
+                                    .label(if self.light_images {
+                                        "Dark colours"
+                                    } else {
+                                        "Original colours"
+                                    })
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.light_images = !this.light_images;
+                                        cx.notify();
+                                    })),
+                            )
+                        }),
                 );
                 if use_html {
                     let key = self.html_renderer.request(
@@ -3352,8 +3505,9 @@ impl MailApp {
                                 .relative()
                                 .flex()
                                 .flex_col()
+                                .flex_shrink_0()
                                 .gap_0()
-                                .w_full()
+                                .w(px(page.width as f32))
                                 .overflow_hidden();
                             if self.html_tiles.len() >= 12 && !self.html_tiles.contains_key(&key) {
                                 self.html_tiles.clear();
@@ -3375,7 +3529,7 @@ impl MailApp {
                             for (height, image) in images.iter() {
                                 tiles = tiles.child(
                                     img(image.clone())
-                                        .w(px(self.html_width as f32))
+                                        .w(px(page.width as f32))
                                         .h(px(*height as f32))
                                         .flex_shrink_0(),
                                 );
@@ -3395,7 +3549,32 @@ impl MailApp {
                                         .on_click(move |_, _, cx| cx.open_url(&url)),
                                 );
                             }
-                            card = card.child(tiles);
+                            let scroll = self.html_scroll.entry(id.clone()).or_default();
+                            card = card.child(
+                                div()
+                                    .relative()
+                                    .w_full()
+                                    .min_w_0()
+                                    .flex_shrink_0()
+                                    .child(
+                                        div()
+                                            .id(SharedString::from(format!("html-scroll-{id}")))
+                                            .w_full()
+                                            .min_w_0()
+                                            .overflow_x_scroll()
+                                            .lock_scroll_axis()
+                                            .track_scroll(scroll)
+                                            .child(tiles),
+                                    )
+                                    .child(
+                                        div().absolute().inset_0().child(
+                                            Scrollbar::horizontal(scroll)
+                                                .id(SharedString::from(format!("html-bar-{id}")))
+                                                .mode(ScrollbarMode::Always)
+                                                .viewport_from_layout(),
+                                        ),
+                                    ),
+                            );
                             for (index, (label, url)) in page.links.iter().enumerate() {
                                 let url = url.clone();
                                 card = card.child(
@@ -3414,6 +3593,7 @@ impl MailApp {
                             }
                         }
                         Some(Err(error)) => {
+                            use_html = false;
                             card =
                                 card.child(div().text_color(rgb(MUTED)).child(error.to_string()));
                         }
@@ -3424,16 +3604,69 @@ impl MailApp {
                 }
             }
             if !use_html {
+                let approved: std::collections::HashMap<_, _> = self
+                    .thread_images
+                    .get(&id)
+                    .into_iter()
+                    .flatten()
+                    // Loader keys already contain decoded CID identifiers or
+                    // canonical HTTPS URLs. Decode only the HTML reference.
+                    .map(|(source, image)| (source.clone(), image.clone()))
+                    .collect();
+                let inline: std::collections::HashMap<_, _> = reading
+                    .images
+                    .iter()
+                    .filter_map(|slot| {
+                        approved
+                            .get(&crate::reader::image_key(&slot.source))
+                            .map(|image| (slot.token.clone(), image.clone()))
+                    })
+                    .collect();
                 card = card.child(
-                    TextView::html(
+                    TextView::markdown(
                         SharedString::from(format!("thread-body-{id}-{expanded}")),
-                        escaped_body(if body.trim().is_empty() && quoted {
-                            "(Quoted reply)"
+                        if reading.markdown.trim().is_empty() && quoted {
+                            "(Quoted reply)".to_string()
                         } else {
-                            &body
-                        }),
+                            reading.markdown.clone()
+                        },
                     )
-                    .selectable(true),
+                    .text_size(px(16.))
+                    .selectable(true)
+                    // Images only enter through the existing approved image loader.
+                    .image_source(move |uri| {
+                        inline.get(uri.as_ref()).cloned().map_or_else(
+                            || ImageSource::Custom(Arc::new(|_, _| None)),
+                            ImageSource::Image,
+                        )
+                    })
+                    .on_link_click(|link, _, _, cx| {
+                        if let Ok(url) = url::Url::parse(link)
+                            && matches!(url.scheme(), "https" | "http" | "mailto")
+                        {
+                            cx.open_url(url.as_str());
+                        }
+                    }),
+                );
+            }
+            if has_signature {
+                let signature_id = id.clone();
+                card = card.child(
+                    Button::new(SharedString::from(format!("signature-{id}")))
+                        .ghost()
+                        .small()
+                        .text_color(rgb(MUTED))
+                        .label(if show_signature {
+                            "Hide signature"
+                        } else {
+                            "Show signature"
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if !this.expanded_signatures.remove(&signature_id) {
+                                this.expanded_signatures.insert(signature_id.clone());
+                            }
+                            cx.notify();
+                        })),
                 );
             }
             if quoted {
@@ -3497,7 +3730,19 @@ impl MailApp {
                 self.thread_images.get(&id)
             };
             if let Some(images) = images.filter(|_| !use_html) {
+                // Quoted inline images stay behind the quote toggle, and an
+                // image shown in the body must not repeat in the attachment list.
+                let inline_sources: std::collections::HashSet<_> = reading
+                    .image_sources
+                    .iter()
+                    .map(|source| crate::reader::image_key(source))
+                    .collect();
                 for (name, image) in images {
+                    if inline_sources.contains(name)
+                        || (!show_signature && crate::signatures::signature_image(name))
+                    {
+                        continue;
+                    }
                     card = card
                         .child(
                             div()
@@ -3517,7 +3762,17 @@ impl MailApp {
             }
             reader = reader.child(card);
         }
-        reader.into_any_element()
+        div()
+            .id("reader")
+            .track_scroll(&self.reader_scroll)
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .overflow_y_scroll()
+            .child(reader)
+            .into_any_element()
     }
     fn migrate_contact_defaults(&mut self) {
         let mut defaults = self.contact_defaults.clone();
@@ -4264,16 +4519,6 @@ fn image_from_bytes(bytes: Vec<u8>) -> Option<Arc<Image>> {
         return None;
     };
     Some(Arc::new(Image::from_bytes(format, bytes)))
-}
-
-fn escaped_body(text: &str) -> String {
-    format!(
-        "<p>{}</p>",
-        text.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('\n', "<br>")
-    )
 }
 
 // Capture the neighbour before filtering: archive may remove the row from Inbox,
