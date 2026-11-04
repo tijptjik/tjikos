@@ -68,6 +68,7 @@ with private_compositor(isolate_pointer=True):
                 copied = wait_for(copied_indents, timeout=5)
                 assert "Renáta Exampleová" in copied and "你好" in copied, copied
                 assert "Studio 12" in copied and "Markdown" in copied, copied
+                assert "Council Alpha" in copied and "Council Beta" in copied, copied
                 click(1241, 257)
                 time.sleep(1)
                 capture("reader-indents-original.png")

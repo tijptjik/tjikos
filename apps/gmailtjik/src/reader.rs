@@ -153,6 +153,7 @@ pub fn parse_with_signature(
             .select(&Selector::parse("style").unwrap())
             .map(|style| style.text().collect::<String>())
             .collect();
+        let indent_styles = stylesheet_indents(&styles);
         prune(&mut doc, false);
         let mut unquoted = doc.clone();
         let quoted = crate::quotes::strip_html(&mut unquoted);
@@ -203,7 +204,7 @@ pub fn parse_with_signature(
         let markdown = if hidden(doc.root_element()) {
             String::new()
         } else {
-            normalize(&render(body, 0, &mut images))
+            normalize(&render(body, 0, &mut images, &indent_styles))
         };
         // A broken/empty HTML alternative must not hide a useful plain body.
         // Do not restore history that was intentionally collapsed above.
@@ -496,14 +497,22 @@ fn text_node(text: &str) -> String {
     escape(&out)
 }
 
-fn children(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) -> String {
+fn children(
+    element: ElementRef<'_>,
+    depth: usize,
+    images: &mut Vec<InlineImage>,
+    styles: &[(Selector, String)],
+) -> String {
     let mut output = String::new();
     for node in element.children() {
         match node.value() {
             Node::Text(text) => output.push_str(&text_node(text)),
-            Node::Element(_) => {
-                output.push_str(&render(ElementRef::wrap(node).unwrap(), depth + 1, images))
-            }
+            Node::Element(_) => output.push_str(&render(
+                ElementRef::wrap(node).unwrap(),
+                depth + 1,
+                images,
+                styles,
+            )),
             _ => {}
         }
     }
@@ -528,6 +537,24 @@ fn quote_block(text: &str) -> String {
     )
 }
 
+fn stylesheet_indents(styles: &[String]) -> Vec<(Selector, String)> {
+    let rule = regex::Regex::new(r"(?s)([^{}]+)\{([^{}]*)\}").unwrap();
+    styles
+        .iter()
+        .flat_map(|style| {
+            rule.captures_iter(style)
+                .filter_map(|parts| {
+                    let declarations = parts[2].to_ascii_lowercase();
+                    if !declarations.contains("margin") && !declarations.contains("padding-left") {
+                        return None;
+                    }
+                    Some((Selector::parse(parts[1].trim()).ok()?, declarations))
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
 fn indented_style(style: &str) -> bool {
     let positive_length = |value: &str| {
         let value = value.trim().trim_end_matches("!important").trim();
@@ -539,11 +566,46 @@ fn indented_style(style: &str) -> bool {
     };
     // Only explicit left indentation belongs in the readable representation;
     // ordinary all-around message/card padding is layout decoration.
-    style.split(';').any(|declaration| {
-        declaration.split_once(':').is_some_and(|(name, value)| {
-            matches!(name.trim(), "margin-left" | "padding-left") && positive_length(value)
-        })
-    })
+    let mut margin = false;
+    let mut padding = false;
+    for declaration in style.split(';') {
+        let Some((name, value)) = declaration.split_once(':') else {
+            continue;
+        };
+        match name.trim() {
+            "margin-left" => margin = positive_length(value),
+            "padding-left" => padding = positive_length(value),
+            "margin" => {
+                let values: Vec<_> = value
+                    .trim()
+                    .trim_end_matches("!important")
+                    .split_whitespace()
+                    .collect();
+                // Four-sided margins explicitly encode the left offset. Other
+                // shorthands reset it without treating card spacing as prose.
+                margin = values.len() == 4 && positive_length(values[3]);
+            }
+            _ => {}
+        }
+    }
+    margin || padding
+}
+
+fn element_indented(element: ElementRef<'_>, styles: &[(Selector, String)]) -> bool {
+    let mut declarations = String::new();
+    for (selector, style) in styles {
+        if selector.matches(&element) {
+            declarations.push_str(style);
+            declarations.push(';');
+        }
+    }
+    declarations.push_str(
+        &element
+            .attr("style")
+            .unwrap_or_default()
+            .to_ascii_lowercase(),
+    );
+    indented_style(&declarations)
 }
 
 fn indented_html_lines(content: &str) -> String {
@@ -635,7 +697,12 @@ fn image_source(image: ElementRef<'_>) -> Option<&str> {
 
 // Keep real data tables while unwrapping email layout tables. Markdown has no
 // merged cells; reserve their occupied columns so later cells stay aligned.
-fn table(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) -> Option<String> {
+fn table(
+    element: ElementRef<'_>,
+    depth: usize,
+    images: &mut Vec<InlineImage>,
+    styles: &[(Selector, String)],
+) -> Option<String> {
     if element.attr("role") == Some("presentation") {
         return None;
     }
@@ -693,7 +760,7 @@ fn table(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) -
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(1)
                 .clamp(1, rows.len());
-            let value = normalize(&children(cell, depth + 1, images));
+            let value = normalize(&children(cell, depth + 1, images, styles));
             // Pipes are escaped even inside code/link destinations. Keep cell
             // paragraphs readable without emitting a new Markdown table row.
             let value = value.replace("\\|", "|").replace('|', "\\|");
@@ -726,7 +793,7 @@ fn table(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) -
     let caption = element
         .child_elements()
         .find(|child| child.value().name() == "caption")
-        .map(|caption| children(caption, depth + 1, images))
+        .map(|caption| children(caption, depth + 1, images, styles))
         .unwrap_or_default();
     if !has_headers {
         grid.insert(0, Vec::new());
@@ -741,7 +808,12 @@ fn table(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) -
     Some(format!("{}{}", block(&caption), block(&lines.join("\n"))))
 }
 
-fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) -> String {
+fn render(
+    element: ElementRef<'_>,
+    depth: usize,
+    images: &mut Vec<InlineImage>,
+    styles: &[(Selector, String)],
+) -> String {
     if hidden(element) {
         return String::new();
     }
@@ -752,8 +824,12 @@ fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) 
     }
     let tag = element.value().name();
     if tag == "table" {
-        if let Some(markdown) = table(element, depth, images) {
-            return markdown;
+        if let Some(markdown) = table(element, depth, images, styles) {
+            return if element_indented(element, styles) {
+                quote_block(&markdown)
+            } else {
+                markdown
+            };
         }
     }
     match tag {
@@ -805,7 +881,7 @@ fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) 
                 .filter(|n| n.value().name() == "li")
                 .enumerate()
             {
-                let text = normalize(&children(li, depth + 1, images));
+                let text = normalize(&children(li, depth + 1, images, styles));
                 if text.is_empty() {
                     continue;
                 }
@@ -832,7 +908,7 @@ fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) 
         }
         _ => {}
     }
-    let mut content = children(element, depth, images);
+    let mut content = children(element, depth, images, styles);
     // Outlook and web composers often express emphasis with inline CSS.
     let style = element
         .attr("style")
@@ -901,7 +977,9 @@ fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) 
             let content = bullet
                 .map(|text| format!("- {text}"))
                 .unwrap_or_else(|| indented_html_lines(&content));
-            if tag == "dd" || (matches!(tag, "p" | "div") && indented_style(&style)) {
+            if tag == "dd"
+                || (matches!(tag, "p" | "div" | "table") && element_indented(element, styles))
+            {
                 quote_block(&content)
             } else {
                 block(&content)
@@ -1273,6 +1351,54 @@ mod tests {
             false,
         );
         assert_eq!(body.markdown, "Flush\n\nAlso flush");
+    }
+
+    #[test]
+    fn stylesheet_indented_single_column_tables_become_visible_quote_blocks() {
+        // Generated mail uses a class margin on the table, ordinary padding on
+        // its cells, and zero-margin paragraphs. Only the table is an indent.
+        let source = "<style>.entries { margin-left:5.4pt } .cell { padding:0pt 5.4pt 0pt 5.4pt } .entry { text-indent:0pt; margin:0pt 0pt 0pt 0pt }</style><p>Available options:</p><table class='entries' style='border-collapse:collapse'><tr><td class='cell'><p class='entry'>Council Alpha</p></td></tr><tr><td class='cell'><p class='entry'>Council Beta</p></td></tr></table><p>Following details.</p>";
+        let body = parse(&mail("text/html", source), false);
+        assert_eq!(
+            body.markdown,
+            "Available options:\n\n> Council Alpha\n>\n> Council Beta\n\nFollowing details\\."
+        );
+        assert!(!body.quoted && !body.complex);
+        assert!(body.original_layout.unwrap().contains("margin-left:5.4pt"));
+        let reset = source.replace(
+            "border-collapse:collapse",
+            "border-collapse:collapse;margin-left:0",
+        );
+        assert!(
+            !parse(&mail("text/html", &reset), false)
+                .markdown
+                .contains("> Council")
+        );
+    }
+
+    #[test]
+    fn class_and_shorthand_indents_keep_table_structure_and_inline_resets() {
+        for source in [
+            "<style>.indent { margin-left:24px }</style><div class='indent'>Indented text</div>",
+            "<p style='margin:0 0 0 24px'>Indented text</p>",
+            "<table style='margin-left:24px'><tr><td>Indented text</td></tr></table>",
+        ] {
+            assert_eq!(
+                parse(&mail("text/html", source), false).markdown,
+                "> Indented text"
+            );
+        }
+        let source = "<style>.indent { margin-left:24px } .indent { margin-left:0 }</style><p class='indent'>Flush</p><p style='margin-left:24px;margin:0'>Also flush</p>";
+        assert_eq!(
+            parse(&mail("text/html", source), false).markdown,
+            "Flush\n\nAlso flush"
+        );
+        let source = "<style>.indent { margin-left:24px }</style><table class='indent'><tr><th>Item</th><th>Status</th></tr><tr><td>Alpha</td><td>Ready</td></tr></table>";
+        let body = parse(&mail("text/html", source), false);
+        assert!(
+            body.markdown
+                .contains("> | Item | Status |\n> | --- | --- |\n> | Alpha | Ready |")
+        );
     }
 
     #[test]
