@@ -100,6 +100,72 @@ pub fn key(label: &str, query: &str, page: &str) -> String {
     serde_json::to_string(&(label, query, page)).unwrap()
 }
 
+pub(crate) fn execute_action(
+    record: &crate::actions::QueuedAction,
+    google: &mut Google,
+    email: &str,
+    store: &Store,
+) -> Result<(Vec<String>, crate::actions::ActionResult)> {
+    use crate::actions::{Action, ActionResult};
+    let mut result = ActionResult::default();
+    let ids = match &record.action {
+        Action::Labels {
+            id,
+            thread,
+            add,
+            remove,
+        } => {
+            if thread.is_empty() {
+                google.modify(id, add, remove)?;
+                vec![id.clone()]
+            } else {
+                google.modify_thread(thread, add, remove, false)?
+            }
+        }
+        Action::Trash { id, thread } => {
+            if thread.is_empty() {
+                google.trash(id)?;
+                vec![id.clone()]
+            } else {
+                google.modify_thread(thread, &["TRASH".into()], &["INBOX".into()], true)?
+            }
+        }
+        Action::MarkAllRead { label, query } => {
+            let ids = if let Some(ids) = &record.target_ids {
+                ids.clone()
+            } else {
+                let ids = google.unread_ids(label, query)?;
+                store.prepare_action_targets(record.id, &ids)?
+            };
+            let remaining: Vec<_> = ids
+                .iter()
+                .filter(|id| !record.confirmed_ids.contains(id))
+                .cloned()
+                .collect();
+            google.mark_messages_read(&remaining, |ids| {
+                store.record_action_progress(record.id, ids)
+            })?;
+            ids
+        }
+        Action::EmptyFolder { label } => {
+            result.count = google.empty_folder(store, label)?;
+            vec![]
+        }
+        Action::SaveDraft { draft } => {
+            result.draft_id = google.save_draft(draft, email)?;
+            vec![]
+        }
+        Action::Send { draft } => {
+            google.send(draft, email)?;
+            vec![]
+        }
+    };
+    if !ids.is_empty() {
+        result.count = ids.len();
+    }
+    Ok((ids, result))
+}
+
 pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Receiver<Event>) {
     let (tx, rx) = mpsc::channel();
     let (events, out) = mpsc::channel();

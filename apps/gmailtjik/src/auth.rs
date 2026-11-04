@@ -12,6 +12,8 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+const MAIL_SCOPE: &str = "https://mail.google.com/";
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Credential {
     pub client_id: String,
@@ -82,12 +84,26 @@ impl Auth {
                 .context("Missing access token")?
                 .into();
             self.credential.expires_at = now() + token["expires_in"].as_u64().unwrap_or(3600);
+            if let Some(scope) = token["scope"].as_str() {
+                self.credential.scope = scope.into();
+            }
             write_private(&self.path, &serde_json::to_vec(&self.credential)?)?;
         }
         Ok(self.credential.access_token.clone())
     }
     pub fn contacts(&self) -> bool {
         self.credential.scope.contains("contacts.readonly")
+    }
+
+    pub fn can_delete_permanently(&mut self) -> Result<bool> {
+        // Reconnecting in another process may have granted the required scope.
+        let _lock = credential_lock(&self.path)?;
+        self.credential = serde_json::from_slice(&fs::read(&self.path)?)?;
+        Ok(self
+            .credential
+            .scope
+            .split_whitespace()
+            .any(|scope| scope == MAIL_SCOPE))
     }
 }
 
@@ -109,9 +125,9 @@ pub fn connect(dir: &Path, client_path: &Path, contacts: bool) -> Result<()> {
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let state = URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>());
     let scope = if contacts {
-        "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly"
+        "https://mail.google.com/ https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly"
     } else {
-        "https://www.googleapis.com/auth/gmail.modify"
+        MAIL_SCOPE
     };
     let mut url = url::Url::parse("https://accounts.google.com/o/oauth2/v2/auth")?;
     url.query_pairs_mut().extend_pairs([

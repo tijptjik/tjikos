@@ -44,7 +44,7 @@ apps/gmailtjik/dist/gmailtjik --connect /private/path/google-client.json --conta
 apps/gmailtjik/dist/gmailtjik
 ```
 
-Omit `--contacts` to connect only mail. The permissions are `gmail.modify` and,
+Omit `--contacts` to connect only mail. The permissions are `https://mail.google.com/` and,
 when requested, `contacts.readonly` plus `contacts.other.readonly`. The browser
 login uses a loopback callback, random state, PKCE, and refresh tokens. Public
 distribution requires Google's applicable restricted-scope verification.

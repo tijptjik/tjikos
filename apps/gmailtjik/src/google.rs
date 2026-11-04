@@ -118,27 +118,30 @@ impl Google {
         let token = self.auth.token()?;
         let mut page_token = String::new();
         let final_cursor = loop {
-            let response = self
-                .client
-                .get(format!("{}history", self.api))
-                .bearer_auth(&token)
-                .query(&[
+            let value = match read(
+                &self.client,
+                &token,
+                &format!("{}history", self.api),
+                &[
                     ("startHistoryId", cursor.as_str()),
                     ("pageToken", &page_token),
-                ])
-                .send()?;
-            if response.status() == reqwest::StatusCode::NOT_FOUND {
-                store.invalidate_all()?;
-                let profile = self.get("profile", &[])?;
-                break profile["historyId"]
-                    .as_str()
-                    .context("Missing history cursor")?
-                    .to_string();
-            }
-            if !response.status().is_success() {
-                bail!("Gmail sync failed ({})", response.status());
-            }
-            let value: Value = response.json()?;
+                ],
+            ) {
+                Ok(value) => value,
+                Err(error)
+                    if error
+                        .downcast_ref::<GoogleReadError>()
+                        .is_some_and(|error| error.status == reqwest::StatusCode::NOT_FOUND) =>
+                {
+                    store.invalidate_all()?;
+                    let profile = self.get("profile", &[])?;
+                    break profile["historyId"]
+                        .as_str()
+                        .context("Missing history cursor")?
+                        .to_string();
+                }
+                Err(error) => return Err(error),
+            };
             if let Some(records) = value["history"].as_array() {
                 for record in records {
                     if let Some(messages) = record["messages"].as_array() {
@@ -161,6 +164,7 @@ impl Google {
         store.put("history", &final_cursor)
     }
     pub fn page(&mut self, store: &Store, label: &str, query: &str, page: &str) -> Result<Page> {
+        let started = chrono::Utc::now().timestamp_millis().max(0) as u64;
         let query = if label == "INBOX" {
             exclude_snoozed(query)
         } else {
@@ -229,6 +233,8 @@ impl Google {
                     })
                     .collect::<Result<Vec<_>>>()
             })?;
+            let mut results = results;
+            store.observe_messages(&mut results, started)?;
             for message in results {
                 store.save_message(&message)?;
                 messages.push(message);
@@ -327,6 +333,113 @@ impl Google {
         })
     }
 
+    /// Load the first screen without fetching any message bodies or attachments.
+    /// Progress snapshots contain complete membership metadata for the threads
+    /// loaded so far, in Gmail's list order. Returning false cancels later batches.
+    /// These summaries never enter the full-message or full-thread caches.
+    pub fn thread_summaries(
+        &mut self,
+        label: &str,
+        query: &str,
+        page: &str,
+        mut on_progress: impl FnMut(&Page) -> bool,
+    ) -> Result<Option<Page>> {
+        let query = if label == "INBOX" {
+            exclude_snoozed(query)
+        } else {
+            query.to_owned()
+        };
+        let mut params = vec![("maxResults", "25"), ("q", query.as_str())];
+        if !label.is_empty() {
+            params.push(("labelIds", label));
+        }
+        if label == "TRASH" || label == "SPAM" {
+            params.push(("includeSpamTrash", "true"));
+        }
+        if !page.is_empty() {
+            params.push(("pageToken", page));
+        }
+        let value = self.get("threads", &params)?;
+        let ids: Vec<_> = value["threads"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|row| row["id"].as_str())
+            .collect();
+        let token = self.auth.token()?;
+        let mut page = Page {
+            messages: Vec::new(),
+            next: value["nextPageToken"].as_str().unwrap_or_default().into(),
+            threaded: true,
+        };
+        for chunk in ids.chunks(6) {
+            let threads = std::thread::scope(|scope| {
+                let jobs: Vec<_> = chunk
+                    .iter()
+                    .map(|id| {
+                        let client = &self.client;
+                        let token = &token;
+                        let api = &self.api;
+                        scope.spawn(move || -> Result<Vec<Message>> {
+                            let value = read(
+                                client,
+                                token,
+                                &format!("{api}threads/{}", segment(id)),
+                                &[
+                                    ("format", "metadata"),
+                                    (
+                                        "fields",
+                                        "messages(id,threadId,labelIds,snippet,internalDate,payload(headers))",
+                                    ),
+                                ],
+                            )?;
+                            let mut messages: Vec<Message> =
+                                serde_json::from_value(value["messages"].clone())?;
+                            for message in &mut messages {
+                                message.summary_only = true;
+                            }
+                            messages.sort_by_key(|m| m.internal_date.parse::<i64>().unwrap_or(0));
+                            Ok(messages)
+                        })
+                    })
+                    .collect();
+                jobs.into_iter()
+                    .map(|job| {
+                        job.join().unwrap_or_else(|_| {
+                            Err(anyhow::anyhow!("Gmail summary fetch worker stopped"))
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            });
+            let previous_len = page.messages.len();
+            let mut batch_error = None;
+            for thread in threads {
+                match thread {
+                    Ok(messages) => page.messages.extend(messages),
+                    Err(error) => {
+                        // Keep a throttling failure observable even if another
+                        // member of the batch fails for a different reason.
+                        if batch_error.as_ref().is_none_or(|previous| {
+                            rate_limit_until(&error) > rate_limit_until(previous)
+                        }) {
+                            batch_error = Some(error);
+                        }
+                    }
+                }
+            }
+            // Publish successes in Gmail order before reporting a failed peer.
+            // Incomplete pages are not returned as completed pagination results.
+            let keep_loading = page.messages.len() == previous_len || on_progress(&page);
+            if let Some(error) = batch_error {
+                return Err(error);
+            }
+            if !keep_loading {
+                return Ok(None);
+            }
+        }
+        Ok(Some(page))
+    }
+
     pub fn modify_thread(
         &mut self,
         id: &str,
@@ -344,11 +457,9 @@ impl Google {
             request = request.json(&json!({"addLabelIds":add,"removeLabelIds":remove}));
         }
         let response = request.send()?;
-        anyhow::ensure!(
-            response.status().is_success(),
-            "Gmail did not confirm the conversation change ({})",
-            response.status()
-        );
+        if !response.status().is_success() {
+            return Err(GoogleReadError::from_response(response).into());
+        }
         let value: Value = response.json()?;
         let messages = value["messages"]
             .as_array()
@@ -365,6 +476,7 @@ impl Google {
     }
 
     pub fn thread(&mut self, store: &Store, id: &str) -> Result<Vec<Message>> {
+        let started = chrono::Utc::now().timestamp_millis().max(0) as u64;
         let value = self.get(&format!("threads/{}", segment(id)), &[("format", "full")])?;
         let mut messages: Vec<Message> = serde_json::from_value(value["messages"].clone())?;
         let token = self.auth.token()?;
@@ -376,10 +488,14 @@ impl Google {
                 &message.id,
                 &mut message.payload,
             )?;
+        }
+        store.observe_messages(&mut messages, started)?;
+        for message in &messages {
             store.save_message(message)?;
         }
         messages.sort_by_key(|message| message.internal_date.parse::<i64>().unwrap_or(0));
         store.put(&format!("thread:{id}"), &messages)?;
+        store.mark_thread_fresh(id)?;
         Ok(messages)
     }
     pub fn modify(&mut self, id: &str, add: &[String], remove: &[String]) -> Result<()> {
@@ -391,11 +507,32 @@ impl Google {
             .json(&json!({"addLabelIds":add,"removeLabelIds":remove}))
             .send()?;
         if !response.status().is_success() {
-            bail!("Gmail did not confirm the change ({})", response.status());
+            return Err(GoogleReadError::from_response(response).into());
         }
         Ok(())
     }
     pub fn mark_all_read(&mut self, store: &Store, label: &str, query: &str) -> Result<usize> {
+        self.mark_all_read_ids(label, query, |ids| {
+            for id in ids {
+                store.apply_labels(id, &[], &["UNREAD".into()])?;
+            }
+            Ok(())
+        })
+        .map(|ids| ids.len())
+    }
+
+    pub fn mark_all_read_ids(
+        &mut self,
+        label: &str,
+        query: &str,
+        mut confirmed: impl FnMut(&[String]) -> Result<()>,
+    ) -> Result<Vec<String>> {
+        let ids = self.unread_ids(label, query)?;
+        self.mark_messages_read(&ids, &mut confirmed)?;
+        Ok(ids)
+    }
+
+    pub fn unread_ids(&mut self, label: &str, query: &str) -> Result<Vec<String>> {
         // Collect all IDs before mutating: changing unread results while paging can skip mail.
         let query = unread_query(query);
         let query = if label == "INBOX" {
@@ -436,12 +573,17 @@ impl Google {
                 bail!("Gmail repeated a results page; no mail was changed");
             }
         }
-        let ids: Vec<_> = ids.into_iter().collect();
+        Ok(ids.into_iter().collect())
+    }
+
+    pub fn mark_messages_read(
+        &mut self,
+        ids: &[String],
+        mut confirmed: impl FnMut(&[String]) -> Result<()>,
+    ) -> Result<()> {
         let mut completed = 0;
         for chunk in ids.chunks(1000) {
             let token = self.auth.token()?;
-            // A lost response may still have applied remotely, so discard stale views before sending.
-            store.invalidate_mail_views()?;
             let response = self
                 .client
                 .post(format!("{}messages/batchModify", self.api))
@@ -452,15 +594,98 @@ impl Google {
                     format!("Mark all read interrupted after {completed} confirmed messages")
                 })?;
             if !response.status().is_success() {
-                bail!(
-                    "Gmail did not confirm marking all read ({}); {completed} messages already updated",
-                    response.status()
+                return Err(
+                    anyhow::Error::from(GoogleReadError::from_response(response)).context(format!(
+                        "Mark all read interrupted; {completed} messages already updated"
+                    )),
                 );
             }
             completed += chunk.len();
+            confirmed(chunk)?;
         }
-        Ok(completed)
+        Ok(())
     }
+    pub fn empty_folder(&mut self, store: &Store, label: &str) -> Result<usize> {
+        let name = match label {
+            "SPAM" => "Spam",
+            "TRASH" => "Trash",
+            _ => bail!("Only Spam and Trash can be emptied"),
+        };
+        anyhow::ensure!(
+            self.auth.can_delete_permanently()?,
+            "Empty {name} needs permission to permanently delete mail. Reconnect Gmail in Settings → Sync and grant the requested access, then try again. No messages were deleted."
+        );
+        let mut completed = 0;
+        let mut write_started = false;
+        let result = (|| -> Result<usize> {
+            // Snapshot every message ID before deleting. Mutating between list
+            // pages can skip messages, and a thread may contain mail elsewhere.
+            let mut page = String::new();
+            let mut ids = std::collections::BTreeSet::new();
+            let mut seen_pages = HashSet::new();
+            loop {
+                let mut params = vec![
+                    ("maxResults", "500"),
+                    ("labelIds", label),
+                    ("includeSpamTrash", "true"),
+                ];
+                if !page.is_empty() {
+                    params.push(("pageToken", page.as_str()));
+                }
+                let value = self.get("messages", &params)?;
+                if let Some(messages) = value.get("messages") {
+                    for message in messages.as_array().context("Invalid Gmail message list")? {
+                        let id = message["id"]
+                            .as_str()
+                            .filter(|id| !id.is_empty())
+                            .context("Missing message ID")?;
+                        ids.insert(id.to_owned());
+                    }
+                }
+                page = match value.get("nextPageToken") {
+                    Some(value) => value.as_str().context("Invalid Gmail page token")?.into(),
+                    None => String::new(),
+                };
+                if page.is_empty() {
+                    break;
+                }
+                anyhow::ensure!(
+                    seen_pages.insert(page.clone()),
+                    "Gmail repeated a results page; no mail was changed"
+                );
+            }
+            let ids: Vec<_> = ids.into_iter().collect();
+            for chunk in ids.chunks(1000) {
+                let token = self.auth.token()?;
+                // Never retry permanent writes: a lost response may still mean
+                // Gmail applied the batch. Only confirmed IDs leave the cache.
+                write_started = true;
+                let response = self
+                    .client
+                    .post(format!("{}messages/batchDelete", self.api))
+                    .bearer_auth(token)
+                    .json(&json!({"ids": chunk}))
+                    .send()
+                    .context(
+                        "Deletion outcome is uncertain; refresh this folder before retrying",
+                    )?;
+                if !response.status().is_success() {
+                    return Err(GoogleReadError::from_response(response).into());
+                }
+                completed += chunk.len();
+                store.remove_messages(chunk)?;
+            }
+            Ok(completed)
+        })();
+        result.map_err(|error| {
+            let error = if write_started { error } else { error.context(BeforeWrite) };
+            let detail = format!(
+                "Empty {name} interrupted; {completed} messages confirmed permanently deleted. {error}"
+            );
+            error.context(detail)
+        })
+    }
+
     pub fn trash(&mut self, id: &str) -> Result<()> {
         let token = self.auth.token()?;
         let response = self
@@ -471,15 +696,12 @@ impl Google {
             .bearer_auth(token)
             .send()?;
         if !response.status().is_success() {
-            bail!(
-                "Gmail did not confirm moving the email to Trash ({})",
-                response.status()
-            );
+            return Err(GoogleReadError::from_response(response).into());
         }
         Ok(())
     }
     pub fn save_draft(&mut self, draft: &Draft, from: &str) -> Result<String> {
-        let token = self.auth.token()?;
+        let token = self.auth.token().context(BeforeWrite)?;
         let message = message_body(draft, from)?;
         let request = if draft.gmail_id.is_empty() {
             self.client.post(format!("{}drafts", self.api))
@@ -492,7 +714,7 @@ impl Google {
             .json(&json!({"message":message}))
             .send()?;
         if !response.status().is_success() {
-            bail!("Gmail did not save the draft ({})", response.status());
+            return Err(GoogleReadError::from_response(response).into());
         }
         Ok(response.json::<Value>()?["id"]
             .as_str()
@@ -500,7 +722,7 @@ impl Google {
             .into())
     }
     pub fn send(&mut self, draft: &Draft, from: &str) -> Result<()> {
-        let token = self.auth.token()?;
+        let token = self.auth.token().context(BeforeWrite)?;
         let message = message_body(draft, from)?;
         let (route, body) = if draft.gmail_id.is_empty() {
             ("messages/send", message)
@@ -519,9 +741,9 @@ impl Google {
             .send()
             .context("Send outcome is unknown. Check Gmail Sent before trying again")?;
         if !response.status().is_success() {
-            bail!(
-                "Gmail did not confirm sending ({}). Check Sent before retrying",
-                response.status()
+            return Err(
+                anyhow::Error::from(GoogleReadError::from_response(response))
+                    .context("Gmail did not confirm sending. Check Sent before retrying"),
             );
         }
         Ok(())
@@ -806,6 +1028,173 @@ fn message_body(draft: &Draft, from: &str) -> Result<Value> {
 pub fn segment(value: &str) -> String {
     url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GoogleFailure {
+    RateLimit,
+    Permissions,
+    DisabledApi,
+    Policy,
+    Quota,
+    Unknown,
+}
+
+#[derive(Debug)]
+struct GoogleReadError {
+    status: reqwest::StatusCode,
+    kind: GoogleFailure,
+    retry_after_until: u64,
+}
+
+impl GoogleReadError {
+    fn from_response(response: reqwest::blocking::Response) -> Self {
+        let status = response.status();
+        let retry_after_until = retry_after_until(
+            response
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|value| value.to_str().ok()),
+            crate::auth::now(),
+        );
+        let mut kind = GoogleFailure::Unknown;
+        if status == reqwest::StatusCode::FORBIDDEN {
+            // Inspect only bounded structured reasons. Google's free-form messages
+            // can contain account or project details and must never reach the UI/log.
+            let value: Value = serde_json::from_reader(std::io::Read::take(response, 65_536))
+                .unwrap_or(Value::Null);
+            let error = &value["error"];
+            let reasons = error["errors"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .chain(error["details"].as_array().into_iter().flatten())
+                .filter_map(|entry| entry["reason"].as_str());
+            for reason in reasons {
+                let recognized = match reason {
+                    "rateLimitExceeded" | "userRateLimitExceeded" | "RATE_LIMIT_EXCEEDED" => {
+                        GoogleFailure::RateLimit
+                    }
+                    "insufficientPermissions" | "ACCESS_TOKEN_SCOPE_INSUFFICIENT" => {
+                        GoogleFailure::Permissions
+                    }
+                    "accessNotConfigured" | "SERVICE_DISABLED" | "API_DISABLED" => {
+                        GoogleFailure::DisabledApi
+                    }
+                    "domainPolicy" | "ORG_RESTRICTION_VIOLATION" => GoogleFailure::Policy,
+                    "dailyLimitExceeded" | "quotaExceeded" | "QUOTA_EXCEEDED" => {
+                        GoogleFailure::Quota
+                    }
+                    _ => GoogleFailure::Unknown,
+                };
+                if recognized != GoogleFailure::Unknown {
+                    kind = recognized;
+                    // A permanent denial takes precedence over any rate-limit detail.
+                    if kind != GoogleFailure::RateLimit {
+                        break;
+                    }
+                }
+            }
+        }
+        Self {
+            status,
+            kind,
+            retry_after_until,
+        }
+    }
+
+    fn retryable(&self) -> bool {
+        self.status.is_server_error()
+    }
+}
+
+fn retry_after_until(value: Option<&str>, now: u64) -> u64 {
+    value
+        .and_then(|value| {
+            let value = value.trim();
+            value
+                .parse::<u64>()
+                .ok()
+                .map(|seconds| now.saturating_add(seconds))
+                .or_else(|| {
+                    chrono::DateTime::parse_from_rfc2822(value)
+                        .ok()
+                        .and_then(|date| u64::try_from(date.timestamp()).ok())
+                        .map(|timestamp| timestamp.max(now))
+                })
+        })
+        .unwrap_or_else(|| now.saturating_add(60))
+}
+
+/// Account workers persist this deadline to share Google's cooldown across
+/// folder reads, background sync and separate GUI/service processes.
+pub fn rate_limit_until(error: &anyhow::Error) -> Option<u64> {
+    let error = error.downcast_ref::<GoogleReadError>()?;
+    (error.status == reqwest::StatusCode::TOO_MANY_REQUESTS
+        || error.kind == GoogleFailure::RateLimit)
+        .then_some(error.retry_after_until)
+}
+
+/// Only delivery of idempotent mailbox actions may use this retry policy.
+/// Sending, creating drafts and permanent deletion never use automatic replay.
+pub fn transient_failure(error: &anyhow::Error) -> bool {
+    if let Some(error) = error.downcast_ref::<GoogleReadError>() {
+        return error.retryable()
+            || error.status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            || error.kind == GoogleFailure::RateLimit;
+    }
+    error
+        .downcast_ref::<reqwest::Error>()
+        .is_some_and(|error| error.is_timeout() || error.is_connect() || error.is_request())
+}
+
+#[derive(Debug)]
+struct BeforeWrite;
+impl std::fmt::Display for BeforeWrite {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("No mailbox write was started")
+    }
+}
+
+pub fn before_write(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<BeforeWrite>().is_some()
+}
+
+impl std::fmt::Display for GoogleReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let detail = if self.status == reqwest::StatusCode::UNAUTHORIZED {
+            "Google authorization is no longer valid. Reconnect Gmail."
+        } else if self.status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            || self.kind == GoogleFailure::RateLimit
+        {
+            "Google is temporarily limiting requests. Wait a moment and try again."
+        } else if self.status.is_server_error() {
+            "Google is temporarily unavailable. Try again shortly."
+        } else {
+            match self.kind {
+                GoogleFailure::Permissions => {
+                    "Required Google permissions are missing. Reconnect Gmail and grant the requested access."
+                }
+                GoogleFailure::DisabledApi => {
+                    "The requested Google API is disabled. Enable it in the OAuth client's Google Cloud project."
+                }
+                GoogleFailure::Policy => {
+                    "Your Google Workspace policy blocks this request. Contact your administrator."
+                }
+                GoogleFailure::Quota => {
+                    "The Google API quota is exhausted. Check the project's quota or wait for it to reset."
+                }
+                _ if self.status == reqwest::StatusCode::FORBIDDEN => {
+                    "Google denied access. Check account permissions and Google API settings."
+                }
+                _ => "Check account permissions and connectivity.",
+            }
+        };
+        write!(f, "Google request failed ({}). {detail}", self.status)
+    }
+}
+
+impl std::error::Error for GoogleReadError {}
+
 fn read(client: &Client, token: &str, url: &str, params: &[(&str, &str)]) -> Result<Value> {
     for attempt in 0..4 {
         let response = client.get(url).bearer_auth(token).query(params).send()?;
@@ -813,11 +1202,12 @@ fn read(client: &Client, token: &str, url: &str, params: &[(&str, &str)]) -> Res
         if status.is_success() {
             return Ok(response.json()?);
         }
-        if (status.as_u16() == 429 || status.is_server_error()) && attempt < 3 {
-            std::thread::sleep(Duration::from_millis(250 * 2_u64.pow(attempt)));
+        let error = GoogleReadError::from_response(response);
+        if error.retryable() && attempt < 3 {
+            std::thread::sleep(Duration::from_secs(2_u64.pow(attempt)));
             continue;
         }
-        bail!("Google request failed ({status}). Check account permissions and connectivity");
+        return Err(error.into());
     }
     unreachable!()
 }
@@ -900,11 +1290,22 @@ mod tests {
     fn server(
         responses: Vec<(u16, Value)>,
     ) -> (String, mpsc::Receiver<String>, std::thread::JoinHandle<()>) {
+        server_with_headers(
+            responses
+                .into_iter()
+                .map(|(status, body)| (status, body, String::new()))
+                .collect(),
+        )
+    }
+
+    fn server_with_headers(
+        responses: Vec<(u16, Value, String)>,
+    ) -> (String, mpsc::Receiver<String>, std::thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let url = format!("http://{}/", listener.local_addr().unwrap());
         let (tx, rx) = mpsc::channel();
         let thread = std::thread::spawn(move || {
-            for (status, body) in responses {
+            for (status, body, extra_headers) in responses {
                 let (mut stream, _) = listener.accept().unwrap();
                 stream
                     .set_read_timeout(Some(Duration::from_secs(5)))
@@ -929,19 +1330,256 @@ mod tests {
                 bytes.extend(body_bytes);
                 tx.send(String::from_utf8(bytes).unwrap()).unwrap();
                 let body = body.to_string();
-                write!(stream,"HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+                write!(stream,"HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{extra_headers}Connection: close\r\n\r\n{body}",body.len()).unwrap();
             }
         });
         (url, rx, thread)
     }
     fn client(dir: &Path, api: String) -> Google {
-        crate::store::write_private(&dir.join("account.json"),&serde_json::to_vec(&json!({"client_id":"synthetic","client_secret":"synthetic","refresh_token":"synthetic","access_token":"synthetic","expires_at":u64::MAX,"scope":"https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly"})).unwrap()).unwrap();
+        scoped_client(
+            dir,
+            api,
+            "https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly",
+        )
+    }
+    fn scoped_client(dir: &Path, api: String, scope: &str) -> Google {
+        crate::store::write_private(&dir.join("account.json"),&serde_json::to_vec(&json!({"client_id":"synthetic","client_secret":"synthetic","refresh_token":"synthetic","access_token":"synthetic","expires_at":u64::MAX,"scope":scope})).unwrap()).unwrap();
         Google {
             auth: Auth::open(dir).unwrap(),
             client: http().unwrap(),
             people_api: api.clone(),
             api,
         }
+    }
+
+    fn summary_server(
+        thread_count: usize,
+        fetched_threads: usize,
+    ) -> (String, mpsc::Receiver<String>, std::thread::JoinHandle<()>) {
+        summary_failure_server(thread_count, fetched_threads, Default::default())
+    }
+
+    fn summary_failure_server(
+        thread_count: usize,
+        fetched_threads: usize,
+        failures: std::collections::HashMap<String, (u16, Value, String)>,
+    ) -> (String, mpsc::Receiver<String>, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let (tx, rx) = mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            for _ in 0..=fetched_threads {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut bytes = Vec::new();
+                let mut byte = [0; 1];
+                while !bytes.ends_with(b"\r\n\r\n") {
+                    stream.read_exact(&mut byte).unwrap();
+                    bytes.push(byte[0]);
+                }
+                let request = String::from_utf8(bytes).unwrap();
+                let target = request.split_whitespace().nth(1).unwrap();
+                let route = url::Url::parse(&format!("http://fixture{target}")).unwrap();
+                let body = if route.path() == "/threads" {
+                    json!({
+                        "threads": (0..thread_count).map(|i| json!({"id":format!("t{i}")})).collect::<Vec<_>>(),
+                        "nextPageToken":"next-25",
+                    })
+                } else {
+                    let id = route
+                        .path()
+                        .strip_prefix("/threads/")
+                        .expect("metadata must not fetch attachments");
+                    assert!(!id.contains('/'));
+                    let mut received = crate::model::demo().1.messages.remove(0);
+                    received.id = format!("{id}-received");
+                    received.thread_id = id.to_string();
+                    received.internal_date = "100".into();
+                    received.label_ids = vec!["INBOX".into(), "UNREAD".into()];
+                    // A body reference, even if returned by an over-broad server,
+                    // must not make the list fetch its attachment.
+                    received.payload.body.data.clear();
+                    received.payload.body.attachment_id = "must-not-fetch".into();
+                    let mut sent = received.clone();
+                    sent.id = format!("{id}-sent");
+                    sent.internal_date = "200".into();
+                    sent.label_ids = vec!["SENT".into()];
+                    sent.payload.headers = vec![
+                        crate::model::Header {
+                            name: "From".into(),
+                            value: "You <you@example.test>".into(),
+                        },
+                        crate::model::Header {
+                            name: "Subject".into(),
+                            value: "Reply to the sample".into(),
+                        },
+                    ];
+                    // Deliberately reverse chronology within each conversation.
+                    json!({"messages":[sent,received]})
+                };
+                let (status, body, extra_headers) = failures
+                    .get(route.path())
+                    .cloned()
+                    .unwrap_or((200, body, String::new()));
+                let body = body.to_string();
+                tx.send(request).unwrap();
+                write!(stream,"HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{extra_headers}Connection: close\r\n\r\n{body}",body.len()).unwrap();
+            }
+        });
+        (url, rx, thread)
+    }
+
+    #[test]
+    fn summaries_render_25_threads_progressively_without_fetching_bodies() {
+        let (api, requests, server) = summary_server(25, 25);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let mut counts = Vec::new();
+        let mut observed = Vec::new();
+        let page = google
+            .thread_summaries("INBOX", "", "", |page| {
+                observed.extend(requests.try_iter());
+                let count = page.conversations().len();
+                counts.push(count);
+                // No later batch has been requested before these rows are exposed.
+                assert_eq!(observed.len(), count + 1);
+                assert_eq!(page.messages.len(), count * 2);
+                true
+            })
+            .unwrap()
+            .unwrap();
+        server.join().unwrap();
+        assert_eq!(counts, [6, 12, 18, 24, 25]);
+        assert_eq!(page.next, "next-25");
+        assert!(page.threaded);
+        assert!(page.messages.iter().all(|message| message.summary_only));
+        for (index, row) in page.conversations().iter().enumerate() {
+            assert_eq!(row.message().thread_id, format!("t{index}"));
+            assert_eq!(row.messages.len(), 2);
+            assert!(row.unread());
+            assert_eq!(row.latest().id, format!("t{index}-sent"));
+            assert_eq!(row.participants("you@example.test"), "Mira Chen, me");
+        }
+        let first = &observed[0];
+        assert!(first.starts_with("GET /threads?"));
+        assert!(first.contains("maxResults=25"));
+        assert!(first.contains("labelIds=INBOX"));
+        assert!(first.contains("q=-in%3Asnoozed"));
+        for request in &observed[1..] {
+            assert!(request.contains("format=metadata"));
+            let target = request.split_whitespace().nth(1).unwrap();
+            let url = url::Url::parse(&format!("http://fixture{target}")).unwrap();
+            let fields = url
+                .query_pairs()
+                .find(|(key, _)| key == "fields")
+                .unwrap()
+                .1;
+            assert_eq!(
+                fields,
+                "messages(id,threadId,labelIds,snippet,internalDate,payload(headers))"
+            );
+        }
+    }
+
+    #[test]
+    fn obsolete_summary_load_stops_before_the_next_batch() {
+        let (api, requests, server) = summary_server(25, 6);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let page = google
+            .thread_summaries("TRASH", "from:sample", "older", |page| {
+                assert_eq!(page.conversations().len(), 6);
+                false
+            })
+            .unwrap();
+        assert!(page.is_none());
+        server.join().unwrap();
+        let requests: Vec<_> = requests.try_iter().collect();
+        assert_eq!(requests.len(), 7);
+        assert!(requests[0].contains("maxResults=25"));
+        assert!(requests[0].contains("labelIds=TRASH"));
+        assert!(requests[0].contains("includeSpamTrash=true"));
+        assert!(requests[0].contains("q=from%3Asample"));
+        assert!(requests[0].contains("pageToken=older"));
+    }
+
+    #[test]
+    fn summary_batch_keeps_successes_and_reports_throttling_without_retry_fanout() {
+        let failures = [
+            (
+                "/threads/t1".into(),
+                (
+                    403,
+                    json!({"error":{"errors":[{"reason":"rateLimitExceeded"}]}}),
+                    String::new(),
+                ),
+            ),
+            (
+                "/threads/t3".into(),
+                (
+                    403,
+                    json!({"error":{"errors":[{"reason":"insufficientPermissions"}]}}),
+                    String::new(),
+                ),
+            ),
+            (
+                "/threads/t5".into(),
+                (429, json!({}), "Retry-After: 180\r\n".into()),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        let (api, requests, server) = summary_failure_server(25, 6, failures);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let before = crate::auth::now();
+        let mut progress = Vec::new();
+        let error = google
+            .thread_summaries("INBOX", "", "", |page| {
+                progress.push(page.clone());
+                // Cancellation does not swallow the shared throttling deadline.
+                false
+            })
+            .unwrap_err();
+        server.join().unwrap();
+        assert_eq!(requests.try_iter().count(), 7);
+        assert_eq!(progress.len(), 1);
+        let ids: Vec<_> = progress[0]
+            .conversations()
+            .iter()
+            .map(|row| row.message().thread_id.clone())
+            .collect();
+        assert_eq!(ids, ["t0", "t2", "t4"]);
+        assert!(
+            progress[0]
+                .messages
+                .iter()
+                .all(|message| message.summary_only)
+        );
+        let deadline =
+            rate_limit_until(&error).expect("a permanent peer error must not hide throttling");
+        assert!((before + 180..=crate::auth::now() + 180).contains(&deadline));
+    }
+
+    #[test]
+    fn empty_summary_page_preserves_cursor_without_fetching_threads() {
+        let (api, requests, server) = summary_server(0, 0);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let page = google
+            .thread_summaries("SPAM", "", "", |_| {
+                panic!("An empty page has no progress batch")
+            })
+            .unwrap()
+            .unwrap();
+        assert!(page.messages.is_empty() && page.threaded);
+        assert_eq!(page.next, "next-25");
+        server.join().unwrap();
+        let requests: Vec<_> = requests.try_iter().collect();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].contains("includeSpamTrash=true"));
     }
 
     #[test]
@@ -1154,6 +1792,310 @@ mod tests {
     }
 
     #[test]
+    fn queued_mark_all_read_retries_only_the_frozen_unconfirmed_ids() {
+        use crate::actions::Action;
+        let ids: Vec<_> = (0..1001)
+            .map(|n| json!({"id":format!("frozen-{n:04}")}))
+            .collect();
+        let (api, requests, server) = server(vec![
+            (200, json!({"messages":ids})),
+            (200, json!({})),
+            (503, json!({})),
+            (200, json!({})),
+        ]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let store = Store::open(None).unwrap();
+        let id = store
+            .enqueue_action(
+                Action::MarkAllRead {
+                    label: "INBOX".into(),
+                    query: String::new(),
+                },
+                &[],
+            )
+            .unwrap();
+        let first = store.claim_action(1).unwrap().unwrap();
+        assert!(
+            crate::worker::execute_action(&first, &mut google, "you@example.test", &store).is_err()
+        );
+        let partial = store.action(id).unwrap().unwrap();
+        assert_eq!(partial.target_ids.as_ref().unwrap().len(), 1001);
+        assert_eq!(partial.confirmed_ids.len(), 1000);
+        store
+            .defer_action(id, 2, "Synthetic interrupted batch")
+            .unwrap();
+        let second = store.claim_action(2).unwrap().unwrap();
+        let (confirmed, result) =
+            crate::worker::execute_action(&second, &mut google, "you@example.test", &store)
+                .unwrap();
+        assert_eq!(confirmed.len(), 1001);
+        assert_eq!(result.count, 1001);
+        server.join().unwrap();
+        assert!(requests.recv().unwrap().starts_with("GET /messages?"));
+        let writes: Vec<_> = requests.try_iter().collect();
+        assert_eq!(writes.len(), 3);
+        for (request, size) in writes.iter().zip([1000, 1, 1]) {
+            assert!(request.starts_with("POST /messages/batchModify "));
+            let body: Value =
+                serde_json::from_str(request.split_once("\r\n\r\n").unwrap().1).unwrap();
+            assert_eq!(body["ids"].as_array().unwrap().len(), size);
+        }
+    }
+
+    #[test]
+    fn empty_folder_requires_exact_permission_and_a_disposable_folder() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let store = Store::open(None).unwrap();
+        for scope in [
+            "",
+            "https://www.googleapis.com/auth/gmail.modify",
+            "https://mail.google.com/other",
+        ] {
+            let mut google = scoped_client(dir.path(), "http://127.0.0.1:9/".into(), scope);
+            let error = google.empty_folder(&store, "SPAM").unwrap_err();
+            assert!(error.to_string().contains("Reconnect Gmail"));
+            assert!(error.to_string().contains("No messages were deleted"));
+        }
+        let mut google = scoped_client(
+            dir.path(),
+            "http://127.0.0.1:9/".into(),
+            "https://mail.google.com/",
+        );
+        for label in ["", "INBOX", "Label_Spam", "spam"] {
+            assert_eq!(
+                google.empty_folder(&store, label).unwrap_err().to_string(),
+                "Only Spam and Trash can be emptied"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_folder_listing_failure_is_safe_to_defer_before_any_write() {
+        let (api, requests, thread) = server(vec![(429, json!({}))]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let error = scoped_client(dir.path(), api, "https://mail.google.com/")
+            .empty_folder(&Store::open(None).unwrap(), "TRASH")
+            .unwrap_err();
+        assert!(before_write(&error));
+        assert!(transient_failure(&error));
+        assert!(rate_limit_until(&error).is_some());
+        assert!(requests.recv().unwrap().starts_with("GET /messages?"));
+        thread.join().unwrap();
+        assert!(requests.try_recv().is_err());
+    }
+
+    #[test]
+    fn empty_folder_collects_all_pages_then_deletes_bounded_deduplicated_messages() {
+        let entries = |range: std::ops::Range<usize>| {
+            range
+                .map(|i| json!({"id":format!("id-{i:04}")}))
+                .collect::<Vec<_>>()
+        };
+        let (api, requests, thread) = server(vec![
+            (
+                200,
+                json!({"messages":entries(0..500), "nextPageToken":"second"}),
+            ),
+            (
+                200,
+                json!({"messages":entries(499..999), "nextPageToken":"third"}),
+            ),
+            (200, json!({"messages":entries(999..1001)})),
+            (204, json!({})),
+            (204, json!({})),
+        ]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = scoped_client(dir.path(), api, "https://mail.google.com/");
+        let store = Store::open(None).unwrap();
+        let mut deleted = crate::model::demo().1.messages[0].clone();
+        deleted.id = "id-0000".into();
+        store.save_message(&deleted).unwrap();
+        let mut retained = deleted.clone();
+        retained.id = "outside-folder".into();
+        store.save_message(&retained).unwrap();
+        assert_eq!(google.empty_folder(&store, "TRASH").unwrap(), 1001);
+        thread.join().unwrap();
+        let requests: Vec<_> = requests.try_iter().collect();
+        assert_eq!(requests.len(), 5);
+        for (index, request) in requests[..3].iter().enumerate() {
+            let target = request.split_whitespace().nth(1).unwrap();
+            let url = url::Url::parse(&format!("http://test{target}")).unwrap();
+            let params: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+            assert!(request.starts_with("GET /messages?"));
+            assert_eq!(params["labelIds"], "TRASH");
+            assert_eq!(params["includeSpamTrash"], "true");
+            assert_eq!(params["maxResults"], "500");
+            assert!(!params.contains_key("q"));
+            assert_eq!(
+                params.get("pageToken").map(String::as_str),
+                [None, Some("second"), Some("third")][index]
+            );
+        }
+        let mut deleted_ids = HashSet::new();
+        for (request, count) in requests[3..].iter().zip([1000, 1]) {
+            assert!(request.starts_with("POST /messages/batchDelete "));
+            let body: Value =
+                serde_json::from_str(request.split_once("\r\n\r\n").unwrap().1).unwrap();
+            assert_eq!(body["ids"].as_array().unwrap().len(), count);
+            for id in body["ids"].as_array().unwrap() {
+                assert!(deleted_ids.insert(id.as_str().unwrap().to_owned()));
+            }
+        }
+        assert_eq!(deleted_ids.len(), 1001);
+        assert!(store.message("id-0000").unwrap().is_none());
+        assert!(store.message("outside-folder").unwrap().is_some());
+    }
+
+    #[test]
+    fn empty_folder_keeps_confirmed_progress_and_typed_cooldown_on_partial_failure() {
+        let entries = |range: std::ops::Range<usize>| {
+            range
+                .map(|i| json!({"id":format!("id-{i:04}")}))
+                .collect::<Vec<_>>()
+        };
+        let (api, requests, thread) = server_with_headers(vec![
+            (
+                200,
+                json!({"messages":entries(0..500), "nextPageToken":"second"}),
+                String::new(),
+            ),
+            (
+                200,
+                json!({"messages":entries(500..1000), "nextPageToken":"third"}),
+                String::new(),
+            ),
+            (200, json!({"messages":entries(1000..1001)}), String::new()),
+            (204, json!({}), String::new()),
+            (
+                429,
+                json!({"error": {"errors":[{"reason":"rateLimitExceeded"}]}}),
+                "Retry-After: 120\r\n".into(),
+            ),
+        ]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = scoped_client(dir.path(), api, "https://mail.google.com/");
+        let store = Store::open(None).unwrap();
+        for id in ["id-0000", "id-1000"] {
+            let mut message = crate::model::demo().1.messages[0].clone();
+            message.id = id.into();
+            store.save_message(&message).unwrap();
+        }
+        let before = crate::auth::now();
+        let error = google.empty_folder(&store, "SPAM").unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("1000 messages confirmed permanently deleted")
+        );
+        assert!(error.to_string().contains("limiting requests"));
+        assert!(rate_limit_until(&error).unwrap() >= before + 120);
+        assert!(store.message("id-0000").unwrap().is_none());
+        assert!(store.message("id-1000").unwrap().is_some());
+        thread.join().unwrap();
+        assert_eq!(requests.try_iter().count(), 5);
+    }
+
+    #[test]
+    fn empty_folder_does_not_write_when_listing_is_empty_or_invalid() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let store = Store::open(None).unwrap();
+        let (api, requests, thread) = server(vec![(200, json!({}))]);
+        // Upgrade persisted permissions without replacing the open Google instance.
+        let mut google = client(dir.path(), api.clone());
+        let _upgraded = scoped_client(dir.path(), api, "https://mail.google.com/");
+        assert_eq!(google.empty_folder(&store, "SPAM").unwrap(), 0);
+        thread.join().unwrap();
+        assert_eq!(requests.try_iter().count(), 1);
+        for replies in [
+            vec![
+                (
+                    200,
+                    json!({"messages":[{"id":"one"}], "nextPageToken":"repeated"})
+                );
+                2
+            ],
+            vec![(200, json!({"messages":[{}]}))],
+            vec![(
+                403,
+                json!({"error":{"errors":[{"reason":"insufficientPermissions"}]}}),
+            )],
+        ] {
+            let expected = replies.len();
+            let (api, requests, thread) = server(replies);
+            let error = scoped_client(dir.path(), api, "https://mail.google.com/")
+                .empty_folder(&store, "TRASH")
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("0 messages confirmed permanently deleted")
+            );
+            thread.join().unwrap();
+            let requests: Vec<_> = requests.try_iter().collect();
+            assert_eq!(requests.len(), expected);
+            assert!(requests.iter().all(|request| request.starts_with("GET ")));
+        }
+    }
+
+    #[test]
+    fn empty_folder_does_not_retry_server_failure_or_remove_unconfirmed_cache() {
+        let (api, requests, thread) = server(vec![
+            (200, json!({"messages":[{"id":"unconfirmed"}]})),
+            (503, json!({})),
+        ]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let store = Store::open(None).unwrap();
+        let mut message = crate::model::demo().1.messages[0].clone();
+        message.id = "unconfirmed".into();
+        store.save_message(&message).unwrap();
+        let error = scoped_client(dir.path(), api, "https://mail.google.com/")
+            .empty_folder(&store, "SPAM")
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("0 messages confirmed permanently deleted")
+        );
+        assert_eq!(
+            error.downcast_ref::<GoogleReadError>().unwrap().status,
+            reqwest::StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert!(store.message("unconfirmed").unwrap().is_some());
+        thread.join().unwrap();
+        assert_eq!(requests.try_iter().count(), 2);
+    }
+
+    #[test]
+    fn empty_folder_transport_failure_reports_uncertain_outcome() {
+        // The mock closes its listener after listing; the mutation cannot
+        // receive a confirmation. The UI must not claim that nothing changed.
+        let (api, requests, thread) =
+            server(vec![(200, json!({"messages":[{"id":"unconfirmed"}]}))]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let store = Store::open(None).unwrap();
+        let mut message = crate::model::demo().1.messages[0].clone();
+        message.id = "unconfirmed".into();
+        store.save_message(&message).unwrap();
+        let error = scoped_client(dir.path(), api, "https://mail.google.com/")
+            .empty_folder(&store, "TRASH")
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("0 messages confirmed permanently deleted")
+        );
+        assert!(
+            error
+                .to_string()
+                .contains("Deletion outcome is uncertain; refresh this folder before retrying")
+        );
+        assert!(store.message("unconfirmed").unwrap().is_some());
+        thread.join().unwrap();
+        assert_eq!(requests.try_iter().count(), 1);
+    }
+
+    #[test]
     fn trash_uses_recoverable_endpoint_and_reports_failure() {
         let (api, requests, thread) = server(vec![(200, json!({})), (403, json!({}))]);
         let dir = tempfile::tempdir_in("/tmp").unwrap();
@@ -1310,6 +2252,144 @@ mod tests {
         assert!(!requests[0].contains("labelIds"));
         assert!(requests[2].contains("pageToken=older"));
     }
+    #[test]
+    fn history_retries_server_failures_before_advancing_cursor() {
+        let (api, requests, thread) = server(vec![
+            (503, json!({})),
+            (
+                200,
+                json!({"history":[{"messages":[{"id":"demo-0"}]}],"historyId":"new"}),
+            ),
+        ]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let store = Store::open(None).unwrap();
+        store.put("history", &"old").unwrap();
+        store
+            .save_message(&crate::model::demo().1.messages[0])
+            .unwrap();
+        google.changes(&store).unwrap();
+        thread.join().unwrap();
+        let requests: Vec<_> = requests.try_iter().collect();
+        assert_eq!(requests.len(), 2);
+        assert!(requests.iter().all(|r| r.starts_with("GET /history?")));
+        assert!(requests.iter().all(|r| r.contains("startHistoryId=old")));
+        assert!(store.message("demo-0").unwrap().is_none());
+        assert_eq!(store.get::<String>("history").unwrap().unwrap(), "new");
+    }
+
+    #[test]
+    fn history_permission_denial_preserves_cache_without_retrying() {
+        let (api, requests, thread) = server(vec![(
+            403,
+            json!({"error":{"errors":[{"reason":"insufficientPermissions"}]}}),
+        )]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let store = Store::open(None).unwrap();
+        store.put("history", &"old").unwrap();
+        store
+            .save_message(&crate::model::demo().1.messages[0])
+            .unwrap();
+        let error = google.changes(&store).unwrap_err().to_string();
+        thread.join().unwrap();
+        assert_eq!(requests.try_iter().count(), 1);
+        assert!(error.contains("Required Google permissions are missing"));
+        assert!(error.contains("Reconnect Gmail"));
+        assert!(store.message("demo-0").unwrap().is_some());
+        assert_eq!(store.get::<String>("history").unwrap().unwrap(), "old");
+    }
+
+    #[test]
+    fn forbidden_errors_use_safe_actionable_messages_without_retries() {
+        for (reason, message) in [
+            (
+                "ACCESS_TOKEN_SCOPE_INSUFFICIENT",
+                "Required Google permissions",
+            ),
+            ("SERVICE_DISABLED", "Google API is disabled"),
+            ("domainPolicy", "Google Workspace policy"),
+            ("dailyLimitExceeded", "Google API quota is exhausted"),
+            ("private-unknown-reason", "Google denied access"),
+        ] {
+            let (api, requests, thread) = server(vec![(
+                403,
+                json!({"error":{
+                    "message":"private-account@example.test secret-project",
+                    "details":[{"reason":reason,"metadata":{"token":"private-token"}}]
+                }}),
+            )]);
+            let error = read(&http().unwrap(), "synthetic", &api, &[])
+                .unwrap_err()
+                .to_string();
+            thread.join().unwrap();
+            assert_eq!(requests.try_iter().count(), 1);
+            assert!(error.contains("403 Forbidden"));
+            assert!(error.contains(message), "{error}");
+            assert!(!error.contains("private-"));
+            assert!(!error.contains("secret-project"));
+            if reason != "ACCESS_TOKEN_SCOPE_INSUFFICIENT" {
+                assert!(!error.contains("Reconnect"));
+            }
+        }
+    }
+
+    #[test]
+    fn history_rate_limit_stops_immediately_and_preserves_cursor() {
+        let (api, requests, thread) = server(vec![(
+            403,
+            json!({"error":{"errors":[{"reason":"rateLimitExceeded"}]}}),
+        )]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let store = Store::open(None).unwrap();
+        store.put("history", &"old").unwrap();
+        let before = crate::auth::now();
+        let error = google.changes(&store).unwrap_err();
+        thread.join().unwrap();
+        assert_eq!(requests.try_iter().count(), 1);
+        assert!(error.to_string().contains("temporarily limiting requests"));
+        assert!(!error.to_string().contains("Reconnect"));
+        assert!(
+            (before + 60..=crate::auth::now() + 60).contains(&rate_limit_until(&error).unwrap())
+        );
+        assert_eq!(store.get::<String>("history").unwrap().unwrap(), "old");
+    }
+
+    #[test]
+    fn throttling_honors_retry_after_seconds_and_http_dates() {
+        let date_deadline = crate::auth::now() + 3600;
+        let date = chrono::DateTime::from_timestamp(date_deadline as i64, 0)
+            .unwrap()
+            .format("%a, %d %b %Y %H:%M:%S GMT")
+            .to_string();
+        for (status, header) in [(403, "120".to_string()), (429, date)] {
+            let (api, requests, thread) = server_with_headers(vec![(
+                status,
+                json!({"error":{"errors":[{"reason":"userRateLimitExceeded"}]}}),
+                format!("Retry-After: {header}\r\n"),
+            )]);
+            let before = crate::auth::now();
+            let error = read(&http().unwrap(), "synthetic", &api, &[]).unwrap_err();
+            thread.join().unwrap();
+            assert_eq!(requests.try_iter().count(), 1);
+            let deadline = rate_limit_until(&error.context("Synthetic request context")).unwrap();
+            if status == 403 {
+                assert!((before + 120..=crate::auth::now() + 120).contains(&deadline));
+            } else {
+                assert_eq!(deadline, date_deadline);
+            }
+        }
+        assert_eq!(retry_after_until(None, 100), 160);
+        assert_eq!(retry_after_until(Some("bad-date"), 100), 160);
+        assert_eq!(retry_after_until(Some("0"), 100), 100);
+        assert_eq!(
+            retry_after_until(Some("Wed, 21 Oct 2015 07:28:00 GMT"), 2_000_000_000),
+            2_000_000_000
+        );
+        assert!(rate_limit_until(&anyhow::anyhow!("unrelated error")).is_none());
+    }
+
     #[test]
     fn expired_history_invalidates_cache_before_rebasing_cursor() {
         let (api, _requests, thread) =
