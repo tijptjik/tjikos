@@ -461,11 +461,7 @@ Rectangle {
             implicitHeight: Math.max(26, ...Array.from({length: pages.count}, (_, i) => pages.itemAt(i) ? pages.itemAt(i).implicitHeight : 0))
             height: implicitHeight
             property int page: 0
-            // Freedesktop's default action is primary; local actions use the first.
-            readonly property int primaryIndex: {
-                const index = card.availableActions.findIndex(action => action.identifier === "default");
-                return card.availableActions[index < 0 ? 0 : index]?.actionIndex ?? -1;
-            }
+            readonly property int primaryIndex: Logic.primaryActionIndex(card.notice, card.controller.config)
             readonly property int gap: 12
             readonly property int navigationWidth: 32
             FontMetrics {

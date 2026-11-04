@@ -393,13 +393,19 @@ notjikctl send 'Build started' --app builder --group project-a
 
 The managed Hyprland bindings pair **Super+M** with Waybar's reveal/pin toggle and
 show/hide this drawer. **Super+,** selects an older notice; **Super+.** selects a
-newer one. Without active notices these open history. Navigation wraps around.
+newer one. **Super+/** dismisses the selected notice, **Super+'** invokes its
+primary (rightmost) action, and **Super+;** invokes its first secondary (leftmost)
+action. Without a popup selection these target the newest visible popup; in history
+they target the selected row. Missing actions do nothing. These are also available
+as `notjikctl selected dismiss|primary|secondary`. Primary actions use the sender's
+`default` action, falling back to the first labeled action, matching the buttons.
+Without active notices these open history. Navigation wraps around.
 The drawer opens on the focused configured monitor with groups collapsed and the
 list at the top. Expand a group for compact rows; select a row for full details.
 It uses on-demand focus. After focusing the drawer, clicking another app closes
 it; selected popup keyboard mode also clears when focus leaves.
 After clicking the drawer or a selected popup, Up/Down also browse, Enter
-invokes the first live action, Tab focuses buttons, Delete dismisses the selected
+invokes the primary live action, Tab focuses buttons, Delete dismisses the selected
 live notice, and Escape closes history or releases popup keyboard focus. Ordinary
 popups never take keyboard focus automatically. Super+, / Super+. still select
 notices globally; click the selected popup to use its local keyboard controls.

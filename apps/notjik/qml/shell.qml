@@ -467,13 +467,27 @@ ShellRoot {
 
     function unfocus() { keyboardMode = false; selectedId = ""; }
 
-    function activateSelected() {
-        const active = drawerOpen ? historyCard(historyItems.find(n => n.historyKey === historySelectedKey) || {}) : find(selectedId);
-        if (active && Logic.actionsFor(active, config).length) invoke(active.id, 0);
+    function selectedNotice(fallback) {
+        if (drawerOpen) {
+            const entry = historyItems.find(n => n.historyKey === historySelectedKey);
+            return entry ? historyCard(entry) : null;
+        }
+        const selected = find(selectedId);
+        if (selected || !fallback) return selected;
+        return dismissReadIds().map(id => find(id)).filter(Boolean).sort((a,b) => b.received-a.received)[0];
     }
 
-    function dismissSelected() {
-        const active = drawerOpen ? historyCard(historyItems.find(n => n.historyKey === historySelectedKey) || {}) : find(selectedId);
+    function activateSelected(role, fallback) {
+        if (locked) throw Error("Notification actions are disabled while locked");
+        const active = selectedNotice(fallback);
+        if (!active) return;
+        const index = role === "secondary" ? Logic.secondaryActionIndex(active, config) : Logic.primaryActionIndex(active, config);
+        if (index >= 0) invoke(active.id, index);
+    }
+
+    function dismissSelected(fallback) {
+        if (locked) throw Error("Notification dismissal is disabled while locked");
+        const active = selectedNotice(fallback);
         if (active?.globalId) { Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/notjik-sync", "dismiss", active.globalId]); loadGlobalHistory(false); }
         else if (active && !active.archived && find(active.id)) dismissNotice(active.id);
     }
@@ -518,6 +532,11 @@ ShellRoot {
         case "navigate":
             if (!["previous", "next"].includes(request.direction)) throw Error("Invalid navigation direction");
             navigate(request.direction); break;
+        case "selected":
+            if (!["dismiss", "primary", "secondary"].includes(request.action)) throw Error("Invalid selected action");
+            if (request.action === "dismiss") dismissSelected(true);
+            else activateSelected(request.action, true);
+            break;
         case "unfocus": unfocus(); break;
         case "telegramBridge":
             telegramBridgeUntil = request.active === true ? Date.now() + 12000 : 0;

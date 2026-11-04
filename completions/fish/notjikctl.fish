@@ -16,6 +16,8 @@ complete -c notjikctl -n '__tjikos_context exact' -a history -d History
 complete -c notjikctl -n '__tjikos_context exact' -a history-data -d 'Read notification history'
 complete -c notjikctl -n '__tjikos_context exact' -a history-action -d 'Act on a live history entry'
 complete -c notjikctl -n '__tjikos_context prefix history-action' -l index -d 'Action index' -r -f
+complete -c notjikctl -n '__tjikos_context exact' -a selected -d 'Act on the selected notification'
+complete -c notjikctl -n '__tjikos_context prefix selected' -a 'dismiss primary secondary'
 complete -c notjikctl -n '__tjikos_context exact' -a navigate -d Navigate
 complete -c notjikctl -n '__tjikos_context exact' -a unfocus -d Unfocus
 complete -c notjikctl -n '__tjikos_context exact' -a logs -d Logs

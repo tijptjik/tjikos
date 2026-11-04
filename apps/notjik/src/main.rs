@@ -98,6 +98,11 @@ enum Op {
         #[arg(long, default_value_t = 0)]
         index: i64,
     },
+    /// Act on the selected notification, or the newest visible popup.
+    Selected {
+        #[arg(value_parser=["dismiss","primary","secondary"])]
+        action: String,
+    },
     Navigate {
         #[arg(value_parser=["previous","next"])]
         direction: String,
@@ -374,6 +379,7 @@ fn cli(root: &Path, op: Op) -> Result<()> {
         Op::HistoryAction { key, action, index } => {
             json!({"op":"history-action","key":key,"action":action,"index":index})
         }
+        Op::Selected { action } => json!({"op":"selected","action":action}),
         Op::Navigate { direction } => json!({"op":"navigate","direction":direction}),
     };
     println!("{}", serde_json::to_string_pretty(&ipc(root, &request)?)?);

@@ -93,6 +93,17 @@ function actionButtonsFor(notice, config) {
         .filter(action => String(action.label || "").trim().length > 0);
 }
 
+// Share the card's visual action order with keyboard shortcuts; preserve sender indexes.
+function primaryActionIndex(notice, config) {
+    var buttons = actionButtonsFor(notice, config);
+    return (buttons.find(a => a.identifier === "default") || buttons[0])?.actionIndex ?? -1;
+}
+
+function secondaryActionIndex(notice, config) {
+    var primary = primaryActionIndex(notice, config);
+    return actionButtonsFor(notice, config).find(a => a.actionIndex !== primary)?.actionIndex ?? -1;
+}
+
 function groupKey(n) {
     return JSON.stringify([n.desktopEntry || n.app || "Notification", n.group || n.senderId || ""]);
 }

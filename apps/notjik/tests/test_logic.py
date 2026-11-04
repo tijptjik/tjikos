@@ -22,6 +22,24 @@ for(const action of [{label:"Copy code",copy:"$(id)"},{label:"Copy code",copy:"0
 '''
         subprocess.run(["bun", "-e", source + assertions], check=True)
 
+    def test_shortcut_actions_match_visual_order(self):
+        source = (ROOT / "qml/Logic.js").read_text()
+        assertions = r'''
+const assert = require("node:assert/strict");
+const notice = {app:"test",actions:[{label:" "},{label:"Left"},{label:"Open",identifier:"default"},{label:"Other"}]};
+assert.equal(primaryActionIndex(notice, {}),2);
+assert.equal(secondaryActionIndex(notice, {}),1);
+assert.equal(primaryActionIndex({actions:[{label:"First"},{label:"Second"}]}, {}),0);
+assert.equal(secondaryActionIndex({actions:[{label:"Only"}]}, {}),-1);
+for (const n of [{}, {actions:[{label:" "}]}, {...notice,archived:true}]) {
+    assert.equal(primaryActionIndex(n, {}),-1);
+    assert.equal(secondaryActionIndex(n, {}),-1);
+}
+assert.equal(primaryActionIndex(notice,{actions:{blacklist:["test"]}}),-1);
+assert.equal(secondaryActionIndex(notice,{actions:{blacklist:["test"]}}),-1);
+'''
+        subprocess.run(["bun", "-e", source + assertions], check=True)
+
     def test_cached_avatar_selection(self):
         source = (ROOT / "qml/Logic.js").read_text()
         assertions = r'''

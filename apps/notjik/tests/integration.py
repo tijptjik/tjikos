@@ -47,7 +47,7 @@ def run():
         shell.write_text(shell.read_text().replace(
             'readonly property string focusedAppId: ToplevelManager.activeToplevel?.appId || ""',
             'property string focusedAppId: ""').replace('case "status": break;',
-            'case "testFocus": focusedAppId = request.appId; break;\n        case "status": break;'))
+            'case "testFocus": focusedAppId = request.appId; break;\n        case "testLock": lockState = request.state; break;\n        case "status": break;'))
         os.environ["NOTJIK_CONFIG"] = str(path / "config.json")
         os.environ["NOTJIK_STATE_DIR"] = str(path / "state")
         os.environ["QT_ACCESSIBILITY"] = "0"
@@ -111,8 +111,9 @@ def run():
                     ident = call("send", notice={"title": urgency, "urgency": urgency})["id"]
                     wait_for(lambda: ident not in ids())
                 critical = call("send", notice={"title": "critical", "urgency": "critical"})["id"]
+                critical_initial = call("list")
                 time.sleep(0.5)
-                assert critical in ids()
+                assert critical in ids(), (critical_initial, call("list"), call("status"))
                 call("dismiss", id="all")
                 marker = path / "action-result"
                 ident = call("send", notice={"title": "Command action", "timeout": 0, "actions": [
@@ -288,6 +289,55 @@ def run():
                 assert call("status")["drawerOpen"]
                 assert call("status")["historySelectedKey"] == ""
                 call("history", mode="hide")
+
+                # Global shortcuts work without first focusing a popup and match visual action order.
+                for action in ("dismiss", "primary", "secondary"):
+                    assert call("selected", action=action)["ok"]
+                older = call("send", notice={"title":"Older shortcut", "app":"Shortcut older", "timeout":0})["id"]
+                time.sleep(.02)
+                marker = path / "shortcut-action"
+                actions = [
+                    {"label":" ", "command":["touch", str(path / "blank-action")]},
+                    {"label":"Left", "command":["touch", str(marker)]},
+                    {"label":"Open", "identifier":"default", "command":["touch", str(path / "primary-action")]},
+                ]
+                latest = call("send", notice={"title":"Shortcut actions", "app":"Shortcut", "timeout":0,
+                                             "resident":True, "actions":actions})["id"]
+                call("selected", action="secondary")
+                wait_for(marker.exists)
+                assert not (path / "primary-action").exists() and not (path / "blank-action").exists()
+                call("selected", action="primary")
+                wait_for(lambda: (path / "primary-action").exists())
+                # Explicit selection wins over the newer popup.
+                call("navigate", direction="previous")
+                assert call("status")["selectedId"] == older
+                call("selected", action="dismiss")
+                assert older not in ids() and latest in ids()
+                call("selected", action="dismiss")
+                assert not ids()
+                # A single primary action must never be invoked by the secondary shortcut.
+                only = call("send", notice={"title":"Single action", "app":"Shortcut", "timeout":0,
+                    "actions":[{"label":"Only", "command":["touch", str(path / "should-not-run")]}]})["id"]
+                call("selected", action="secondary")
+                time.sleep(.1)
+                assert only in ids() and not (path / "should-not-run").exists()
+                call("testLock", state="locked")
+                for action in ("dismiss", "primary", "secondary"):
+                    try:
+                        call("selected", action=action)
+                    except ValueError as error:
+                        assert "locked" in str(error)
+                    else:
+                        raise AssertionError("Locked shortcut was accepted")
+                assert only in ids() and not (path / "should-not-run").exists()
+                call("testLock", state="unlocked")
+                call("pause")
+                call("unfocus")
+                call("selected", action="dismiss")
+                assert only in ids()  # Hidden queued popups are not implicit shortcut targets.
+                call("resume")
+                call("selected", action="dismiss")
+                assert not ids()
 
                 # Exercise all component loaders and live theme changes.
                 for kind, data in (("progress", {"value": 67, "label": "285 KiB/s"}),
