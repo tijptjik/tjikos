@@ -17,3 +17,9 @@ application updates. Generated dist/ and private runtime files are ignored.
 
 Use gofmt for Go and four-space indentation for Python. Public commands are
 mailtjik read and mailtjik archive; no command opens the mode selector.
+
+On managed desktops, run heavy validation through `dev-check COMMAND ...`,
+including direct Vitest, Svelte checks and Cargo builds. It shares one user lock
+across agents and repositories. Do not set DOTJIK_DEV_CHECK manually or bypass
+a failed resource scope. Watch commands retain the slot until stopped; avoid
+them for one-shot checks.
