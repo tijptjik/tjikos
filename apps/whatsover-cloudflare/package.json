@@ -1,0 +1,19 @@
+{
+  "name": "@tjikos/whatsover-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "build": "bun run build:wasm && wrangler deploy --dry-run",
+    "check": "tsc --noEmit",
+    "test": "WHATSOVER_QUALIFICATION=1 bun run build:wasm && vitest run",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.5.0",
+    "@types/node": "^22.15.17",
+    "typescript": "^5.9.3",
+    "vitest": "~4.1.0",
+    "wrangler": "4.152.0"
+  }
+}
