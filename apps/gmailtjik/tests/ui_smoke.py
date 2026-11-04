@@ -574,6 +574,19 @@ with private_compositor(isolate_pointer=True):
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "label-search":
+                click(95, 506)
+                capture("label-selected.png")
+                click(500, 48)
+                subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                time.sleep(.4)
+                scope = subprocess.check_output(["wl-paste", "--no-newline"], text=True)
+                assert scope == "label:Mail/Design", scope
+                subprocess.run(["wtype", "label:Mail/Design quiet", "-k", "Return"], check=True)
+                capture("label-scoped-search.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "contact-signature":
                 capture("contact-signature-hidden.png")
                 assert "panicked" not in (root / "gmailtjik.log").read_text()

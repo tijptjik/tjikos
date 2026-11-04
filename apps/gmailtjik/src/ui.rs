@@ -362,12 +362,17 @@ impl MailApp {
         );
         let mut subscriptions = vec![cx.subscribe_in(&search, window, |this, _, event, _, cx| {
             if matches!(event, InputEvent::PressEnter { .. }) {
-                this.query = this.search.read(cx).value().trim().into();
-                this.label = if this.query.is_empty() {
-                    "INBOX".into()
+                let text = this.search.read(cx).value().trim().to_string();
+                if let Some(query) = crate::labels::scoped_query(&text, &this.label, &this.labels) {
+                    this.query = query;
                 } else {
-                    String::new()
-                };
+                    this.query = text;
+                    this.label = if this.query.is_empty() {
+                        "INBOX".into()
+                    } else {
+                        String::new()
+                    };
+                }
                 this.previous.clear();
                 this.page_token.clear();
                 this.load(cx);
@@ -811,6 +816,13 @@ impl MailApp {
                                 cx.notify();
                                 return;
                             };
+                            self.search.update(cx, |s, cx| {
+                                s.set_value(
+                                    crate::labels::search_prefix(&id, &self.labels),
+                                    window,
+                                    cx,
+                                )
+                            });
                             self.label = id;
                             self.query.clear();
                             self.page_token.clear();
@@ -3389,7 +3401,13 @@ impl MailApp {
                                 }
                                 this.label = id.clone();
                                 this.query.clear();
-                                this.search.update(cx, |s, cx| s.set_value("", window, cx));
+                                this.search.update(cx, |s, cx| {
+                                    s.set_value(
+                                        crate::labels::search_prefix(&id, &this.labels),
+                                        window,
+                                        cx,
+                                    )
+                                });
                                 this.previous.clear();
                                 this.page_token.clear();
                                 this.load(cx);

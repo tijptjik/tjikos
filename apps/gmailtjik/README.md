@@ -535,3 +535,8 @@ Icons are cached by origin in the private data directory's `favicons/` folder fo
 seven days; failed lookups are cached for one day. PNG, JPEG, GIF, WebP and ICO
 images are bounded and reduced to 32px. Missing or unsupported icons keep the
 standard link icon. Demo mode uses synthetic icons and makes no favicon requests.
+
+Selecting a label fills search with `label:<full name>` (quoted when needed).
+Keep that prefix while adding terms to search only the selected label; Gmail's
+label ID filter remains active even with OR queries. Replacing/removing the
+prefix permits a global search. The virtual All view has no label prefix.

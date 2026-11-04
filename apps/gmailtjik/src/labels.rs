@@ -40,6 +40,47 @@ pub fn display_name(name: &str) -> String {
         .join("/")
 }
 
+/// Gmail's search syntax uses the full label name, not its API ID.
+pub fn search_prefix(id: &str, labels: &[Label]) -> String {
+    if id.is_empty() {
+        return String::new();
+    }
+    let name = labels
+        .iter()
+        .find(|label| label.id == id)
+        .map(|label| label.name.clone())
+        .unwrap_or_else(|| id.to_lowercase());
+    let name = if name == id && !id.starts_with("Label_") {
+        name.to_lowercase()
+    } else {
+        name
+    };
+    if name
+        .chars()
+        .all(|c| c.is_alphanumeric() || "_-/.".contains(c))
+    {
+        format!("label:{name}")
+    } else {
+        format!(
+            r#"label:"{}""#,
+            name.replace('\\', "\\\\").replace('"', "\\\"")
+        )
+    }
+}
+
+pub fn scoped_query(text: &str, id: &str, labels: &[Label]) -> Option<String> {
+    let prefix = search_prefix(id, labels);
+    if prefix.is_empty() {
+        return None;
+    }
+    let rest = text.strip_prefix(&prefix)?;
+    if rest.is_empty() || rest.starts_with(char::is_whitespace) {
+        Some(rest.trim().to_owned())
+    } else {
+        None
+    }
+}
+
 fn rainbow(index: usize, count: usize) -> u32 {
     let position =
         index as f32 * (PALETTE.len() - 1) as f32 / count.saturating_sub(1).max(1) as f32;
@@ -250,6 +291,29 @@ pub fn update_unread(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn search_scope_uses_full_names_and_keeps_or_queries_inside_the_label() {
+        let labels = vec![Label {
+            id: "Label_1".into(),
+            name: "Work/Project One".into(),
+            ..Default::default()
+        }];
+        assert_eq!(
+            search_prefix("Label_1", &labels),
+            r#"label:"Work/Project One""#
+        );
+        assert_eq!(
+            scoped_query(
+                r#"label:"Work/Project One" alice OR bob"#,
+                "Label_1",
+                &labels
+            ),
+            Some("alice OR bob".into())
+        );
+        assert_eq!(scoped_query("label:inbox-extra", "INBOX", &[]), None);
+        assert_eq!(search_prefix("", &labels), "");
+    }
+
     #[test]
     fn all_mail_follows_trash_and_is_selectable_without_an_api_label() {
         let labels = vec![
