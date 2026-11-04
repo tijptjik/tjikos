@@ -193,13 +193,14 @@ ShellRoot {
         if(row.disabled || !query.trim())return;
         const menus=['/tabs','/browser','/history','/todo','/reading','/define','/synonym',
             '/cliphist','/rec','/grab','/processes','/run','/stats','/config','/bindings'];
+        const refresh=row.id==='/refresh';
         if(row.provider==='apps') {
             if(settings.ui.auto_launch_applications===false)return;
         } else {
             if(settings.ui.auto_launch_commands===false)return;
             if(row.provider!=='commands' && (row.provider!=='internal'
-                || !menus.includes(row.id) || /\s/.test(query.trim())
-                || query.trim()===row.id))return;
+                || (!menus.includes(row.id) && !refresh) || /\s/.test(query.trim())
+                || (!refresh && query.trim()===row.id)))return;
         }
         const requested=query;
         autoActivationPending=false;
@@ -672,17 +673,28 @@ ShellRoot {
                     Rectangle {
                         width:parent.width;height:parent.height-footer.height-4
                         radius:14;color:root.theme.background
-                        Text {
+                        Rectangle {
                             id: paneMessage
-                            x: 16; y: 10; width: parent.width - 32
+                            anchors.centerIn: parent
+                            z: 10
+                            width: Math.min(parent.width - 48, messageText.implicitWidth + 40)
+                            height: messageText.height + 32
+                            radius: 12
+                            color: root.theme.surface
+                            border.color: root.theme.border
                             visible: root.message !== ''
-                            text: root.message; wrapMode: Text.Wrap
-                            color: root.theme.accent; font.family: root.settings.ui.font; font.pixelSize: 11
+                            Text {
+                                id: messageText
+                                anchors.centerIn: parent
+                                width: parent.width - 40
+                                text: root.message; wrapMode: Text.Wrap
+                                horizontalAlignment: Text.AlignHCenter
+                                color: root.theme.accent; font.family: root.settings.ui.font; font.pixelSize: 14
+                            }
                         }
                         StatsPane {
                             id: statsPane
                             anchors.fill: parent
-                            anchors.topMargin: paneMessage.visible ? paneMessage.height + 16 : 0
                             visible: root.statistics !== null
                             statistics: root.statistics || ({})
                             theme: root.theme; settings: root.settings; indexed: root.indexed; demo: root.demo
@@ -690,7 +702,6 @@ ShellRoot {
                         WordPane {
                             id: wordPane
                             anchors.fill: parent
-                            anchors.topMargin: paneMessage.visible ? paneMessage.height + 16 : 0
                             visible: root.wordMode && root.statistics === null
                             theme: root.theme; settings: root.settings
                             headerHost: wordProviderHeader
@@ -707,7 +718,6 @@ ShellRoot {
                             id:items
                             visible: root.statistics === null && !root.wordMode
                             anchors.fill:parent;anchors.margins:8
-                            anchors.topMargin:paneMessage.visible?paneMessage.height+18:8
                             clip:true;model:resultModel
                             remove: Transition {
                                 enabled:root.animateClosedRemoval

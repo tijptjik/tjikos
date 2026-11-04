@@ -14,6 +14,19 @@ with private_compositor(isolate_pointer=True):
     home = temp / 'app'
     shutil.copytree(app / 'qml', home / 'qml')
     shutil.copy2(app / 'runtjik-core', home / 'runtjik-core')
+    shell = home / 'qml/shell.qml'
+    shell.write_text(shell.read_text().replace('    function send(data) {', '''
+    property int refreshRequests: 0
+    function send(data) {
+        if(data.op==='activate' && data.id==='/refresh')refreshRequests++;
+''').replace('statistics:root.statistics,', '''
+                refreshRequests:root.refreshRequests,message:root.message,
+                messageVisible:paneMessage.visible,
+                messageCenterX:paneMessage.x+paneMessage.width/2,
+                messageCenterY:paneMessage.y+paneMessage.height/2,
+                paneWidth:paneMessage.parent.width,paneHeight:paneMessage.parent.height,
+                gridY:items.y,gridHeight:items.height,
+                statistics:root.statistics,'''))
     config = temp / 'runtjik.conf'
     config.write_text('[plugins]\nenabled=["Browser"]\n')
     env = {**os.environ, 'RUNTJIK_HOME': str(home), 'RUNTJIK_DEMO': '1',
@@ -50,13 +63,33 @@ with private_compositor(isolate_pointer=True):
             query('/', '/')  # Ambiguous command suggestions remain suggestions.
             assert len(state()['rows']) > 1, state()
             query('', '')
-            query('refresh', 'refresh')  # No automatic side effect.
-            assert [row['id'] for row in state()['rows']] == ['/refresh'], state()
+            baseline = state()
+            for value in ('/ref', '/refresh', 'refresh'):
+                before = state()['refreshRequests']
+                ipc('test', value)
+                wait_for(lambda: state().get('message', '').startswith('Index rebuilt'))
+                current = state()
+                assert current['resultQuery'] == '', current
+                assert current['refreshRequests'] == before + 1, current
+                assert current['messageVisible'], current
+                assert abs(current['messageCenterX'] - current['paneWidth'] / 2) < 1, current
+                assert abs(current['messageCenterY'] - current['paneHeight'] / 2) < 1, current
+                assert current['gridY'] == baseline['gridY'], current
+                assert current['gridHeight'] == baseline['gridHeight'], current
+                if os.environ.get('RUNTJIK_TEST_CAPTURE'):
+                    capture = Path(os.environ['RUNTJIK_TEST_CAPTURE'])
+                    ipc('capture', str(capture))
+                    wait_for(capture.is_file)
+                time.sleep(.3)
+                assert state()['refreshRequests'] == before + 1, state()
+                query('/', '/')
+            query('pin', 'pin')  # Other actions still require activation.
+            assert [row['id'] for row in state()['rows']] == ['/pin'], state()
             query('', '')
             query('extension documentation', 'extension documentation')  # A sole browser tab is not auto-activated.
             assert len(state()['rows']) == 1, state()
             assert 'TypeError' not in (temp / 'launcher.log').read_text()
-            print('PASS: bare tabs and unique prefix auto-enter; deletion, ambiguous commands, actions, and ordinary results do not')
+            print('PASS: unique menus and refresh auto-enter once; refresh message is centered without grid movement; deletion, ambiguous commands, other actions, and ordinary results do not auto-enter')
         finally:
             process.terminate()
             process.wait(timeout=5)
