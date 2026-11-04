@@ -173,16 +173,43 @@ Item {
                         Component {
                             id: groupHeading
                             Button {
-                                text: (drawer.controller.historyGroupExpanded(rowLoader.modelData.key) ? "▾  " : "▸  ") + rowLoader.modelData.app +
-                                    (rowLoader.modelData.label ? " · " + rowLoader.modelData.label : "") + "  (" + rowLoader.modelData.count + ")"
+                                id: groupButton
+                                text: rowLoader.modelData.app + (rowLoader.modelData.label ? " · " + rowLoader.modelData.label : "")
+                                Accessible.name: text + ", " + rowLoader.modelData.count + " notifications"
                                 padding: 12
-                                background: Rectangle { color: drawer.theme.surface || "#242424"; radius: 8 }
-                                contentItem: Text {
-                                    text: parent.text
-                                    textFormat: Text.PlainText
-                                    color: drawer.theme.accent || "#fff"
-                                    elide: Text.ElideRight
-                                    font { family: drawer.theme.font || "monospace"; pixelSize: drawer.theme.fontSize || 14 }
+                                implicitHeight: Math.max(44, contentItem.implicitHeight + topPadding + bottomPadding)
+                                hoverEnabled: true
+                                background: Rectangle {
+                                    color: drawer.theme.surface || "#242424"
+                                    radius: 8
+                                    border.width: groupButton.hovered || groupButton.visualFocus ? 1 : 0
+                                    border.color: groupButton.visualFocus ? drawer.theme.accent : drawer.theme.border
+                                }
+                                contentItem: RowLayout {
+                                    spacing: 12
+                                    Text {
+                                        Layout.preferredWidth: 12
+                                        text: drawer.controller.historyGroupExpanded(rowLoader.modelData.key) ? "▾" : "▸"
+                                        color: drawer.theme.muted || "#aaa"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        font { family: drawer.theme.font || "monospace"; pixelSize: drawer.theme.fontSize || 14 }
+                                    }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
+                                        text: groupButton.text
+                                        textFormat: Text.PlainText
+                                        color: drawer.theme.text || "#fff"
+                                        elide: Text.ElideRight
+                                        font { family: drawer.theme.font || "monospace"; pixelSize: drawer.theme.fontSize || 14 }
+                                    }
+                                    Text {
+                                        Layout.minimumWidth: 36
+                                        text: rowLoader.modelData.count
+                                        color: drawer.theme.text || "#fff"
+                                        horizontalAlignment: Text.AlignRight
+                                        font { family: drawer.theme.font || "monospace"; pixelSize: drawer.theme.fontSize || 14 }
+                                    }
                                 }
                                 onClicked: drawer.controller.toggleGroup(rowLoader.modelData.key)
                             }

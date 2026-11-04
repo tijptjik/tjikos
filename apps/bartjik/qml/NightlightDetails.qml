@@ -121,7 +121,8 @@ Column {
         }
         Label {
             width:parent.width;wrapMode:Text.Wrap;font.pixelSize:10;color:details.theme.muted
-            text:details.settings.location?.source==='device'?(details.info.locationAgeHours>24?'Last device location · update when you travel':'Updates hourly while the schedule is enabled'):'A selected city stays fixed until you change it.'
+            text:details.settings.location?.source==='device'?(details.info.locationAgeHours>24?'Last device location · update when you travel':''):'A selected city stays fixed until you change it.'
+            visible:!!text
         }
         RowLayout {width:parent.width;spacing:8
             Field {id:citySearch;objectName:'nightlight-city-search';Layout.fillWidth:true;placeholderText:'Search for your city…';maximumLength:80;onAccepted:if(text.trim().length>=2)details.act('city-search',text.trim())}
