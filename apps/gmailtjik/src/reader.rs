@@ -545,7 +545,7 @@ fn stylesheet_indents(styles: &[String]) -> Vec<(Selector, String)> {
             rule.captures_iter(style)
                 .filter_map(|parts| {
                     let declarations = parts[2].to_ascii_lowercase();
-                    if !declarations.contains("margin") && !declarations.contains("padding-left") {
+                    if !declarations.contains("margin") && !declarations.contains("padding") {
                         return None;
                     }
                     Some((Selector::parse(parts[1].trim()).ok()?, declarations))
@@ -555,7 +555,7 @@ fn stylesheet_indents(styles: &[String]) -> Vec<(Selector, String)> {
         .collect()
 }
 
-fn indented_style(style: &str) -> bool {
+fn indented_style(style: &str, cell_padding: bool) -> bool {
     let positive_length = |value: &str| {
         let value = value.trim().trim_end_matches("!important").trim();
         ["rem", "px", "pt", "em", "cm", "mm", "in", "pc", "%"]
@@ -575,6 +575,20 @@ fn indented_style(style: &str) -> bool {
         match name.trim() {
             "margin-left" => margin = positive_length(value),
             "padding-left" => padding = positive_length(value),
+            "padding" => {
+                let values: Vec<_> = value
+                    .trim()
+                    .trim_end_matches("!important")
+                    .split_whitespace()
+                    .collect();
+                let left = match values.as_slice() {
+                    [all] => Some(*all),
+                    [_, horizontal] | [_, horizontal, _] => Some(*horizontal),
+                    [_, _, _, left] => Some(*left),
+                    _ => None,
+                };
+                padding = cell_padding && left.is_some_and(positive_length);
+            }
             "margin" => {
                 let values: Vec<_> = value
                     .trim()
@@ -588,10 +602,14 @@ fn indented_style(style: &str) -> bool {
             _ => {}
         }
     }
-    margin || padding
+    if cell_padding {
+        padding
+    } else {
+        margin || padding
+    }
 }
 
-fn element_indented(element: ElementRef<'_>, styles: &[(Selector, String)]) -> bool {
+fn element_style(element: ElementRef<'_>, styles: &[(Selector, String)]) -> String {
     let mut declarations = String::new();
     for (selector, style) in styles {
         if selector.matches(&element) {
@@ -605,7 +623,45 @@ fn element_indented(element: ElementRef<'_>, styles: &[(Selector, String)]) -> b
             .unwrap_or_default()
             .to_ascii_lowercase(),
     );
-    indented_style(&declarations)
+    declarations
+}
+
+fn element_indented(element: ElementRef<'_>, styles: &[(Selector, String)]) -> bool {
+    indented_style(&element_style(element, styles), false)
+}
+
+fn padded_table_rows(element: ElementRef<'_>, styles: &[(Selector, String)]) -> bool {
+    // Repeated single-column rows can encode an indented address/list using
+    // cell padding alone. A one-cell message wrapper or a data grid is layout.
+    if element
+        .select(&Selector::parse("table, th").unwrap())
+        .next()
+        .is_some()
+    {
+        return false;
+    }
+    let mut rows = 0;
+    for row in element.select(&Selector::parse("tr").unwrap()) {
+        if hidden(row) {
+            continue;
+        }
+        let cells: Vec<_> = row
+            .child_elements()
+            .filter(|cell| cell.value().name() == "td" && !hidden(*cell))
+            .collect();
+        if cells.len() != 1 {
+            return false;
+        }
+        let cell = cells[0];
+        if text_len(cell) == 0 {
+            continue;
+        }
+        if !indented_style(&element_style(cell, styles), true) {
+            return false;
+        }
+        rows += 1;
+    }
+    rows > 1
 }
 
 fn indented_html_lines(content: &str) -> String {
@@ -979,6 +1035,7 @@ fn render(
                 .unwrap_or_else(|| indented_html_lines(&content));
             if tag == "dd"
                 || (matches!(tag, "p" | "div" | "table") && element_indented(element, styles))
+                || (tag == "table" && padded_table_rows(element, styles))
             {
                 quote_block(&content)
             } else {
@@ -1370,6 +1427,12 @@ mod tests {
             "border-collapse:collapse;margin-left:0",
         );
         assert!(
+            parse(&mail("text/html", &reset), false)
+                .markdown
+                .contains("> Council")
+        );
+        let reset = reset.replace("padding:0pt 5.4pt 0pt 5.4pt", "padding:0");
+        assert!(
             !parse(&mail("text/html", &reset), false)
                 .markdown
                 .contains("> Council")
@@ -1399,6 +1462,50 @@ mod tests {
             body.markdown
                 .contains("> | Item | Status |\n> | --- | --- |\n> | Alpha | Ready |")
         );
+    }
+
+    #[test]
+    fn table_cell_padding_indents_repeated_single_column_content_only() {
+        for padding in ["0pt 5.4pt", "0pt 5.4pt 0pt", "0pt 5.4pt 0pt 5.4pt"] {
+            let source = format!(
+                "<style>.cell {{ width:437.9pt; padding:{padding} }} .line {{ margin:0pt 0pt 0pt 0pt }}</style><p>Delivery details:</p><table style='border-collapse:collapse'><tr><td class='cell'><p class='line'>Studio 12</p></td></tr><tr><td class='cell'><p class='line'>Example Building</p></td></tr><tr><td class='cell'><p class='line'>Example City</p></td></tr></table><p>Next field:</p>"
+            );
+            let body = parse(&mail("text/html", &source), false);
+            assert_eq!(
+                body.markdown,
+                "Delivery details:\n\n> Studio 12\n>\n> Example Building\n>\n> Example City\n\nNext field:"
+            );
+            assert!(!body.quoted && !body.complex);
+            assert!(
+                body.original_layout
+                    .unwrap()
+                    .contains(&format!("padding:{padding}"))
+            );
+            let reset = source.replace("class='cell'", "class='cell' style='padding:0'");
+            assert!(
+                !parse(&mail("text/html", &reset), false)
+                    .markdown
+                    .contains("> Studio")
+            );
+            let margin = source.replace("border-collapse:collapse", "margin-left:5.4pt");
+            assert!(
+                !parse(&mail("text/html", &margin), false)
+                    .markdown
+                    .contains("> >")
+            );
+        }
+        for source in [
+            "<table><tr><td style='padding:0 24px'><p>Message heading</p><p>Message body</p></td></tr></table>",
+            "<table><tr><td style='padding:0 24px'>A</td><td>B</td></tr><tr><td style='padding:0 24px'>C</td><td>D</td></tr></table>",
+            "<table><tr><td style='padding:0 24px 0 0'>A</td></tr><tr><td style='padding:0 24px 0 0'>B</td></tr></table>",
+        ] {
+            assert!(
+                !parse(&mail("text/html", source), false)
+                    .markdown
+                    .starts_with('>'),
+                "{source}"
+            );
+        }
     }
 
     #[test]
