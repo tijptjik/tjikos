@@ -168,19 +168,24 @@ PopupWindow {
         id:moveArea;parent:host.panelBody;anchors.fill:parent;z:1000
         enabled:host.panelOpen && !host.dropping
         acceptedButtons:Qt.LeftButton;preventStealing:true
+        propagateComposedEvents:true
+        property bool gestureDragged:false
         property point start:Qt.point(0,0)
         onPressed:mouse=>{
             const superDrag=!!(mouse.modifiers & Qt.MetaModifier);
             if((!host.detached && !host.dragFromBody && !superDrag)
                 || (!superDrag && host.controlAt(mouse.x,mouse.y))){mouse.accepted=false;return;}
-            start=Qt.point(mouse.x,mouse.y);
+            gestureDragged=false;start=Qt.point(mouse.x,mouse.y);
         }
         onPositionChanged:mouse=>{
             if(!pressed)return;
             const point=Qt.point(mouse.x,mouse.y);
-            if(!host.dragging && Math.hypot(point.x-start.x,point.y-start.y)>=8)host.beginDrag(start);
+            if(!host.dragging && Math.hypot(point.x-start.x,point.y-start.y)>=8){gestureDragged=true;host.beginDrag(start);}
             host.moveDrag(point);
         }
+        // A stationary body click reaches controls beneath the drag overlay.
+        // A completed drag must never activate the thumbnail at its release point.
+        onClicked:mouse=>{if(!gestureDragged)mouse.accepted=false;}
         onReleased:mouse=>host.endDrag(Qt.point(mouse.x,mouse.y))
         onCanceled:if(host.dragging)host.cancelDrag()
         onWheel:wheel=>{wheel.accepted=false;}

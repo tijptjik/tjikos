@@ -96,8 +96,8 @@ DetachablePopup {
         return Logic.panelHeld(Date.now()-controller.pointerUpdated<1500?controller.pointer:null,targetScreen?.name,selected?.context.hoverRegion,
             {x:pos.x+(side==='r'?w:0),y:pos.y+(side==='b'?h:0)},w,h,side);
     }
-    function focusOffscreen(address) {
-        if(!/^0x[0-9a-fA-F]+$/.test(address))return;
+    function focusWindow(address) {
+        if(!controller.demo && !/^0x[0-9a-fA-F]+$/.test(address))return;
         if(!controller.demo)Hyprland.dispatch('hl.dsp.focus({ window = "address:'+address+'" })');
         close();
     }
@@ -145,6 +145,14 @@ DetachablePopup {
                         x:rect.x;y:rect.y;width:rect.width;height:rect.height
                         color:popup.controller.demo?(key==='demo-editor'?'#2b293c':'#17151f'):popup.theme.surface
                         border.width:0;clip:true
+                        // The thumbnail bounds already map monitor-relative window fractions
+                        // into the desktop preview, including clipping and stacking order.
+                        MouseArea {
+                            anchors.fill:parent
+                            acceptedButtons:Qt.LeftButton
+                            // Quickshell keys omit 0x; dispatch requires the raw IPC address.
+                            onClicked:popup.focusWindow(thumb.clientData.address || thumb.key)
+                        }
                         Loader {
                             id:streamLoader;anchors.fill:parent
                             // Create after reparenting into the panel's native scene graph.
@@ -216,7 +224,7 @@ DetachablePopup {
                         windows:notch.windows
                         side:notch.modelData
                         theme:popup.theme
-                        onActivated:address=>popup.focusOffscreen(address)
+                        onActivated:address=>popup.focusWindow(address)
                         onCloseRequested:address=>popup.closeOffscreen(address)
                     }
                 }

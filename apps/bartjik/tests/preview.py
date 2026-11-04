@@ -93,7 +93,7 @@ def main():
                 assert abs(state()["width"] - expected_width) < 1
                 wait_for(lambda: abs(state()["card"]["width"] - expected_width) < 1)
                 first = state()["card"]["x"]
-                target = 710 - state()["width"] / 2
+                target = max(12, min(710 - state()["width"] / 2, screen["width"] - state()["width"] - 12))
                 enter("3", 700)
                 wait_for(lambda: state()["key"].endswith("/3"))
                 intermediate = state()["card"]["x"]
@@ -116,7 +116,7 @@ def main():
                     }
                 )
                 wait_for(
-                    lambda: abs(state()["card"]["x"] - (800 - state()["width"] / 2)) < 1
+                    lambda: abs(state()["card"]["x"] - max(12, min(800 - state()["width"] / 2, screen["width"] - state()["width"] - 12))) < 1
                 )
                 image = destination / "workspace-preview.png"
                 ipc({"op": "captureWorkspace", "path": str(image)})

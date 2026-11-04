@@ -1056,7 +1056,9 @@ the mixer retains its existing pinned-panel close behavior. Icon clicks still
 switch output, percentage clicks toggle the mixer, and scrolling changes volume.
 
 Workspace preview width follows the monitor aspect ratio at the shared card height,
-with a 10px border around the live desktop. Empty workspaces show a desktop icon.
+with a 10px border around the live desktop. Click a window thumbnail to focus that
+window and dismiss the preview. Dragging still detaches the card without focusing
+a window. Empty workspaces show a desktop icon.
 Crypto charts remain visible when reopened or refreshed. Public history and request
 timestamps persist in `$XDG_CACHE_HOME/bartjik/crypto-history.json` (normally
 `~/.cache/bartjik/crypto-history.json`); each asset/currency is requested at most once

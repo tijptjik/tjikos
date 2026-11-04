@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory(prefix='bartjik-inset-') as td:
             return {ok:true,probe:workspacePreview.item?.offscreenProbe(),barIcons:panels.instances.map(p=>p.offscreenBarIcons())};
         case 'status':break;''');p.write_text(s)
     p=temp/'qml/PanelButton.qml';p.write_text(p.read_text().replace('PanelToolTip {', "PanelToolTip {objectName:'test-panel-tooltip'"))
-    p=temp/'qml/WorkspacePreview.qml';s=p.read_text().replace('import QtQuick\n','import QtQuick\nimport QtTest\n',1).replace('    id:popup', "    id:popup\n    TestEvent {id:offscreenInput}\n    property string lastTestFocus:''\n    property string lastTestClose:''").replace("function focusOffscreen(address) {", "function focusOffscreen(address) {lastTestFocus=address;").replace("function closeOffscreen(address) {", "function closeOffscreen(address) {lastTestClose=address;").replace('    function inspect()', '''    function offscreenButtons() {
+    p=temp/'qml/WorkspacePreview.qml';s=p.read_text().replace('import QtQuick\n','import QtQuick\nimport QtTest\n',1).replace('    id:popup', "    id:popup\n    TestEvent {id:offscreenInput}\n    property string lastTestFocus:''\n    property string lastTestClose:''").replace("function focusWindow(address) {", "function focusWindow(address) {lastTestFocus=address;").replace("function closeOffscreen(address) {", "function closeOffscreen(address) {lastTestClose=address;").replace('    function inspect()', '''    function offscreenButtons() {
         let buttons=[];
         function visit(q) {if(q.objectName==='offscreen-app-button')buttons.push(q);for(const c of q.children || [])visit(c);}
         visit(offscreenInset);return buttons;
