@@ -143,11 +143,20 @@ impl Google {
                 Err(error) => return Err(error),
             };
             if let Some(records) = value["history"].as_array() {
+                // New messages may not yet be members of any cached view.
+                if !records.is_empty() {
+                    store
+                        .db
+                        .execute("UPDATE mail_views SET refreshed_at=0", [])?;
+                }
                 for record in records {
                     if let Some(messages) = record["messages"].as_array() {
                         for message in messages {
                             if let Some(id) = message["id"].as_str() {
                                 store.invalidate(id)?;
+                                if let Some(thread) = message["threadId"].as_str() {
+                                    store.db.execute("UPDATE mail_thread_freshness SET refreshed_at=0 WHERE id=?", [thread])?;
+                                }
                             }
                         }
                     }
@@ -454,7 +463,10 @@ impl Google {
             .client
             .post(format!("{}threads/{}/{action}", self.api, segment(id)))
             .bearer_auth(token);
-        if !trash {
+        if trash {
+            // Google's empty-body POST endpoints require an explicit length.
+            request = request.header(reqwest::header::CONTENT_LENGTH, "0");
+        } else {
             request = request.json(&json!({"addLabelIds":add,"removeLabelIds":remove}));
         }
         let response = request.send()?;
@@ -495,7 +507,7 @@ impl Google {
             store.save_message(message)?;
         }
         messages.sort_by_key(|message| message.internal_date.parse::<i64>().unwrap_or(0));
-        store.put(&format!("thread:{id}"), &messages)?;
+        store.reconcile_thread(id, &messages)?;
         store.mark_thread_fresh(id)?;
         Ok(messages)
     }
@@ -751,6 +763,108 @@ impl Google {
         }
         Ok(())
     }
+    pub fn filters(&mut self) -> Result<Vec<crate::filters::Filter>> {
+        let value = self.get("settings/filters", &[])?;
+        Ok(serde_json::from_value(
+            value.get("filter").cloned().unwrap_or_else(|| json!([])),
+        )?)
+    }
+    pub fn create_filter(
+        &mut self,
+        filter: &crate::filters::Filter,
+    ) -> Result<crate::filters::Filter> {
+        filter.validate(false)?;
+        let token = self.auth.token()?;
+        let response = self
+            .client
+            .post(format!("{}settings/filters", self.api))
+            .bearer_auth(token)
+            .json(&json!({"criteria":filter.criteria,"action":filter.action}))
+            .send()?;
+        if !response.status().is_success() {
+            return Err(GoogleReadError::from_response(response).into());
+        }
+        Ok(response.json()?)
+    }
+    pub fn delete_filter(&mut self, id: &str) -> Result<()> {
+        anyhow::ensure!(!id.is_empty(), "Missing filter ID");
+        let token = self.auth.token()?;
+        let response = self
+            .client
+            .delete(format!("{}settings/filters/{}", self.api, segment(id)))
+            .bearer_auth(token)
+            .send()?;
+        if !response.status().is_success() {
+            return Err(GoogleReadError::from_response(response).into());
+        }
+        Ok(())
+    }
+    pub fn apply_filter(
+        &mut self,
+        store: &Store,
+        filter: &crate::filters::Filter,
+    ) -> Result<usize> {
+        filter.validate(true)?;
+        let query = filter.query()?;
+        let mut ids = std::collections::BTreeSet::new();
+        let mut page = String::new();
+        let mut seen = HashSet::new();
+        loop {
+            let value = self.get(
+                "messages",
+                &[
+                    ("q", &query),
+                    ("maxResults", "500"),
+                    ("includeSpamTrash", "true"),
+                    ("pageToken", &page),
+                ],
+            )?;
+            for row in value["messages"].as_array().into_iter().flatten() {
+                ids.insert(
+                    row["id"]
+                        .as_str()
+                        .context("Missing matching message ID")?
+                        .to_string(),
+                );
+            }
+            page = value["nextPageToken"].as_str().unwrap_or_default().into();
+            if page.is_empty() {
+                break;
+            }
+            anyhow::ensure!(
+                seen.insert(page.clone()),
+                "Gmail repeated a results page; no mail was changed"
+            );
+        }
+        let ids: Vec<_> = ids.into_iter().collect();
+        let add = filter.label_ids("addLabelIds");
+        let remove = filter.label_ids("removeLabelIds");
+        let mut completed = 0;
+        for chunk in ids.chunks(1000) {
+            let result = (|| -> Result<()> {
+                let token = self.auth.token()?;
+                let response = self
+                    .client
+                    .post(format!("{}messages/batchModify", self.api))
+                    .bearer_auth(token)
+                    .json(&json!({"ids":chunk,"addLabelIds":add,"removeLabelIds":remove}))
+                    .send()?;
+                if !response.status().is_success() {
+                    return Err(GoogleReadError::from_response(response).into());
+                }
+                completed += chunk.len();
+                store.invalidate_page_freshness()?;
+                for id in chunk {
+                    store.apply_labels(id, &add, &remove)?;
+                }
+                Ok(())
+            })();
+            result.with_context(|| format!("Apply interrupted after {completed} confirmed messages; retry Apply existing mail"))?;
+        }
+        store.invalidate_page_freshness()?;
+        Ok(completed)
+    }
+
     pub fn all_contacts(&mut self) -> Result<Vec<Contact>> {
         if !self.auth.contacts() {
             return Ok(vec![]);
@@ -1235,9 +1349,10 @@ pub fn contact_photo(url: &str) -> Result<Vec<u8>> {
         || !parsed.username().is_empty()
         || parsed.password().is_some()
         || parsed.port_or_known_default() != Some(443)
-        || !["googleusercontent.com", "ggpht.com"]
-            .iter()
-            .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
+        || !(host == "www.gravatar.com"
+            || ["googleusercontent.com", "ggpht.com"]
+                .iter()
+                .any(|domain| host == *domain || host.ends_with(&format!(".{domain}"))))
     {
         bail!("Unsupported contact photo URL");
     }
@@ -1353,6 +1468,80 @@ mod tests {
             people_api: api.clone(),
             api,
         }
+    }
+
+    #[test]
+    fn filters_use_server_endpoints_and_freeze_matches_before_batching() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let filter = crate::filters::Filter {
+            id: "old".into(),
+            criteria: json!({"from":"sender@example.test"}),
+            action: json!({"removeLabelIds":["UNREAD"]}),
+        };
+        let messages: Vec<_> = (0..1001).map(|i| json!({"id":format!("m{i}")})).collect();
+        let (api, requests, thread) = server(vec![
+            (200, json!({"filter":[]})),
+            (200, serde_json::to_value(&filter).unwrap()),
+            (200, json!({})),
+            (
+                200,
+                json!({"messages":messages[..500],"nextPageToken":"next"}),
+            ),
+            (200, json!({"messages":messages[500..]})),
+            (200, json!({})),
+            (200, json!({})),
+        ]);
+        let mut google = client(dir.path(), api);
+        let store = Store::open(None).unwrap();
+        assert!(google.filters().unwrap().is_empty());
+        google.create_filter(&filter).unwrap();
+        google.delete_filter("old").unwrap();
+        assert_eq!(google.apply_filter(&store, &filter).unwrap(), 1001);
+        thread.join().unwrap();
+        let requests: Vec<_> = requests.try_iter().collect();
+        assert!(requests[0].starts_with("GET /settings/filters"));
+        let body: Value =
+            serde_json::from_str(requests[1].split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        assert!(body.get("id").is_none());
+        assert!(requests[2].starts_with("DELETE /settings/filters/old"));
+        assert!(requests[4].contains("pageToken=next"));
+        for (request, count) in requests[5..].iter().zip([1000, 1]) {
+            assert!(request.starts_with("POST /messages/batchModify"));
+            let body: Value =
+                serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+            assert_eq!(body["ids"].as_array().unwrap().len(), count);
+            assert_eq!(body["removeLabelIds"], json!(["UNREAD"]));
+        }
+    }
+
+    #[test]
+    fn repeated_filter_page_aborts_before_any_mutation() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let (api, requests, thread) = server(vec![
+            (
+                200,
+                json!({"messages":[{"id":"m1"}],"nextPageToken":"same"}),
+            ),
+            (
+                200,
+                json!({"messages":[{"id":"m2"}],"nextPageToken":"same"}),
+            ),
+        ]);
+        let mut google = client(dir.path(), api);
+        let filter = crate::filters::Filter {
+            criteria: json!({"from":"sender@example.test"}),
+            action: json!({"removeLabelIds":["UNREAD"]}),
+            ..Default::default()
+        };
+        assert!(
+            google
+                .apply_filter(&Store::open(None).unwrap(), &filter)
+                .unwrap_err()
+                .to_string()
+                .contains("no mail was changed")
+        );
+        thread.join().unwrap();
+        assert!(requests.try_iter().all(|r| r.starts_with("GET /messages?")));
     }
 
     fn summary_server(
@@ -1625,6 +1814,19 @@ mod tests {
     }
 
     #[test]
+    fn all_mail_lists_threads_without_a_label_filter() {
+        let (api, requests, thread) = server(vec![(200, json!({"threads":[]}))]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        google.thread_summaries("", "", "", |_| true).unwrap();
+        thread.join().unwrap();
+        let request = requests.recv().unwrap();
+        assert!(request.starts_with("GET /threads?"));
+        assert!(!request.contains("labelIds"));
+        assert!(!request.contains("includeSpamTrash"));
+    }
+
+    #[test]
     fn conversation_actions_use_thread_endpoints_and_report_all_members() {
         let (api, requests, thread) = server(vec![
             (
@@ -1662,12 +1864,14 @@ mod tests {
         assert!(first.starts_with("POST /threads/conversation/modify "));
         let body: Value = serde_json::from_str(first.split_once("\r\n\r\n").unwrap().1).unwrap();
         assert_eq!(body["removeLabelIds"], json!(["INBOX"]));
+        let trash = requests.recv().unwrap();
+        assert!(trash.starts_with("POST /threads/conversation/trash "));
         assert!(
-            requests
-                .recv()
-                .unwrap()
-                .starts_with("POST /threads/conversation/trash ")
+            trash
+                .to_ascii_lowercase()
+                .contains("\r\ncontent-length: 0\r\n")
         );
+        assert!(trash.ends_with("\r\n\r\n"));
     }
 
     #[test]
@@ -2255,6 +2459,32 @@ mod tests {
         assert!(!requests[0].contains("labelIds"));
         assert!(requests[2].contains("pageToken=older"));
     }
+    #[test]
+    fn new_history_message_invalidates_existing_thread_and_folder_freshness() {
+        let (api, _requests, server) = server(vec![(
+            200,
+            json!({
+                "history":[{"messages":[{"id":"new-message","threadId":"existing-thread"}]}],
+                "historyId":"new"
+            }),
+        )]);
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let mut google = client(dir.path(), api);
+        let store = Store::open(None).unwrap();
+        store.put("history", &"old").unwrap();
+        store.mark_thread_fresh("existing-thread").unwrap();
+        store
+            .save_page(
+                &crate::worker::key("INBOX", "", ""),
+                &crate::model::demo().1,
+            )
+            .unwrap();
+        google.changes(&store).unwrap();
+        server.join().unwrap();
+        assert!(!store.thread_is_fresh("existing-thread", 900).unwrap());
+        assert!(!store.page_is_fresh("INBOX", "", "", 300).unwrap());
+    }
+
     #[test]
     fn history_retries_server_failures_before_advancing_cursor() {
         let (api, requests, thread) = server(vec![

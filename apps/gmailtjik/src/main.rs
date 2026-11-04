@@ -5,6 +5,7 @@ mod background;
 mod cache;
 mod codex;
 mod contacts;
+mod filters;
 mod google;
 mod html;
 mod labels;
@@ -18,6 +19,7 @@ mod rules;
 mod signatures;
 mod store;
 mod ui;
+mod unsubscribe;
 mod worker;
 
 use anyhow::{Context, Result, bail};

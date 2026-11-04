@@ -746,6 +746,11 @@ impl Store {
                     && (label == "TRASH" || !m.label_ids.iter().any(|l| l == "TRASH"))
                     && (label == "SPAM" || !m.label_ids.iter().any(|l| l == "SPAM"))
                     && (label != "INBOX" || !m.label_ids.iter().any(|l| l == "SNOOZED"))))
+                && (!(label.is_empty() && matches!(query.trim(), "" | "is:unread"))
+                    || !m
+                        .label_ids
+                        .iter()
+                        .any(|l| matches!(l.as_str(), "SPAM" | "TRASH")))
                 && (query.trim() != "is:unread" || m.unread())
         });
         if !label.is_empty() && token.is_empty() && matches!(query.trim(), "" | "is:unread") {
@@ -825,6 +830,32 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn viewer_read_action_only_changes_its_message_and_survives_reopen() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let store = Store::open(Some(dir.path())).unwrap();
+        let first = crate::model::demo().1.messages.remove(0);
+        let mut collapsed = first.clone();
+        collapsed.id = "collapsed-message".into();
+        store
+            .enqueue_action(
+                Action::Labels {
+                    id: first.id.clone(),
+                    thread: String::new(),
+                    add: vec![],
+                    remove: vec!["UNREAD".into()],
+                },
+                &[first.clone()],
+            )
+            .unwrap();
+        drop(store);
+        let reopened = Store::open(Some(dir.path())).unwrap();
+        let mut messages = vec![first, collapsed];
+        reopened.project_messages(&mut messages).unwrap();
+        assert!(!messages[0].unread());
+        assert!(messages[1].unread());
+    }
 
     fn fixture(store: &Store) -> Message {
         let message = crate::model::demo().1.messages.remove(0);

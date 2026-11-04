@@ -193,6 +193,33 @@ pub fn visible_rows(
     roots
 }
 
+// All Mail is a virtual mailbox: Gmail lists it without a label filter.
+pub fn navigation_rows(
+    labels: &[Label],
+    collapsed: &HashSet<String>,
+    preferences: &Preferences,
+    show_all: bool,
+) -> Vec<Row> {
+    let mut rows = visible_rows(labels, collapsed, preferences, show_all);
+    let index = rows
+        .iter()
+        .position(|row| !row.path.starts_with("system:"))
+        .unwrap_or(rows.len());
+    rows.insert(
+        index,
+        Row {
+            path: "system:ALL".into(),
+            name: "All".into(),
+            id: Some(String::new()),
+            depth: 0,
+            children: false,
+            color: 0xa5a0ba,
+            unread: 0,
+        },
+    );
+    rows
+}
+
 // Apply a confirmed message change once, before replacing its cached labels.
 pub fn update_unread(
     labels: &mut [Label],
@@ -223,6 +250,28 @@ pub fn update_unread(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn all_mail_follows_trash_and_is_selectable_without_an_api_label() {
+        let labels = vec![
+            Label {
+                id: "TRASH".into(),
+                name: "TRASH".into(),
+                messages_unread: 2,
+            },
+            Label {
+                id: "custom".into(),
+                name: "Work".into(),
+                messages_unread: 0,
+            },
+        ];
+        let rows = navigation_rows(&labels, &HashSet::new(), &Preferences::new(), false);
+        assert_eq!(
+            rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+            ["Trash", "All", "Work"]
+        );
+        assert_eq!(rows[1].id.as_deref(), Some(""));
+    }
+
     #[test]
     fn auth_display_keeps_original_paths_and_ids() {
         let labels = vec![Label {

@@ -17,6 +17,7 @@ use std::{
 };
 
 pub enum Command {
+    Filters(crate::filters::Request),
     OpenMail(crate::links::MailLink),
     Connect(PathBuf),
     Sync,
@@ -30,7 +31,7 @@ pub enum Command {
         page: String,
         force: bool,
     },
-    ContactPhotos(Vec<String>),
+    ContactPhotos(Vec<crate::contacts::PhotoRequest>),
     Contacts {
         query: String,
     },
@@ -41,6 +42,7 @@ pub enum Command {
     },
 }
 pub enum Event {
+    Filters(Result<crate::filters::Outcome, String>),
     QueueChanged,
     OpenMail(Message),
     SyncComplete,
@@ -98,6 +100,63 @@ fn check_cooldown(store: &Store) -> Result<()> {
         "Google is limiting requests. Cached mail remains available; refresh can retry in {remaining} seconds."
     );
     Ok(())
+}
+
+fn filter_request(
+    google: &mut Google,
+    store: &Store,
+    request: crate::filters::Request,
+) -> Result<crate::filters::Outcome> {
+    use crate::filters::{Outcome, Request};
+    let mut outcome = Outcome {
+        saved: None,
+        deleted: None,
+        filters: None,
+        note: String::new(),
+    };
+    match request {
+        Request::List => {
+            let filters = google.filters()?;
+            store.put("gmail_filters", &filters)?;
+            outcome.filters = Some(filters);
+            outcome.note = "Filters loaded from Gmail".into();
+        }
+        Request::Delete(id) => {
+            google.delete_filter(&id)?;
+            outcome.deleted = Some(id);
+            outcome.note = "Filter deleted; existing mail is unchanged".into();
+        }
+        Request::Save { filter, apply } => {
+            filter.validate(apply)?;
+            let saved = google.create_filter(&filter)?;
+            outcome.saved = Some(saved.clone());
+            outcome.note = "Filter saved in Gmail".into();
+            if !filter.id.is_empty() {
+                if let Err(error) = google.delete_filter(&filter.id) {
+                    remember_rate_limit(store, &error);
+                    outcome.note = format!(
+                        "New filter saved, but the old filter still exists: {error}. Refresh the list before deleting the old one."
+                    );
+                    return Ok(outcome);
+                }
+                outcome.deleted = Some(filter.id);
+            }
+            if apply {
+                outcome.note = match google.apply_filter(store, &saved) {
+                    Ok(count) => format!("Filter saved · applied to {count} matching messages"),
+                    Err(error) => {
+                        remember_rate_limit(store, &error);
+                        format!("Filter saved. Existing mail: {error:#}")
+                    }
+                };
+            }
+        }
+        Request::Apply(filter) => {
+            let count = google.apply_filter(store, &filter)?;
+            outcome.note = format!("Applied to {count} matching messages");
+        }
+    }
+    Ok(outcome)
 }
 
 fn remember_rate_limit(store: &Store, error: &anyhow::Error) {
@@ -354,7 +413,7 @@ fn load_page(
     let had_cache = cached.is_some();
     let fresh = had_cache
         && !request.force
-        && store.page_is_fresh(&request.label, &request.query, &request.page, 60)?;
+        && store.page_is_fresh(&request.label, &request.query, &request.page, 300)?;
     if gate
         .current(request.ticket, epoch, || {
             if let Some(page) = cached {
@@ -545,6 +604,19 @@ struct LabelSnapshot {
     counts_observed_at: u64,
 }
 
+// A receipt is written only after notification scanning succeeds. Advancing the
+// history cursor alone must never suppress a retry of an interrupted sync.
+fn unchanged_sync_page(store: &Store) -> Result<Option<Page>> {
+    let history = store.get::<String>("history")?;
+    if history.is_none()
+        || history != store.get::<String>("completed_sync_history")?
+        || !store.page_is_fresh("INBOX", "", "", 900)?
+    {
+        return Ok(None);
+    }
+    store.cached_page("INBOX", "", "")
+}
+
 fn cached_labels(store: &Store) -> Result<Option<LabelSnapshot>> {
     let transaction = store.db.unchecked_transaction()?;
     let labels = store.get("labels")?;
@@ -634,7 +706,7 @@ fn read_worker(
                 }
                 if let Some(messages) = store.cached_thread(&request.id)? {
                     emit_thread(&request, messages, &events)?;
-                    if store.thread_is_fresh(&request.id, 60)? {
+                    if store.thread_is_fresh(&request.id, 900)? {
                         return Ok(());
                     }
                 }
@@ -771,7 +843,7 @@ fn claim_prefetch(dir: &Path, store: &Store, now: u64) -> Result<Option<File>> {
     if store.get::<u64>("prefetch_not_before")?.unwrap_or(0) > now {
         return Ok(None);
     }
-    store.put("prefetch_not_before", &now.saturating_add(60))?;
+    store.put("prefetch_not_before", &now.saturating_add(300))?;
     Ok(Some(lock))
 }
 
@@ -954,7 +1026,7 @@ fn prefetch_target(store: &Store, current: &str) -> Result<Option<String>> {
         {
             continue;
         }
-        if !store.page_is_fresh(&label, "", "", 600)? {
+        if !store.page_is_fresh(&label, "", "", 1800)? {
             return Ok(Some(label));
         }
     }
@@ -974,8 +1046,8 @@ fn prefetch_worker(dir: PathBuf, foreground: Arc<Foreground>, gate: Arc<LoadGate
             let current = foreground.label.lock().unwrap().clone();
             if let Ok(Some(label)) = prefetch_target(&store, &current) {
                 // A separate lane means even a stalled background request cannot
-                // hold navigation. At most one folder is warmed per minute.
-                next_attempt = crate::auth::now().saturating_add(60);
+                // hold navigation. At most one folder is warmed every five minutes.
+                next_attempt = crate::auth::now().saturating_add(300);
                 let Ok(Some(_ownership)) = claim_prefetch(&dir, &store, crate::auth::now()) else {
                     continue;
                 };
@@ -1117,6 +1189,21 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                     let _ = photos.send(urls.clone());
                     continue;
                 }
+                if let Command::Filters(request) = command {
+                    let _mutation = (!matches!(request, crate::filters::Request::List))
+                        .then(|| gate.mutation());
+                    let result = (|| -> Result<crate::filters::Outcome> {
+                        check_cooldown(&store)?;
+                        let mut google = open_mail_connection(&dir, &store)?.0;
+                        filter_request(&mut google, &store, request)
+                    })();
+                    if let Err(error) = &result {
+                        remember_rate_limit(&store, error);
+                    }
+                    let _ =
+                        events.send(Event::Filters(result.map_err(|error| format!("{error:#}"))));
+                    continue;
+                }
                 let _mutation = matches!(&command, Command::Connect(_)).then(|| gate.mutation());
                 if let Command::Connect(path) = &command {
                     match crate::auth::connect(&dir, path, true) {
@@ -1192,7 +1279,8 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                     }
                     let (google, email) = connection.as_mut().unwrap();
                     match command {
-                        Command::Connect(_)
+                        Command::Filters(_)
+                        | Command::Connect(_)
                         | Command::ContactPhotos(_)
                         | Command::Load { .. }
                         | Command::WakeActions
@@ -1204,6 +1292,16 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                         Command::Sync | Command::PushSync(_) => {
                             let sync_started = chrono::Utc::now().timestamp_millis();
                             google.changes(&store)?;
+                            if contacts_synced
+                                .is_some_and(|last| last.elapsed() < Duration::from_secs(3600))
+                                && let Some(page) = unchanged_sync_page(&store)?
+                            {
+                                let _ = events.send(Event::Inbox(page));
+                                store.put("background_last_sync", &sync_started)?;
+                                sync_success = true;
+                                let _ = events.send(Event::SyncComplete);
+                                return Ok(());
+                            }
                             let baseline = match store.get::<i64>("notification_baseline")? {
                                 Some(value) => value,
                                 None => {
@@ -1287,6 +1385,9 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                             if notifications_ok {
                                 store.put("notification_baseline", &sync_started)?;
                                 store.put("background_last_sync", &sync_started)?;
+                                if let Some(history) = store.get::<String>("history")? {
+                                    store.put("completed_sync_history", &history)?;
+                                }
                             }
                             if contacts_synced.is_none_or(|last| {
                                 last.elapsed() >= std::time::Duration::from_secs(3600)
@@ -1519,8 +1620,8 @@ mod tests {
         let owner = claim_prefetch(dir.path(), &first, 100).unwrap().unwrap();
         assert!(claim_prefetch(dir.path(), &second, 100).unwrap().is_none());
         drop(owner);
-        assert!(claim_prefetch(dir.path(), &second, 159).unwrap().is_none());
-        assert!(claim_prefetch(dir.path(), &second, 160).unwrap().is_some());
+        assert!(claim_prefetch(dir.path(), &second, 399).unwrap().is_none());
+        assert!(claim_prefetch(dir.path(), &second, 400).unwrap().is_some());
     }
 
     #[test]
@@ -1568,6 +1669,24 @@ mod tests {
             ))
             .unwrap()
         );
+    }
+
+    #[test]
+    fn unchanged_history_reuses_only_a_completed_valid_sync() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let store = Store::open(Some(dir.path())).unwrap();
+        store
+            .save_page(&key("INBOX", "", ""), &crate::model::demo().1)
+            .unwrap();
+        store.put("history", &"cursor-1").unwrap();
+        assert!(unchanged_sync_page(&store).unwrap().is_none());
+        store.put("completed_sync_history", &"cursor-1").unwrap();
+        assert!(unchanged_sync_page(&store).unwrap().is_some());
+        store.put("history", &"cursor-2").unwrap();
+        assert!(unchanged_sync_page(&store).unwrap().is_none());
+        store.put("completed_sync_history", &"cursor-2").unwrap();
+        store.invalidate_all().unwrap();
+        assert!(unchanged_sync_page(&store).unwrap().is_none());
     }
 
     #[test]

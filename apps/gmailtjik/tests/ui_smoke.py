@@ -279,6 +279,44 @@ with private_compositor(isolate_pointer=True):
 
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "threads":
                 # Six messages form three conversations, with counts 3, 1 and 2.
+                from PIL import Image, ImageChops
+
+                def region(name, box):
+                    with Image.open(root / name) as shot:
+                        return shot.convert("RGB").crop(box)
+
+                click(1100, 200)
+                capture("thread-before.png")
+                # Both the newest and selected message must allow an explicit
+                # collapse, overriding their default-open state, and reopen.
+                click(618, 667)
+                capture("thread-newest-collapsed.png")
+                assert ImageChops.difference(region("thread-before.png", (600, 700, 1350, 820)),
+                                            region("thread-newest-collapsed.png", (600, 700, 1350, 820))).getbbox()
+                click(700, 667)
+                capture("thread-newest-reopened.png")
+                assert not ImageChops.difference(region("thread-before.png", (600, 700, 1350, 820)),
+                                                region("thread-newest-reopened.png", (600, 700, 1350, 820))).getbbox()
+                click(618, 330)
+                capture("thread-selected-collapsed.png")
+                assert ImageChops.difference(region("thread-before.png", (600, 390, 1350, 620)),
+                                            region("thread-selected-collapsed.png", (600, 390, 1350, 620))).getbbox()
+                click(700, 330)
+                capture("thread-selected-reopened.png")
+                assert not ImageChops.difference(region("thread-before.png", (600, 390, 1350, 620)),
+                                                region("thread-selected-reopened.png", (600, 390, 1350, 620))).getbbox()
+                # The enlarged list avatars show both senders, while the
+                # message header retains the same sender's smaller identicon.
+                from collections import Counter
+
+                def avatar_ink(box):
+                    pixels = region("thread-before.png", box).get_flattened_data()
+                    colors = Counter(pixel for pixel in pixels if min(pixel) > 80 and max(pixel) - min(pixel) > 15)
+                    assert colors
+                    return colors.most_common(1)[0][0]
+
+                assert avatar_ink((244, 195, 284, 235)) == avatar_ink((639, 317, 667, 345))
+                assert avatar_ink((244, 195, 284, 235)) != avatar_ink((292, 195, 332, 235))
                 click(885, 106)
                 capture("thread-marked-read.png")
                 subprocess.run(["wtype", "-s", "150", "-k", "Escape", "r"], check=True)
@@ -319,10 +357,101 @@ with private_compositor(isolate_pointer=True):
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "auto-read":
+                time.sleep(1)
+                capture("auto-read-keeps-viewer.png")
+                # The current message has left the unread list; the reader stays put.
+                subprocess.run(["wl-copy", "--", "not-copied"], check=True)
+                click(670, 350)
+                subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                body = subprocess.check_output(["wl-paste", "--no-newline"], text=True)
+                assert "first notes for our new mail client" in body
+                time.sleep(1)
+                capture("auto-read-no-cascade.png")
+                click(885, 106)
+                time.sleep(1)
+                capture("manual-unread-stays.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "footer-actions":
+                time.sleep(2)
+                capture("footer-actions.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "inline-toolbar":
+                capture("inline-toolbar.png")
+                click(476, 95)
+                capture("inline-unread.png")
+                click(527, 95)
+                capture("inline-mark-read.png")
+                for operation in ["m 3972 4500", "m 3972 4500", "b 1"] + [f"m {x} 4500" for x in range(3972, 3071, -100)] + ["b 0"]:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.2)
+                capture("inline-toolbar-narrow.png")
+                assert (root / "inline-toolbar.png").read_bytes() != (root / "inline-unread.png").read_bytes()
+                assert (root / "inline-unread.png").read_bytes() != (root / "inline-mark-read.png").read_bytes()
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "avatar-stack":
+                capture("avatar-stack.png")
+                click(425, 176)
+                capture("stack-contact.png")
+                click(920, 533)
+                assert subprocess.check_output(["wl-paste", "--no-newline"], text=True) == "mira@example.test"
+                subprocess.run(["wtype", "-k", "Escape"], check=True)
+                for operation in ["m 3972 4500", "m 3972 4500", "b 1"] + [f"m {x} 4500" for x in range(3972, 3071, -100)] + ["b 0"]:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    time.sleep(.2)
+                capture("avatar-stack-narrow.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "sender-details":
+                click(650, 255)
+                capture("reader-contact-modal.png")
+                click(920, 533)
+                assert subprocess.check_output(["wl-paste", "--no-newline"], text=True) == "mira@example.test"
+                subprocess.run(["wtype", "-k", "Escape"], check=True)
+                click(618, 255)
+                capture("collapsed-message.png")
+                click(650, 255)
+                capture("collapsed-contact-modal.png")
+                click(920, 533)
+                assert subprocess.check_output(["wl-paste", "--no-newline"], text=True) == "mira@example.test"
+                subprocess.run(["wtype", "-k", "Escape"], check=True)
+                capture("still-collapsed-message.png")
+                click(800, 255)
+                click(509, 216)
+                capture("list-contact-modal.png")
+                click(920, 533)
+                assert subprocess.check_output(["wl-paste", "--no-newline"], text=True) == "mira@example.test"
+                subprocess.run(["wtype", "-k", "Escape"], check=True)
+                click(670, 322)
+                capture("unsubscribe-modal.png")
+                click(700, 540)
+                capture("unsubscribe-demo-open.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "all-mail":
+                click(80, 268)
+                capture("all-mail.png")
+                click(90, 950)
+                capture("manage-labels-icon.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "label-counts":
                 click(885, 106)
                 capture("counts-after-read.png")
-                click(100, 912)
+                click(90, 950)
                 capture("manage-labels.png")
                 click(195, 98)
                 capture("label-visibility.png")
@@ -339,6 +468,17 @@ with private_compositor(isolate_pointer=True):
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "filters":
+                click(1000, 105)
+                capture("sender-filter.png")
+                click(395, 567)
+                click(272, 593)
+                capture("filter-apply-checked.png")
+                click(302, 651)
+                capture("filter-saved.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "actions":
                 subprocess.run(["wtype", "-s", "150", "-k", "Escape", "r", "Reply body: r a d stay as text."], check=True)
                 capture("reply-focused.png")
@@ -351,6 +491,8 @@ with private_compositor(isolate_pointer=True):
                 # Draft protection: replying to the next message must retain the old draft.
                 subprocess.run(["wtype", "-s", "150", "r"], check=True)
                 capture("draft-protected.png")
+                click(980, 200)
+                capture("saved-reply-restored.png")
                 click(80, 234)
                 capture("trash-folder.png")
                 for before, after in [("reply-focused.png", "reply-resumed.png"), ("archived.png", "trashed.png")]:

@@ -46,6 +46,52 @@ pub fn people(contacts: &[Contact]) -> Vec<Person> {
     groups.into_values().collect()
 }
 
+/// Match by address and disambiguate shared mailboxes by name; never merge people.
+pub fn sender_details(from: &str, contacts: &[Contact]) -> Person {
+    let (name, email) = crate::model::addresses(from)
+        .ok()
+        .and_then(|rows| rows.into_iter().next())
+        .unwrap_or_else(|| (from.into(), String::new()));
+    let candidates: Vec<_> = people(contacts)
+        .into_iter()
+        .filter(|person| {
+            person
+                .addresses
+                .iter()
+                .any(|a| a.email.eq_ignore_ascii_case(&email))
+        })
+        .collect();
+    if candidates.len() == 1 {
+        return candidates[0].clone();
+    }
+    let named: Vec<_> = candidates
+        .iter()
+        .filter(|person| person.name.eq_ignore_ascii_case(&name))
+        .collect();
+    if named.len() == 1 {
+        return named[0].clone();
+    }
+    Person {
+        key: format!("sender:{email}"),
+        name: if name.is_empty() {
+            email.clone()
+        } else {
+            name.clone()
+        },
+        addresses: if email.is_empty() {
+            vec![]
+        } else {
+            vec![Contact {
+                resource_name: String::new(),
+                name,
+                email,
+                photo: String::new(),
+            }]
+        },
+        photo: String::new(),
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DefaultAddress {
     pub name: String,
@@ -197,49 +243,154 @@ pub fn initials(name: &str) -> String {
         .collect()
 }
 
-/// Independent of the mail worker: a slow photo host must not delay sending mail.
+#[derive(Clone, Debug)]
+pub struct PhotoRequest {
+    pub key: String,
+    pub urls: Vec<String>,
+}
+
+pub fn mailbox(name: &str, email: &str) -> String {
+    if name.is_empty() {
+        return email.to_owned();
+    }
+    format!(
+        "\"{}\" <{email}>",
+        name.replace('\\', "\\\\").replace('\"', "\\\"")
+    )
+}
+
+pub fn sender_photo(from: &str, contacts: &[Contact]) -> PhotoRequest {
+    use sha2::{Digest, Sha256};
+    let (_, email) = crate::model::addresses(from)
+        .ok()
+        .and_then(|addresses| addresses.first().cloned())
+        .unwrap_or_default();
+    let email = email.trim().to_lowercase();
+    let matching: Vec<_> = contacts
+        .iter()
+        .filter(|contact| contact.email.eq_ignore_ascii_case(&email) && !contact.photo.is_empty())
+        .collect();
+    let photos: HashSet<_> = matching
+        .iter()
+        .map(|contact| contact.photo.as_str())
+        .collect();
+    // A shared address does not establish a person's identity. Never select an
+    // arbitrary contact's portrait when distinct people share that address.
+    let google = if photos.len() == 1 {
+        photos.iter().next().map(|photo| (*photo).to_owned())
+    } else {
+        None
+    };
+    let person = sender_details(&email, contacts);
+    let known_person = person.key.starts_with("google:");
+    let google = if known_person && !person.photo.is_empty() {
+        Some(person.photo.clone())
+    } else {
+        google
+    };
+    // Aliases on the same People record share both their portrait and fallback.
+    let identity = if known_person {
+        person.key.as_str()
+    } else {
+        email.as_str()
+    };
+    let identity_hash = format!("{:x}", Sha256::digest(identity.as_bytes()));
+    let avatar_email = if known_person {
+        person
+            .addresses
+            .iter()
+            .map(|a| a.email.to_lowercase())
+            .min()
+            .unwrap_or_else(|| email.clone())
+    } else {
+        email.clone()
+    };
+    let hash = format!("{:x}", Sha256::digest(avatar_email.as_bytes()));
+    let mut urls = Vec::new();
+    if let Some(google) = &google {
+        urls.push(google.clone());
+    }
+    if !email.is_empty() {
+        urls.push(format!("https://www.gravatar.com/avatar/{hash}?s=64&d=404"));
+    }
+    PhotoRequest {
+        key: format!("sender:{identity_hash}:{}", google.unwrap_or_default()),
+        urls,
+    }
+}
+
+pub fn identicon(key: &str) -> Vec<u8> {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(
+        key.strip_prefix("sender:")
+            .unwrap_or(key)
+            .split(':')
+            .next()
+            .unwrap_or(key)
+            .as_bytes(),
+    );
+    let color = [
+        100 + hash[0] % 140,
+        100 + hash[1] % 140,
+        100 + hash[2] % 140,
+        255,
+    ];
+    let image = image::RgbaImage::from_fn(64, 64, |x, y| {
+        if !(7..57).contains(&x) || !(7..57).contains(&y) {
+            return image::Rgba([46, 42, 64, 255]);
+        }
+        let col = (x - 7) / 10;
+        let col = col.min(4 - col);
+        let row = (y - 7) / 10;
+        image::Rgba(if hash[(row * 3 + col + 3) as usize] & 1 == 1 {
+            color
+        } else {
+            [46, 42, 64, 255]
+        })
+    });
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+    bytes.into_inner()
+}
+
+/// Independent of the mail worker: slow avatar hosts never delay sending mail.
 pub fn photo_worker(
     events: std::sync::mpsc::Sender<crate::worker::Event>,
-) -> std::sync::mpsc::Sender<Vec<String>> {
-    let (tx, rx) = std::sync::mpsc::channel::<Vec<String>>();
+) -> std::sync::mpsc::Sender<Vec<PhotoRequest>> {
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<PhotoRequest>>();
     std::thread::spawn(move || {
         let mut cache = std::collections::HashMap::<String, Vec<u8>>::new();
-        let mut failed = std::collections::HashMap::<String, std::time::Instant>::new();
-        while let Ok(mut urls) = rx.recv() {
-            for latest in rx.try_iter() {
-                urls = latest;
-            }
-            let mut seen = HashSet::new();
-            urls.retain(|url| !url.is_empty() && seen.insert(url.clone()));
-            for url in urls.into_iter().take(12) {
-                if let Some(bytes) = cache.get(&url) {
-                    let _ = events.send(crate::worker::Event::ContactPhoto {
-                        url,
-                        bytes: bytes.clone(),
-                    });
-                    continue;
+        while let Ok(requests) = rx.recv() {
+            for request in requests {
+                let bytes = cache.get(&request.key).cloned().unwrap_or_else(|| {
+                    request
+                        .urls
+                        .iter()
+                        .find_map(|url| {
+                            let bytes = crate::google::contact_photo(url).ok()?;
+                            // Invalid or oversized decoded images also fall through to the next provider.
+                            let mut reader = image::ImageReader::new(std::io::Cursor::new(&bytes))
+                                .with_guessed_format()
+                                .ok()?;
+                            let mut limits = image::Limits::default();
+                            limits.max_image_width = Some(2048);
+                            limits.max_image_height = Some(2048);
+                            reader.limits(limits);
+                            let image = reader.decode().ok()?.thumbnail(64, 64);
+                            let mut png = std::io::Cursor::new(Vec::new());
+                            image.write_to(&mut png, image::ImageFormat::Png).ok()?;
+                            Some(png.into_inner())
+                        })
+                        .unwrap_or_else(|| identicon(&request.key))
+                });
+                if cache.len() >= 512 {
+                    cache.clear();
                 }
-                if failed
-                    .get(&url)
-                    .is_some_and(|last| last.elapsed() < std::time::Duration::from_secs(60))
-                {
-                    continue;
-                }
-                match crate::google::contact_photo(&url) {
-                    Ok(bytes) => {
-                        if cache.len() >= 128 {
-                            cache.clear();
-                        }
-                        cache.insert(url.clone(), bytes.clone());
-                        let _ = events.send(crate::worker::Event::ContactPhoto { url, bytes });
-                    }
-                    Err(_) => {
-                        if failed.len() >= 128 {
-                            failed.clear();
-                        }
-                        failed.insert(url, std::time::Instant::now());
-                    }
-                }
+                cache.insert(request.key.clone(), bytes.clone());
+                let _ = events.send(crate::worker::Event::ContactPhoto {
+                    url: request.key,
+                    bytes,
+                });
             }
         }
     });
@@ -266,6 +417,112 @@ mod tests {
             name: name.into(),
             email: email.into(),
             ..Default::default()
+        }
+    }
+    #[test]
+    fn sender_details_preserve_people_and_fall_back_for_unknown_senders() {
+        let contacts = vec![
+            contact("Mira", "shared@example.test"),
+            contact("Mira", "mira@example.test"),
+            contact("Jun", "shared@example.test"),
+        ];
+        let mira = super::sender_details("Mira <SHARED@example.test>", &contacts);
+        assert_eq!(mira.name, "Mira");
+        assert_eq!(mira.addresses.len(), 2);
+        let shared = super::sender_details("shared@example.test", &contacts);
+        assert!(shared.key.starts_with("sender:"));
+        assert_eq!(shared.addresses.len(), 1);
+        let unknown = super::sender_details("New Person <new@example.test>", &contacts);
+        assert_eq!(unknown.name, "New Person");
+        assert_eq!(unknown.addresses[0].email, "new@example.test");
+    }
+    #[test]
+    fn aliases_of_one_saved_person_share_avatar_and_fallback() {
+        let mut first = contact("Mira", "mira@example.test");
+        first.photo = "https://lh3.googleusercontent.com/mira".into();
+        let second = contact("Mira", "work@example.test");
+        let contacts = vec![first, second];
+        let a = super::sender_photo("Mira <mira@example.test>", &contacts);
+        let b = super::sender_photo("work@example.test", &contacts);
+        assert_eq!(a.key, b.key);
+        assert_eq!(a.urls, b.urls);
+        assert_eq!(super::identicon(&a.key), super::identicon(&b.key));
+        assert_ne!(
+            a.key,
+            super::sender_photo("Mira <unrelated@example.test>", &contacts).key
+        );
+    }
+    #[test]
+    fn avatar_provider_order_and_normalized_identity() {
+        let contacts = vec![crate::model::Contact {
+            email: "mira@example.test".into(),
+            photo: "https://lh3.googleusercontent.com/photo".into(),
+            ..Default::default()
+        }];
+        let request = super::sender_photo("Mira <MIRA@example.test>", &contacts);
+        assert_eq!(request.urls[0], contacts[0].photo);
+        assert!(request.urls[1].starts_with("https://www.gravatar.com/avatar/"));
+        assert!(request.urls[1].ends_with("?s=64&d=404"));
+        assert_eq!(
+            request.key,
+            super::sender_photo("mira@example.test", &contacts).key
+        );
+        assert_eq!(super::sender_photo("mira@example.test", &[]).urls.len(), 1);
+        assert!(super::sender_photo("", &[]).urls.is_empty());
+    }
+    #[test]
+    fn avatar_mailbox_preserves_names_with_commas_and_quotes() {
+        let name = "Example, Morgan \"M\"";
+        assert_eq!(
+            crate::model::addresses(&super::mailbox(name, "morgan@example.test")).unwrap(),
+            vec![(name.into(), "morgan@example.test".into())]
+        );
+    }
+    #[test]
+    fn shared_address_avatar_is_independent_of_display_name_and_contact_order() {
+        let first = crate::model::Contact {
+            name: "Rhea Example".into(),
+            email: "shared@example.test".into(),
+            photo: "https://lh3.googleusercontent.com/rhea".into(),
+            ..Default::default()
+        };
+        let second = crate::model::Contact {
+            name: "Morgan Example".into(),
+            email: "shared@example.test".into(),
+            photo: "https://lh3.googleusercontent.com/morgan".into(),
+            ..Default::default()
+        };
+        for contacts in [
+            vec![first.clone(), second.clone()],
+            vec![second.clone(), first.clone()],
+        ] {
+            let plain = super::sender_photo("shared@example.test", &contacts);
+            for name in ["Morgan Example", "Rhea Example", "Someone Else"] {
+                let named =
+                    super::sender_photo(&super::mailbox(name, "shared@example.test"), &contacts);
+                assert_eq!(named.key, plain.key);
+                assert_eq!(named.urls, plain.urls);
+            }
+            assert!(
+                super::sender_photo("shared@example.test", &contacts).urls[0]
+                    .contains("gravatar.com")
+            );
+            assert!(
+                super::sender_photo("Someone Else <shared@example.test>", &contacts).urls[0]
+                    .contains("gravatar.com")
+            );
+        }
+    }
+    #[test]
+    fn identicons_are_deterministic_distinct_and_mirrored() {
+        let bytes = super::identicon("mira@example.test");
+        assert_eq!(bytes, super::identicon("mira@example.test"));
+        assert_ne!(bytes, super::identicon("jun@example.test"));
+        let image = image::load_from_memory(&bytes).unwrap().to_rgba8();
+        for y in 0..64 {
+            for x in 0..64 {
+                assert_eq!(image.get_pixel(x, y), image.get_pixel(63 - x, y));
+            }
         }
     }
     #[test]

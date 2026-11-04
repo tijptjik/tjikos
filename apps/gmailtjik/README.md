@@ -44,7 +44,7 @@ apps/gmailtjik/dist/gmailtjik --connect /private/path/google-client.json --conta
 apps/gmailtjik/dist/gmailtjik
 ```
 
-Omit `--contacts` to connect only mail. The permissions are `https://mail.google.com/` and,
+Omit `--contacts` to connect only mail. The permissions are `https://mail.google.com/`, `gmail.settings.basic`, and,
 when requested, `contacts.readonly` plus `contacts.other.readonly`. The browser
 login uses a loopback callback, random state, PKCE, and refresh tokens. Public
 distribution requires Google's applicable restricted-scope verification.
@@ -89,6 +89,21 @@ People API contact/profile photos appear when Google provides one; otherwise the
 person gets an initials avatar. Other Contacts search cannot return photos, so
 those photos come from the full contacts import. Photos load and cache in memory
 on an independent worker, without blocking mail synchronization or sending.
+
+Conversation rows keep names and subject beside a compact circular avatar stack
+on the right. Up to five distinct senders overlap slightly;
+a +n circle lists remaining senders on hover. To/Cc-only recipients have no avatar. Aliases belonging to the same
+saved Google person share an avatar and count once. Message headers retain the
+individual circular sender avatar. Both prefer the cached Google contact
+photo, then Gravatar (using the SHA-256 of the normalized email address). They
+show a stable, locally generated identicon while loading or if no photo exists.
+Avatar selection is independent of message display names. Conflicting Google
+photos for the same address fall back to Gravatar, then a stable identicon.
+List avatars are 28px circles with a 1px separator border and 8px overlap.
+These lookups run separately from mail delivery; demo mode never fetches avatars.
+Each expanded message can be collapsed with its header chevron. Recognized
+quoted history, including Outlook reply-header chains, is hidden in both reading
+views and can be restored with **Show quoted history**.
 
 ## Sync, notifications and keyboard
 
@@ -338,7 +353,9 @@ Folder navigation reads a private SQLite index of headers and label membership
 first. It returns up to 25 conversations without scanning or decoding email
 bodies; selection and scroll position are remembered separately for each view.
 Saved lists and full conversation bodies open immediately. A fresh saved view is
-reused for 60 seconds; Refresh explicitly bypasses freshness. A missing or stale
+reused for five minutes, and downloaded thread bodies for fifteen minutes;
+Refresh explicitly bypasses folder freshness. Gmail history changes invalidate
+folder views and affected threads, including newly added replies. A missing or stale
 view refreshes in the background, with new previews appearing in batches of six.
 Folder reads, selected-message reads, images, queued actions and background sync
 have independent workers. Obsolete requests cannot replace the current view.
@@ -463,3 +480,48 @@ requires the full-mail scope above for permanent deletion. The app explains the
 missing permission before attempting to empty a folder; reconnecting does not
 delete mail. To preview the controls without an account, use
 `GMAILTJIK_DEMO_SCENE=empty-folders apps/gmailtjik/dist/gmailtjik --demo`.
+
+Sender icons in the conversation list and reader open a contact-details modal.
+It shows known addresses for the matching saved person, or the message's sender
+name/address when no unambiguous contact is available. Copy buttons copy addresses;
+Close and Escape dismiss the modal without changing message selection or expansion.
+
+Gmail's public API has no unsubscribe method. Gmailtjik exposes valid HTTP(S) and
+mailto links from a message's RFC 2369 `List-Unsubscribe` header in an Unsubscribe
+helper. Opening a website or email application is an explicit action; it does not
+mark the subscription as cancelled. RFC 8058 one-click POST delivery is not
+implemented. Demo mode never opens these links. The synthetic `sender-details`
+UI scene exercises both modal types without accessing real contacts or mail.
+
+Idle sync checks Gmail history first and skips inbox and notification scans when
+the last completed sync has the same cursor and a valid inbox snapshot (up to
+fifteen minutes). Failed scans are retried rather than recorded as complete.
+Background prefetch warms at most one folder per five minutes across processes,
+and retains fresh prefetched folders for thirty minutes.
+
+Message footer links and actions share a horizontal wrapping group below the body
+and attachments, including reply, quoted-history and signature controls.
+
+Expanded messages with loaded bodies are automatically marked read after the
+viewer has been active for half a second. Summary-only and collapsed messages
+are excluded. Read changes use the durable per-message action queue; unread-only
+views keep the opened message in the reader instead of advancing through unread
+mail. Explicit Mark unread is respected until the message is opened again.
+
+## Gmail filters and reply drafts
+
+Settings → Filters manages Gmail server-side filters. The reader's Filter button
+prefills the sender address. Choose criteria and actions, then save. Existing
+accounts must reconnect through Settings → Sync to grant `gmail.settings.basic`.
+Editing replaces the Gmail filter because the API has no update operation.
+
+“Apply to all matching mail” is off by default. Enabling it also applies label,
+read, archive, star, Trash, and Spam actions to matching existing messages,
+including Spam and Trash. Matches are collected before batched changes begin.
+Partial failures report progress; “Apply existing mail…” retries the saved
+filter without creating another one. Historical forwarding is not supported.
+Deleting a filter leaves previously processed mail unchanged.
+
+Replying while a different draft is open saves that draft locally and opens the
+reply. Resume saved drafts from the composer; their text and pending Gmail-save
+receipts survive reopening the app.

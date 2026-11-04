@@ -125,9 +125,9 @@ pub fn connect(dir: &Path, client_path: &Path, contacts: bool) -> Result<()> {
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let state = URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>());
     let scope = if contacts {
-        "https://mail.google.com/ https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly"
+        "https://mail.google.com/ https://www.googleapis.com/auth/gmail.settings.basic https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly"
     } else {
-        MAIL_SCOPE
+        "https://mail.google.com/ https://www.googleapis.com/auth/gmail.settings.basic"
     };
     let mut url = url::Url::parse("https://accounts.google.com/o/oauth2/v2/auth")?;
     url.query_pairs_mut().extend_pairs([

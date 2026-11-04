@@ -55,11 +55,10 @@ fn prepare(
     resources: &Resources,
 ) -> (String, Offline, Vec<(String, String)>) {
     let mut doc = scraper::Html::parse_document(html);
-    let selector = scraper::Selector::parse(if expanded {
-        "script, iframe, object, embed, form, input, button, textarea, select, meta, base, link, audio, video, svg"
-    } else {
-        "script, iframe, object, embed, form, input, button, textarea, select, meta, base, link, audio, video, svg, .gmail_quote, .yahoo_quoted, blockquote[type=cite]"
-    }).unwrap();
+    if !expanded {
+        crate::quotes::strip_html(&mut doc);
+    }
+    let selector = scraper::Selector::parse("script, iframe, object, embed, form, input, button, textarea, select, meta, base, link, audio, video, svg").unwrap();
     let removed: Vec<_> = doc.select(&selector).map(|n| n.id()).collect();
     for id in removed {
         doc.tree.get_mut(id).unwrap().detach();
@@ -300,6 +299,46 @@ fn normalize_dark(doc: &mut HtmlDocument) {
     doc.resolve(0.);
 }
 
+// Blitz currently treats a table cell's explicit height as a fixed block
+// height, allowing wrapped content to paint over later rows. In HTML tables it
+// is a minimum. Normalize computed cell heights so inline/class/legacy sizing
+// all retain their minimum while participating in content-driven row sizing.
+fn normalize_table_heights(doc: &mut HtmlDocument) {
+    let cells = doc.query_selector_all("td, th").unwrap_or_default();
+    let mut changed = false;
+    for id in cells {
+        let height = doc.resolved_style_value(id, "height");
+        if height == "auto" || height.is_empty() {
+            continue;
+        }
+        let minimum = doc.resolved_style_value(id, "min-height");
+        let minimum = if minimum == "auto" || minimum.is_empty() {
+            height
+        } else {
+            format!("max({height}, {minimum})")
+        };
+        let style = doc
+            .get_node(id)
+            .and_then(|node| node.attr("style".into()))
+            .unwrap_or("");
+        let Some(style) = doc.style_attr_set_property(style, "min-height", &minimum, true) else {
+            continue;
+        };
+        let Some(style) = doc.style_attr_set_property(&style, "height", "auto", true) else {
+            continue;
+        };
+        doc.mutate().set_attribute(
+            id,
+            blitz_dom::QualName::new(None, Default::default(), "style".into()),
+            &style,
+        );
+        changed = true;
+    }
+    if changed {
+        doc.resolve(0.);
+    }
+}
+
 pub fn render(
     html: &str,
     width: u32,
@@ -335,6 +374,7 @@ pub fn render(
     if !light {
         normalize_dark(&mut doc);
     }
+    normalize_table_heights(&mut doc);
     // Fixed boxes belong to the email document, not to each raster tile's
     // viewport. Resolve authored CSS before normalizing so class rules and
     // !important declarations are handled without parsing CSS ourselves.
@@ -736,6 +776,94 @@ mod tests {
                 .to_rgba8();
             assert!(first.pixels().any(|pixel| pixel.0 == [255, 0, 255, 255]));
             assert!(second.pixels().all(|pixel| pixel.0 != [255, 0, 255, 255]));
+        }
+    }
+
+    #[test]
+    fn outlook_border_box_cells_keep_paragraphs_inside_rows() {
+        let mut html =
+            String::from("<table style='border-collapse:collapse;box-sizing:border-box'>");
+        for row in 0..3 {
+            html.push_str("<tr>");
+            for width in [78.625, 344.703, 382.703] {
+                html.push_str(&format!("<td style='border:1pt solid;padding:0 5.4pt;vertical-align:top;width:{width}px;height:29.0819px;box-sizing:border-box'><p style='margin:0;font:12pt sans-serif'><a href='https://example.test/{row}'>Some sample title with enough words to wrap onto multiple lines</a></p><p style='margin:0;font:12pt sans-serif'>An additional paragraph</p></td>"));
+            }
+            html.push_str("</tr>");
+        }
+        html.push_str("</table><a href='https://example.test/after'>Following message</a>");
+        let page = render(&html, 620, false, false, &vec![]).unwrap();
+        for row in 0..2 {
+            let bottom = page
+                .link_areas
+                .iter()
+                .filter(|a| a.url.ends_with(&format!("/{row}")))
+                .map(|a| a.rect[1] + a.rect[3])
+                .fold(0., f32::max);
+            let top = page
+                .link_areas
+                .iter()
+                .filter(|a| a.url.ends_with(&format!("/{}", row + 1)))
+                .map(|a| a.rect[1])
+                .fold(f32::INFINITY, f32::min);
+            assert!(top >= bottom, "Next row overlaps: {top} < {bottom}");
+        }
+    }
+
+    #[test]
+    fn row_heights_allow_wrapping_without_explicit_cell_heights() {
+        let html = "<table style='width:260px;border-collapse:collapse'><tr style='height:20px'><td style='width:65px'>Country</td><td><p style='margin:0'><a href='https://example.test/first'>A long book title that wraps over several lines with ordering details and additional information</a></p></td></tr><tr style='height:20px'><td>Next</td><td><a href='https://example.test/next'>Next row</a></td></tr></table>";
+        let page = render(html, 300, true, false, &vec![]).unwrap();
+        let bottom = page
+            .link_areas
+            .iter()
+            .filter(|a| a.url.ends_with("/first"))
+            .map(|a| a.rect[1] + a.rect[3])
+            .fold(0., f32::max);
+        let top = page
+            .link_areas
+            .iter()
+            .find(|a| a.url.ends_with("/next"))
+            .unwrap()
+            .rect[1];
+        assert!(top >= bottom, "Next row overlaps: {top} < {bottom}");
+    }
+
+    #[test]
+    fn fixed_height_table_cells_grow_for_wrapped_content() {
+        let html = "<table style='width:260px;border-collapse:collapse'><tr style='height:20px'><td style='width:65px;height:20px'>Country</td><td style='height:20px'><a href='https://example.test/first'>A long book title that wraps over several lines with ordering details and additional information</a></td></tr><tr style='height:20px'><td>Next</td><td><a href='https://example.test/next'>Next row</a></td></tr></table><a href='https://example.test/after'>Following message</a>";
+        for light in [false, true] {
+            let page = render(html, 300, true, light, &vec![]).unwrap();
+            if let Ok(directory) = std::env::var("GMAILTJIK_TEST_RENDER_DIR") {
+                std::fs::write(
+                    std::path::Path::new(&directory).join(format!("table-{light}.png")),
+                    &page.tiles[0].1,
+                )
+                .unwrap();
+            }
+            let bottom = |url: &str| {
+                page.link_areas
+                    .iter()
+                    .filter(|a| a.url.ends_with(url))
+                    .map(|a| a.rect[1] + a.rect[3])
+                    .fold(0., f32::max)
+            };
+            let top = |url: &str| {
+                page.link_areas
+                    .iter()
+                    .filter(|a| a.url.ends_with(url))
+                    .map(|a| a.rect[1])
+                    .fold(f32::INFINITY, f32::min)
+            };
+            assert!(
+                top("/next") >= bottom("/first"),
+                "Next row overlaps wrapped text: {} < {}",
+                top("/next"),
+                bottom("/first")
+            );
+            assert!(
+                top("/after") >= bottom("/next"),
+                "Following message overlaps table"
+            );
         }
     }
 

@@ -179,6 +179,12 @@ pub struct Draft {
     pub gmail_id: String,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct DraftSlot {
+    pub draft: Draft,
+    pub pending_save: Option<i64>,
+}
+
 impl Draft {
     pub fn reply(message: &Message) -> Self {
         let reply_to = message.header("Reply-To");
@@ -326,6 +332,29 @@ impl Conversation<'_> {
 
     pub fn unread(&self) -> bool {
         self.messages.iter().any(|m| m.unread())
+    }
+
+    /// Only people who sent a message in this conversation.
+    /// Prefer a named address when another header only supplies the email.
+    pub fn avatar_participants(&self) -> Vec<(String, String)> {
+        let mut participants: Vec<(String, String)> = Vec::new();
+        for message in &self.messages {
+            for header in ["From"] {
+                for (name, email) in addresses(&message.header(header)).unwrap_or_default() {
+                    if let Some(existing) = participants
+                        .iter_mut()
+                        .find(|(_, address)| address.eq_ignore_ascii_case(&email))
+                    {
+                        if existing.0.is_empty() && !name.is_empty() {
+                            existing.0 = name;
+                        }
+                    } else {
+                        participants.push((name, email));
+                    }
+                }
+            }
+        }
+        participants
     }
 
     pub fn participants(&self, account: &str) -> String {
@@ -544,6 +573,42 @@ pub fn demo() -> (Vec<Label>, Page) {
             URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-readable.html"));
         messages[0].snippet = "A simple message with consistent typography and lists.".into();
     }
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("avatar-stack") {
+        for n in 1..=6 {
+            let mut reply = messages[0].clone();
+            reply.id = format!("stack-reply-{n}");
+            for header in &mut reply.payload.headers {
+                if header.name == "From" {
+                    header.value = format!("Person {n} <person{n}@example.test>");
+                }
+            }
+            messages.push(reply);
+        }
+    }
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("footer-actions") {
+        messages[0].payload.mime_type = "text/html".into();
+        let links = [
+            "Website",
+            "Privacy policy",
+            "Email preferences",
+            "Legal information",
+            "Terms of Service",
+            "Contact",
+            "Community",
+            "Support",
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(n, label)| format!("<a href=\"https://example.test/{n}\">{label}</a> "))
+        .collect::<String>();
+        messages[0].payload.body.data = URL_SAFE_NO_PAD.encode(format!("<table><tr><td>Account update</td><td>Privacy and preferences</td></tr><tr><td>Details</td><td>Synthetic notice</td></tr></table><p>{links}</p>"));
+    }
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("sender-details") {
+        messages[0].payload.headers.push(Header {
+            name: "List-Unsubscribe".into(),
+            value: "<https://newsletter.example.test/unsubscribe?token=synthetic>, <mailto:unsubscribe@example.test?subject=unsubscribe>".into(),
+        });
+    }
     if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("html") {
         messages[0].payload.mime_type = "text/html".into();
         messages[0].payload.body.data =
@@ -684,6 +749,10 @@ pub fn demo_thread(message: &Message) -> Vec<Message> {
                 header.value = "Mira <mira@example.test>".into();
             }
         }
+        reply
+            .payload
+            .headers
+            .retain(|h| !h.name.eq_ignore_ascii_case("List-Unsubscribe"));
         reply.payload.mime_type = "text/plain".into();
         reply.payload.body.data = URL_SAFE_NO_PAD.encode(format!(
             "Thanks, Mira. I will send notes before Thursday.
@@ -756,6 +825,37 @@ fn demo_html_thread(latest: &Message) -> Vec<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn avatar_participants_exclude_non_senders_and_deduplicate_addresses() {
+        let mut message = Message::default();
+        message.payload.headers = vec![
+            Header {
+                name: "From".into(),
+                value: "Sender <sender@example.test>".into(),
+            },
+            Header {
+                name: "To".into(),
+                value: "reader@example.test, Recipient <recipient@example.test>".into(),
+            },
+            Header {
+                name: "Cc".into(),
+                value: "Reader <READER@example.test>, Observer <observer@example.test>".into(),
+            },
+        ];
+        let mut reply = message.clone();
+        reply.payload.headers[0].value = "Reader <READER@example.test>".into();
+        let conversation = Conversation {
+            messages: vec![&message, &message, &reply],
+        };
+        assert_eq!(
+            conversation.avatar_participants(),
+            vec![
+                ("Sender".into(), "sender@example.test".into()),
+                ("Reader".into(), "READER@example.test".into()),
+            ]
+        );
+    }
 
     #[test]
     fn progressive_previews_preserve_selection_and_opened_content() {

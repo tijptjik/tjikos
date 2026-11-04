@@ -178,6 +178,32 @@ impl Store {
         )?;
         Ok(())
     }
+    /// A complete Gmail thread response replaces cached membership, not just bodies.
+    /// Missing members are evicted locally, without claiming permanent deletion.
+    pub fn reconcile_thread(&self, id: &str, messages: &[Message]) -> Result<()> {
+        anyhow::ensure!(
+            messages.iter().all(|m| m.thread_id == id),
+            "Mismatched thread response"
+        );
+        let ids = serde_json::to_string(&messages.iter().map(|m| &m.id).collect::<Vec<_>>())?;
+        let transaction = self.db.unchecked_transaction()?;
+        for table in ["searches", "partial_searches"] {
+            transaction.execute(&format!(
+                "UPDATE {table} SET value=json_set(value,'$.messages',json((
+                    SELECT json_group_array(json(member.value)) FROM json_each({table}.value,'$.messages') AS member
+                    WHERE json_extract(member.value,'$.threadId') IS NOT ?1
+                       OR json_extract(member.value,'$.id') IN (SELECT value FROM json_each(?2))
+                ))) WHERE EXISTS(SELECT 1 FROM json_each({table}.value,'$.messages') AS member
+                    WHERE json_extract(member.value,'$.threadId')=?1)"
+            ), params![id, ids])?;
+        }
+        transaction.execute("DELETE FROM messages WHERE json_extract(value,'$.threadId')=?1 AND id NOT IN (SELECT value FROM json_each(?2))", params![id, ids])?;
+        transaction.execute("DELETE FROM mail_summaries WHERE thread_key=?1 AND id NOT IN (SELECT value FROM json_each(?2))", params![id, ids])?;
+        self.put(&format!("thread:{id}"), &messages)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn invalidate(&self, id: &str) -> Result<()> {
         self.invalidate_cached_message(id)?;
         self.db.execute("DELETE FROM messages WHERE id=?", [id])?;
@@ -245,7 +271,6 @@ impl Store {
         transaction.commit()?;
         Ok(())
     }
-    #[cfg(test)]
     pub fn apply_labels(&self, id: &str, add: &[String], remove: &[String]) -> Result<()> {
         self.update_summary_labels(id, add, remove)?;
         let mut stmt = self.db.prepare(
@@ -405,6 +430,54 @@ impl Store {
         )?;
         Ok(())
     }
+    pub fn switch_draft(
+        &self,
+        current: &Draft,
+        pending_save: Option<i64>,
+        target: Draft,
+        resume: Option<usize>,
+    ) -> Result<crate::model::DraftSlot> {
+        let transaction = self.db.unchecked_transaction()?;
+        let mut slots: Vec<crate::model::DraftSlot> =
+            self.get("saved_local_drafts")?.unwrap_or_default();
+        let index = resume.or_else(|| {
+            slots.iter().position(|slot| {
+                !target.in_reply_to.is_empty()
+                    && slot.draft.in_reply_to == target.in_reply_to
+                    && slot.draft.thread_id == target.thread_id
+            })
+        });
+        let selected = if let Some(index) = index {
+            anyhow::ensure!(
+                index < slots.len(),
+                "Saved draft changed; reopen the draft list"
+            );
+            if resume.is_some() {
+                anyhow::ensure!(
+                    slots[index].draft == target,
+                    "Saved draft changed; reopen the draft list"
+                );
+            }
+            slots.remove(index)
+        } else {
+            crate::model::DraftSlot {
+                draft: target,
+                pending_save: None,
+            }
+        };
+        if current != &Draft::default() && current != &selected.draft {
+            slots.push(crate::model::DraftSlot {
+                draft: current.clone(),
+                pending_save,
+            });
+        }
+        self.put("saved_local_drafts", &slots)?;
+        self.put("composer", &selected.draft)?;
+        self.put("pending_draft_save", &selected.pending_save.unwrap_or(0))?;
+        transaction.commit()?;
+        Ok(selected)
+    }
+
     pub fn draft(&self) -> Result<Draft> {
         Ok(self.get("composer")?.unwrap_or_default())
     }
@@ -413,6 +486,106 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn complete_thread_evicts_obsolete_members_from_all_cached_views() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let store = Store::open(Some(dir.path())).unwrap();
+        let page = crate::model::demo_conversations().1;
+        let key = crate::worker::key("INBOX", "", "");
+        store.save_page(&key, &page).unwrap();
+        store.save_partial_page(&key, &page).unwrap();
+        for message in &page.messages {
+            store.save_message(message).unwrap();
+        }
+        let thread = &page.messages[0].thread_id;
+        let members: Vec<_> = page
+            .messages
+            .iter()
+            .filter(|m| &m.thread_id == thread)
+            .cloned()
+            .collect();
+        assert!(members.len() > 1);
+        let removed = &members[1].id;
+        store.reconcile_thread(thread, &members[..1]).unwrap();
+        assert!(store.message(removed).unwrap().is_none());
+        for cached in [
+            store.page(&key).unwrap().unwrap(),
+            store.cached_folder_page("INBOX", "", "").unwrap().unwrap(),
+        ] {
+            assert!(!cached.messages.iter().any(|m| &m.id == removed));
+            assert_eq!(
+                cached
+                    .messages
+                    .iter()
+                    .filter(|m| &m.thread_id == thread)
+                    .count(),
+                1
+            );
+        }
+        assert_eq!(
+            store
+                .db
+                .query_row("SELECT count(*) FROM deleted_messages", [], |r| r
+                    .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        drop(store);
+        let store = Store::open(Some(dir.path())).unwrap();
+        assert!(
+            !store
+                .cached_folder_page("INBOX", "", "")
+                .unwrap()
+                .unwrap()
+                .messages
+                .iter()
+                .any(|m| &m.id == removed)
+        );
+    }
+
+    #[test]
+    fn switching_replies_preserves_drafts_and_pending_receipts_across_reopen() {
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let first = Draft {
+            body: "Unfinished original".into(),
+            ..Default::default()
+        };
+        let reply = Draft {
+            in_reply_to: "message-id".into(),
+            thread_id: "thread".into(),
+            body: "Reply text".into(),
+            ..Default::default()
+        };
+        {
+            let store = Store::open(Some(dir.path())).unwrap();
+            assert_eq!(
+                store
+                    .switch_draft(&first, Some(42), reply.clone(), None)
+                    .unwrap()
+                    .draft,
+                reply
+            );
+        }
+        let store = Store::open(Some(dir.path())).unwrap();
+        assert_eq!(store.draft().unwrap(), reply);
+        let restored = store
+            .switch_draft(&reply, Some(43), first.clone(), Some(0))
+            .unwrap();
+        assert_eq!(restored.draft, first);
+        assert_eq!(restored.pending_save, Some(42));
+        assert!(
+            store
+                .switch_draft(&first, Some(42), Draft::default(), Some(0))
+                .is_err()
+        );
+        assert_eq!(store.draft().unwrap(), first);
+        let restored = store
+            .switch_draft(&first, Some(42), reply.clone(), None)
+            .unwrap();
+        assert_eq!(restored.draft, reply);
+        assert_eq!(restored.pending_save, Some(43));
+    }
 
     #[test]
     fn permanent_deletion_scrubs_every_cache_and_preserves_other_thread_members() {

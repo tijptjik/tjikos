@@ -259,7 +259,6 @@ impl Store {
         Ok(())
     }
 
-    #[cfg(test)]
     pub(crate) fn update_summary_labels(
         &self,
         id: &str,

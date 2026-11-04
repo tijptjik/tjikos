@@ -153,13 +153,8 @@ pub fn parse_with_signature(
             .map(|style| style.text().collect::<String>())
             .collect();
         prune(&mut doc, false);
-        let quotes = Selector::parse(".gmail_quote, .yahoo_quoted, blockquote[type=cite]").unwrap();
-        let quote_ids: Vec<_> = doc
-            .root_element()
-            .select(&quotes)
-            .map(|node| node.id())
-            .collect();
-        let quoted = !quote_ids.is_empty();
+        let mut unquoted = doc.clone();
+        let quoted = crate::quotes::strip_html(&mut unquoted);
         prune(&mut current, true);
         let complex = complex_layout(&current) || stylesheet_columns(&current, &styles);
         // Some senders put reply markers only in the plain alternative. Retain
@@ -196,11 +191,7 @@ pub fn parse_with_signature(
             }
         }
         if !expanded {
-            for id in quote_ids {
-                if let Some(mut node) = doc.tree.get_mut(id) {
-                    node.detach();
-                }
-            }
+            doc = unquoted;
         }
         let body = doc
             .root_element()
@@ -278,6 +269,9 @@ fn plain_body(text: &str, show_signature: bool) -> (String, bool) {
 }
 
 fn prune(doc: &mut Html, quotes: bool) {
+    if quotes {
+        crate::quotes::strip_html(doc);
+    }
     let ids: Vec<_> = doc
         .root_element()
         .select(&Selector::parse("*").unwrap())
@@ -806,6 +800,29 @@ mod tests {
         }
     }
 
+    #[test]
+    fn outlook_quotes_hide_integrally_and_restore_in_both_views() {
+        let message = mail(
+            "text/html",
+            "<p>Current answer</p><div><p><b>From:</b> sender@example.test<br><b>Sent:</b> Monday<br><b>To:</b> reader@example.test<br><b>Subject:</b> Earlier</p><table><tr><td>Old body</td></tr></table></div><p>Older history</p>",
+        );
+        let collapsed = parse(&message, false);
+        let expanded = parse(&message, true);
+        assert!(collapsed.quoted && expanded.quoted);
+        assert!(!collapsed.complex && !expanded.complex);
+        assert!(collapsed.markdown.contains("Current answer"));
+        assert!(
+            !collapsed.markdown.contains("Old body")
+                && !collapsed.markdown.contains("Older history")
+                && !collapsed.markdown.contains("From:")
+        );
+        assert!(
+            expanded.markdown.contains("Old body") && expanded.markdown.contains("Older history")
+        );
+        let mut layout = scraper::Html::parse_document(collapsed.original_layout.as_ref().unwrap());
+        crate::quotes::strip_html(&mut layout);
+        assert!(!layout.html().contains("Old body") && !layout.html().contains("Older history"));
+    }
     #[test]
     fn preserves_semantics_and_links_without_sender_styling() {
         let body = parse(
