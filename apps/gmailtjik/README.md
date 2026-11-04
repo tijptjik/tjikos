@@ -436,6 +436,8 @@ Synthetic progressive folder check: `GMAILTJIK_DEMO_SCENE=quick-folder bun run -
 Synthetic failed-refresh cache check: `GMAILTJIK_DEMO_SCENE=cache-failure bun run --cwd apps/gmailtjik test:ui`.
 
 Install the built app with `bash scripts/install.sh gmailtjik` from the workspace root. This installs `~/.local/bin/gmailtjik`, its desktop entry and the approved rose icon for launcher discovery.
+If a headless sync binary is already installed, its copy is updated atomically too.
+The running service is preserved and adopts the new build on its next restart.
 
 Sidebar badges show Gmail unread message counts for each label. Right-click a label,
 or choose Manage labels and its settings icon, to select Always show, Only when

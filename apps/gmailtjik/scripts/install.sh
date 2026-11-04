@@ -5,9 +5,18 @@ install_home="${GMAILTJIK_INSTALL_HOME:-$HOME}"
 data_root="${GMAILTJIK_INSTALL_DATA:-${XDG_DATA_HOME:-$install_home/.local/share}}"
 install -d "$install_home/.local/bin" "$data_root/applications" "$data_root/icons/hicolor/scalable/apps"
 new_binary="$(mktemp "$install_home/.local/bin/.gmailtjik.XXXXXXXX")"
-trap 'rm -f -- "$new_binary"' EXIT
+new_sync_binary=""
+trap 'rm -f -- "$new_binary"; [[ -z "$new_sync_binary" ]] || rm -f -- "$new_sync_binary"' EXIT
 install -m 755 "$root/dist/gmailtjik" "$new_binary"
 mv -f -- "$new_binary" "$install_home/.local/bin/gmailtjik"
+# Refresh an existing headless installation without interrupting its process or
+# changing account configuration. Its next restart will use this validated build.
+sync_binary="$install_home/.local/lib/gmailtjik/gmailtjik"
+if [[ -f "$sync_binary" ]]; then
+    new_sync_binary="$(mktemp "$install_home/.local/lib/gmailtjik/.gmailtjik.XXXXXXXX")"
+    install -m 755 "$root/dist/gmailtjik" "$new_sync_binary"
+    mv -f -- "$new_sync_binary" "$sync_binary"
+fi
 install -m 644 "$root/assets/gmailtjik-app.svg" "$data_root/icons/hicolor/scalable/apps/gmailtjik.svg"
 # Absolute Exec also works when the desktop session omits ~/.local/bin from PATH.
 # Keep the icon name so the active theme takes precedence over the hicolor fallback.
