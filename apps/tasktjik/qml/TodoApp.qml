@@ -471,7 +471,7 @@ Pane {
         Qt.callLater(() => {
             if(section==='repeat')repeatTyping=true;
             const inputs = {group:groupInput,tags:tagsInput,due:dueInput,repeat:repeatInput,reference:planInput,reminder:notifyInput};
-            inputs[section].forceActiveFocus();
+            if(inputs[section])inputs[section].forceActiveFocus();
         });
     }
     component QuietButton: Button {
@@ -570,6 +570,70 @@ Pane {
             implicitHeight:Math.min(contentItem.implicitHeight+12,260)
             background:Rectangle {radius:10;color:theme.surface;border.color:theme.border}
             contentItem:ListView {clip:true;implicitHeight:contentHeight;model:control.popup.visible?control.delegateModel:null;currentIndex:control.highlightedIndex;ScrollIndicator.vertical:ScrollIndicator {}}
+        }
+    }
+    component SearchChoice: QuietButton {
+        id:control
+        property var model: []
+        property int currentIndex: 0
+        property string label
+        property bool allowEmpty: false
+        readonly property string currentValue: model[currentIndex]?.id || ''
+        readonly property string currentText: model[currentIndex]?.title || ''
+        signal activated(int index)
+        implicitHeight:34;horizontalPadding:12
+        width:Math.min(implicitWidth,parent.width)
+        text:currentValue?label+': '+currentText:'+ '+label
+        Accessible.name:text
+        contentItem:Text {text:control.text;color:theme.text;font.pixelSize:13;elide:Text.ElideRight;verticalAlignment:Text.AlignVCenter}
+        onClicked:picker.open()
+        onVisibleChanged:if(!visible)picker.close()
+        function choose(index) {
+            currentIndex=index;
+            activated(index);
+            picker.close();
+        }
+        Popup {
+            id:picker;objectName:control.objectName+'-popup'
+            x:Math.min(0,app.width-control.mapToItem(app,0,0).x-width-12)
+            y:control.height+6;width:Math.min(420,app.width-32);padding:8;margins:12
+            implicitHeight:contentItem.implicitHeight+16
+            modal:true;focus:true
+            closePolicy:Popup.CloseOnEscape | Popup.CloseOnPressOutside
+            onOpened:{query.text='';results.currentIndex=0;query.forceActiveFocus();}
+            onClosed:if(control.visible)control.forceActiveFocus()
+            background:Rectangle {radius:10;color:theme.surface;border.color:theme.border}
+            contentItem:ColumnLayout {
+                spacing:6
+                Entry {
+                    id:query;objectName:control.objectName+'-search'
+                    Layout.fillWidth:true;placeholderText:'Search '+control.label.toLowerCase()+'…'
+                    Accessible.name:placeholderText
+                    onTextChanged:results.currentIndex=0
+                    onAccepted:if(results.count)control.choose(results.model[results.currentIndex].index)
+                    Keys.onDownPressed:if(results.count){results.currentIndex=(results.currentIndex+1)%results.count;results.positionViewAtIndex(results.currentIndex,ListView.Contain);}
+                    Keys.onUpPressed:if(results.count){results.currentIndex=(results.currentIndex+results.count-1)%results.count;results.positionViewAtIndex(results.currentIndex,ListView.Contain);}
+                    Keys.onEscapePressed:picker.close()
+                }
+                ListView {
+                    id:results;objectName:control.objectName+'-results'
+                    Layout.fillWidth:true;Layout.preferredHeight:Math.min(contentHeight,220)
+                    clip:true;boundsBehavior:Flickable.StopAtBounds
+                    model:control.model.map((entry,index)=>({title:entry.title,id:entry.id,index:index})).filter(entry=>(entry.id || control.allowEmpty) && entry.title.toLowerCase().includes(query.text.trim().toLowerCase()))
+                    currentIndex:0
+                    delegate:ItemDelegate {
+                        required property var modelData
+                        required property int index
+                        width:results.width;height:36
+                        text:modelData.title;highlighted:results.currentIndex===index
+                        onClicked:control.choose(modelData.index)
+                        contentItem:Text {text:parent.text;color:theme.text;font.pixelSize:13;elide:Text.ElideRight;verticalAlignment:Text.AlignVCenter}
+                        background:Rectangle {radius:6;color:parent.highlighted || parent.hovered?theme.border:'transparent'}
+                    }
+                    ScrollIndicator.vertical:ScrollIndicator {}
+                }
+                Label {visible:results.count===0;Layout.fillWidth:true;text:'No matching '+control.label.toLowerCase()+'.';color:theme.muted;padding:8}
+            }
         }
     }
     Shortcut {sequence:'?';onActivated:help.open()}
@@ -1577,20 +1641,32 @@ Pane {
                     Label {text:'Title';color:theme.muted;font.pixelSize:12}
                     Entry {id:titleInput;Layout.fillWidth:true;placeholderText:collection==='reading'?'Page title':'What needs to be done?';font.pixelSize:18;onAccepted:if(text.trim())saveEditor()}
                 }
-                Choice {
-                    id:templatePicker;objectName:'from-template';Layout.fillWidth:true
-                    visible:!!editing && !editing.id && editing.kind==='todo'
-                    textRole:'title';valueRole:'id'
-                    model:[{id:'',title:'From Template…'}].concat((stateData.tasks || []).filter(t=>t.kind==='template'))
-                    onActivated:{const template=model[currentIndex];if(template.id){const copy=Workflow.instantiate(template.subtasks || []);workflowEditor.reset(copy,template.workflow===true);}}
-                }
-                Choice {
-                    id:projectPicker;Layout.fillWidth:true;visible:!!editing && editing.kind==='todo'
-                    textRole:'title';valueRole:'id';Accessible.name:'Project'
-                    model:[{id:'',title:'No project'}].concat((stateData.tasks || []).filter(t=>t.kind==='project')).concat(editing && editing.project && !(stateData.tasks || []).some(t=>t.kind==='project' && t.id===editing.project)?[{id:editing.project,title:editing.project+' (legacy)'}]:[])
+                Flow {
+                    id:detailButtons
+                    Layout.fillWidth:true;Layout.preferredHeight:implicitHeight;Layout.maximumHeight:implicitHeight;spacing:6
+                    SearchChoice {
+                        id:templatePicker;objectName:'from-template';label:'Template'
+                        visible:!!editing && !editing.id && editing.kind==='todo'
+                        model:[{id:'',title:'From Template…'}].concat((stateData.tasks || []).filter(t=>t.kind==='template'))
+                        onActivated:{const template=model[currentIndex];if(template.id){const copy=Workflow.instantiate(template.subtasks || []);workflowEditor.reset(copy,template.workflow===true);app.reveal('subtasks');}}
+                    }
+                    SearchChoice {
+                        id:projectPicker;objectName:'project-choice';label:'Project';allowEmpty:true
+                        visible:!!editing && editing.kind==='todo'
+                        model:[{id:'',title:'No project'}].concat((stateData.tasks || []).filter(t=>t.kind==='project')).concat(editing && editing.project && !(stateData.tasks || []).some(t=>t.kind==='project' && t.id===editing.project)?[{id:editing.project,title:editing.project+' (legacy)'}]:[])
+                    }
+                    QuietButton {
+                        objectName:'add-subtasks';text:'+ Subtasks';implicitHeight:34;horizontalPadding:12
+                        visible:!!editing && editing.kind==='todo' && !workflowEditor.visible
+                        onClicked:app.reveal('subtasks')
+                    }
+                    Repeater {
+                        model:[{label:'Domain',key:'group'},{label:'Tags',key:'tags'},{label:'Due date',key:'due'},{label:'Repeat',key:'repeat'},{label:'Note',key:'reference'},{label:'Reminder',key:'reminder'}]
+                        QuietButton {required property var modelData;objectName:'add-'+modelData.key;text:'+ '+modelData.label;visible:!sections[modelData.key];implicitHeight:34;horizontalPadding:12;onClicked:reveal(modelData.key)}
+                    }
                 }
                 CheckBox {id:projectOnly;text:'Only show Project tasks in their project';visible:!!editing && editing.kind==='project';checked:true}
-                WorkflowEditor {id:workflowEditor;Layout.fillWidth:true;theme:app.theme;visible:!!editing && ['todo','template'].includes(editing.kind)}
+                WorkflowEditor {id:workflowEditor;Layout.fillWidth:true;theme:app.theme;visible:!!editing && (editing.kind==='template' || editing.kind==='todo' && (!!sections.subtasks || nodes.length>0 || sequential))}
                 ColumnLayout {
                     visible:!!sections.reference;Layout.fillWidth:true;spacing:6
                     Label {text:editing && editing.kind==='reading'?'Link':'Reference';color:theme.muted;font.pixelSize:12}
@@ -1606,14 +1682,6 @@ Pane {
                             model:plans.filter(p=>{let i=0;for(const c of p.toLowerCase())if(c===planFilter.text.toLowerCase()[i])i++;return i===planFilter.text.length;}).slice(0,15)
                             QuietButton {required property string modelData;text:modelData;Layout.fillWidth:true;onClicked:{planInput.text=modelData;planPicker.visible=false;}}
                         }
-                    }
-                }
-                Flow {
-                    id:detailButtons
-                    Layout.fillWidth:true;Layout.preferredHeight:implicitHeight;Layout.maximumHeight:implicitHeight;spacing:6
-                    Repeater {
-                        model:[{label:'Domain',key:'group'},{label:'Tags',key:'tags'},{label:'Due date',key:'due'},{label:'Repeat',key:'repeat'},{label:'Note',key:'reference'},{label:'Reminder',key:'reminder'}]
-                        QuietButton {required property var modelData;objectName:'add-'+modelData.key;text:'+ '+modelData.label;visible:!sections[modelData.key];implicitHeight:34;horizontalPadding:12;onClicked:reveal(modelData.key)}
                     }
                 }
                 ColumnLayout {
