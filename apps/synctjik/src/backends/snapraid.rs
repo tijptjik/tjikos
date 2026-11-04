@@ -75,6 +75,8 @@ struct Policy {
     state: PathBuf,
     lock: PathBuf,
     backup_lock: PathBuf,
+    #[serde(default)]
+    coordination_locks: Vec<PathBuf>,
     log_dir: PathBuf,
     snapraid_config: PathBuf,
     layout: Vec<Vec<String>>,
@@ -158,6 +160,14 @@ impl Policy {
             self.lock != self.backup_lock,
             "Maintenance and backup locks must differ"
         );
+        let mut locks = std::collections::HashSet::from([&self.lock, &self.backup_lock]);
+        for lock in &self.coordination_locks {
+            paths(&[lock])?;
+            ensure!(
+                locks.insert(lock),
+                "Duplicate maintenance coordination lock"
+            );
+        }
         Ok(())
     }
     fn guard(&self, r: &Runner) -> Result<()> {
@@ -263,15 +273,29 @@ impl Policy {
             return Ok(());
         }
         let _backup = Lock::take(&self.backup_lock, true, r)?;
+        let _coordinated = self
+            .coordination_locks
+            .iter()
+            .map(|lock| Lock::take(lock, true, r))
+            .collect::<Result<Vec<_>>>()?;
         self.guard(r)?;
         self.resume(r)?;
         private_dir(&self.log_dir)?;
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+        // A failed scrub must be investigated before parity can change. A scrub
+        // retry may verify existing parity, but never implicitly bypass this gate.
+        let sync_first = action == "sync"
+            || (action == "scrub" && !self.state.join("scrub-failure.json").exists());
+        let mut failure_mode = if action == "scrub" && sync_first {
+            "sync"
+        } else {
+            action
+        };
         let result = (|| {
-            if action == "sync" || action == "preflight" {
-                if action == "sync" {
-                    self.pause(r)?;
-                }
+            if action == "sync" || action == "scrub" {
+                self.pause(r)?;
+            }
+            if sync_first || action == "preflight" {
                 let log = self.log_dir.join(format!("{stamp}-diff.log"));
                 no_symlinks(&log)?;
                 let output = tempfile::NamedTempFile::new_in(&self.log_dir)?;
@@ -301,7 +325,7 @@ impl Policy {
                         "{removed} removals exceed limit {}; review diff before any sync",
                         self.max_removed
                     );
-                    if action == "sync" {
+                    if sync_first {
                         // Consume before parity changes; failures require fresh human approval.
                         remove(&approval_path)?;
                         atomic_json(
@@ -332,7 +356,16 @@ impl Policy {
                         .arg(&log)
                         .arg("sync"),
                 )?;
-            } else {
+                if action == "scrub" {
+                    atomic_json(
+                        &self.state.join("last-sync-success.json"),
+                        &json!({"completed_at":now(), "mode":"sync"}),
+                    )?;
+                    remove(&self.state.join("sync-failure.json"))?;
+                }
+            }
+            if action == "scrub" {
+                failure_mode = "scrub";
                 let log = self.log_dir.join(format!("{stamp}-scrub.log"));
                 run_maintenance(
                     r,
@@ -358,7 +391,7 @@ impl Policy {
         let result: Result<()> = result.and(cleanup);
         if let Err(e) = &result {
             atomic_json(
-                &self.state.join(format!("{action}-failure.json")),
+                &self.state.join(format!("{failure_mode}-failure.json")),
                 &json!({"failed_at":now(), "error":e.to_string()}),
             )?;
         } else if action != "preflight" {

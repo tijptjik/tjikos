@@ -22,7 +22,7 @@ import unittest
 APP = Path(__file__).resolve().parents[1]
 BINARY = APP / 'target/debug/synctjik'
 FAKE = r'''#!/usr/bin/python3
-import datetime, json, os, shutil, signal, subprocess, sys, time
+import datetime, fcntl, json, os, shutil, signal, subprocess, sys, time
 from pathlib import Path
 name=Path(sys.argv[0]).name; a=sys.argv[1:]; root=Path(os.environ['FIXTURE']); calls=root/'calls'
 with calls.open('a') as f: f.write(json.dumps([name,*a])+'\n')
@@ -73,7 +73,16 @@ elif name=='snapraid':
         print('incomplete' if os.environ.get('BAD_DIFF') else os.environ.get('REMOVED','2')+' removed')
         sys.exit(2)
     if 'sync' in a or 'scrub' in a:
-        if os.environ.get('WAIT_PARITY'):
+        if os.environ.get('ASSERT_PAUSED'):
+            assert (root/'paused').exists(), 'writers must remain paused'
+            for lock in ['snap.lock', 'backup.lock', 'external-backup.lock']:
+                if not (root/lock).exists(): continue
+                with (root/lock).open('a') as held:
+                    try: fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError: pass
+                    else: raise AssertionError('coordination lock not held: '+lock)
+        if 'scrub' in a: fail('FAIL_SCRUB')
+        if os.environ.get('WAIT_PARITY') or ('scrub' in a and os.environ.get('WAIT_SCRUB')):
             (root/'parity-running').touch()
             while True: time.sleep(1)
         fail('FAIL_PARITY')
@@ -325,10 +334,73 @@ class Protection(Fixtures):
     def test_snapraid_threshold_truncation_mount_and_scrub_failure(self):
         for env in [{'REMOVED':'201'},{'BAD_DIFF':'1'},{'FAIL_MOUNT':'1'}]: self.run_native('snapraid','sync',ok=False,env=env)
         self.assertFalse(any('sync' in c for c in self.commands('snapraid')))
-        self.run_native('snapraid','scrub',ok=False,env={'FAIL_PARITY':'1'})
+        self.run_native('snapraid','scrub',ok=False,env={'FAIL_SCRUB':'1'})
         self.run_native('snapraid','sync',ok=False)
         self.run_native('snapraid','scrub')
         self.run_native('snapraid','sync')
+
+    def test_scrub_syncs_then_verifies_under_one_writer_pause(self):
+        self.snap['coordination_locks'] = [str(self.root/'external-backup.lock')]
+        self.save('snapraid', self.snap)
+        self.run_native('snapraid', 'scrub', env={'ASSERT_PAUSED': '1'})
+        calls = self.commands()
+        actions = [c[-1] for c in calls if c[0] == 'snapraid']
+        self.assertEqual(actions, ['diff', 'sync', 'scrub'])
+        self.assertEqual(len([c for c in calls if c[:2] == ['docker', 'pause']]), 1)
+        self.assertEqual(len([c for c in calls if c[:2] == ['docker', 'unpause']]), 1)
+        self.assertFalse((self.root/'paused').exists())
+        for mode in ['sync', 'scrub']:
+            self.assertTrue((self.root/f'snap-state/last-{mode}-success.json').exists())
+
+    def test_scrub_does_not_sync_past_failure_or_poison_guard_on_diff_refusal(self):
+        self.run_native('snapraid', 'scrub', ok=False, env={'BAD_DIFF': '1'})
+        self.assertFalse((self.root/'snap-state/scrub-failure.json').exists())
+        self.assertFalse((self.root/'paused').exists())
+        self.run_native('snapraid', 'scrub', ok=False, env={'FAIL_SCRUB': '1'})
+        self.assertTrue((self.root/'snap-state/last-sync-success.json').exists())
+        self.assertFalse((self.root/'snap-state/last-scrub-success.json').exists())
+        (self.root/'calls').unlink()
+        self.run_native('snapraid', 'scrub', env={'ASSERT_PAUSED': '1'})
+        self.assertEqual([c[-1] for c in self.commands('snapraid')], ['scrub'])
+
+    def test_scrub_waits_for_external_backup_before_pausing_and_releases_locks(self):
+        lock = self.root/'external-backup.lock'
+        self.snap['coordination_locks'] = [str(lock)]
+        self.save('snapraid', self.snap)
+        with lock.open('a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX)
+            proc = subprocess.Popen([str(BINARY), 'snapraid', 'scrub', '--policy', str(self.policies['snapraid'])], env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.addCleanup(lambda: proc.poll() is None and proc.kill())
+            time.sleep(.5)
+            self.assertIsNone(proc.poll())
+            self.assertFalse((self.root/'paused').exists())
+            self.assertEqual(self.commands('snapraid'), [])
+            fcntl.flock(held, fcntl.LOCK_UN)
+            output = proc.communicate(timeout=15)
+            self.assertEqual(proc.returncode, 0, output)
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def test_scrub_rejects_duplicate_coordination_locks(self):
+        self.snap['coordination_locks'] = [self.snap['backup_lock']]
+        self.save('snapraid', self.snap)
+        self.run_native('snapraid', 'check', ok=False)
+        self.assertEqual(self.commands('snapraid'), [])
+
+    def test_interrupted_scrub_resumes_writers_and_retains_only_sync_success(self):
+        proc = subprocess.Popen([str(BINARY), 'snapraid', 'scrub', '--policy', str(self.policies['snapraid'])], env={**self.env, 'WAIT_SCRUB': '1', 'ASSERT_PAUSED': '1'}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        deadline = time.monotonic() + 10
+        while not (self.root/'parity-running').exists() and time.monotonic() < deadline:
+            time.sleep(.05)
+        self.assertTrue((self.root/'parity-running').exists())
+        self.assertTrue((self.root/'paused').exists())
+        proc.terminate()
+        proc.communicate(timeout=15)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse((self.root/'paused').exists())
+        self.assertTrue((self.root/'snap-state/last-sync-success.json').exists())
+        self.assertFalse((self.root/'snap-state/last-scrub-success.json').exists())
+        self.assertTrue((self.root/'snap-state/scrub-failure.json').exists())
 
     def test_resume_failure_retains_ownership_and_blocks_success(self):
         self.run_native('snapraid','sync',ok=False,env={'FAIL_RESUME':'1'})

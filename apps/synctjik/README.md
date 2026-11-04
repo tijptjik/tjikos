@@ -136,6 +136,16 @@ and encrypted Drive remote in step. Private-assets backup separately creates
 **encrypted Restic snapshots on Si**, retaining recoverable history even when
 sync propagates a deletion. A successful bisync receipt is not proof that the
 Restic backup succeeded; check their separate receipts.
+Scheduled laptop backups skip only when the current private tree matches a specific
+completed desktop snapshot from that day. The comparison hashes file contents and
+checks paths, empty directories, permissions and symlink targets, then rechecks the
+local tree for changes. The shared backup lock stays held throughout. Missing or
+inconclusive evidence triggers a laptop backup; manual backups always run.
+`last-backup-skip.json` records the exact desktop snapshot and inventory digest,
+separately from the laptop's own backup receipt. This verification streams the
+snapshot into private temporary storage and costs roughly one download of the
+protected data per eligible check.
+
 The remote backup host needs POSIX shell, flock and coreutils. Managed
 installation provisions them. `cloudflare check` validates policy and dependency
 availability without reading credentials, accessing remote data or writing state.
@@ -187,6 +197,13 @@ trigger retention.
 
 SnapRAID checks disk identities and layout, enforces deletion limits, and retains
 pause ownership for interrupted-writer recovery. `status` returns 75 when busy.
+Scrub holds the configured `coordination_locks` as well as maintenance and
+application-backup locks, and keeps configured writers paused throughout a
+guarded sync followed by scrub. Locks are acquired before writers are paused.
+An existing scrub failure prohibits the preliminary sync: a retry only scrubs
+existing parity. Diff/sync refusals do not create a misleading scrub-failure
+marker. Writers resume on success, failure or handled interruption; the managed
+units retain their persistent pause-recovery hooks for abrupt termination.
 Sync/scrub are real maintenance operations: never use them against live storage
 as migration tests. Notification health checks can send configured alerts.
 

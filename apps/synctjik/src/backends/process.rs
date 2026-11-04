@@ -55,6 +55,17 @@ impl Runner {
         output.sync_all()?;
         Ok(())
     }
+    /// Stream private data while retaining the remote coordination guard.
+    pub fn guarded_run_to(
+        &self,
+        command: &mut Command,
+        guard: &mut Child,
+        output: &File,
+    ) -> Result<()> {
+        self.execute(command, Some(guard), false, Some(output), None)?;
+        output.sync_all()?;
+        Ok(())
+    }
     /// Preserve dependency diagnostics in a private log without exposing them.
     pub fn logged(&self, command: &mut Command, log: &File) -> Result<(i32, Vec<u8>)> {
         self.execute(command, None, true, None, Some(log))

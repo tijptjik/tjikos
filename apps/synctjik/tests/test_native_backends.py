@@ -167,13 +167,13 @@ class NativeTests(unittest.TestCase):
         self.assertTrue((self.state/'last-backup.json').exists())
         self.assertTrue((self.root/'server/.coordination/fi.json').exists())
 
-    def test_scheduled_laptop_skips_verified_desktop_but_manual_runs(self):
+    def test_scheduled_laptop_backs_up_without_content_proof(self):
         self.run_native('backup')
         self.env['HOST_FIXTURE']='li'
         count=len(self.commands('restic'))
         result=self.run_native('backup','--scheduled')
-        self.assertIn('already completed',result.stdout)
-        self.assertEqual(len(self.commands('restic')),count)
+        self.assertIn('Desktop coverage not established',result.stdout)
+        self.assertGreater(len(self.commands('restic')),count)
         self.run_native('backup')
         self.assertGreater(len(self.commands('restic')),count)
 

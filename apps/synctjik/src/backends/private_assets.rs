@@ -5,11 +5,15 @@ use chrono::{DateTime, Datelike, Local, NaiveDateTime, Utc};
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
-    io::{BufRead, BufReader, Write},
-    os::unix::process::CommandExt,
+    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
+    os::unix::{
+        fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
+        process::CommandExt,
+    },
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::mpsc::{self, Receiver},
@@ -425,13 +429,24 @@ impl<'a> App<'a> {
             );
         }
         let (common, ssh, root) = self.restic(&self.host)?;
-        let mut coord = Coordinator::start(
-            &ssh,
-            &self.p.backup_root,
-            &self.host,
-            scheduled,
-            self.runner,
-        )?;
+        let mut coord = Coordinator::start(&ssh, &self.p.backup_root, &self.host, self.runner)?;
+        if self.host == "li" && scheduled {
+            let covered = self.peer_coverage(&mut coord, &paths);
+            self.runner.check()?;
+            if let Ok(Some(proof)) = covered {
+                ensure!(
+                    coord.child.0.try_wait()?.is_none(),
+                    "Lost backup coordination connection"
+                );
+                atomic_json(&self.state.join("last-backup-skip.json"), &proof)?;
+                println!(
+                    "✓ Private files match verified fi snapshot {}; laptop backup skipped",
+                    proof["snapshot"].as_str().unwrap()
+                );
+                return Ok(());
+            }
+            println!("⇧ Desktop coverage not established; backing up this laptop");
+        }
         let mut args = ssh.clone();
         args.push(repository_probe(&root));
         let (_, probe) =
@@ -453,14 +468,7 @@ impl<'a> App<'a> {
             "--tag",
             "private-storage",
         ]));
-        for pattern in [
-            "**/.git",
-            "**/node_modules",
-            "**/.venv",
-            "**/__pycache__",
-            "**/.Trash-*",
-            "**/.private-sync-access",
-        ] {
+        for pattern in BACKUP_EXCLUDES {
             args.extend(strings(&["--exclude", pattern]));
         }
         args.extend(paths.iter().map(|p| path(p)));
@@ -511,6 +519,67 @@ impl<'a> App<'a> {
         )?;
         println!("✓ Incremental backup verified; retention applied");
         Ok(())
+    }
+    fn peer_coverage(&self, coord: &mut Coordinator, paths: &[PathBuf]) -> Result<Option<Value>> {
+        let midnight = Local::now()
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_local_timezone(Local)
+            .earliest()
+            .context("Ambiguous local midnight")?
+            .timestamp() as f64;
+        if coord.peer_receipt.is_null()
+            || !peer_completed(&coord.peer_receipt, Utc::now().timestamp() as f64, midnight)?
+        {
+            return Ok(None);
+        }
+        let (common, _, repository) = self.restic("fi")?;
+        let snapshots: Vec<Value> = serde_json::from_slice(
+            &coord.run(
+                &[
+                    common.clone(),
+                    strings(&[
+                        "snapshots",
+                        "--json",
+                        "--host",
+                        "fi",
+                        "--tag",
+                        "private-storage",
+                    ]),
+                ]
+                .concat(),
+                self.runner,
+            )?,
+        )?;
+        let Some(snapshot) = coverage_snapshot(
+            &snapshots,
+            paths,
+            midnight,
+            coord.peer_receipt["completed_epoch"].as_f64().unwrap(),
+        ) else {
+            return Ok(None);
+        };
+        let before = local_coverage(&self.home, &self.p.folders, self.runner)?;
+        // Unnamed, owner-only temporary storage; never extract archive paths.
+        let mut dump = tempfile::tempfile_in(&self.state)?;
+        let args = [
+            common,
+            strings(&["dump", &snapshot, path(&self.home).as_str()]),
+        ]
+        .concat();
+        self.runner
+            .guarded_run_to(&mut command(&args), &mut coord.child.0, &dump)?;
+        dump.seek(SeekFrom::Start(0))?;
+        let archived = archive_coverage(dump, &self.home, &self.p.folders, self.runner)?;
+        if before != archived || before != local_coverage(&self.home, &self.p.folders, self.runner)?
+        {
+            return Ok(None);
+        }
+        Ok(Some(
+            json!({"completed":stamp(), "reason":"verified-peer-content", "source":"fi", "repository":repository,
+            "snapshot":snapshot, "entries":before.len(), "inventory_sha256":crate::util::digest(&json!(before))}),
+        ))
     }
     fn crypt_password(&self) -> Result<()> {
         let temp = tempfile::Builder::new()
@@ -768,15 +837,10 @@ fi
 struct Coordinator {
     child: ManagedChild,
     replies: Receiver<String>,
+    peer_receipt: Value,
 }
 impl Coordinator {
-    fn start(
-        ssh: &[String],
-        root: &str,
-        host: &str,
-        scheduled: bool,
-        runner: &Runner,
-    ) -> Result<Self> {
+    fn start(ssh: &[String], root: &str, host: &str, runner: &Runner) -> Result<Self> {
         let remote = shell_join(&strings(&[
             "sh",
             "-c",
@@ -799,20 +863,8 @@ impl Coordinator {
                 .strip_prefix("RECEIPT ")
                 .context("Missing backup receipt response")?,
         )
-        .context("Invalid backup receipt JSON")?;
-        if host == "li" && scheduled && !value.is_null() {
-            let midnight = Local::now()
-                .date_naive()
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
-                .and_local_timezone(Local)
-                .earliest()
-                .context("Ambiguous local midnight")?
-                .timestamp() as f64;
-            if peer_completed(&value, Utc::now().timestamp() as f64, midnight)? {
-                return Err(Busy("fi already completed a verified backup today".into()).into());
-            }
-        }
+        .unwrap_or(Value::Null);
+        s.peer_receipt = value;
         Ok(s)
     }
     fn spawn(command: &mut Command) -> Result<Self> {
@@ -839,7 +891,11 @@ impl Coordinator {
                 }
             }
         });
-        Ok(Self { child, replies })
+        Ok(Self {
+            child,
+            replies,
+            peer_receipt: Value::Null,
+        })
     }
     fn reply(&mut self, runner: &Runner) -> Result<String> {
         let until = Instant::now() + Duration::from_secs(40);
@@ -877,6 +933,214 @@ impl Coordinator {
         Ok(())
     }
 }
+const BACKUP_EXCLUDES: [&str; 6] = [
+    "**/.git",
+    "**/node_modules",
+    "**/.venv",
+    "**/__pycache__",
+    "**/.Trash-*",
+    "**/.private-sync-access",
+];
+type Coverage = BTreeMap<String, (String, u32, u64, String)>;
+
+fn excluded_component(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | "node_modules" | ".venv" | "__pycache__" | ".private-sync-access"
+    ) || name.starts_with(".Trash-")
+}
+
+fn content_digest(reader: &mut impl Read, runner: &Runner) -> Result<String> {
+    let mut digest = Sha256::new();
+    let mut buffer = [0u8; 65536];
+    loop {
+        runner.check()?;
+        let count = reader.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+fn local_coverage(home: &Path, folders: &[String], runner: &Runner) -> Result<Coverage> {
+    fn visit(home: &Path, p: &Path, runner: &Runner, output: &mut Coverage) -> Result<()> {
+        runner.check()?;
+        let relative = p
+            .strip_prefix(home)?
+            .to_str()
+            .context("Non-UTF8 backup path")?
+            .to_string();
+        let before = fs::symlink_metadata(p)?;
+        let mode = before.permissions().mode() & 0o7777;
+        let value = if before.file_type().is_symlink() {
+            (
+                "link".into(),
+                mode,
+                0,
+                fs::read_link(p)?
+                    .to_str()
+                    .context("Non-UTF8 link target")?
+                    .into(),
+            )
+        } else if before.is_dir() {
+            for child in fs::read_dir(p)? {
+                let child = child?;
+                let name = child.file_name();
+                if !excluded_component(name.to_str().context("Non-UTF8 backup path")?) {
+                    visit(home, &child.path(), runner, output)?;
+                }
+            }
+            ("dir".into(), mode, 0, String::new())
+        } else {
+            ensure!(before.is_file(), "Special file requires own backup");
+            let mut file = fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_NOFOLLOW)
+                .open(p)?;
+            let opened = file.metadata()?;
+            ensure!(
+                (before.dev(), before.ino()) == (opened.dev(), opened.ino()),
+                "Source replaced during comparison"
+            );
+            let digest = content_digest(&mut file, runner)?;
+            ("file".into(), mode, before.len(), digest)
+        };
+        let after = fs::symlink_metadata(p)?;
+        ensure!(
+            (
+                before.dev(),
+                before.ino(),
+                before.len(),
+                before.mtime(),
+                before.mtime_nsec(),
+                before.ctime(),
+                before.ctime_nsec()
+            ) == (
+                after.dev(),
+                after.ino(),
+                after.len(),
+                after.mtime(),
+                after.mtime_nsec(),
+                after.ctime(),
+                after.ctime_nsec()
+            ),
+            "Source changed during comparison"
+        );
+        output.insert(relative, value);
+        Ok(())
+    }
+    let mut output = Coverage::new();
+    for folder in folders {
+        visit(home, &home.join(folder), runner, &mut output)?;
+    }
+    Ok(output)
+}
+
+fn archive_coverage(
+    reader: impl Read,
+    home: &Path,
+    folders: &[String],
+    runner: &Runner,
+) -> Result<Coverage> {
+    let mut archive = tar::Archive::new(reader);
+    let mut output = Coverage::new();
+    let home = home.strip_prefix("/")?;
+    for entry in archive.entries()? {
+        runner.check()?;
+        let mut entry = entry?;
+        let member = entry.path()?.into_owned();
+        let member = member.strip_prefix("/").unwrap_or(&member);
+        let relative = member.strip_prefix(home).unwrap_or(member);
+        ensure!(
+            relative.components().all(|c| matches!(
+                c,
+                std::path::Component::Normal(_) | std::path::Component::CurDir
+            )),
+            "Unexpected archive path"
+        );
+        if !folders.iter().any(|folder| relative.starts_with(folder)) {
+            continue;
+        }
+        let key = relative
+            .to_str()
+            .context("Non-UTF8 archive path")?
+            .trim_start_matches("./")
+            .trim_end_matches('/')
+            .to_string();
+        let mode = entry.header().mode()? & 0o7777;
+        let kind = entry.header().entry_type();
+        let value = if kind.is_file() {
+            (
+                "file".into(),
+                mode,
+                entry.size(),
+                content_digest(&mut entry, runner)?,
+            )
+        } else if kind.is_dir() {
+            ("dir".into(), mode, 0, String::new())
+        } else if kind.is_symlink() {
+            (
+                "link".into(),
+                mode,
+                0,
+                entry
+                    .link_name()?
+                    .context("Missing link target")?
+                    .to_str()
+                    .context("Non-UTF8 link target")?
+                    .to_owned(),
+            )
+        } else {
+            anyhow::bail!("Archive entry requires own backup")
+        };
+        ensure!(
+            output.insert(key, value).is_none(),
+            "Duplicate archive path"
+        );
+    }
+    Ok(output)
+}
+
+fn coverage_snapshot(
+    snapshots: &[Value],
+    paths: &[PathBuf],
+    midnight: f64,
+    completed: f64,
+) -> Option<String> {
+    let mut expected: Vec<_> = paths.iter().map(|p| p.to_str()).collect::<Option<_>>()?;
+    expected.sort();
+    snapshots
+        .iter()
+        .filter_map(|s| {
+            let id = s["id"].as_str()?;
+            if id.len() != 64
+                || !id.bytes().all(|b| b.is_ascii_hexdigit())
+                || s["hostname"] != "fi"
+                || !s["tags"].as_array()?.contains(&json!("private-storage"))
+            {
+                return None;
+            }
+            let time = DateTime::parse_from_rfc3339(s["time"].as_str()?)
+                .ok()?
+                .timestamp_millis() as f64
+                / 1000.;
+            if time < midnight || time > completed {
+                return None;
+            }
+            let mut actual: Vec<_> = s["paths"]
+                .as_array()?
+                .iter()
+                .map(Value::as_str)
+                .collect::<Option<_>>()?;
+            actual.sort();
+            (actual == expected).then(|| (time, id.to_owned()))
+        })
+        .max_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, id)| id)
+}
+
 fn peer_completed(v: &Value, now: f64, midnight: f64) -> Result<bool> {
     let epoch = v["completed_epoch"]
         .as_f64()
@@ -951,7 +1215,12 @@ pub fn main(args: &[String], runner: &Runner) -> Result<()> {
             Ok(())
         }
         Action::Status => {
-            for name in ["last-sync.json", "last-backup.json", "last-error.json"] {
+            for name in [
+                "last-sync.json",
+                "last-backup.json",
+                "last-backup-skip.json",
+                "last-error.json",
+            ] {
                 let p = app.state.join(name);
                 println!(
                     "{name}: {}",
@@ -1104,6 +1373,24 @@ mod tests {
         let receipt = read_json(&root.path().join(".coordination/fi.json")).unwrap();
         assert_eq!(receipt["host"], "fi");
         assert!(receipt["completed_epoch"].as_i64().unwrap() > 0);
+    }
+    #[test]
+    fn connection_loss_stops_streamed_peer_dump() {
+        let dir = tempfile::tempdir().unwrap();
+        let runner = Runner::new().unwrap();
+        let mut coord = Coordinator::spawn(Command::new("sh").args(["-c", "sleep 0.3"])).unwrap();
+        let marker = dir.path().join("survived");
+        let script = format!("(sleep 1; touch {}) & wait", quote(&path(&marker)));
+        let output = tempfile::tempfile_in(dir.path()).unwrap();
+        assert!(runner
+            .guarded_run_to(
+                Command::new("sh").args(["-c", &script]),
+                &mut coord.child.0,
+                &output
+            )
+            .is_err());
+        std::thread::sleep(Duration::from_millis(1200));
+        assert!(!marker.exists());
     }
     #[test]
     fn connection_loss_stops_transfer_process_group() {
