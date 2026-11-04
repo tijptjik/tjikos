@@ -570,6 +570,10 @@ pub fn demo() -> (Vec<Label>, Page) {
         messages[0].payload.mime_type = "text/html".into();
         messages[0].payload.body.data = URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-german-signoff.html"));
     }
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("mart-signoff") {
+        messages[0].payload.mime_type = "text/html".into();
+        messages[0].payload.body.data = URL_SAFE_NO_PAD.encode("<p>Please include the revised edition.</p><p>Mart</p>");
+    }
     if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("signoff") {
         messages[0].payload.mime_type = "text/html".into();
         messages[0].payload.body.data =
@@ -782,7 +786,7 @@ pub fn demo_conversations() -> (Vec<Label>, Page) {
 pub fn demo_thread(message: &Message) -> Vec<Message> {
     if matches!(
         std::env::var("GMAILTJIK_DEMO_SCENE").as_deref(),
-        Ok("german-signoff" | "rich-reader" | "reader" | "inline" | "signature" | "signoff" | "contact-signature" | "message-header")
+        Ok("mart-signoff" | "german-signoff" | "rich-reader" | "reader" | "inline" | "signature" | "signoff" | "contact-signature" | "message-header")
     ) {
         return vec![message.clone()];
     }

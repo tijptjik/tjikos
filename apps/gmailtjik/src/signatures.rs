@@ -305,6 +305,18 @@ fn signature_range(lines: &[String], end: usize, sender: &str) -> Option<std::op
             return Some(closing_start(lines, start)..end);
         }
     }
+    // Explicitly requested name-only closing. Match a whole final line, never
+    // an occurrence in prose or a message consisting only of the name.
+    if let Some(start) = (0..end)
+        .rev()
+        .find(|&index| !lines[index].trim().is_empty())
+    {
+        if lines[start].trim() == "Mart"
+            && lines[..start].iter().any(|line| !line.trim().is_empty())
+        {
+            return Some(closing_start(lines, start)..end);
+        }
+    }
     let (name, email) = crate::model::addresses(sender).ok()?.into_iter().next()?;
     if name.split_whitespace().count() < 2 || email.is_empty() {
         return None;
@@ -626,6 +638,38 @@ mod tests {
         let folded = html_for_sender(&html, sender);
         assert!(folded.detected && !folded.collapsed.contains("Example Acquisition"));
         assert!(folded.collapsed.contains("PS: Keep this note."));
+    }
+
+    #[test]
+    fn folds_only_standalone_trailing_mart() {
+        for text in [
+            "Confirmed.\nMart",
+            "Confirmed.\n\nMart\n\n",
+            "Confirmed.\nBest regards,\nMart",
+        ] {
+            assert_eq!(plain(text), Some("Confirmed.".into()));
+        }
+        for source in [
+            "<p>Confirmed.</p><p>Mart</p>",
+            "<div>Confirmed.<br><br>Mart<br></div>",
+        ] {
+            let result = html(source);
+            assert!(result.detected && result.collapsed.contains("Confirmed."));
+            assert!(!result.collapsed.contains("Mart"));
+        }
+        for text in [
+            "Mart",
+            "\nMart\n",
+            "Please ask Mart",
+            "Confirmed.\nMart will reply.",
+            "Confirmed.\nMart\nPlease keep this instruction.",
+        ] {
+            assert!(plain(text).is_none(), "{text}");
+        }
+        let result =
+            html("<p>Confirmed.</p><p>Mart</p><blockquote>Older reply from Mart</blockquote>");
+        assert!(result.detected && result.collapsed.contains("Older reply from Mart"));
+        assert!(!result.collapsed.contains("<p>Mart</p>"));
     }
 
     #[test]

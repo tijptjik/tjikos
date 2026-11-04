@@ -735,6 +735,14 @@ with private_compositor(isolate_pointer=True):
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "mart-signoff":
+                capture("mart-folded.png")
+                click(1240, 253)
+                capture("mart-revealed.png")
+                assert (root / "mart-folded.png").read_bytes() != (root / "mart-revealed.png").read_bytes()
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "german-signoff":
                 capture("german-folded.png")
                 click(1215, 253)
