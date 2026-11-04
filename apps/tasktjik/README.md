@@ -124,6 +124,9 @@ Creation does not launch agents or grant execution authority.
 Enable `tasktjik.timer` on configured graphical clients for reminders. When
 switching, disable `runtjik-todo.timer` first; the old Runtjik timer unit now invokes the same native Tasktjik CLI. Installation never enables or stops timers.
 Keep all task records, configuration and evidence outside the repository.
+Closing the desktop window keeps its shell available; launching Tasktjik again
+reopens that window and preserves its navigation state. Run
+`python3 -B tests/window_reopen.py` for the isolated close/reopen regression check.
 See the HTTPS authority and backup instructions below.
 
 ## Private HTTPS authority

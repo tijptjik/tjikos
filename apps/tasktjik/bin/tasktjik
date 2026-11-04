@@ -8,6 +8,12 @@ else
 fi
 case "${1:-show}" in
     show)
+        # Closing a FloatingWindow hides it while Quickshell can stay alive.
+        # Reopen that instance before --no-duplicate decides there is nothing to do.
+        reopened=false
+        if [[ "$(quickshell ipc --path "$TASKTJIK_HOME/qml" call tasktjik reopen 2>/dev/null)" == true ]]; then
+            reopened=true
+        fi
         # Reuse a normal compositor window without tying its lifetime to Runtjik.
         if command -v hyprctl >/dev/null && command -v jq >/dev/null; then
             address=$(hyprctl -j clients 2>/dev/null | jq -r '.[] | select(.title == "Tasktjik") | .address' | head -n 1) || address=''
@@ -17,6 +23,9 @@ case "${1:-show}" in
             }; then
                 exit 0
             fi
+        fi
+        if [[ "$reopened" == true ]]; then
+            exit 0
         fi
         export QT_QUICK_CONTROLS_STYLE=Basic
         exec quickshell --path "$TASKTJIK_HOME/qml" --no-duplicate ;;

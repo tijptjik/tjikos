@@ -57,6 +57,9 @@ ShellRoot {
         }
     }
     FloatingWindow {
+        id: taskWindow
+        // Keep Quickshell's requested visibility in sync with native close events.
+        onClosed: visible = false
         title: 'Tasktjik'
         implicitWidth: 860; implicitHeight: 680
         color: '#26233a'
@@ -81,8 +84,14 @@ ShellRoot {
     Timer { interval: 10000; running: true; repeat: true; onTriggered: { if (!view.editor && !backend.running) root.request({action:'list'}); } }
     IpcHandler {
         target: "tasktjik"
+        function reopen(): bool {
+            if (!taskWindow.visible) taskWindow.visible = false;
+            taskWindow.visible = true;
+            taskWindow.minimized = false;
+            return true;
+        }
         function status(): string {
-            return JSON.stringify({view:view.view,undatedVisible:view.dropGroups.filter(g=>g.visible).reduce((n,g)=>n+view.tasks(g.modelData).filter(t=>!view.effectiveDue(t)).length,0),project:view.projectId,projectCount:(view.stateData.tasks || []).filter(t=>t.kind==='project').length,visibleCount:view.visibleCount(),visibleEmptyGroups:view.dropGroups.filter(g=>g.visible && g.rows.count===0).length,editor:view.editor, settings:view.settingsOpen, completing:view.completing, saving:!!view.pendingSave, deleting:!!view.pendingPurge, queuedDeletes:view.queuedPurges.length, busy:backend.running || root.pending.length>0, sortOrder:view.sortOrder, dragging:!!view.dragTask, moving:view.pendingMove, purgeMode:'optimistic-undo-queue', taskCount:(view.stateData.tasks || []).length});
+            return JSON.stringify({windowVisible:taskWindow.visible,windowMinimized:taskWindow.minimized,view:view.view,undatedVisible:view.dropGroups.filter(g=>g.visible).reduce((n,g)=>n+view.tasks(g.modelData).filter(t=>!view.effectiveDue(t)).length,0),project:view.projectId,projectCount:(view.stateData.tasks || []).filter(t=>t.kind==='project').length,visibleCount:view.visibleCount(),visibleEmptyGroups:view.dropGroups.filter(g=>g.visible && g.rows.count===0).length,editor:view.editor, settings:view.settingsOpen, completing:view.completing, saving:!!view.pendingSave, deleting:!!view.pendingPurge, queuedDeletes:view.queuedPurges.length, busy:backend.running || root.pending.length>0, sortOrder:view.sortOrder, dragging:!!view.dragTask, moving:view.pendingMove, purgeMode:'optimistic-undo-queue', taskCount:(view.stateData.tasks || []).length});
         }
         function showView(name: string): bool {
             if(!['today','week','month','all','projects'].includes(name) || view.editor || view.settingsOpen || view.completing || view.pendingSave || view.pendingPurge || view.dragTask || view.pendingMove)return false;
