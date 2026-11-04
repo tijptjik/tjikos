@@ -1,0 +1,11 @@
+[Unit]
+Description=Check wedding contribution responses every three hours
+
+[Timer]
+OnCalendar=*-*-* 00/3:00:00 Asia/Hong_Kong
+Persistent=true
+AccuracySec=1min
+Unit=tasktjik-contribution-responses.service
+
+[Install]
+WantedBy=timers.target

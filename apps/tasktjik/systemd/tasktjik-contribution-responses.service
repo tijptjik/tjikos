@@ -1,0 +1,12 @@
+[Unit]
+Description=Record explicit WhatsApp wedding contribution responses
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/tasktjik/contribution-responses.env
+ExecStart=%h/.local/bin/tasktjik-contribution-responses --project ${PROJECT_ID} --state-dir %h/.local/state/tasktjik-contribution-responses --apply --observe-seconds 30 --tasktjik %h/.local/bin/tasktjik --whatsover %h/.local/bin/whatsover
+UMask=0077
+TimeoutStartSec=10min
+NoNewPrivileges=true
