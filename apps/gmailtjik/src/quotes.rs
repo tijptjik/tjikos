@@ -1,5 +1,45 @@
 use crate::model::Message;
 
+/// A complete Outlook header cluster, including localized German headers.
+/// Require all fields in order so ordinary mentions of a sender stay visible.
+pub(crate) fn reply_header(text: &str) -> bool {
+    let text = text
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+    for fields in [
+        ["from:", "sent:", "to:", "subject:"],
+        ["von:", "gesendet:", "an:", "betreff:"],
+    ] {
+        let Some(mut rest) = text.strip_prefix(fields[0]) else {
+            continue;
+        };
+        let mut valid = true;
+        for field in &fields[1..] {
+            let marker = format!(" {field}");
+            if let Some(index) = rest.find(&marker) {
+                rest = &rest[index + marker.len()..];
+            } else {
+                valid = false;
+                break;
+            }
+        }
+        if valid {
+            return true;
+        }
+    }
+    false
+}
+
+pub(crate) fn header_at(lines: &[String], index: usize) -> bool {
+    let first = lines[index].trim().to_lowercase();
+    if !first.starts_with("from:") && !first.starts_with("von:") {
+        return false;
+    }
+    reply_header(&lines[index..lines.len().min(index + 48)].join(" "))
+}
+
 /// Remove known quote containers and the complete trailing history after
 /// Outlook/Apple/Gmail reply headers, even when it crosses wrapper boundaries.
 pub fn strip_html(doc: &mut scraper::Html) -> bool {
@@ -31,11 +71,20 @@ pub fn strip_html(doc: &mut scraper::Html) -> bool {
             }
             let text = node.text().collect::<Vec<_>>().join(" ");
             let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-            let lower = text.to_lowercase();
-            let headers = lower.starts_with("from:")
-                && lower.contains("sent:")
-                && lower.contains("to:")
-                && lower.contains("subject:");
+            let headers = reply_header(&text) || {
+                // Outlook can put each field in a separate sibling paragraph.
+                let lower = text.to_lowercase();
+                (lower.starts_with("from:") || lower.starts_with("von:")) && {
+                    let following = node
+                        .next_siblings()
+                        .take(48)
+                        .filter_map(scraper::ElementRef::wrap)
+                        .map(|sibling| sibling.text().collect::<Vec<_>>().join(" "))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    reply_header(&format!("{text} {following}"))
+                }
+            };
             let attribution = text.len() < 600
                 && text.starts_with("On ")
                 && text.ends_with("wrote:")
@@ -85,7 +134,7 @@ pub fn strip_html(doc: &mut scraper::Html) -> bool {
 pub fn body(message: &Message) -> (String, bool) {
     let full = message.text();
     let mut kept = Vec::new();
-    let lines: Vec<_> = full.lines().collect();
+    let lines: Vec<String> = full.lines().map(str::to_owned).collect();
     let mut hidden = false;
     let mut index = 0;
     while index < lines.len() {
@@ -109,19 +158,9 @@ pub fn body(message: &Message) -> (String, bool) {
                 }
             }
         }
-        if line.to_ascii_lowercase().starts_with("from:") && line.contains('@') {
-            let header = lines[index..]
-                .iter()
-                .take(12)
-                .map(|line| line.trim().to_ascii_lowercase())
-                .collect::<Vec<_>>();
-            if ["sent:", "to:", "subject:"]
-                .iter()
-                .all(|label| header.iter().any(|line| line.starts_with(label)))
-            {
-                hidden = true;
-                break;
-            }
+        if header_at(&lines, index) {
+            hidden = true;
+            break;
         }
         if !message.header("In-Reply-To").is_empty()
             && (line.eq_ignore_ascii_case("-----Original Message-----")
@@ -138,7 +177,7 @@ pub fn body(message: &Message) -> (String, bool) {
             hidden = true;
             break;
         }
-        kept.push(lines[index]);
+        kept.push(lines[index].as_str());
         index += 1;
     }
     if hidden {
@@ -183,6 +222,30 @@ mod tests {
             ..Default::default()
         }
     }
+    #[test]
+    fn german_headers_fold_complete_history_and_keep_prose() {
+        for header in [
+            "<p><b>Von:</b> Sender &lt;sender@example.test&gt;<br><b>Gesendet:</b> Montag<br><b>An:</b> Reader<br>Other recipient<br><b>Cc:</b> Team<br><b>Betreff:</b> Earlier</p>",
+            "<p>Von: Sender</p><p>Gesendet: Montag</p><p>An: Reader</p><p>Betreff: Earlier</p>",
+        ] {
+            let mut doc = scraper::Html::parse_document(&format!(
+                "<p>Current answer</p><div>{header}<p>Old body</p></div><p>Older body</p>"
+            ));
+            assert!(super::strip_html(&mut doc));
+            assert!(doc.html().contains("Current answer"));
+            assert!(!doc.html().contains("Old body") && !doc.html().contains("Older body"));
+        }
+        let mail = mail(
+            "text/plain",
+            "Current answer\n\nVon: Sender <sender@example.test>\nGesendet: Montag\nAn: Reader\nCc: Team\nBetreff: Earlier\nOld body",
+        );
+        assert_eq!(body(&mail), ("Current answer".into(), true));
+        let mut doc = scraper::Html::parse_document(
+            "<p>Von: a character in the book</p><p>Keep this discussion.</p>",
+        );
+        assert!(!super::strip_html(&mut doc));
+    }
+
     #[test]
     fn preserves_answer_after_explicit_quote_container() {
         let mut doc = scraper::Html::parse_document(

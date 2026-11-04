@@ -57,8 +57,9 @@ fn signoff(text: &str) -> bool {
             .as_str(),
         "thanks"
             | "thank you"
-            | "thanks a lot"
+            | "thank you very much"
             | "many thanks"
+            | "thanks a lot"
             | "cheers"
             | "regards"
             | "kind regards"
@@ -86,8 +87,43 @@ fn named_signoff(text: &str) -> bool {
             .trim()
             .to_lowercase()
             .as_str(),
-        "regards" | "cheers" | "best regards" | "kind regards" | "kind regars"
+        "regards"
+            | "cheers"
+            | "best regards"
+            | "kind regards"
+            | "kind regars"
+            | "best"
+            | "all the best"
+            | "have a lovely day"
+            | "have a nice day"
     )
+}
+
+fn thanks(text: &str) -> bool {
+    matches!(
+        text.trim()
+            .trim_end_matches(['.', ',', '!', ':', ';', '…'])
+            .trim()
+            .to_lowercase()
+            .as_str(),
+        "thanks" | "thank you" | "thank you very much" | "thanks a lot" | "many thanks"
+    )
+}
+
+// Include consecutive closing courtesies immediately before the signature.
+fn closing_start(lines: &[String], start: usize) -> usize {
+    let mut result = start;
+    for index in (0..start).rev() {
+        if lines[index].trim().is_empty() {
+            continue;
+        }
+        if thanks(&lines[index]) && lines[..index].iter().any(|line| !line.trim().is_empty()) {
+            result = index;
+        } else {
+            break;
+        }
+    }
+    result
 }
 
 fn postscript(text: &str) -> bool {
@@ -238,7 +274,7 @@ fn signature_range(lines: &[String], end: usize, sender: &str) -> Option<std::op
                 .iter()
                 .all(|line| line.trim().is_empty())
         {
-            return Some(start..end);
+            return Some(closing_start(lines, start)..end);
         }
         if line != "--" && !signoff(line) && !named_signoff(line) {
             continue;
@@ -252,7 +288,10 @@ fn signature_range(lines: &[String], end: usize, sender: &str) -> Option<std::op
             .filter(|s| !s.is_empty())
             .collect();
         if named_signoff(line) && tail.first().is_some_and(|name| identity(name)) {
-            return Some(start..end);
+            return Some(closing_start(lines, start)..end);
+        }
+        if thanks(line) && (tail.is_empty() || (tail.len() == 1 && identity(tail[0]))) {
+            return Some(closing_start(lines, start)..end);
         }
         if tail.is_empty() || tail.len() > 12 || tail.iter().map(|s| s.len()).sum::<usize>() > 700 {
             continue;
@@ -263,7 +302,7 @@ fn signature_range(lines: &[String], end: usize, sender: &str) -> Option<std::op
             || (standard_separator && identities > 0))
             && tail.iter().all(|line| contact(line) || identity(line))
         {
-            return Some(start..end);
+            return Some(closing_start(lines, start)..end);
         }
     }
     let (name, email) = crate::model::addresses(sender).ok()?.into_iter().next()?;
@@ -312,7 +351,8 @@ pub fn plain_for_sender(text: &str, sender: &str) -> Option<String> {
     let lines: Vec<_> = text.lines().map(str::to_owned).collect();
     let end = lines
         .iter()
-        .position(|line| reply_boundary(line))
+        .enumerate()
+        .position(|(index, line)| reply_boundary(line) || crate::quotes::header_at(&lines, index))
         .unwrap_or(lines.len());
     let range = signature_range(&lines, end, sender)?;
     Some(
@@ -466,11 +506,14 @@ pub fn html_for_sender(source: &str, sender: &str) -> HtmlSignature {
     let mut current = Line::default();
     collect(doc.root_element(), &mut current, &mut lines, 0);
     flush(&mut current, &mut lines);
+    let texts: Vec<_> = lines.iter().map(|line| line.text.clone()).collect();
     let end = lines
         .iter()
-        .position(|line| line.boundary || reply_boundary(&line.text))
+        .enumerate()
+        .position(|(index, line)| {
+            line.boundary || reply_boundary(&line.text) || crate::quotes::header_at(&texts, index)
+        })
         .unwrap_or(lines.len());
-    let texts: Vec<_> = lines.iter().map(|line| line.text.clone()).collect();
     if let Some(range) = signature_range(&texts, end, sender) {
         for line in &lines[range] {
             for piece in &line.pieces {
@@ -583,6 +626,55 @@ mod tests {
         let folded = html_for_sender(&html, sender);
         assert!(folded.detected && !folded.collapsed.contains("Example Acquisition"));
         assert!(folded.collapsed.contains("PS: Keep this note."));
+    }
+
+    #[test]
+    fn additional_closings_and_thanks_preserve_postscripts() {
+        for closing in [
+            "Best,",
+            "Have a lovely day,",
+            "Thank you very much.",
+            "Many thanks!",
+        ] {
+            let source = format!(
+                "Please review the books.\n\n{closing}\nMira\n\nP.S. Keep this instruction."
+            );
+            assert_eq!(
+                plain(&source),
+                Some("Please review the books.\n\nP.S. Keep this instruction.".into())
+            );
+            let source = source
+                .lines()
+                .map(|line| format!("<p>{line}</p>"))
+                .collect::<String>();
+            let result = html(&source);
+            assert!(result.detected && !result.collapsed.contains("Mira"));
+            assert!(result.collapsed.contains("Keep this instruction"));
+        }
+        assert_eq!(
+            plain("Please review the books.\n\nThank you very much."),
+            Some("Please review the books.".into())
+        );
+        assert!(plain("Thank you very much.").is_none());
+        assert!(
+            plain("Please review the books.\nThank you very much.\nPlease send feedback tomorrow.")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn current_signature_stops_before_german_history() {
+        let source = "<p>Any potential books?</p><p>Many thanks!</p><p>Best regards<br>Mira</p><p>Head of Library<br>Example Institute<br>Website: https://example.test</p><hr><p><b>Von:</b> Earlier &lt;earlier@example.test&gt;<br><b>Gesendet:</b> Monday<br><b>An:</b> Reader<br><b>Betreff:</b> Earlier note</p><p>Old body</p><p>Regards,<br>Alex<br>Old Institute</p>";
+        let result = html(source);
+        assert!(result.detected);
+        for removed in ["Many thanks", "Best regards", "Mira", "Head of Library"] {
+            assert!(!result.collapsed.contains(removed), "{}", result.collapsed);
+        }
+        assert!(result.collapsed.contains("Old body") && result.collapsed.contains("Alex"));
+        let mut doc = Html::parse_document(&result.collapsed);
+        assert!(crate::quotes::strip_html(&mut doc));
+        assert!(doc.html().contains("Any potential books?"));
+        assert!(!doc.html().contains("Old body"));
     }
 
     #[test]

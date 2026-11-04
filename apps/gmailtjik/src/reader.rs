@@ -288,7 +288,6 @@ fn prune(doc: &mut Html, quotes: bool) {
                     | "object"
                     | "embed"
                     | "form"
-                    | "input"
                     | "button"
                     | "textarea"
                     | "select"
@@ -300,7 +299,8 @@ fn prune(doc: &mut Html, quotes: bool) {
                     | "svg"
                     | "noscript"
                     | "template"
-            ) || (hidden(*node) && !matches!(node.value().name(), "html" | "body"))
+            ) || (node.value().name() == "input" && node.attr("type") != Some("checkbox"))
+                || (hidden(*node) && !matches!(node.value().name(), "html" | "body"))
                 || (quotes
                     && (node.value().has_class(
                         "gmail_quote",
@@ -578,6 +578,114 @@ fn image_source(image: ElementRef<'_>) -> Option<&str> {
         .filter(|src| !src.trim().is_empty())
 }
 
+// Keep real data tables while unwrapping email layout tables. Markdown has no
+// merged cells; reserve their occupied columns so later cells stay aligned.
+fn table(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) -> Option<String> {
+    if element.attr("role") == Some("presentation") {
+        return None;
+    }
+    let selector = Selector::parse("tr").unwrap();
+    let rows: Vec<_> = element
+        .select(&selector)
+        .filter(|row| {
+            row.ancestors()
+                .filter_map(ElementRef::wrap)
+                .find(|node| node.value().name() == "table")
+                .is_some_and(|parent| parent.id() == element.id())
+        })
+        .filter(|row| !hidden(*row))
+        .collect();
+    let nested = Selector::parse("table").unwrap();
+    if element.select(&nested).next().is_some() || rows.is_empty() {
+        return None;
+    }
+    let has_headers = rows
+        .iter()
+        .any(|row| row.child_elements().any(|cell| cell.value().name() == "th"));
+    if !has_headers
+        && !rows.iter().any(|row| {
+            row.child_elements()
+                .filter(|cell| matches!(cell.value().name(), "td" | "th"))
+                .count()
+                > 1
+        })
+    {
+        return None;
+    }
+    let mut grid = Vec::new();
+    let mut occupied = vec![0usize; 128];
+    for row in &rows {
+        let mut values = Vec::new();
+        let mut column = 0;
+        for cell in row
+            .child_elements()
+            .filter(|cell| matches!(cell.value().name(), "td" | "th") && !hidden(*cell))
+        {
+            while column < occupied.len() && occupied[column] > 0 {
+                values.push(String::new());
+                column += 1;
+            }
+            if column >= occupied.len() {
+                return None;
+            }
+            let colspan = cell
+                .attr("colspan")
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1)
+                .clamp(1, 128 - column);
+            let rowspan = cell
+                .attr("rowspan")
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1)
+                .clamp(1, rows.len());
+            let value = normalize(&children(cell, depth + 1, images));
+            // Pipes are escaped even inside code/link destinations. Keep cell
+            // paragraphs readable without emitting a new Markdown table row.
+            let value = value.replace("\\|", "|").replace('|', "\\|");
+            values.push(
+                value
+                    .lines()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+            for offset in 0..colspan {
+                occupied[column + offset] = rowspan;
+                if offset > 0 {
+                    values.push(String::new());
+                }
+            }
+            column += colspan;
+        }
+        for count in &mut occupied {
+            *count = count.saturating_sub(1);
+        }
+        grid.push(values);
+    }
+    let width = grid.iter().map(Vec::len).max().unwrap_or(0);
+    if width == 0 {
+        return None;
+    }
+    let mut lines = Vec::new();
+    let caption = element
+        .child_elements()
+        .find(|child| child.value().name() == "caption")
+        .map(|caption| children(caption, depth + 1, images))
+        .unwrap_or_default();
+    if !has_headers {
+        grid.insert(0, Vec::new());
+    }
+    for (index, mut row) in grid.into_iter().enumerate() {
+        row.resize(width, String::new());
+        lines.push(format!("| {} |", row.join(" | ")));
+        if index == 0 {
+            lines.push(format!("| {} |", vec!["---"; width].join(" | ")));
+        }
+    }
+    Some(format!("{}{}", block(&caption), block(&lines.join("\n"))))
+}
+
 fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) -> String {
     if hidden(element) {
         return String::new();
@@ -588,7 +696,24 @@ fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) 
         return text_node(&element.text().collect::<String>());
     }
     let tag = element.value().name();
+    if tag == "table" {
+        if let Some(markdown) = table(element, depth, images) {
+            return markdown;
+        }
+    }
     match tag {
+        "input" => {
+            return if element.attr("type") == Some("checkbox") {
+                if element.attr("checked").is_some() {
+                    "[x] "
+                } else {
+                    "[ ] "
+                }
+                .into()
+            } else {
+                String::new()
+            };
+        }
         "img" => {
             if tracking_image(element) {
                 return String::new();
@@ -652,7 +777,32 @@ fn render(element: ElementRef<'_>, depth: usize, images: &mut Vec<InlineImage>) 
         }
         _ => {}
     }
-    let content = children(element, depth, images);
+    let mut content = children(element, depth, images);
+    // Outlook and web composers often express emphasis with inline CSS.
+    let style = element
+        .attr("style")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    for declaration in style.split(';') {
+        if let Some((property, value)) = declaration.split_once(':') {
+            match (property.trim(), value.trim()) {
+                ("font-style", "italic" | "oblique") if !matches!(tag, "em" | "i") => {
+                    content = marked(&content, "*")
+                }
+                ("font-weight", "bold" | "bolder" | "600" | "700" | "800" | "900")
+                    if !matches!(tag, "strong" | "b") =>
+                {
+                    content = marked(&content, "**")
+                }
+                ("text-decoration" | "text-decoration-line", "line-through")
+                    if !matches!(tag, "del" | "s" | "strike") =>
+                {
+                    content = marked(&content, "~~")
+                }
+                _ => {}
+            }
+        }
+    }
     match tag {
         "strong" | "b" => marked(&content, "**"),
         "em" | "i" => marked(&content, "*"),
@@ -826,6 +976,59 @@ mod tests {
         crate::quotes::strip_html(&mut layout);
         assert!(!layout.html().contains("Old body") && !layout.html().contains("Older history"));
     }
+    #[test]
+    fn preserves_tables_quotes_and_css_emphasis() {
+        let body = parse(
+            &mail(
+                "text/html",
+                "<table role='presentation'><tr><td><table><caption>Schedule</caption><tr><th>Item</th><th>Status</th></tr><tr><td><em>Alpha</em> | Beta</td><td><a href='https://example.test'>Ready</a></td></tr><tr><td colspan='2'>Combined</td></tr></table><blockquote>A genuine quotation</blockquote><p><span style='font-style:italic'>Italic</span> <span style='font-weight:700'>Bold</span> <del>Old</del> <code>x</code></p><div class='gmail_quote'>Hidden history</div></td></tr></table>",
+            ),
+            false,
+        );
+        assert!(
+            body.markdown.contains("| Item | Status |\n| --- | --- |"),
+            "{}",
+            body.markdown
+        );
+        assert!(
+            body.markdown
+                .contains("| *Alpha* \\| Beta | [Ready](<https://example.test/>) |")
+        );
+        assert!(body.markdown.contains("| Combined |  |"));
+        assert!(body.markdown.contains("> A genuine quotation"));
+        assert!(body.markdown.contains("*Italic* **Bold** ~~Old~~ ` x `"));
+        assert!(!body.markdown.contains("Hidden history"));
+    }
+
+    #[test]
+    fn preserves_static_task_lists() {
+        let body = parse(
+            &mail(
+                "text/html",
+                "<ul><li><input type='checkbox' checked>Done</li><li><input type='checkbox'>Pending</li></ul>",
+            ),
+            false,
+        );
+        assert!(body.markdown.contains("- [x] Done\n- [ ] Pending"));
+    }
+
+    #[test]
+    fn tables_without_headers_preserve_first_row_and_rowspans() {
+        let body = parse(
+            &mail(
+                "text/html",
+                "<table><tr><td rowspan='2'>A</td><td>B</td></tr><tr><td>C</td></tr></table>",
+            ),
+            false,
+        );
+        assert!(
+            body.markdown
+                .contains("|  |  |\n| --- | --- |\n| A | B |\n|  | C |"),
+            "{}",
+            body.markdown
+        );
+    }
+
     #[test]
     fn preserves_semantics_and_links_without_sender_styling() {
         let body = parse(

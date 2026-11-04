@@ -49,7 +49,10 @@ fn proicon(name: &str) -> Icon {
     let bytes: &[u8] = match name {
         "recipients" => include_bytes!("../assets/proicons/recipients.svg"),
         "bcc" => include_bytes!("../assets/proicons/bcc.svg"),
+        "colour-wheel" => include_bytes!("../assets/proicons/colour-wheel.svg"),
         "layout" => include_bytes!("../assets/proicons/layout.svg"),
+        "signature" => include_bytes!("../assets/proicons/signature.svg"),
+        "quote" => include_bytes!("../assets/proicons/quote.svg"),
         "reply-all" => include_bytes!("../assets/proicons/reply-all.svg"),
         "archive" => include_bytes!("../assets/proicons/archive.svg"),
         "arrow-left" => include_bytes!("../assets/proicons/arrow-left.svg"),
@@ -74,6 +77,23 @@ fn proicon(name: &str) -> Icon {
     Icon::default().data(bytes)
 }
 
+fn empty_mail(loading: bool) -> AnyElement {
+    let label = if loading { "Loading…" } else { "No Mail" };
+    let layer = |color, offset| {
+        div().absolute().top(px(offset)).left_0().w_full()
+            .flex().flex_col().items_center().gap_2()
+            .text_color(rgb(color)).text_lg().font_weight(FontWeight::MEDIUM)
+            .child(proicon("mail").size(px(38.)).text_color(rgb(color)))
+            .child(label)
+    };
+    div().flex_1().min_h_0().min_w_0().w_full()
+        .flex().items_center().justify_center()
+        .child(div().relative().w(px(140.)).h(px(76.))
+            .child(layer(0x3d394e, 1.))
+            .child(layer(0x706b80, 0.)))
+        .into_any_element()
+}
+
 gpui_kit::actions!(filter_labels, [CompleteFilterLabel]);
 
 pub fn theme(cx: &mut App) {
@@ -94,6 +114,9 @@ pub fn theme(cx: &mut App) {
         t.colors.button_primary_active = rgb(0xcf3d83).into();
         t.colors.button_hover = rgb(0x454056).into();
         t.colors.muted_foreground = rgb(MUTED).into();
+        t.colors.table = rgb(SURFACE).into();
+        t.colors.table_head = rgb(RAISED).into();
+        t.colors.table_head_foreground = rgb(TEXT).into();
         t.radius = px(10.);
         t.font_size = px(14.);
         t.font_family = "tijpset".into();
@@ -3599,6 +3622,12 @@ impl MailApp {
                 .map(|l| crate::labels::display_name(&l.name))
                 .unwrap_or_else(|| "Inbox".into())
         };
+        let thread_count = self.page.conversations().len();
+        let count_label = if self.loading && self.page.messages.is_empty() {
+            "Loading…".into()
+        } else {
+            format!("{} thread{}{}", thread_count, if thread_count == 1 { "" } else { "s" }, if self.loading { " · loading" } else { "" })
+        };
         div()
             .flex()
             .flex_col()
@@ -3610,7 +3639,9 @@ impl MailApp {
             .overflow_hidden()
             .child(
                 div().flex().items_center().gap_1().p_3()
-                    .child(div().flex_1().min_w_0().truncate().text_lg().font_weight(FontWeight::SEMIBOLD).child(title))
+                    .child(div().flex_1().min_w_0().flex().items_center().gap_2()
+                        .child(div().min_w_0().truncate().text_lg().font_weight(FontWeight::SEMIBOLD).child(title))
+                        .child(div().flex_shrink_0().text_xs().text_color(rgb(MUTED)).child(count_label)))
                     .when(matches!(self.label.as_str(), "SPAM" | "TRASH"), |d| d.child(
                         Button::new("empty-folder").small().ghost().icon(proicon("delete"))
                             .label(if self.emptying_folder.as_ref() == Some(&self.label) { "Emptying…" }
@@ -3642,22 +3673,9 @@ impl MailApp {
                         .tooltip("Refresh mail").disabled(self.loading)
                         .on_click(cx.listener(|this, _, _, cx| this.load_force(true, cx))))
             )
-            .child(
-                div()
-                    .px_4()
-                    .pb_3()
-                    .text_xs()
-                    .text_color(rgb(MUTED))
-                    .child(if self.loading && self.page.messages.is_empty() {
-                        "Loading threads…".into()
-                    } else { format!(
-                        "{} thread{}{}",
-                        self.page.conversations().len(),
-                        if self.page.conversations().len() == 1 { "" } else { "s" },
-                        if self.loading { " · loading" } else { "" }
-                    ) }),
-            )
-            .child(
+            .child(if self.page.messages.is_empty() {
+                empty_mail(self.loading)
+            } else {
                 uniform_list(
                     "mail-list",
                     self.page.conversations().len(),
@@ -3746,14 +3764,8 @@ impl MailApp {
                 )
                 .track_scroll(&self.mail_scroll)
                 .flex_1()
-                .min_h_0(),
-            )
-            .when(self.page.messages.is_empty(), |d| {
-                d.child(div().p_6().text_color(rgb(MUTED)).child(if self.loading {
-                    "Loading mail…"
-                } else {
-                    "No messages in this view."
-                }))
+                .min_h_0()
+                .into_any_element()
             })
             .child(
                 div()
@@ -4027,12 +4039,7 @@ impl MailApp {
     }
     fn reader(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let Some(message) = self.selected.clone() else {
-            return div()
-                .flex_1()
-                .p_8()
-                .text_color(rgb(MUTED))
-                .child("A little room to read. Select an email to begin.")
-                .into_any_element();
+            return empty_mail(self.loading);
         };
         let id = message.id.clone();
         let unread = self
@@ -4174,22 +4181,51 @@ impl MailApp {
                 )
                 .into_any_element();
         }
-        reader = reader.child(
-            div()
-                .flex()
-                .justify_between()
-                .text_xs()
-                .text_color(rgb(MUTED))
-                .child(format!(
-                    "{} messages · oldest first",
-                    self.conversation.len().max(1)
-                )),
-        );
         let messages = if self.conversation.is_empty() {
             vec![message]
         } else {
             self.conversation.clone()
         };
+        let all_open = messages.iter().all(|message| self.message_open(&message.id));
+        let toggle_messages = messages.clone();
+        reader = reader.child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .text_xs()
+                .text_color(rgb(MUTED))
+                .child(format!(
+                    "{} message{} · oldest first",
+                    messages.len(),
+                    if messages.len() == 1 { "" } else { "s" }
+                ))
+                .child(
+                    Button::new("toggle-all-messages")
+                        .ghost().small()
+                        .label(if all_open { "Collapse all" } else { "Expand all" })
+                        .tooltip(if all_open { "Collapse every message in this conversation" } else { "Expand every message in this conversation" })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            for message in &toggle_messages {
+                                if all_open {
+                                    this.expanded_messages.remove(&message.id);
+                                    this.collapsed_messages.insert(message.id.clone());
+                                } else {
+                                    this.collapsed_messages.remove(&message.id);
+                                    this.expanded_messages.insert(message.id.clone());
+                                    if !this.demo && !this.thread_images.contains_key(&message.id) {
+                                        this.dispatch(Command::Images {
+                                            generation: this.image_generation,
+                                            message: message.clone(),
+                                            remote: this.auto_images || this.manual_images.contains(&message.id),
+                                        });
+                                    }
+                                }
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
         for message in messages {
             let id = message.id.clone();
             if !self.message_open(&id) {
@@ -4335,15 +4371,28 @@ impl MailApp {
                         })),
                 );
             }
+            if use_html {
+                let title = if self.light_images { "Use dark colours" } else { "Show original colours" };
+                header_actions = header_actions.child(
+                    Button::new(SharedString::from(format!("colours-{id}")))
+                        .ghost().small().icon(proicon("colour-wheel"))
+                        .text_color(rgb(if self.light_images { ACCENT } else { MUTED }))
+                        .accessibility_label(title).tooltip(title)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.light_images = !this.light_images;
+                            cx.notify();
+                        })),
+                );
+            }
             if has_signature {
                 let signature_id = id.clone();
                 header_actions = header_actions.child(
                     Button::new(SharedString::from(format!("signature-{id}")))
                         .ghost()
                         .small()
-                        .icon(proicon("compose"))
+                        .icon(proicon("signature"))
                         .text_color(rgb(if show_signature { ACCENT } else { MUTED }))
-                        .accessibility_label("Show signature")
+                        .accessibility_label(if show_signature { "Hide signature" } else { "Show signature" })
                         .tooltip(if show_signature {
                             "Hide signature"
                         } else {
@@ -4352,6 +4401,22 @@ impl MailApp {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if !this.expanded_signatures.remove(&signature_id) {
                                 this.expanded_signatures.insert(signature_id.clone());
+                            }
+                            cx.notify();
+                        })),
+                );
+            }
+            if quoted {
+                let quote_id = id.clone();
+                let title = if expanded { "Hide quoted history" } else { "Show quoted history" };
+                header_actions = header_actions.child(
+                    Button::new(SharedString::from(format!("quote-{id}")))
+                        .ghost().small().icon(proicon("quote"))
+                        .text_color(rgb(if expanded { ACCENT } else { MUTED }))
+                        .accessibility_label(title).tooltip(title)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if !this.expanded_quotes.remove(&quote_id) {
+                                this.expanded_quotes.insert(quote_id.clone());
                             }
                             cx.notify();
                         })),
@@ -4462,23 +4527,6 @@ impl MailApp {
                 .w_full()
                 .min_w_0();
             if let Some(html) = html {
-                if use_html {
-                    // Colour treatment remains independent of the layout toggle.
-                    card = card.child(
-                        Button::new(SharedString::from(format!("colours-{id}")))
-                            .ghost()
-                            .small()
-                            .label(if self.light_images {
-                                "Dark colours"
-                            } else {
-                                "Original colours"
-                            })
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.light_images = !this.light_images;
-                                cx.notify();
-                            })),
-                    );
-                }
                 if use_html {
                     let key = self.html_renderer.request(
                         html,
@@ -4672,6 +4720,9 @@ impl MailApp {
                             reading.markdown.clone()
                         },
                     )
+                    // Use a real family with bold and italic faces; the desktop
+                    // font alias can resolve every requested face to Regular.
+                    .font_family("Noto Sans")
                     .text_size(px(16.))
                     .selectable(true)
                     // Images only enter through the existing approved image loader.
@@ -4688,25 +4739,6 @@ impl MailApp {
                             cx.open_url(url.as_str());
                         }
                     }),
-                );
-            }
-            if quoted {
-                let id = id.clone();
-                actions = actions.child(
-                    Button::new(SharedString::from(format!("quote-{id}")))
-                        .ghost()
-                        .small()
-                        .label(if expanded {
-                            "Hide quoted history"
-                        } else {
-                            "Show quoted history"
-                        })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if !this.expanded_quotes.remove(&id) {
-                                this.expanded_quotes.insert(id.clone());
-                            }
-                            cx.notify();
-                        })),
                 );
             }
             if !self.auto_images
@@ -5493,6 +5525,7 @@ impl Render for MailApp {
                     .child(
                         Button::new("compose")
                             .primary()
+                            .text_color(rgb(0xffffff))
                             .icon(proicon("compose"))
                             .label(if self.composing {
                                 "Continue draft"

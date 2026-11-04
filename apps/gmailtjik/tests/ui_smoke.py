@@ -52,6 +52,67 @@ with private_compositor(isolate_pointer=True):
                 time.sleep(.3)
                 subprocess.run(["grim", "-o", "GMAIL", str(root / name)], check=True)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "rich-reader":
+                capture("rich-original.png")
+                click(1241, 253)
+                time.sleep(1)
+                capture("rich-colours.png")
+                click(1241, 253)
+                click(1210, 253)
+                capture("rich-readable.png")
+                from PIL import Image
+                def light_fraction(name):
+                    with Image.open(root / name) as shot:
+                        pixels = list(shot.convert("RGB").crop((620, 300, 1350, 750)).getdata())
+                    return sum(min(pixel) > 220 for pixel in pixels) / len(pixels)
+                assert light_fraction("rich-original.png") < .05
+                assert light_fraction("rich-colours.png") > .5
+                assert light_fraction("rich-readable.png") < .05
+                assert (root / "rich-original.png").read_bytes() != (root / "rich-readable.png").read_bytes()
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "empty-style":
+                click(90, 234)
+                capture("no-mail-empty-states.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_EXPAND_CHECK") == "1":
+                capture("thread-initial.png")
+                click(1330, 205)
+                click(590, 200)
+                capture("thread-all-expanded.png")
+                click(1330, 205)
+                click(590, 200)
+                capture("thread-all-collapsed.png")
+                assert (root / "thread-all-expanded.png").read_bytes() != (root / "thread-all-collapsed.png").read_bytes()
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_ICON_CHECK") == "1":
+                capture("message-toggle-icons.png")
+                click(1136, 253)
+                click(590, 200)
+                capture("signature-icon-expanded.png")
+                click(1160, 253)
+                click(590, 200)
+                capture("both-icons-expanded.png")
+                click(1136, 253)
+                click(1160, 253)
+                click(590, 200)
+                capture("icons-recollapsed.png")
+                from PIL import Image
+                def active_icon(name, x):
+                    with Image.open(root / name) as shot:
+                        return any(r > 200 and b > 100 and g < 150 for r, g, b in shot.convert("RGB").crop((x - 8, 246, x + 8, 261)).get_flattened_data())
+                assert active_icon("signature-icon-expanded.png", 1136)
+                assert active_icon("both-icons-expanded.png", 1160)
+                assert not active_icon("icons-recollapsed.png", 1136)
+                assert not active_icon("icons-recollapsed.png", 1160)
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "optimistic":
                 from PIL import Image
 
@@ -669,6 +730,17 @@ with private_compositor(isolate_pointer=True):
 
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "contact-signature":
                 capture("contact-signature-hidden.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "german-signoff":
+                capture("german-folded.png")
+                click(1215, 253)
+                capture("german-signature.png")
+                click(1240, 253)
+                capture("german-history.png")
+                assert (root / "german-folded.png").read_bytes() != (root / "german-signature.png").read_bytes()
+                assert (root / "german-signature.png").read_bytes() != (root / "german-history.png").read_bytes()
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
