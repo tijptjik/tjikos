@@ -102,6 +102,51 @@ with private_compositor(isolate_pointer=True):
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "message-header":
+                def copied_body():
+                    subprocess.run(["wl-copy", "--", "header-selection-pending"], check=True)
+                    for operation in [f"m 4306 {round(290 / output_height * 10000)}", "b 1", f"m 4792 {round(290 / output_height * 10000)}", "b 0"]:
+                        click_pointer.stdin.write(operation + "\n")
+                        click_pointer.stdin.flush()
+                        assert click_pointer.stdout.readline().strip() == "ok"
+                        time.sleep(.15)
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                    return wait_for(lambda: (value if (value := subprocess.check_output(
+                        ["wl-paste", "--no-newline"], text=True, timeout=5)) != "header-selection-pending" else None), timeout=5)
+
+                capture("message-header.png")
+                assert "+1 202 555 0118" not in copied_body()
+                click(1160, 253)  # Signature toggle in the header.
+                capture("header-signature-visible.png")
+                assert "+1 202 555 0118" in copied_body()
+                click(1160, 253)
+                assert "+1 202 555 0118" not in copied_body()
+                for operation in ["m 5181 2530", "m 5181 2530"]:
+                    click_pointer.stdin.write(operation + "\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                time.sleep(1)
+                capture("header-to-tooltip.png")
+                click(1136, 253)  # Original layout icon.
+                time.sleep(2)
+                capture("header-original-layout.png")
+                click(1136, 253)
+                time.sleep(1)
+                capture("header-readable-layout.png")
+                click(1330, 253)  # Reply All belongs to this message.
+                capture("header-reply-all.png")
+                for x, y, expected in [(750, 145, "mira@example.test"), (750, 183, "jun@example.test")]:
+                    click(x, y)
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                    assert subprocess.check_output(["wl-paste", "--no-newline"], text=True).strip() == expected
+
+                click(1320, 106)  # Close and preserve the synthetic draft.
+                subprocess.run(["hyprctl", "eval", 'hl.monitor({output="GMAIL",mode="1000x1000@60",position="-3000x0",scale=1})'], check=True, stdout=subprocess.DEVNULL)
+                time.sleep(1)
+                capture("header-narrow-reader.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "empty-folders":
                 from PIL import Image
 
@@ -109,69 +154,51 @@ with private_compositor(isolate_pointer=True):
                     with Image.open(root / name) as shot:
                         shot = shot.convert("RGB")
                         for index in range(5):
-                            pixels = shot.crop((245, 190 + 104 * index, 530, 278 + 104 * index)).get_flattened_data()
+                            pixels = shot.crop((244, 152 + 92 * index, 515, 224 + 92 * index)).get_flattened_data()
                             ink = sum(pixel in ((229, 229, 229), (165, 160, 186)) for pixel in pixels)
                             assert (ink > 20) if index < count else (ink == 0), (name, index, ink)
 
-                def confirm_button(name):
+                def empty_button(name, required=True):
                     with Image.open(root / name) as shot:
                         shot = shot.convert("RGB")
-                        points = [(x, y) for y in range(150, 400) for x in range(245, 560)
+                        points = [(x, y) for y in range(82, 120) for x in range(235, 555)
                                   if shot.getpixel((x, y)) == (235, 111, 146)]
-                        assert len(points) > 100, name
+                        if not required:
+                            assert not points, name
+                            return
+                        assert len(points) > 5, name
                         return ((min(x for x, _ in points) + max(x for x, _ in points)) // 2,
                                 (min(y for _, y in points) + max(y for _, y in points)) // 2)
 
-                def no_empty_action(name):
-                    with Image.open(root / name) as shot:
-                        pixels = shot.convert("RGB").crop((430, 120, 550, 150)).get_flattened_data()
-                        assert not any(pixel == (235, 111, 146) for pixel in pixels), name
+                def unread_button():
+                    # The header action precedes Unread in Spam and Trash.
+                    click(470, 101)
 
                 rows("inbox.png", 5)
-                no_empty_action("inbox.png")
+                empty_button("inbox.png", required=False)
                 click(80, 234)
                 capture("empty-spam-before.png")
                 rows("empty-spam-before.png", 3)
-                click(480, 135)
-                capture("empty-spam-confirm.png")
-                confirm_button("empty-spam-confirm.png")
-                click(280, 256)  # Cancel must preserve every message.
-                capture("empty-spam-cancelled.png")
-                rows("empty-spam-cancelled.png", 3)
-                click(480, 135)
-                subprocess.run(["wtype", "-k", "Escape"], check=True)
-                capture("empty-spam-escaped.png")
-                rows("empty-spam-escaped.png", 3)
-                click(480, 135)
-                click(80, 268)  # Switching folders cancels the Spam confirmation.
-                capture("empty-trash-before.png")
-                rows("empty-trash-before.png", 2)
-                click(80, 234)
-                capture("empty-spam-return.png")
-                rows("empty-spam-return.png", 3)
-                click(280, 135)  # Only one of the three Spam messages is unread.
+                empty_button("empty-spam-before.png")
+                unread_button()  # Opening the sole unread message has marked it read.
                 capture("empty-spam-unread.png")
-                rows("empty-spam-unread.png", 1)
-                click(480, 135)
-                capture("empty-spam-filtered-confirm.png")
-                click(*confirm_button("empty-spam-filtered-confirm.png"))
+                rows("empty-spam-unread.png", 0)
+                click(*empty_button("empty-spam-unread.png"))
                 capture("empty-spam-done.png")
                 rows("empty-spam-done.png", 0)
-                click(280, 135)  # Read messages must also have been deleted.
+                unread_button()  # Read messages must also have been deleted.
                 capture("empty-spam-all-done.png")
                 rows("empty-spam-all-done.png", 0)
                 click(80, 268)
-                capture("empty-trash-untouched.png")
-                rows("empty-trash-untouched.png", 2)
-                click(480, 135)
-                capture("empty-trash-confirm.png")
-                click(*confirm_button("empty-trash-confirm.png"))
+                capture("empty-trash-before.png")
+                rows("empty-trash-before.png", 2)
+                click(*empty_button("empty-trash-before.png"))
                 capture("empty-trash-done.png")
                 rows("empty-trash-done.png", 0)
                 click(80, 98)
                 capture("empty-inbox-preserved.png")
                 rows("empty-inbox-preserved.png", 5)
-                no_empty_action("empty-inbox-preserved.png")
+                empty_button("empty-inbox-preserved.png", required=False)
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
@@ -468,13 +495,66 @@ with private_compositor(isolate_pointer=True):
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "handling-groups":
+                capture("handling-overview.png")
+                click(550, 250)
+                capture("handling-editor.png")
+                click(830, 452)
+                subprocess.run(["wtype", "from:c@example.test"], check=True)
+                capture("handling-added-or.png")
+                click(830, 550)
+                capture("handling-saved.png")
+                click(550, 250)
+                capture("handling-reopened.png")
+                for y, expected in [(379, "from:(a@example.test)"), (417, "from:(b@example.test)"), (455, "from:c@example.test")]:
+                    click(550, y)
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                    assert subprocess.check_output(["wl-paste", "--no-newline"], text=True) == expected
+                click(1374, 417)
+                capture("handling-removed-or.png")
+                click(830, 511)
+                capture("handling-resaved.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "filter-labels":
+                click(1000, 105)
+                capture("filter-labels-ready.png")
+                click(400, 240)
+                subprocess.run(["wtype", "co"], check=True)
+                capture("filter-labels-matching.png")
+                subprocess.run(["wtype", "-k", "Return"], check=True)
+                capture("filter-labels-enter.png")
+
+                def label_value():
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                    value = subprocess.check_output(["wl-paste", "--no-newline"], text=True)
+                    subprocess.run(["wtype", "-k", "End"], check=True)
+                    return value
+
+                assert label_value() == "Mail/Code, "
+                subprocess.run(["wtype", "de"], check=True)
+                capture("filter-labels-second-match.png")
+                click(400, 273)
+                assert label_value() == "Mail/Code, Mail/Design, "
+                subprocess.run(["wtype", "rec"], check=True)
+                capture("filter-labels-tab-match.png")
+                subprocess.run(["wtype", "-k", "Tab"], check=True)
+                capture("filter-labels-tab.png")
+                assert label_value() == "Mail/Code, Mail/Design, Finances/Receipts, "
+                subprocess.run(["wtype", "-k", "Down", "-k", "Escape"], check=True)
+                capture("filter-labels-dismissed.png")
+                assert label_value() == "Mail/Code, Mail/Design, Finances/Receipts, "
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "filters":
                 click(1000, 105)
                 capture("sender-filter.png")
-                click(395, 567)
-                click(272, 593)
+                click(378, 273)
+                click(272, 443)
                 capture("filter-apply-checked.png")
-                click(302, 651)
+                click(830, 473)
                 capture("filter-saved.png")
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)
@@ -608,18 +688,23 @@ with private_compositor(isolate_pointer=True):
                     with Image.open(root / name) as shot:
                         return Counter(shot.convert("RGB").crop((590, 320, 1390, output_height - 145)).get_flattened_data())
                 def signature_control(name, kind):
-                    # The independent signature/quote controls precede Reply
-                    # at the bottom of the naturally sized message card.
+                    if kind == "signature":
+                        click(1238, 253)
+                        return
                     with Image.open(root / name) as shot:
                         shot = shot.convert("RGB")
-                        border_rows = [y for y in range(225, output_height - 180)
+                        border_rows = [y for y in range(550, output_height - 200)
                                        if shot.getpixel((1000, y)) == (57, 53, 70)
                                        and shot.getpixel((1300, y)) == (57, 53, 70)]
                     assert border_rows, name
-                    click(990, border_rows[-1] - (85 if kind == "signature" else 55))
+                    click(675, border_rows[-1] - 25)
                 def selected_body():
                     subprocess.run(["wl-copy", "--", "signature-selection-pending"], check=True)
-                    click(650, 341)
+                    for operation in [f"m 4306 {round(290 / output_height * 10000)}", "b 1", f"m 4792 {round(290 / output_height * 10000)}", "b 0"]:
+                        click_pointer.stdin.write(operation + "\n")
+                        click_pointer.stdin.flush()
+                        assert click_pointer.stdout.readline().strip() == "ok"
+                        time.sleep(.15)
                     subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
                     def copied():
                         value = subprocess.check_output(["wl-paste", "--no-newline"], text=True, timeout=5)
@@ -652,7 +737,7 @@ with private_compositor(isolate_pointer=True):
                 assert "Older synthetic delivery notes" in copied and "+1 202 555 0118" not in copied, copied
                 signature_control("signature-hidden-quotes-open.png", "quote")
                 capture("signature-recollapsed.png")
-                click(655, 307)
+                click(1214, 253)
                 time.sleep(1)
                 capture("signature-original-hidden.png")
                 assert signature_pixels("signature-original-hidden.png")[(240, 190, 50)] == 0
@@ -660,7 +745,7 @@ with private_compositor(isolate_pointer=True):
                 time.sleep(1)
                 capture("signature-original-expanded.png")
                 assert signature_pixels("signature-original-expanded.png")[(240, 190, 50)] == 96 * 64
-                click(655, 307)
+                click(1214, 253)
                 capture("signature-readable-expanded.png")
                 assert signature_pixels("signature-readable-expanded.png")[(240, 190, 50)] == 96 * 64
                 signature_control("signature-readable-expanded.png", "signature")

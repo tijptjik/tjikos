@@ -466,11 +466,11 @@ Mark all read for every matching unread message across all result pages. The
 filter does not change the search text. Bulk changes remove only the UNREAD
 label, preserve mail and drafts, and report failed or partially completed batches.
 
-Spam and Trash also offer **Empty Spam** / **Empty Trash**. Confirming **Delete
-permanently** deletes every message in that folder across all pages, regardless
-of the Unread toggle or search filter. Cancel or Escape leaves the folder alone;
-changing folders dismisses the confirmation. Other folders have no empty action.
-Only confirmed deletions are removed from the cache; errors report partial
+Spam and Trash offer **Empty Spam** / **Empty Trash** beside the folder title.
+Clicking immediately permanently deletes every message in that folder across all
+pages, regardless of the Unread toggle or search filter. Other folders have no
+empty action.
+Only successful deletions are removed from the cache; errors report partial
 completion and preserve the remaining messages. Permanent deletion is not retried
 automatically.
 
@@ -510,17 +510,48 @@ mail. Explicit Mark unread is respected until the message is opened again.
 
 ## Gmail filters and reply drafts
 
-Settings → Filters manages Gmail server-side filters. The reader's Filter button
-prefills the sender address. Choose criteria and actions, then save. Existing
-accounts must reconnect through Settings → Sync to grant `gmail.settings.basic`.
-Editing replaces the Gmail filter because the API has no update operation.
+Settings → Gmail filters shows mail **handlings**, grouped by the entire shared
+action set: labels, archive/read/star/Trash/Spam behavior and forwarding. Open a
+handling to edit its actions once and add or remove as many OR conditions as
+needed. Each condition is a Gmail search; terms within a row combine normally,
+and the rows are joined with OR. The reader's Filter button starts a new handling
+with the sender prefilled.
 
-“Apply to all matching mail” is off by default. Enabling it also applies label,
-read, archive, star, Trash, and Spam actions to matching existing messages,
-including Spam and Trash. Matches are collected before batched changes begin.
-Partial failures report progress; “Apply existing mail…” retries the saved
-filter without creating another one. Historical forwarding is not supported.
-Deleting a filter leaves previously processed mail unchanged.
+The Apply labels field suggests existing names, including nested labels. Click a
+match or use ↑/↓ and Enter/Tab; Escape dismisses suggestions. Earlier selections
+are preserved and already selected names are omitted from suggestions.
+
+Large handlings are split across bounded Gmail filter queries and still appear
+as one handling. Saving creates and reads back all replacements before deleting
+the originals. Full originals and progress receipts are journaled in the private
+account cache; stale edits are rejected. Changing to an existing action set joins
+its conditions. Existing advanced actions, including forwarding, are preserved;
+unsupported criteria are shown without allowing a lossy edit.
+
+“Also apply to existing matching mail” is off by default. Enabling it applies the
+shared actions to matching existing mail, including Spam and Trash. Historical
+forwarding is not supported. Deleting a handling changes filters only, leaving
+previously processed mail unchanged. Accounts need `gmail.settings.basic`; use
+Settings → Sync to reconnect if Google denies filter management.
+
+For an explicitly requested account cleanup, `scripts/consolidate-filters.py`
+provides separate `plan PRIVATE_DIRECTORY --since YYYY-MM-DD` and
+`apply PRIVATE_DIRECTORY` modes. Planning saves original filters and per-query
+received-mail activity evidence outside Git. Non-delete address conditions with
+no received mail since the cutoff and no-action filters are removed from the
+plan; delete conditions and non-address conditions are preserved. Sender
+activity is checked independently of obsolete subject text, including Spam and
+Trash and excluding Sent and Drafts. Applying verifies replacements before
+removing originals, records every mutation, and verifies the final inventory;
+it never applies actions to existing messages. Interrupted creates require
+receipt reconciliation; mail sync and archive workers keep running. Run it with
+`uv run apps/gmailtjik/scripts/consolidate-filters.py ...` to use its declared
+Python dependencies. Settings deletions are serialized over a pooled connection;
+slow responses are reconciled by filter-ID read-back and every completed ID is
+recorded immediately.
+
+Synthetic checks: `GMAILTJIK_DEMO_SCENE=handling-groups bun run --cwd apps/gmailtjik test:ui`
+and `python3 -B apps/gmailtjik/tests/test_filter_consolidation.py`.
 
 Replying while a different draft is open saves that draft locally and opens the
 reply. Resume saved drafts from the composer; their text and pending Gmail-save
@@ -535,6 +566,12 @@ Icons are cached by origin in the private data directory's `favicons/` folder fo
 seven days; failed lookups are cached for one day. PNG, JPEG, GIF, WebP and ICO
 images are bounded and reduced to 32px. Missing or unsupported icons keep the
 standard link icon. Demo mode uses synthetic icons and makes no favicon requests.
+
+The expanded message header groups sender and To/Cc/Bcc icons with address
+tooltips, Original layout and signature icon toggles, a relative timestamp (hover
+for the exact date), Reply, and Reply All when there are multiple other recipients.
+Reply All excludes the current account, deduplicates addresses, and never copies Bcc.
+Check with `GMAILTJIK_DEMO_SCENE=message-header bun run --cwd apps/gmailtjik test:ui`.
 
 Selecting a label fills search with `label:<full name>` (quoted when needed).
 Keep that prefix while adding terms to search only the selected label; Gmail's

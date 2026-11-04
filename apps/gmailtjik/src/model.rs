@@ -209,6 +209,29 @@ impl Draft {
             ..Self::default()
         }
     }
+    pub fn reply_all(message: &Message, account: &str) -> Self {
+        let mut draft = Self::reply(message);
+        let mut seen = std::collections::HashSet::new();
+        seen.insert(account.to_lowercase());
+        let mut recipients = |value: &str| {
+            addresses(value)
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|(_, email)| seen.insert(email.to_lowercase()).then_some(email))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let sender = recipients(&draft.to);
+        let to = recipients(&message.header("To"));
+        draft.to = [sender, to]
+            .into_iter()
+            .filter(|v| !v.is_empty())
+            .collect::<Vec<_>>()
+            .join(", ");
+        draft.cc = recipients(&message.header("Cc"));
+        // Bcc recipients must never be exposed by Reply All.
+        draft
+    }
     pub fn validate(&self) -> Result<()> {
         for field in [
             &self.to,
@@ -548,7 +571,10 @@ pub fn demo() -> (Vec<Label>, Page) {
         messages[0].payload.body.data =
             URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-signoff.html"));
     }
-    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("signature") {
+    if matches!(
+        std::env::var("GMAILTJIK_DEMO_SCENE").as_deref(),
+        Ok("signature" | "message-header")
+    ) {
         messages[0].payload.mime_type = "text/html".into();
         messages[0].payload.body.data =
             URL_SAFE_NO_PAD.encode(include_str!("../assets/demo-signature.html"));
@@ -559,6 +585,16 @@ pub fn demo() -> (Vec<Label>, Page) {
                 header.value = "Studio delivery details".into();
             }
         }
+    }
+    if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("message-header") {
+        messages[0].payload.headers.push(Header {
+            name: "Cc".into(),
+            value: "Jun Park <jun@example.test>".into(),
+        });
+        messages[0].payload.headers.push(Header {
+            name: "Bcc".into(),
+            value: "Private <private@example.test>".into(),
+        });
     }
     if std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("inline") {
         messages[0].payload.mime_type = "multipart/alternative".into();
@@ -738,7 +774,7 @@ pub fn demo_conversations() -> (Vec<Label>, Page) {
 pub fn demo_thread(message: &Message) -> Vec<Message> {
     if matches!(
         std::env::var("GMAILTJIK_DEMO_SCENE").as_deref(),
-        Ok("reader" | "inline" | "signature" | "signoff" | "contact-signature")
+        Ok("reader" | "inline" | "signature" | "signoff" | "contact-signature" | "message-header")
     ) {
         return vec![message.clone()];
     }
@@ -966,6 +1002,49 @@ mod tests {
             ..Draft::default()
         };
         assert!(draft.raw("me@example.test").is_err());
+    }
+    #[test]
+    fn reply_all_excludes_self_duplicates_and_bcc() {
+        let mut msg = demo().1.messages.remove(0);
+        msg.payload
+            .headers
+            .retain(|h| !matches!(h.name.as_str(), "To" | "Cc" | "Bcc" | "From"));
+        for (name, value) in [
+            ("From", "Sender <sender@example.test>"),
+            ("Reply-To", "reply@example.test"),
+            (
+                "To",
+                "You <YOU@example.test>, reply@example.test, Other <other@example.test>",
+            ),
+            (
+                "Cc",
+                "other@example.test, Third <third@example.test>, you@example.test",
+            ),
+            ("Bcc", "hidden@example.test"),
+        ] {
+            msg.payload.headers.push(Header {
+                name: name.into(),
+                value: value.into(),
+            });
+        }
+        let reply = Draft::reply_all(&msg, "you@example.test");
+        assert_eq!(reply.to, "reply@example.test, other@example.test");
+        assert_eq!(reply.cc, "third@example.test");
+        assert!(reply.bcc.is_empty());
+        assert_eq!(reply.thread_id, msg.thread_id);
+        assert_eq!(reply.in_reply_to, msg.header("Message-ID"));
+        // Replies to our own sent messages retain the original audience.
+        msg.payload.headers.retain(|h| h.name != "Reply-To");
+        msg.payload
+            .headers
+            .iter_mut()
+            .find(|h| h.name == "From")
+            .unwrap()
+            .value = "you@example.test".into();
+        assert_eq!(
+            Draft::reply_all(&msg, "you@example.test").to,
+            "reply@example.test, other@example.test"
+        );
     }
     #[test]
     fn reply_preserves_thread_and_prefers_reply_to() {

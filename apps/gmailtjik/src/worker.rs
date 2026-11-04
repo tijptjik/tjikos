@@ -109,52 +109,62 @@ fn filter_request(
 ) -> Result<crate::filters::Outcome> {
     use crate::filters::{Outcome, Request};
     let mut outcome = Outcome {
-        saved: None,
-        deleted: None,
+        group_saved: false,
         filters: None,
         note: String::new(),
     };
     match request {
+        Request::SaveGroup { originals, conditions, action, apply } => {
+            if apply {
+                for filter in crate::filters::compile_handling(&action, &conditions)? { filter.validate(true)?; }
+            }
+            match crate::filters::replace_handling(google, store, &originals, Some(&action), &conditions) {
+                Ok(filters) => {
+                    store.put("gmail_filters", &filters)?;
+                    outcome.filters = Some(filters);
+                    outcome.group_saved = true;
+                    outcome.note = "Handling saved in Gmail".into();
+                    if apply {
+                        let target = outcome.filters.as_ref().unwrap().iter().filter(|row|
+                            crate::filters::action_key(&row.action) == crate::filters::action_key(&action)).cloned().collect();
+                        let conditions = crate::filters::Handling { action: action.clone(), originals: target }.conditions()?;
+                        for filter in crate::filters::compile_handling(&action, &conditions)? {
+                            if let Err(error) = google.apply_filter(store, &filter) {
+                                outcome.note = format!("Handling saved. Existing-mail application incomplete: {error:#}");
+                                return Ok(outcome);
+                            }
+                        }
+                        outcome.note = "Handling saved · applied to existing matching mail".into();
+                    }
+                }
+                Err(error) => {
+                    remember_rate_limit(store, &error);
+                    outcome.filters = google.filters().ok();
+                    outcome.note = format!("Handling save incomplete: {error:#}. Original coverage is retained until replacements are verified; refresh before retrying. Recovery details are in the private account cache.");
+                }
+            }
+        }
+        Request::DeleteGroup(originals) => {
+            match crate::filters::replace_handling(google, store, &originals, None, &[]) {
+                Ok(filters) => {
+                    store.put("gmail_filters", &filters)?;
+                    outcome.filters = Some(filters);
+                    outcome.group_saved = true;
+                    outcome.note = "Handling deleted; existing mail is unchanged".into();
+                }
+                Err(error) => {
+                    outcome.filters = google.filters().ok();
+                    outcome.note = format!("Handling deletion incomplete: {error:#}. Refresh before retrying.");
+                }
+            }
+        }
         Request::List => {
             let filters = google.filters()?;
             store.put("gmail_filters", &filters)?;
             outcome.filters = Some(filters);
             outcome.note = "Filters loaded from Gmail".into();
         }
-        Request::Delete(id) => {
-            google.delete_filter(&id)?;
-            outcome.deleted = Some(id);
-            outcome.note = "Filter deleted; existing mail is unchanged".into();
-        }
-        Request::Save { filter, apply } => {
-            filter.validate(apply)?;
-            let saved = google.create_filter(&filter)?;
-            outcome.saved = Some(saved.clone());
-            outcome.note = "Filter saved in Gmail".into();
-            if !filter.id.is_empty() {
-                if let Err(error) = google.delete_filter(&filter.id) {
-                    remember_rate_limit(store, &error);
-                    outcome.note = format!(
-                        "New filter saved, but the old filter still exists: {error}. Refresh the list before deleting the old one."
-                    );
-                    return Ok(outcome);
-                }
-                outcome.deleted = Some(filter.id);
-            }
-            if apply {
-                outcome.note = match google.apply_filter(store, &saved) {
-                    Ok(count) => format!("Filter saved · applied to {count} matching messages"),
-                    Err(error) => {
-                        remember_rate_limit(store, &error);
-                        format!("Filter saved. Existing mail: {error:#}")
-                    }
-                };
-            }
-        }
-        Request::Apply(filter) => {
-            let count = google.apply_filter(store, &filter)?;
-            outcome.note = format!("Applied to {count} matching messages");
-        }
+
     }
     Ok(outcome)
 }
@@ -1203,6 +1213,12 @@ pub fn start(dir: PathBuf, headless: bool) -> (mpsc::Sender<Command>, mpsc::Rece
                     let _mutation = (!matches!(request, crate::filters::Request::List))
                         .then(|| gate.mutation());
                     let result = (|| -> Result<crate::filters::Outcome> {
+                        let _filter_lock = if !matches!(request, crate::filters::Request::List) {
+                            let file = OpenOptions::new().create(true).truncate(false).read(true).write(true)
+                                .mode(0o600).open(dir.join("filters-maintenance.lock"))?;
+                            file.try_lock().map_err(|_| anyhow::anyhow!("Another filter update is running; wait for it to finish, then refresh"))?;
+                            Some(file)
+                        } else { None };
                         check_cooldown(&store)?;
                         let mut google = open_mail_connection(&dir, &store)?.0;
                         filter_request(&mut google, &store, request)

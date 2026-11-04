@@ -47,6 +47,10 @@ struct FolderPosition {
 
 fn proicon(name: &str) -> Icon {
     let bytes: &[u8] = match name {
+        "recipients" => include_bytes!("../assets/proicons/recipients.svg"),
+        "bcc" => include_bytes!("../assets/proicons/bcc.svg"),
+        "layout" => include_bytes!("../assets/proicons/layout.svg"),
+        "reply-all" => include_bytes!("../assets/proicons/reply-all.svg"),
         "archive" => include_bytes!("../assets/proicons/archive.svg"),
         "arrow-left" => include_bytes!("../assets/proicons/arrow-left.svg"),
         "arrow-reply" => include_bytes!("../assets/proicons/arrow-reply.svg"),
@@ -70,7 +74,10 @@ fn proicon(name: &str) -> Icon {
     Icon::default().data(bytes)
 }
 
+gpui_kit::actions!(filter_labels, [CompleteFilterLabel]);
+
 pub fn theme(cx: &mut App) {
+    cx.bind_keys([KeyBinding::new("tab", CompleteFilterLabel, Some("FilterLabels"))]);
     Theme::change(ThemeMode::Dark, None, cx);
     Theme::update(cx, |t| {
         t.colors.background = rgb(BG).into();
@@ -98,6 +105,12 @@ pub struct MailApp {
     gmail_filters: Vec<crate::filters::Filter>,
     filter_edit: crate::filters::Filter,
     filter_fields: Vec<Entity<InputState>>,
+    filter_label_open: bool,
+    filter_label_cursor: usize,
+    filter_editor_open: bool,
+    filter_group_originals: Vec<crate::filters::Filter>,
+    filter_conditions: Vec<Entity<InputState>>,
+    filter_condition_error: Option<String>,
     filter_flags: [bool; 6],
     filter_apply: bool,
     filter_busy: bool,
@@ -163,7 +176,6 @@ pub struct MailApp {
     query: String,
     unread_only: bool,
     marking_all_read: bool,
-    confirm_empty_folder: Option<String>,
     emptying_folder: Option<String>,
     empty_folder_error: Option<String>,
     page_token: String,
@@ -334,7 +346,7 @@ impl MailApp {
                 cx,
             ),
         ];
-        let filter_fields = [
+        let filter_fields: Vec<Entity<InputState>> = [
             "Sender address",
             "Recipient address",
             "Subject",
@@ -378,6 +390,17 @@ impl MailApp {
                 this.load(cx);
             }
         })];
+        subscriptions.push(cx.subscribe_in(&filter_fields[5], window, |this, field, event, window, cx| {
+            match event {
+                InputEvent::Change | InputEvent::Focus => {
+                    this.filter_label_open = field.read(cx).focus_handle(cx).is_focused(window);
+                    this.filter_label_cursor = 0;
+                }
+                InputEvent::Blur => this.filter_label_open = false,
+                _ => return,
+            }
+            cx.notify();
+        }));
         for field in &rule_fields {
             subscriptions.push(cx.subscribe_in(field, window, |this, _, event, _, cx| {
                 if matches!(event, InputEvent::Change) {
@@ -475,6 +498,12 @@ impl MailApp {
                 .unwrap_or_default(),
             filter_edit: Default::default(),
             filter_fields,
+            filter_label_open: false,
+            filter_label_cursor: 0,
+            filter_editor_open: false,
+            filter_group_originals: vec![],
+            filter_conditions: vec![],
+            filter_condition_error: None,
             filter_flags: [false; 6],
             filter_apply: false,
             filter_busy: false,
@@ -558,7 +587,6 @@ impl MailApp {
             unread_only: demo
                 && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("auto-read"),
             marking_all_read: false,
-            confirm_empty_folder: None,
             emptying_folder: None,
             empty_folder_error: None,
             page_token: String::new(),
@@ -606,6 +634,15 @@ impl MailApp {
             cancel: Arc::new(AtomicBool::new(false)),
             _subscriptions: subscriptions,
         };
+        if demo && std::env::var("GMAILTJIK_DEMO_SCENE").as_deref() == Ok("handling-groups") {
+            this.settings = true;
+            this.settings_filters = true;
+            this.gmail_filters = vec![
+                crate::filters::Filter { id: "demo-code-a".into(), criteria: serde_json::json!({"from":"a@example.test"}), action: serde_json::json!({"addLabelIds":["code"],"removeLabelIds":["INBOX"]}) },
+                crate::filters::Filter { id: "demo-code-b".into(), criteria: serde_json::json!({"from":"b@example.test"}), action: serde_json::json!({"addLabelIds":["code"],"removeLabelIds":["INBOX"]}) },
+                crate::filters::Filter { id: "demo-delete".into(), criteria: serde_json::json!({"from":"spam@example.test"}), action: serde_json::json!({"addLabelIds":["TRASH"]}) },
+            ];
+        }
         this.migrate_contact_defaults();
         this.queue_expanded = this.queue.iter().any(|a| a.state == ActionState::Failed);
         if demo && optimistic_demo() {
@@ -747,7 +784,6 @@ impl MailApp {
             self.shortcuts = false;
             self.queue_expanded = false;
             self.label_menu = None;
-            self.confirm_empty_folder = None;
             self.focus.focus(window, cx);
         } else if event.keystroke.modifiers.control && key == "f" {
             self.search.read(cx).focus_handle(cx).focus(window, cx);
@@ -862,16 +898,31 @@ impl MailApp {
         cx.notify();
     }
     fn reply(&mut self, message: &Message, window: &mut Window, cx: &mut Context<Self>) {
+        self.reply_mode(message, false, window, cx);
+    }
+    fn reply_mode(
+        &mut self,
+        message: &Message,
+        all: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if message.summary_only {
             self.status = "Loading the full conversation before replying…".into();
             cx.notify();
             return;
         }
-        let reply = Draft::reply(message);
+        let reply = if all {
+            Draft::reply_all(message, &self.email)
+        } else {
+            Draft::reply(message)
+        };
         let has_draft = self.draft != Draft::default();
         let same_reply = !reply.in_reply_to.is_empty()
             && self.draft.in_reply_to == reply.in_reply_to
-            && self.draft.thread_id == reply.thread_id;
+            && self.draft.thread_id == reply.thread_id
+            && self.draft.to == reply.to
+            && self.draft.cc == reply.cc;
         if !same_reply {
             match self
                 .store
@@ -1367,7 +1418,6 @@ impl MailApp {
         self.auto_read_pinned = false;
         self.auto_read_seen.clear();
         self.read_view_started = Instant::now();
-        self.confirm_empty_folder = None;
         self.empty_folder_error = None;
         self.ticket += 1;
         self.error.clear();
@@ -1464,13 +1514,8 @@ impl MailApp {
         cx.notify();
     }
     fn empty_folder(&mut self, cx: &mut Context<Self>) {
-        let Some(label) = self.confirm_empty_folder.take() else {
-            return;
-        };
-        if self.emptying_folder.is_some()
-            || label != self.label
-            || !matches!(label.as_str(), "SPAM" | "TRASH")
-        {
+        let label = self.label.clone();
+        if self.emptying_folder.is_some() || !matches!(label.as_str(), "SPAM" | "TRASH") {
             return;
         }
         // Ignore responses already queued before this destructive operation.
@@ -1924,18 +1969,7 @@ impl MailApp {
                             if let Some(filters) = outcome.filters {
                                 self.gmail_filters = filters;
                             }
-                            if let Some(id) = outcome.deleted {
-                                self.gmail_filters.retain(|f| f.id != id);
-                                if self.filter_edit.id == id {
-                                    self.edit_filter(crate::filters::Filter::default(), window, cx);
-                                }
-                                self.filter_delete = None;
-                            }
-                            if let Some(filter) = outcome.saved {
-                                self.gmail_filters.retain(|f| f.id != filter.id);
-                                self.gmail_filters.push(filter.clone());
-                                self.edit_filter(filter, window, cx);
-                            }
+                            if outcome.group_saved { self.filter_editor_open = false; self.filter_label_open = false; }
                             self.filter_note = outcome.note;
                             let _ = self.store.put("gmail_filters", &self.gmail_filters);
                         }
@@ -2645,6 +2679,7 @@ impl MailApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.filter_note.clear();
         for (field, name) in
             self.filter_fields
                 .iter()
@@ -2685,6 +2720,23 @@ impl MailApp {
             filter.label_ids("addLabelIds").contains(&"TRASH".into()),
             filter.label_ids("removeLabelIds").contains(&"SPAM".into()),
         ];
+        self.filter_group_originals = if filter.id.is_empty() { vec![] } else {
+            self.gmail_filters.iter().filter(|row| crate::filters::action_key(&row.action) == crate::filters::action_key(&filter.action)).cloned().collect()
+        };
+        let source = if self.filter_group_originals.is_empty() { vec![filter.clone()] } else { self.filter_group_originals.clone() };
+        let conditions = if filter.id.is_empty() && filter.criteria.as_object().is_some_and(|c| c.is_empty()) {
+            Ok(vec![])
+        } else { crate::filters::Handling { action: filter.action.clone(), originals: source }.conditions() };
+        self.filter_condition_error = conditions.as_ref().err().map(ToString::to_string);
+        let conditions = conditions.unwrap_or_default();
+        self.filter_conditions = conditions.into_iter().map(|value| cx.new(|cx|
+            InputState::new(window, cx).placeholder("Gmail search, e.g. from:sender@example.com subject:receipt").default_value(value)
+        )).collect();
+        if self.filter_conditions.is_empty() && self.filter_condition_error.is_none() {
+            self.add_filter_condition(window, cx);
+        }
+        self.filter_editor_open = true;
+        self.filter_label_open = false;
         self.filter_edit = filter;
         self.filter_apply = false;
         self.filter_delete = None;
@@ -2713,7 +2765,7 @@ impl MailApp {
     fn request_filters(
         &mut self,
         request: crate::filters::Request,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.filter_busy {
@@ -2722,39 +2774,28 @@ impl MailApp {
         self.filter_note.clear();
         if self.demo {
             match request {
+                crate::filters::Request::SaveGroup { originals, conditions, action, apply } => {
+                    let filters = match crate::filters::compile_handling(&action, &conditions) {
+                        Ok(filters) => filters,
+                        Err(error) => { self.filter_note = error.to_string(); cx.notify(); return; }
+                    };
+                    self.gmail_filters.retain(|row| !originals.iter().any(|old| row.id == old.id));
+                    for mut filter in filters {
+                        filter.id = format!("demo-handling-{:016x}", rand::random::<u64>());
+                        self.gmail_filters.push(filter);
+                    }
+                    self.filter_editor_open = false;
+                    self.filter_note = if apply { "Synthetic handling saved · existing-mail application simulated" } else { "Synthetic handling saved" }.into();
+                }
+                crate::filters::Request::DeleteGroup(originals) => {
+                    self.gmail_filters.retain(|row| !originals.iter().any(|old| row.id == old.id));
+                    self.filter_editor_open = false;
+                    self.filter_note = "Synthetic handling deleted".into();
+                }
                 crate::filters::Request::List => {
                     self.filter_note = "Synthetic filters · no Gmail changes".into()
                 }
-                crate::filters::Request::Save { mut filter, apply } => {
-                    if let Err(error) = filter.validate(apply) {
-                        self.filter_note = error.to_string();
-                        cx.notify();
-                        return;
-                    }
-                    if filter.id.is_empty() {
-                        filter.id = format!("demo-filter-{}", self.gmail_filters.len() + 1);
-                    }
-                    self.gmail_filters.retain(|row| row.id != filter.id);
-                    self.gmail_filters.push(filter.clone());
-                    self.edit_filter(filter, window, cx);
-                    self.filter_note = if apply {
-                        "Synthetic filter saved · existing-mail application simulated"
-                    } else {
-                        "Synthetic filter saved"
-                    }
-                    .into();
-                }
-                crate::filters::Request::Delete(id) => {
-                    self.gmail_filters.retain(|f| f.id != id);
-                    if self.filter_edit.id == id {
-                        self.edit_filter(Default::default(), window, cx);
-                    }
-                    self.filter_delete = None;
-                    self.filter_note = "Synthetic filter deleted".into();
-                }
-                crate::filters::Request::Apply(_) => {
-                    self.filter_note = "Existing-mail application simulated".into()
-                }
+
             }
         } else {
             self.filter_busy = true;
@@ -2765,18 +2806,7 @@ impl MailApp {
     fn save_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let result = (|| -> anyhow::Result<crate::filters::Filter> {
             let mut filter = self.filter_edit.clone();
-            for (input, name) in
-                self.filter_fields
-                    .iter()
-                    .zip(["from", "to", "subject", "query", "negatedQuery"])
-            {
-                filter.criteria.as_object_mut().unwrap().remove(name);
-                let value = input.read(cx).value().trim().to_string();
-                if !value.is_empty() {
-                    filter.criteria[name] = serde_json::json!(value);
-                }
-            }
-            filter.criteria["hasAttachment"] = serde_json::json!(self.filter_flags[0]);
+            anyhow::ensure!(self.filter_condition_error.is_none(), "Unsupported original criteria must be preserved in Gmail");
             let mut add = filter.label_ids("addLabelIds");
             let mut remove = filter.label_ids("removeLabelIds");
             for (flag, id, is_add) in [
@@ -2820,13 +2850,17 @@ impl MailApp {
             }
             filter.action["addLabelIds"] = serde_json::json!(add);
             filter.action["removeLabelIds"] = serde_json::json!(remove);
-            filter.validate(self.filter_apply)?;
+            for shard in crate::filters::compile_handling(&filter.action, &self.filter_conditions.iter().map(|input| input.read(cx).value().to_string()).collect::<Vec<_>>())? {
+                shard.validate(self.filter_apply)?;
+            }
             Ok(filter)
         })();
         match result {
             Ok(filter) => self.request_filters(
-                crate::filters::Request::Save {
-                    filter,
+                crate::filters::Request::SaveGroup {
+                    originals: self.filter_group_originals.clone(),
+                    conditions: self.filter_conditions.iter().map(|input| input.read(cx).value().to_string()).collect(),
+                    action: filter.action,
                     apply: self.filter_apply,
                 },
                 window,
@@ -2838,117 +2872,151 @@ impl MailApp {
             }
         }
     }
+    fn choose_filter_label(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let value = crate::filters::complete_label(&self.filter_fields[5].read(cx).value(), name);
+        self.filter_fields[5].update(cx, |field, cx| {
+            field.set_value(value, window, cx);
+            field.focus_handle(cx).focus(window, cx);
+        });
+        self.filter_label_open = false;
+        self.filter_label_cursor = 0;
+        cx.notify();
+    }
+    fn filter_label_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.settings || !self.settings_filters || self.filter_busy
+            || !self.filter_fields[5].read(cx).focus_handle(cx).is_focused(window)
+            || event.keystroke.modifiers.control || event.keystroke.modifiers.alt
+            || event.keystroke.modifiers.platform || event.keystroke.modifiers.shift {
+            return;
+        }
+        let rows = crate::filters::label_suggestions(&self.filter_fields[5].read(cx).value(), &self.labels);
+        match event.keystroke.key.as_str() {
+            "down" if !rows.is_empty() => {
+                self.filter_label_cursor = if self.filter_label_open {
+                    (self.filter_label_cursor + 1).min(rows.len() - 1)
+                } else { 0 };
+                self.filter_label_open = true;
+            }
+            "up" if self.filter_label_open => self.filter_label_cursor = self.filter_label_cursor.saturating_sub(1),
+            "enter" | "tab" if self.filter_label_open && !rows.is_empty() => {
+                self.choose_filter_label(&rows[self.filter_label_cursor.min(rows.len() - 1)], window, cx);
+            }
+            "escape" if self.filter_label_open => self.filter_label_open = false,
+            _ => return,
+        }
+        cx.stop_propagation();
+        cx.notify();
+    }
+    fn add_filter_condition(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let input = cx.new(|cx| InputState::new(window, cx)
+            .placeholder("Gmail search, e.g. from:sender@example.com subject:receipt"));
+        input.read(cx).focus_handle(cx).focus(window, cx);
+        self.filter_conditions.push(input);
+        cx.notify();
+    }
     fn filters_view(&self, cx: &mut Context<Self>) -> AnyElement {
-        let mut form = div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .p_4()
-            .rounded_lg()
-            .bg(rgb(SURFACE))
-            .child(div().text_lg().child(if self.filter_edit.id.is_empty() {
-                "New Gmail filter"
-            } else {
-                "Edit Gmail filter"
-            }));
-        for (index, title) in [
-            "From",
-            "To",
-            "Subject contains",
-            "Has the words / Gmail search",
-            "Doesn't have / excluded search",
-            "Apply labels (existing names, comma-separated)",
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            form = form.child(
-                div()
+        let mut groups = crate::filters::handlings(&self.gmail_filters);
+        groups.sort_by_key(|group| (crate::filters::action_key(&group.action) == "{}", group.title(&self.labels).to_lowercase()));
+        let mut overview = div().flex().flex_col().gap_3();
+        for (index, group) in groups.iter().enumerate() {
+            let edit = group.originals[0].clone();
+            let originals = group.originals.clone();
+            let key = crate::filters::action_key(&group.action);
+            let confirmed = self.filter_delete.as_ref() == Some(&key);
+            let count = group.conditions().map(|c| c.len()).unwrap_or(group.originals.len());
+            overview = overview.child(div().p_4().rounded_lg().bg(rgb(SURFACE)).flex().items_center().gap_3()
+                .child(Button::new(("open-handling", index)).ghost().h_auto().py_2().flex_1().min_w_0()
+                    .child(div().w_full().flex().flex_col().items_start().gap_1()
+                        .child(div().text_lg().child(group.title(&self.labels)))
+                        .child(div().text_xs().text_color(rgb(MUTED)).child(format!("{count} OR condition{}", if count == 1 { "" } else { "s" }))))
+                    .disabled(self.filter_busy)
+                    .on_click(cx.listener(move |this, _, window, cx| this.edit_filter(edit.clone(), window, cx))))
+                .child(Button::new(("delete-handling", index)).small().ghost()
+                    .label(if confirmed { "Confirm delete" } else { "Delete handling" }).disabled(self.filter_busy)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        if confirmed { this.request_filters(crate::filters::Request::DeleteGroup(originals.clone()), window, cx); }
+                        else { this.filter_delete = Some(key.clone()); cx.notify(); }
+                    }))));
+        }
+        let mut page = div().id("gmail-filters-scroll").flex_1().h_full().min_w_0().overflow_y_scroll().p_6().flex().flex_col().gap_4()
+            .child(div().flex().items_center().justify_between()
+                .child(div().text_2xl().child(if self.filter_editor_open { "Edit handling".to_string() } else { format!("Mail handling · {}", groups.len()) }))
+                .child(div().flex().gap_2()
+                    .child(Button::new("new-handling").primary().label("New handling").disabled(self.filter_busy)
+                        .on_click(cx.listener(|this, _, window, cx| this.edit_filter(Default::default(), window, cx))))
+                    .child(Button::new("refresh-gmail-filters").label("Refresh").disabled(self.filter_busy)
+                        .on_click(cx.listener(|this, _, window, cx| this.request_filters(crate::filters::Request::List, window, cx))))))
+            .child(div().text_color(rgb(MUTED)).child("Each handling shares one set of actions. Mail matching any of its OR conditions receives those actions in Gmail, even while this app is closed."));
+        if !self.filter_editor_open { return page.child(overview)
+            .when(!self.filter_note.is_empty(), |d| d.child(div().text_color(rgb(ACCENT)).child(self.filter_note.clone())))
+            .into_any_element(); }
+        let mut form = div().flex().flex_col().capture_key_down(cx.listener(Self::filter_label_key))
+            .gap_3().p_4().rounded_lg().bg(rgb(SURFACE))
+            .child(Button::new("back-to-handlings").ghost().small().icon(proicon("arrow-left")).label("All handlings")
+                .on_click(cx.listener(|this, _, _, cx| { this.filter_editor_open = false; this.filter_label_open = false; cx.notify(); })))
+            .child(div().text_lg().child("Actions"))
+            .child(div()
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(div().text_color(rgb(MUTED)).child(title))
-                    .child(Input::new(&self.filter_fields[index]).readonly(self.filter_busy)),
-            );
-        }
+                    .child(div().text_color(rgb(MUTED)).child("Apply labels"))
+                    .child(Input::new(&self.filter_fields[5]).readonly(self.filter_busy))
+                    .when(self.filter_label_open && !self.filter_busy, |d| {
+                        let rows = crate::filters::label_suggestions(&self.filter_fields[5].read(cx).value(), &self.labels);
+                        if rows.is_empty() { return d; }
+                        let d = d.key_context("FilterLabels")
+                            .on_action(cx.listener(|this, _: &CompleteFilterLabel, window, cx| {
+                                let rows = crate::filters::label_suggestions(
+                                    &this.filter_fields[5].read(cx).value(), &this.labels);
+                                if let Some(name) = rows.get(this.filter_label_cursor.min(rows.len().saturating_sub(1))) {
+                                    this.choose_filter_label(name, window, cx);
+                                    cx.stop_propagation();
+                                } else {
+                                    cx.propagate();
+                                }
+                            }));
+                        let mut suggestions = div().flex().flex_col().gap_1().p_1().rounded_lg().bg(rgb(BG));
+                        for (position, name) in rows.into_iter().enumerate() {
+                            let choose = name.clone();
+                            suggestions = suggestions.child(Button::new(("filter-label-suggestion", position))
+                                .ghost().small().w_full()
+                                .child(div().flex().items_center().gap_2().w_full().child(proicon("label")).child(name)).bg(rgb(if position == self.filter_label_cursor { RAISED } else { BG }))
+                                .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, window, cx| {
+                                    this.choose_filter_label(&choose, window, cx);
+                                    cx.stop_propagation();
+                                })));
+                        }
+                        d.child(suggestions)
+                    }),);
         let mut options = div().flex().flex_wrap().gap_4();
-        for (index, title) in [
-            "Has attachment",
-            "Mark as read",
-            "Skip Inbox (archive)",
-            "Star",
-            "Move to Trash",
-            "Never send to Spam",
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            options = options.child(
-                Checkbox::new(SharedString::from(format!("filter-option-{index}")))
-                    .label(title)
-                    .checked(self.filter_flags[index])
-                    .disabled(self.filter_busy)
-                    .on_click(cx.listener(move |this, checked: &bool, _, cx| {
-                        this.filter_flags[index] = *checked;
-                        cx.notify();
-                    })),
-            );
+        for (index, title) in [(1,"Mark as read"), (2,"Skip Inbox (archive)"), (3,"Star"), (4,"Delete (move to Trash)"), (5,"Never send to Spam")] {
+            options = options.child(Checkbox::new(SharedString::from(format!("filter-option-{index}")))
+                .label(title).checked(self.filter_flags[index]).disabled(self.filter_busy)
+                .on_click(cx.listener(move |this, checked: &bool, _, cx| { this.filter_flags[index] = *checked; cx.notify(); })));
         }
         form = form.child(options)
-            .child(Checkbox::new("filter-apply-existing").label("Apply to all matching mail")
+            .when_some(self.filter_edit.action["forward"].as_str().map(str::to_owned), |d, forward| d.child(div().text_color(rgb(MUTED)).child(format!("Forward to {forward}"))))
+            .child(div().mt_3().text_lg().child("Match any condition"))
+            .child(div().text_color(rgb(MUTED)).child("Each row is a Gmail search. Terms within a row combine normally; rows are joined with OR."));
+        for (index, input) in self.filter_conditions.iter().enumerate() {
+            form = form.child(div().flex().items_center().gap_2()
+                .child(div().w(px(30.)).text_color(rgb(MUTED)).child(if index == 0 { "If" } else { "OR" }))
+                .child(div().flex_1().min_w_0().child(Input::new(input).readonly(self.filter_busy)))
+                .child(Button::new(("remove-condition", index)).small().ghost().icon(proicon("delete"))
+                    .tooltip("Remove this OR condition").disabled(self.filter_busy || self.filter_conditions.len() == 1)
+                    .on_click(cx.listener(move |this, _, _, cx| { this.filter_conditions.remove(index); cx.notify(); }))));
+        }
+        form = form.child(Button::new("add-or-condition").small().label("Add OR condition").disabled(self.filter_busy || self.filter_condition_error.is_some())
+                .on_click(cx.listener(|this, _, window, cx| this.add_filter_condition(window, cx))))
+            .when_some(self.filter_condition_error.clone(), |d, error| d.child(div().text_color(rgb(0xeb6f92)).child(error)))
+            .child(Checkbox::new("filter-apply-existing").label("Also apply to existing matching mail")
                 .checked(self.filter_apply).disabled(self.filter_busy)
                 .on_click(cx.listener(|this, checked: &bool, _, cx| { this.filter_apply = *checked; cx.notify(); })))
-            .child(div().text_xs().text_color(rgb(MUTED)).child("When checked, label actions also apply to existing matching messages, including Spam and Trash. Otherwise the filter affects future mail only."))
-            .child(div().flex().gap_2()
-                .child(Button::new("save-gmail-filter").primary().label(if self.filter_busy { "Working…" } else { "Save filter" }).disabled(self.filter_busy)
-                    .on_click(cx.listener(|this, _, window, cx| this.save_filter(window, cx))))
-                .child(Button::new("new-gmail-filter").ghost().label("New filter").disabled(self.filter_busy)
-                    .on_click(cx.listener(|this, _, window, cx| this.edit_filter(Default::default(), window, cx)))))
-            .when(!self.filter_note.is_empty(), |d| d.child(div().child(self.filter_note.clone())));
-        let mut list = div().flex().flex_col().gap_3();
-        for filter in &self.gmail_filters {
-            let edit = filter.clone();
-            let apply = filter.clone();
-            let id = filter.id.clone();
-            let confirmed = self.filter_delete.as_ref() == Some(&id);
-            list = list.child(div().p_3().rounded_lg().bg(rgb(SURFACE)).flex().flex_col().gap_2()
-                .child(div().child(filter.title()))
-                .child(div().text_xs().text_color(rgb(MUTED)).child(format!("Add: {} · Remove: {}{}",
-                    filter.label_ids("addLabelIds").iter().map(|id| self.labels.iter().find(|l| &l.id == id).map_or(id.clone(), |l| l.name.clone())).collect::<Vec<_>>().join(", "),
-                    filter.label_ids("removeLabelIds").join(", "),
-                    filter.action["forward"].as_str().filter(|s| !s.is_empty()).map(|s| format!(" · Forward: {s}")).unwrap_or_default())))
-                .child(div().flex().flex_wrap().gap_2()
-                    .child(Button::new(SharedString::from(format!("edit-filter-{id}"))).small().label("Edit").disabled(self.filter_busy)
-                        .on_click(cx.listener(move |this, _, window, cx| this.edit_filter(edit.clone(), window, cx))))
-                    .child(Button::new(SharedString::from(format!("apply-filter-{id}"))).small().label("Apply existing mail…").disabled(self.filter_busy)
-                        .on_click(cx.listener(move |this, _, window, cx| { this.edit_filter(apply.clone(), window, cx); this.filter_apply = true; this.filter_note = "Check the criteria, then use Apply existing mail below without creating another filter.".into(); cx.notify(); })))
-                    .child(Button::new(SharedString::from(format!("delete-filter-{id}"))).small().label(if confirmed { "Confirm delete" } else { "Delete" }).disabled(self.filter_busy)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            if confirmed { this.request_filters(crate::filters::Request::Delete(id.clone()), window, cx); }
-                            else { this.filter_delete = Some(id.clone()); cx.notify(); }
-                        })))));
-        }
-        if !self.filter_edit.id.is_empty() && self.filter_apply {
-            let filter = self.filter_edit.clone();
-            form = form.child(
-                Button::new("apply-saved-filter")
-                    .label("Apply saved filter to existing mail")
-                    .disabled(self.filter_busy)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.request_filters(
-                            crate::filters::Request::Apply(filter.clone()),
-                            window,
-                            cx,
-                        )
-                    })),
-            );
-        }
-        div().id("gmail-filters-scroll").flex_1().h_full().min_w_0().overflow_y_scroll().p_6().flex().flex_col().gap_4()
-            .child(div().flex().items_center().justify_between().child(div().text_2xl().child("Gmail filters"))
-                .child(Button::new("refresh-gmail-filters").label("Refresh").disabled(self.filter_busy)
-                    .on_click(cx.listener(|this, _, window, cx| this.request_filters(crate::filters::Request::List, window, cx)))))
-            .child(div().text_color(rgb(MUTED)).child("These rules run in Gmail even when this app is closed. If saving is denied, reconnect Gmail in Sync to grant filter-management permission. Existing advanced filter criteria and actions are preserved when editing."))
-            .child(form).child(list).into_any_element()
+            .child(Button::new("save-gmail-filter").primary().label(if self.filter_busy { "Working…" } else { "Save handling" })
+                .disabled(self.filter_busy || self.filter_condition_error.is_some())
+                .on_click(cx.listener(|this, _, window, cx| this.save_filter(window, cx))));
+        page = page.child(form).when(!self.filter_note.is_empty(), |d| d.child(div().text_color(rgb(ACCENT)).child(self.filter_note.clone())));
+        page.into_any_element()
     }
     fn settings_layout(&self, content: AnyElement, cx: &mut Context<Self>) -> AnyElement {
         div()
@@ -3543,6 +3611,15 @@ impl MailApp {
             .child(
                 div().flex().items_center().gap_1().p_3()
                     .child(div().flex_1().min_w_0().truncate().text_lg().font_weight(FontWeight::SEMIBOLD).child(title))
+                    .when(matches!(self.label.as_str(), "SPAM" | "TRASH"), |d| d.child(
+                        Button::new("empty-folder").small().ghost().icon(proicon("delete"))
+                            .label(if self.emptying_folder.as_ref() == Some(&self.label) { "Emptying…" }
+                                else if self.label == "SPAM" { "Empty Spam" } else { "Empty Trash" })
+                            .text_color(rgb(0xeb6f92))
+                            .tooltip("Permanently delete every message in this folder, across all pages")
+                            .disabled(self.emptying_folder.is_some() || self.marking_all_read)
+                            .on_click(cx.listener(|this, _, _, cx| this.empty_folder(cx)))
+                    ))
                     .child(Button::new("unread-only").small().icon(proicon("mail"))
                         .when(self.inbox_width >= 300., |b| b.label("Unread"))
                         .tooltip("Show unread emails only")
@@ -3565,38 +3642,6 @@ impl MailApp {
                         .tooltip("Refresh mail").disabled(self.loading)
                         .on_click(cx.listener(|this, _, _, cx| this.load_force(true, cx))))
             )
-            .child(div().flex().gap_2().px_4()
-                    .when(matches!(self.label.as_str(), "SPAM" | "TRASH"), |d| d.child(
-                        Button::new("empty-folder").small().ghost().icon(proicon("delete"))
-                            .label(if self.emptying_folder.as_ref() == Some(&self.label) { "Emptying…" }
-                                else if self.label == "SPAM" { "Empty Spam" } else { "Empty Trash" })
-                            .text_color(rgb(0xeb6f92))
-                            .tooltip("Permanently delete every message in this folder, across all pages")
-                            .disabled(self.emptying_folder.is_some() || self.marking_all_read)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.confirm_empty_folder = Some(this.label.clone());
-                                cx.notify();
-                            }))
-                    ))
-            )
-            .when_some(self.confirm_empty_folder.clone(), |d, label| d.child(
-                div().mx_4().mb_3().p_3().rounded_lg().bg(rgb(RAISED)).flex().flex_col().gap_3()
-                    .child(div().font_weight(FontWeight::SEMIBOLD)
-                        .child(format!("Empty {}?", if label == "SPAM" { "Spam" } else { "Trash" })))
-                    .child(div().text_sm().child("Every message in this folder will be permanently deleted, across all pages. This cannot be undone."))
-                    .when(self.unread_only || !self.query.is_empty(), |d| d.child(
-                        div().text_sm().text_color(rgb(MUTED)).child("Unread and search filters do not limit this action.")
-                    ))
-                    .child(div().flex().flex_wrap().gap_2()
-                        .child(Button::new("cancel-empty-folder").small().label("Cancel")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.confirm_empty_folder = None;
-                                cx.notify();
-                            })))
-                        .child(Button::new("confirm-empty-folder").small().primary().label("Delete permanently")
-                            .bg(rgb(0xeb6f92)).text_color(rgb(BG))
-                            .on_click(cx.listener(|this, _, _, cx| this.empty_folder(cx)))))
-            ))
             .child(
                 div()
                     .px_4()
@@ -4209,6 +4254,173 @@ impl MailApp {
                 });
             let quoted = reading.quoted;
             let collapse_id = id.clone();
+            let html = reading.original_layout.clone();
+            let mut use_html = html.is_some()
+                && self
+                    .layout_messages
+                    .get(&id)
+                    .copied()
+                    .unwrap_or(reading.complex);
+            let from = message.header("From");
+            let sender = model::addresses(&from)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(name, email)| if name.is_empty() { email } else { name })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut identity = div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .min_w_0()
+                .flex_1()
+                .child(
+                    Button::new(SharedString::from(format!("collapse-{id}")))
+                        .ghost()
+                        .small()
+                        .icon(proicon("chevron-down"))
+                        .accessibility_label("Collapse message")
+                        .tooltip("Collapse message")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.expanded_messages.remove(&collapse_id);
+                            this.collapsed_messages.insert(collapse_id.clone());
+                            cx.notify();
+                        })),
+                )
+                .child(self.contact_avatar(&from, &id, cx))
+                .child(
+                    Button::new(SharedString::from(format!("sender-address-{id}")))
+                        .ghost()
+                        .small()
+                        .min_w_0()
+                        .label(if sender.is_empty() {
+                            from.clone()
+                        } else {
+                            sender
+                        })
+                        .tooltip(format!("From: {from}")),
+                );
+            for (field, icon) in [("To", "send"), ("Cc", "recipients"), ("Bcc", "bcc")] {
+                let value = message.header(field);
+                if !value.trim().is_empty() {
+                    identity = identity.child(
+                        Button::new(SharedString::from(format!("recipient-{field}-{id}")))
+                            .ghost()
+                            .small()
+                            .icon(proicon(icon))
+                            .accessibility_label(format!("{field}: {value}"))
+                            .tooltip(format!("{field}: {value}")),
+                    );
+                }
+            }
+            let mut header_actions = div().flex().items_center().gap_1().flex_shrink_0();
+            if html.is_some() {
+                let toggle_id = id.clone();
+                let next_layout = !use_html;
+                header_actions = header_actions.child(
+                    Button::new(SharedString::from(format!("html-toggle-{id}")))
+                        .ghost()
+                        .small()
+                        .icon(proicon("layout"))
+                        .text_color(rgb(if use_html { ACCENT } else { MUTED }))
+                        .accessibility_label("Original layout")
+                        .tooltip(if use_html {
+                            "Original layout on · switch to readable view"
+                        } else {
+                            "Show original layout"
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.layout_messages.insert(toggle_id.clone(), next_layout);
+                            cx.notify();
+                        })),
+                );
+            }
+            if has_signature {
+                let signature_id = id.clone();
+                header_actions = header_actions.child(
+                    Button::new(SharedString::from(format!("signature-{id}")))
+                        .ghost()
+                        .small()
+                        .icon(proicon("compose"))
+                        .text_color(rgb(if show_signature { ACCENT } else { MUTED }))
+                        .accessibility_label("Show signature")
+                        .tooltip(if show_signature {
+                            "Hide signature"
+                        } else {
+                            "Show signature"
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if !this.expanded_signatures.remove(&signature_id) {
+                                this.expanded_signatures.insert(signature_id.clone());
+                            }
+                            cx.notify();
+                        })),
+                );
+            }
+            let timestamp = message
+                .internal_date
+                .parse::<i64>()
+                .ok()
+                .and_then(chrono::DateTime::from_timestamp_millis);
+            if let Some(date) = timestamp {
+                let seconds = (chrono::Utc::now() - date).num_seconds().max(0);
+                let relative = if seconds < 60 {
+                    "Just now".into()
+                } else if seconds < 3600 {
+                    format!("{}m ago", seconds / 60)
+                } else if seconds < 86400 {
+                    format!("{}h ago", seconds / 3600)
+                } else if seconds < 604800 {
+                    format!("{}d ago", seconds / 86400)
+                } else if seconds < 2592000 {
+                    format!("{}w ago", seconds / 604800)
+                } else if seconds < 31536000 {
+                    format!("{}mo ago", seconds / 2592000)
+                } else {
+                    format!("{}y ago", seconds / 31536000)
+                };
+                header_actions = header_actions.child(
+                    Button::new(SharedString::from(format!("timestamp-{id}")))
+                        .ghost()
+                        .small()
+                        .text_color(rgb(MUTED))
+                        .label(relative)
+                        .tooltip(
+                            date.with_timezone(&chrono::Local)
+                                .format("%d %b %Y · %H:%M:%S %Z")
+                                .to_string(),
+                        ),
+                );
+            }
+            let reply = message.clone();
+            header_actions = header_actions.child(
+                Button::new(SharedString::from(format!("reply-{id}")))
+                    .ghost()
+                    .small()
+                    .icon(proicon("arrow-reply"))
+                    .label("Reply")
+                    .on_click(
+                        cx.listener(move |this, _, window, cx| this.reply(&reply, window, cx)),
+                    ),
+            );
+            let all = Draft::reply_all(&message, &self.email);
+            if model::addresses(&format!("{}, {}", all.to, all.cc).trim_end_matches(", "))
+                .unwrap_or_default()
+                .len()
+                > 1
+            {
+                let reply = message.clone();
+                header_actions = header_actions.child(
+                    Button::new(SharedString::from(format!("reply-all-{id}")))
+                        .ghost()
+                        .small()
+                        .icon(proicon("reply-all"))
+                        .label("Reply All")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.reply_mode(&reply, true, window, cx)
+                        })),
+                );
+            }
             let mut card = div()
                 .flex()
                 .flex_col()
@@ -4222,56 +4434,11 @@ impl MailApp {
                 .child(
                     div()
                         .flex()
-                        .gap_3()
-                        .justify_between()
+                        .flex_wrap()
                         .items_center()
-                        .child(
-                            Button::new(SharedString::from(format!("collapse-{id}")))
-                                .ghost()
-                                .small()
-                                .icon(proicon("chevron-down"))
-                                .accessibility_label("Collapse message")
-                                .tooltip("Collapse message")
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.expanded_messages.remove(&collapse_id);
-                                    this.collapsed_messages.insert(collapse_id.clone());
-                                    cx.notify();
-                                })),
-                        )
-                        .child(self.contact_avatar(&message.header("From"), &id, cx))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_sm()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(message.header("From")),
-                        )
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_xs()
-                                .text_color(rgb(MUTED))
-                                .child(
-                                    message
-                                        .internal_date
-                                        .parse::<i64>()
-                                        .ok()
-                                        .and_then(chrono::DateTime::from_timestamp_millis)
-                                        .map(|date| {
-                                            date.with_timezone(&chrono::Local)
-                                                .format("%d %b · %H:%M")
-                                                .to_string()
-                                        })
-                                        .unwrap_or_default(),
-                                ),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(MUTED))
-                        .child(format!("To: {}", message.header("To"))),
+                        .gap_2()
+                        .child(identity)
+                        .child(header_actions),
                 );
             if !crate::unsubscribe::targets(&message.header("List-Unsubscribe")).is_empty() {
                 let target = message.clone();
@@ -4294,51 +4461,24 @@ impl MailApp {
                 .gap_2()
                 .w_full()
                 .min_w_0();
-            let html = reading.original_layout.clone();
-            let mut use_html = html.is_some()
-                && self
-                    .layout_messages
-                    .get(&id)
-                    .copied()
-                    .unwrap_or(reading.complex);
             if let Some(html) = html {
-                let toggle_id = id.clone();
-                let next_layout = !use_html;
-                card = card.child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .child(
-                            Button::new(SharedString::from(format!("html-toggle-{id}")))
-                                .ghost()
-                                .small()
-                                .label(if use_html {
-                                    "Readable view"
-                                } else {
-                                    "Original layout"
-                                })
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.layout_messages.insert(toggle_id.clone(), next_layout);
-                                    cx.notify();
-                                })),
-                        )
-                        .when(use_html, |row| {
-                            row.child(
-                                Button::new(SharedString::from(format!("colours-{id}")))
-                                    .ghost()
-                                    .small()
-                                    .label(if self.light_images {
-                                        "Dark colours"
-                                    } else {
-                                        "Original colours"
-                                    })
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.light_images = !this.light_images;
-                                        cx.notify();
-                                    })),
-                            )
-                        }),
-                );
+                if use_html {
+                    // Colour treatment remains independent of the layout toggle.
+                    card = card.child(
+                        Button::new(SharedString::from(format!("colours-{id}")))
+                            .ghost()
+                            .small()
+                            .label(if self.light_images {
+                                "Dark colours"
+                            } else {
+                                "Original colours"
+                            })
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.light_images = !this.light_images;
+                                cx.notify();
+                            })),
+                    );
+                }
                 if use_html {
                     let key = self.html_renderer.request(
                         html,
@@ -4550,26 +4690,6 @@ impl MailApp {
                     }),
                 );
             }
-            if has_signature {
-                let signature_id = id.clone();
-                actions = actions.child(
-                    Button::new(SharedString::from(format!("signature-{id}")))
-                        .ghost()
-                        .small()
-                        .text_color(rgb(MUTED))
-                        .label(if show_signature {
-                            "Hide signature"
-                        } else {
-                            "Show signature"
-                        })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if !this.expanded_signatures.remove(&signature_id) {
-                                this.expanded_signatures.insert(signature_id.clone());
-                            }
-                            cx.notify();
-                        })),
-                );
-            }
             if quoted {
                 let id = id.clone();
                 actions = actions.child(
@@ -4589,17 +4709,6 @@ impl MailApp {
                         })),
                 );
             }
-            let reply = message.clone();
-            actions = actions.child(
-                Button::new(SharedString::from(format!("reply-{id}")))
-                    .ghost()
-                    .small()
-                    .icon(proicon("arrow-reply"))
-                    .label("Reply to this message")
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.reply(&reply, window, cx);
-                    })),
-            );
             if !self.auto_images
                 && !message.remote_images().is_empty()
                 && !self.manual_images.contains(&id)
