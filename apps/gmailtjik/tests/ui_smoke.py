@@ -781,8 +781,26 @@ with private_compositor(isolate_pointer=True):
 
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "signoff":
                 capture("signoff-hidden.png")
-                click(655, 720)
+                def signoff_body():
+                    subprocess.run(["wl-copy", "--", "selection-pending"], check=True)
+                    for operation in ["m 4306 2900", "b 1", "m 4792 2900", "b 0"]:
+                        click_pointer.stdin.write(operation + "\n")
+                        click_pointer.stdin.flush()
+                        assert click_pointer.stdout.readline().strip() == "ok"
+                        time.sleep(.15)
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                    def copied():
+                        value = subprocess.check_output(["wl-paste", "--no-newline"], text=True, timeout=5)
+                        return value if value != "selection-pending" else None
+                    return wait_for(copied, timeout=5)
+                folded = signoff_body()
+                assert "The Letter Carrier" in folded and "revised edition" in folded, folded
+                assert "Met vriendelijke groet" not in folded and "Renáta Exampleová" not in folded, folded
+                click(1240, 253)
                 capture("signoff-expanded.png")
+                expanded = signoff_body()
+                assert "Met vriendelijke groet" in expanded and "Renáta Exampleová" in expanded, expanded
+                assert "Example Cultural Centre" in expanded and "revised edition" in expanded, expanded
                 assert (root / "signoff-hidden.png").read_bytes() != (root / "signoff-expanded.png").read_bytes()
                 assert "panicked" not in (root / "gmailtjik.log").read_text()
                 sys.exit(0)

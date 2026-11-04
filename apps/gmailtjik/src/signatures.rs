@@ -69,6 +69,7 @@ fn signoff(text: &str) -> bool {
             | "all the best"
             | "sincerely"
             | "yours sincerely"
+            | "groet"
             | "groeten"
             | "groetjes"
             | "mvg"
@@ -96,6 +97,13 @@ fn named_signoff(text: &str) -> bool {
             | "all the best"
             | "have a lovely day"
             | "have a nice day"
+            | "groet"
+            | "groeten"
+            | "groetjes"
+            | "mvg"
+            | "met vriendelijke groet"
+            | "met vriendelijke groeten"
+            | "vriendelijke groeten"
     )
 }
 
@@ -729,6 +737,14 @@ mod tests {
             "Best Regards,",
             "Kind Regards,",
             "Kind Regars,",
+            "Met vriendelijke groet,",
+            "Met vriendelijke groeten,",
+            "Vriendelijke groeten,",
+            "Mvg,",
+            "Groetjes,",
+            "Groet,",
+            "Groeten,",
+            "MVG.",
         ] {
             for ps in ["PS", "P.s.", "PS:", "P.S:", "PPS", "P.P.S.", "...", "…"] {
                 let footer = "Mira Chen\nCultural Centre\nSuite 304, 30/F Example Plaza\n18, Example Road\nWebsite: https://example.test/\nFacebook: Cultural Centre\nInstagram: @example";
@@ -765,6 +781,19 @@ mod tests {
                 plain(&format!("Confirmed.\n{closing}\nMira Chen")),
                 Some("Confirmed.".into())
             );
+            assert_eq!(
+                plain(&format!("Confirmed.\n\n{closing}\n\nRenáta Exampleová")),
+                Some("Confirmed.".into())
+            );
+            for signature in [
+                format!("<p>{closing}</p><p></p><p>Renáta Exampleová</p>"),
+                format!("<div>{closing}<br><br>Renáta Exampleová</div>"),
+            ] {
+                let folded = html(&format!("<p>Confirmed.</p>{signature}"));
+                assert!(folded.detected && folded.collapsed.contains("Confirmed."));
+                assert!(!folded.collapsed.contains("Renáta Exampleová"));
+                assert!(!folded.collapsed.contains(closing));
+            }
             assert!(
                 plain(&format!(
                     "Confirmed.\n{closing}\nPlease bring the book tomorrow."
