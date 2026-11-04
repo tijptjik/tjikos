@@ -92,6 +92,7 @@
     "audio.up",
     "battery.panel",
     "caffeine.toggle",
+    "idle.panel",
     "chatgpt.open",
     "codex-lb.open",
     "crypto.panel",

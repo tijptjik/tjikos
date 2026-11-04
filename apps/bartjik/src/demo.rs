@@ -54,6 +54,9 @@ pub fn items(provider: &str, o: &Value) -> Vec<Value> {
     if provider == "nightlight" {
         return vec![crate::nightlight::demo()];
     }
+    if provider == "caffeine" {
+        return vec![crate::idle::demo()];
+    }
     if provider == "codex" {
         for (r, h) in rows[0]["panel"]["rows"]
             .as_array_mut()

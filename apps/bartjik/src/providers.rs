@@ -121,13 +121,6 @@ pub fn volume(sink: &Value) -> f64 {
             .round_ties_even()
     }
 }
-pub async fn running(name: &str) -> Result<bool> {
-    match cmd(&["pgrep", "-x", name]).await {
-        Ok(_) => Ok(true),
-        Err(e) if e.to_string().contains("exit 1") => Ok(false),
-        Err(e) => Err(e),
-    }
-}
 pub fn quota_api_rows(data: &Value) -> Result<Vec<Value>> {
     let mut rows = vec![];
     for a in arr(&data["accounts"]) {
@@ -584,22 +577,7 @@ pub async fn poll(m: &Value) -> Result<Vec<Value>> {
                 json!({"leftClick":"DND.toggle"}),
             )
         }
-        "caffeine" => {
-            let active = !running("hypridle").await?;
-            item(
-                "idle",
-                None,
-                Some(if active { "coffee" } else { "hotel" }),
-                "symbol",
-                json!({"active":active}),
-                if active {
-                    "Idle Inhibit : ON"
-                } else {
-                    "Idle Inhibit : OFF"
-                },
-                json!({"leftClick":"caffeine.toggle"}),
-            )
-        }
+        "caffeine" => crate::idle::snapshot().await?,
         "nightlight" => crate::nightlight::snapshot().await?,
         "monitor-layout" => crate::monitors::snapshot(m).await?,
         _ => anyhow::bail!("unknown provider"),

@@ -587,6 +587,7 @@ impl Engine {
                             "tailscale",
                             "battery",
                             "nightlight",
+                            "caffeine",
                             "monitor-layout"
                         ]
                         .contains(&s(&m["provider"])),
@@ -599,7 +600,9 @@ impl Engine {
                     let result = async {
                         if panel_action {
                             let provider = s(&m["provider"]);
-                            let _lock = if ["nightlight", "monitor-layout"].contains(&provider) {
+                            let _lock = if ["nightlight", "monitor-layout", "caffeine"]
+                                .contains(&provider)
+                            {
                                 None
                             } else {
                                 Some(
@@ -613,6 +616,13 @@ impl Engine {
                                         s(&context["action"]),
                                         s(&context["selection"]),
                                         &m,
+                                    )
+                                    .await?
+                                }
+                                "caffeine" => {
+                                    crate::idle::action(
+                                        s(&context["action"]),
+                                        s(&context["selection"]),
                                     )
                                     .await?
                                 }
@@ -669,7 +679,9 @@ impl Engine {
                         Ok::<_, anyhow::Error>(())
                     }
                     .await;
-                    let error = if ["nightlight", "monitor-layout"].contains(&s(&m["provider"])) {
+                    let error = if ["nightlight", "monitor-layout", "caffeine"]
+                        .contains(&s(&m["provider"]))
+                    {
                         result
                             .as_ref()
                             .err()

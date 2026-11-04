@@ -271,7 +271,7 @@ pointer reaches their activation edge, which restores normal auto-hide.
 | codex | Read-only codex-lb SQLite, optional API | Weekly-only, capacity weighted; duration 10080 is authoritative regardless of primary/secondary. `source:"api"` uses local accounts API, or `database` overrides path. No five-hour display. Click the icon to open/focus ChatGPT; click the percentage to open/focus Codex LB. |
 | openrouter | Credits/key/activity HTTP endpoints | Remaining balance and daily usage hover panel; exported OPENROUTER_API_KEY. |
 | DND | `notjikctl status/toggle` | Paused versus unavailable; click changes actual notjik. Never creates a NotificationServer. Optional `ctl` path. |
-| caffeine | Effective `hypridle` process state | Click stops/starts hypridle as existing policy. Preset middle-click explicitly suspends. |
+| caffeine | Hypridle policy, saved keep-awake preference and persistent expiry | Click toggles Keep awake. Hover/right-click opens Idle & Sleep with duration, idle delays and session actions. Preset middle-click explicitly suspends. |
 | nightlight | Hyprsunset IPC, persistent schedule; optional GeoClue location | Click enables/disables the schedule. Hover or right-click opens temperature, brightness, fixed hours and sunset/sunrise controls. |
 | monitor-layout | Hyprland monitor IPC and Lua rules | Hover/right-click opens Displays. Click previews the TV toggle; optional `tv` selects its connector. |
 
@@ -279,6 +279,36 @@ The destructive optional binding is explicitly shown in
 [`examples/optional-poweroff.json`](examples/optional-poweroff.json):
 `"middleClick": ["systemctl", "poweroff"]`. Automated tests mock it and suspension;
 they never execute either command.
+
+### Idle & Sleep
+
+Hover or right-click the coffee icon to open Idle & Sleep. Keep awake pauses
+Hypridle's dimming, automatic locking, screen-off and idle suspend. Choose
+30 minutes, 1 hour, 2 hours or Until switched off. The panel shows the remaining
+time; `bartjik-idle.service` restores normal handling independently of bar reloads
+and catches expired timers at the next graphical login. Changing the saved
+preference externally cancels a stale timer rather than overriding that choice.
+
+The four idle delays are staged until **Apply**, including **Never**. The panel
+reads the effective Hypridle service policy, including a game-mode config override,
+and stores per-policy changes in `$XDG_CONFIG_HOME/bartjik/idle.json`. The installed
+Hypridle drop-in runs a wrapper that preserves the original policy, lock/wake
+hooks, keyboard-backlight actions and other listeners. Native config files are
+not rewritten. A running idle service restarts when delays are applied; editing
+delays while Keep awake is on leaves it paused.
+
+**Lock now** locks the session; **Sleep now** requests a lock before suspend.
+**Power off now** opens a centered confirmation with centered Cancel/Power off
+buttons. Escape cancels. Explicit sleep and power-off requests use normal systemd
+commands without bypassing inhibitors. Demo mode never executes session actions.
+
+After installation, activate only the timer supervisor (this does not change the
+saved keep-awake choice or start Hypridle):
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable --now bartjik-idle.service
+```
 
 ### Displays
 

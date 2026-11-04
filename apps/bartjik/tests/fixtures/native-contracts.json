@@ -6069,10 +6069,12 @@
     ],
     "result": [
       {
-        "id": "demo",
+        "id": "idle",
         "type": "icon",
-        "state": {},
-        "tooltip": "Synthetic caffeine",
+        "state": {
+          "active": true
+        },
+        "tooltip": "Idle Inhibit : ON",
         "visible": true,
         "enabled": true,
         "icon": {
@@ -6081,7 +6083,29 @@
           "style": {},
           "actions": {}
         },
-        "actions": {}
+        "actions": {
+          "leftClick": "caffeine.toggle",
+          "rightClick": "idle.panel",
+          "hoverEnter": "idle.panel"
+        },
+        "panel": {
+          "title": "Idle & Sleep",
+          "rows": [],
+          "inhibited": true,
+          "running": false,
+          "duration": 0,
+          "deadline": null,
+          "delays": {
+            "dim": 60,
+            "lock": 180,
+            "screenOff": 600,
+            "suspend": 1800
+          },
+          "revision": "synthetic",
+          "editable": true,
+          "gamePolicy": false,
+          "error": ""
+        }
       }
     ]
   },

@@ -138,6 +138,25 @@ pub async fn execute(
         } else {
             action
         })?;
+        // Route the existing Dotjik binding through the timer-aware control;
+        // retain its persisted preference and all unrelated custom bindings.
+        if m["provider"] == "caffeine"
+            && args.len() == 2
+            && (args[0] == "idle-inhibit"
+                || std::path::Path::new(&args[0]) == home().join(".local/bin/idle-inhibit"))
+            && ["toggle", "on", "off"].contains(&args[1].as_str())
+        {
+            crate::idle::action(
+                if args[1] == "toggle" {
+                    "toggle"
+                } else {
+                    "enabled"
+                },
+                &args[1],
+            )
+            .await?;
+            return Ok(());
+        }
         if action["detach"] == true {
             detach(&args, c)?;
         } else {
@@ -260,13 +279,7 @@ pub async fn execute(
             }
             "nightlight.toggle" => crate::nightlight::toggle().await?,
             "caffeine.toggle" => {
-                let name = "hypridle";
-                let _lock = FileLock::acquire(&format!("bartjik-{name}.lock")).await?;
-                if providers::running(name).await? {
-                    cmd(&["pkill", "-x", name]).await?;
-                } else {
-                    detach(&[name.into()], &json!({}))?;
-                }
+                crate::idle::action("toggle", "").await?;
             }
             "monitor.toggle" => {
                 crate::monitors::action("preset", "toggle", m).await?;

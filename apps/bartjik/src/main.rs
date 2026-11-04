@@ -8,6 +8,7 @@ mod demo;
 mod details;
 mod engine;
 mod hyprvoice;
+mod idle;
 mod lyrics;
 mod monitors;
 mod navigation;
@@ -77,6 +78,14 @@ async fn run() -> Result<()> {
  "spotify"=>emit(&spotify::configure(args.get(1).context("spotify requires login, logout or status")?)?),
  "config" if args.get(1).is_some_and(|a|a=="--validate")=>emit(&json!({"ok":true,"config":config::load()?})),
  "init"=>{let option=|name:&str,default:&str|->String{args.iter().position(|a|a==name).and_then(|i|args.get(i+1)).cloned().unwrap_or(default.into())};let preset=option("--preset","minimal");let theme=option("--theme","monochrome");ensure!(["desktop","laptop","minimal"].contains(&preset.as_str())&&["monochrome","rose-punk"].contains(&theme.as_str()),"invalid preset or theme");let p=config::path();let mut v=read(root().join("examples").join(format!("{preset}.json")))?;v["theme"]=json!(theme);std::fs::create_dir_all(p.parent().unwrap())?;use std::io::Write;let mut f=std::fs::OpenOptions::new().create_new(true).write(true).open(&p).context("Config already exists; not overwriting it")?;writeln!(f,"{}",serde_json::to_string_pretty(&v)?)?;emit(&json!({"ok":true,"path":p}));},
+ "helper" if args.get(1).map(String::as_str)==Some("idle")=>{match args.get(2).map(String::as_str){
+ Some("status")=>emit(&idle::snapshot().await?),
+ Some("run")=>idle::run().await?,
+ Some("check")=>idle::check()?,
+ Some("watch")=>idle::watch().await?,
+ Some("tick")=>idle::tick().await?,
+ Some("action")=>{ensure!(args.len()==5,"idle action requires name and selection");emit(&json!({"ok":true,"message":idle::action(&args[3],&args[4]).await?}));},
+ _=>anyhow::bail!("idle requires status, run, check, watch, tick or action")}},
  "helper" if args.get(1).map(String::as_str)==Some("monitors")=>{match args.get(2).map(String::as_str){
  Some("status")=>emit(&monitors::snapshot(&json!({})).await?),
  Some("guard")=>monitors::guard(args.get(3).context("missing token")?).await?,

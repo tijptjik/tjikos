@@ -28,3 +28,9 @@ fi
 install -d -m 755 "$config_dir/systemd/user/hyprsunset.service.d" "$install_home/.local/share/applications"
 install -m 644 "$source_dir/systemd/bartjik-nightlight.conf" "$config_dir/systemd/user/hyprsunset.service.d/bartjik.conf"
 install -m 644 "$source_dir/applications/bartjik.desktop" "$install_home/.local/share/applications/bartjik.desktop"
+
+# Keep-awake expiry must survive bar reloads and graphical-session restarts.
+# The policy wrapper preserves existing game/desktop startup overrides.
+install -d -m 755 "$config_dir/systemd/user/hypridle.service.d"
+install -m 644 "$source_dir/systemd/bartjik-idle.conf" "$config_dir/systemd/user/hypridle.service.d/zz-bartjik-idle.conf"
+install -m 644 "$source_dir/systemd/bartjik-idle.service" "$config_dir/systemd/user/bartjik-idle.service"
