@@ -6093,19 +6093,60 @@
     ],
     "result": [
       {
-        "id": "demo",
-        "type": "icon",
-        "state": {},
-        "tooltip": "Synthetic nightlight",
-        "visible": true,
+        "actions": {
+          "hoverEnter": "nightlight.panel",
+          "leftClick": "nightlight.toggle",
+          "rightClick": "nightlight.panel"
+        },
         "enabled": true,
         "icon": {
+          "actions": {},
           "kind": "symbol",
-          "value": "nightlight",
           "style": {},
-          "actions": {}
+          "value": "light_mode"
         },
-        "actions": {}
+        "id": "filter",
+        "panel": {
+          "active": false,
+          "cities": [],
+          "enabled": true,
+          "error": "",
+          "locationAgeHours": 0.0,
+          "rows": [],
+          "running": true,
+          "schedule": {
+            "active": false,
+            "nextAt": 1793785507,
+            "nextOn": true,
+            "nextTime": "17:45",
+            "polar": false,
+            "polarNight": false,
+            "sunrise": "06:28",
+            "sunset": "17:45",
+            "timezone": "Asia/Hong_Kong"
+          },
+          "settings": {
+            "end": "07:30",
+            "gamma": 85,
+            "location": {
+              "latitude": 22.3,
+              "longitude": 114.2,
+              "name": "Hong Kong",
+              "source": "city",
+              "timezone": "Asia/Hong_Kong",
+              "updatedAt": 1793764800
+            },
+            "mode": "solar",
+            "start": "21:00",
+            "temperature": 4500
+          },
+          "subtitle": "Starts at 17:45",
+          "title": "Night light"
+        },
+        "state": {},
+        "tooltip": "Night light \u00b7 scheduled",
+        "type": "icon",
+        "visible": true
       }
     ]
   },

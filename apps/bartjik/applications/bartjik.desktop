@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Bartjik
+Comment=Desktop status bar and night-light controls
+Exec=bartjik
+Icon=weather-clear-night
+NoDisplay=true
+X-Geoclue-Reason=Use local sunset and sunrise for the night-light schedule

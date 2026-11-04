@@ -41,7 +41,7 @@ Item {
     function fire(event) {
         const action=Logic.choose(moduleConfig,row,kind,event);
         if(!action || row.enabled===false)return;
-        if(event==='hoverEnter' && ['audio.panel','network.panel'].includes(action))return; // Shared island hover owns the dwell timer.
+        if(event==='hoverEnter' && ['audio.panel','network.panel','nightlight.panel'].includes(action))return; // Shared island hover owns the dwell timer.
         if(action==='datetime.toggle') {alternate=!alternate;return;}
         controller.act(action,Object.assign({},context,{item:row.id,part:kind,event:event,anchor:anchor()}),window,row);
     }
@@ -177,7 +177,7 @@ Item {
         id: tooltip
         objectName: "part-tooltip"
         theme:part.theme
-        visible: hover.hovered && part.hoverEntered && !!part.row.tooltip && part.moduleConfig.provider!=='crypto' && !part.workspacePreviewEnabled && !part.moduleConfig.panel?.hover && !['audio.panel','network.panel'].includes(Logic.choose(part.moduleConfig,part.row,part.kind,'hoverEnter'))
+        visible: hover.hovered && part.hoverEntered && !!part.row.tooltip && part.moduleConfig.provider!=='crypto' && !part.workspacePreviewEnabled && !part.moduleConfig.panel?.hover && !['audio.panel','network.panel','nightlight.panel'].includes(Logic.choose(part.moduleConfig,part.row,part.kind,'hoverEnter'))
         text: String(part.row.tooltip || '')
         // Qt Quick Controls anchors this popup to this part on the same window/screen.
         delay: 0

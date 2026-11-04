@@ -72,7 +72,7 @@ Column {
                         visible:details.citiesExpanded || vpnSurface.height>mullvadStatus.collapsedHeight+.01
                         enabled:details.citiesExpanded
                         Repeater {
-                            model:details.info.cities || []
+                            model:details.provider==='mullvad'?(details.info.cities || []):[]
                             Button {
                                 id:cityOption
                                 required property var modelData

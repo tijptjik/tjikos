@@ -48,6 +48,9 @@ pub fn items(provider: &str, o: &Value) -> Vec<Value> {
     if provider == "datetime" {
         rows[0]["panel"] = crate::details::world_clock(&o["worldClocks"], Some(1781524800));
     }
+    if provider == "nightlight" {
+        return vec![crate::nightlight::demo()];
+    }
     if provider == "codex" {
         for (r, h) in rows[0]["panel"]["rows"]
             .as_array_mut()

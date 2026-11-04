@@ -22,3 +22,9 @@ bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" bar
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
     install -m 644 "$source_dir/systemd/bartjik.service" "$config_dir/systemd/user/bartjik.service"
 fi
+
+# The scheduler remains independent of the bar and preserves the existing
+# hyprsunset unit and nightlight on/off ExecCondition. Activation is explicit.
+install -d -m 755 "$config_dir/systemd/user/hyprsunset.service.d" "$install_home/.local/share/applications"
+install -m 644 "$source_dir/systemd/bartjik-nightlight.conf" "$config_dir/systemd/user/hyprsunset.service.d/bartjik.conf"
+install -m 644 "$source_dir/applications/bartjik.desktop" "$install_home/.local/share/applications/bartjik.desktop"

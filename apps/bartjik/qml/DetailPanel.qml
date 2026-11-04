@@ -43,6 +43,7 @@ DetachablePopup {
     readonly property bool mediaPanel:bar?.moduleConfigs[selected?.context.module]?.provider==='playerctl'
     readonly property bool audioPanel:provider==='audio'
     readonly property bool networkPanel:provider==='network'
+    readonly property bool nightlightPanel:provider==='nightlight'
     readonly property bool notificationPanel:provider==='DND'
     onRowChanged:if(opened && mediaPanel && !row)Qt.callLater(()=>{if(opened && mediaPanel && !row)close();})
     readonly property bool localePanel:bar?.moduleConfigs[selected?.context.module]?.provider==='locale'
@@ -104,7 +105,7 @@ DetachablePopup {
     function syncGeometry(){
         if(!selected)return;
         implicitWidth=targetWidth;
-        if(!mediaPanel && !audioPanel && !networkPanel && !notificationPanel)settleLayout(openrouterPanel?openrouterDetails:codexPanel?codexDetails:statusContent);
+        if(!mediaPanel && !audioPanel && !networkPanel && !notificationPanel)settleLayout(nightlightPanel?nightlightDetails:openrouterPanel?openrouterDetails:codexPanel?codexDetails:statusContent);
         implicitHeight=targetHeight;
         locate(selected.context,selected.window);
     }
@@ -115,13 +116,13 @@ DetachablePopup {
     }
     function close(){++transitionSerial;contentFade.stop();transitionImage=null;contentProgress=1;opened=false;resetDetach();pinned=false;delay.stop();hide.stop();selected=null;pending=null;hoverKey='';}
     function capture(path){body.grabToImage(result=>result.saveToFile(path));}
-    function inspect(){return {card:{x:attachedPosition().x,y:attachedPosition().y,width:body.width,height:body.height},crossfade:contentProgress,surface:attachedSurface?{width:attachedSurface.width,height:attachedSurface.height}:null,opened:panelVisible,detached:detached,dragging:dragging,placement:placement(),title:panelTitle,provider:provider,monitor:panelScreen?.name || '',pinned:pinned,count:fields.length,pending:delay.running,media:mediaPanel,artworkReady:mediaDetails.artworkReady,lyricsShown:mediaDetails.lyricsShown,lyricsStatus:mediaDetails.lyricsStatus,artwork:mediaPanel?row?.media?.artwork || '':'',anchorX:anchor.rect.x,anchorY:anchor.rect.y,width:implicitWidth,height:implicitHeight,audio:audioDetails.inspect(),network:networkDetails.inspect(),notifications:notificationHistory.inspect()};}
+    function inspect(){return {card:{x:attachedPosition().x,y:attachedPosition().y,width:body.width,height:body.height},crossfade:contentProgress,surface:attachedSurface?{width:attachedSurface.width,height:attachedSurface.height}:null,opened:panelVisible,detached:detached,dragging:dragging,placement:placement(),title:panelTitle,provider:provider,monitor:panelScreen?.name || '',pinned:pinned,count:fields.length,pending:delay.running,media:mediaPanel,artworkReady:mediaDetails.artworkReady,lyricsShown:mediaDetails.lyricsShown,lyricsStatus:mediaDetails.lyricsStatus,artwork:mediaPanel?row?.media?.artwork || '':'',anchorX:anchor.rect.x,anchorY:anchor.rect.y,width:implicitWidth,height:implicitHeight,audio:audioDetails.inspect(),network:networkDetails.inspect(),nightlight:nightlightDetails.inspect(),notifications:notificationHistory.inspect()};}
     visible:false
-    color:'transparent';grabFocus:networkDetails.needsKeyboard || notificationHistory.needsKeyboard
+    color:'transparent';grabFocus:networkDetails.needsKeyboard || notificationHistory.needsKeyboard || (nightlightPanel && nightlightDetails.needsKeyboard)
     readonly property real targetWidth:Math.min(notificationPanel?500:codexPanel?440:420,(selected?.window?.screen.width || 480)-24)
     readonly property real renderedHeight:body.height
     readonly property real statusFooterHeight:0
-    readonly property real targetHeight:notificationPanel?Math.min(680,(selected?.window?.screen.height || 1080)*.65):mediaPanel?Logic.previewHeight(theme,selected?.window?.screen.height):Math.min(88+(audioPanel?audioDetails.implicitHeight:networkPanel?networkDetails.implicitHeight:openrouterPanel?openrouterDetails.implicitHeight:codexPanel?codexDetails.implicitHeight:statusContent.implicitHeight),(selected?.window?.screen.height || 1080)*.65)
+    readonly property real targetHeight:notificationPanel?Math.min(680,(selected?.window?.screen.height || 1080)*.65):mediaPanel?Logic.previewHeight(theme,selected?.window?.screen.height):Math.min(88+(audioPanel?audioDetails.implicitHeight:networkPanel?networkDetails.implicitHeight:nightlightPanel?nightlightDetails.implicitHeight:openrouterPanel?openrouterDetails.implicitHeight:codexPanel?codexDetails.implicitHeight:statusContent.implicitHeight),(selected?.window?.screen.height || 1080)*.65)
     anchor.edges:Edges.Top|Edges.Left
     anchor.gravity:bar?.side==='t'||bar?.side==='l'?Edges.Bottom|Edges.Right:bar?.side==='r'?Edges.Bottom|Edges.Left:Edges.Top|Edges.Right
     anchor.adjustment:PopupAdjustment.Flip|PopupAdjustment.Slide
@@ -149,7 +150,7 @@ DetachablePopup {
                 PanelHeader {
                     id:header;x:16;y:16;width:parent.width-32;visible:!popup.mediaPanel;theme:popup.theme
                     title:popup.panelTitle
-                    imageSource:({mullvad:'icons/tray/mullvad.svg',tailscale:'icons/tailscale.svg',codex:'icons/codex.svg',openrouter:'icons/openrouter.svg',audio:'icons/proicons/volume.svg',network:'icons/proicons/wi-fi.svg',battery:'icons/battery.svg',DND:'Notifications/history-bell.svg'})[popup.provider] || ''
+                    imageSource:({mullvad:'icons/tray/mullvad.svg',tailscale:'icons/tailscale.svg',codex:'icons/codex.svg',openrouter:'icons/openrouter.svg',audio:'icons/proicons/volume.svg',network:'icons/proicons/wi-fi.svg',nightlight:'icons/proicons/moon.svg',battery:'icons/battery.svg',DND:'Notifications/history-bell.svg'})[popup.provider] || ''
                     symbol:({datetime:'schedule',locale:'keyboard',audio:'volume_up',network:'wifi'})[popup.provider] || 'info'
                     popup:popup
                 }
@@ -172,6 +173,12 @@ DetachablePopup {
                     ScrollBar.vertical:ScrollBar {policy:ScrollBar.AsNeeded}
                 }
                 Flickable {
+                    visible:popup.nightlightPanel;x:16;y:72;width:parent.width-32;height:parent.height-88;clip:true
+                    contentWidth:width;contentHeight:nightlightDetails.implicitHeight;boundsBehavior:Flickable.StopAtBounds
+                    NightlightDetails {id:nightlightDetails;width:parent.width;popup:popup}
+                    ScrollBar.vertical:ScrollBar {policy:ScrollBar.AsNeeded}
+                }
+                Flickable {
                     visible:popup.codexPanel;x:16;y:72;width:parent.width-32;height:parent.height-88;clip:true
                     contentWidth:width;contentHeight:codexDetails.implicitHeight;boundsBehavior:Flickable.StopAtBounds
                     CodexDetails {id:codexDetails;width:parent.width;popup:popup}
@@ -184,7 +191,7 @@ DetachablePopup {
                     ScrollBar.vertical:ScrollBar {policy:ScrollBar.AsNeeded}
                 }
                 Flickable {
-                    visible:!popup.mediaPanel && !popup.codexPanel && !popup.openrouterPanel && !popup.audioPanel && !popup.networkPanel && !popup.notificationPanel
+                    visible:!popup.nightlightPanel && !popup.mediaPanel && !popup.codexPanel && !popup.openrouterPanel && !popup.audioPanel && !popup.networkPanel && !popup.notificationPanel
                     x:16;y:72;width:parent.width-32;height:Math.max(0,parent.height-88-popup.statusFooterHeight);clip:true
                     contentWidth:width;contentHeight:statusContent.implicitHeight;boundsBehavior:Flickable.StopAtBounds
                     Item {

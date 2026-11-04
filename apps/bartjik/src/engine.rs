@@ -569,7 +569,8 @@ impl Engine {
                 let mut feedback = json!({});
                 if panel_action {
                     ensure!(
-                        ["locale", "mullvad", "tailscale", "battery"].contains(&s(&m["provider"])),
+                        ["locale", "mullvad", "tailscale", "battery", "nightlight"]
+                            .contains(&s(&m["provider"])),
                         "invalid panel action"
                     );
                     feedback = json!({"barKey":context["barKey"],"module":context["module"],"busy":true,"message":"","error":false});
@@ -579,10 +580,22 @@ impl Engine {
                     let result = async {
                         if panel_action {
                             let provider = s(&m["provider"]);
-                            let _lock =
-                                actions::FileLock::acquire(&format!("bartjik-{provider}.lock"))
-                                    .await?;
+                            let _lock = if ["nightlight"].contains(&provider) {
+                                None
+                            } else {
+                                Some(
+                                    actions::FileLock::acquire(&format!("bartjik-{provider}.lock"))
+                                        .await?,
+                                )
+                            };
                             let message = match provider {
+                                "nightlight" => {
+                                    crate::nightlight::action(
+                                        s(&context["action"]),
+                                        s(&context["selection"]),
+                                    )
+                                    .await?
+                                }
                                 "battery" => {
                                     battery::select(s(&context["action"]), s(&context["selection"]))
                                         .await?
@@ -629,7 +642,13 @@ impl Engine {
                         Ok::<_, anyhow::Error>(())
                     }
                     .await;
-                    let error = if result.is_err() {
+                    let error = if ["nightlight"].contains(&s(&m["provider"])) {
+                        result
+                            .as_ref()
+                            .err()
+                            .map(|e| e.to_string())
+                            .unwrap_or_default()
+                    } else if result.is_err() {
                         "This control is currently unavailable".to_owned()
                     } else {
                         String::new()

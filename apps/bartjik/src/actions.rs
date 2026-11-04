@@ -258,12 +258,9 @@ pub async fn execute(
                 let _lock = FileLock::acquire("bartjik-tailscale.lock").await?;
                 crate::connectivity::act("tailscale", "toggle", &Value::Null, m).await?;
             }
-            "caffeine.toggle" | "nightlight.toggle" => {
-                let name = if action.starts_with("caffeine") {
-                    "hypridle"
-                } else {
-                    "hyprsunset"
-                };
+            "nightlight.toggle" => crate::nightlight::toggle().await?,
+            "caffeine.toggle" => {
+                let name = "hypridle";
                 let _lock = FileLock::acquire(&format!("bartjik-{name}.lock")).await?;
                 if providers::running(name).await? {
                     cmd(&["pkill", "-x", name]).await?;

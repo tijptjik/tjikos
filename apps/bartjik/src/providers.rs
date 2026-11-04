@@ -600,22 +600,7 @@ pub async fn poll(m: &Value) -> Result<Vec<Value>> {
                 json!({"leftClick":"caffeine.toggle"}),
             )
         }
-        "nightlight" => {
-            let active = running("hyprsunset").await?;
-            item(
-                "filter",
-                None,
-                Some(if active { "nightlight" } else { "light_mode" }),
-                "symbol",
-                json!({"active":active}),
-                if active {
-                    "Nightshift : ON"
-                } else {
-                    "Nightshift : OFF"
-                },
-                json!({"leftClick":"nightlight.toggle"}),
-            )
-        }
+        "nightlight" => crate::nightlight::snapshot().await?,
         "monitor-layout" => {
             let rows = jc(&["hyprctl", "-j", "monitors", "all"]).await?;
             let active = arr(&rows).iter().any(|r| {

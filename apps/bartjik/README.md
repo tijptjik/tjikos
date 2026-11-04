@@ -272,7 +272,7 @@ pointer reaches their activation edge, which restores normal auto-hide.
 | openrouter | Credits/key/activity HTTP endpoints | Remaining balance and daily usage hover panel; exported OPENROUTER_API_KEY. |
 | DND | `notjikctl status/toggle` | Paused versus unavailable; click changes actual notjik. Never creates a NotificationServer. Optional `ctl` path. |
 | caffeine | Effective `hypridle` process state | Click stops/starts hypridle as existing policy. Preset middle-click explicitly suspends. |
-| nightlight | `hyprsunset` process state | Click toggles. Poweroff is **not enabled by default**; see optional example below. |
+| nightlight | Hyprsunset IPC, persistent schedule; optional GeoClue location | Click enables/disables the schedule. Hover or right-click opens temperature, brightness, fixed hours and sunset/sunrise controls. |
 | monitor-layout | Structured `hyprctl monitors all`; existing monitor-game-mode command | Status and toggle through the existing persisted Lua mode/reload path. Keeps desktop outputs and adds TV; optional `tv`, `commandPath`. |
 
 The destructive optional binding is explicitly shown in
@@ -280,6 +280,39 @@ The destructive optional binding is explicitly shown in
 `"middleClick": ["systemctl", "poweroff"]`. Automated tests mock it and suspension;
 they never execute either command. Existing `monitor-game-mode`/`monitor-desktop-mode`
 and the Lua monitor file remain an external, documented integration boundary.
+
+### Night light
+
+Hover or right-click the sun/moon icon to open the panel. The master switch enables
+the schedule; turning it off restores normal colours without losing your settings.
+Colour temperature ranges from 1000–6500 K and night-time brightness from 10–150%.
+Fixed hours use the computer's time zone and can cross midnight. The initial values
+are imported from `hypr/hyprsunset.conf` when available (otherwise 21:00–07:30,
+5500 K, 80%). Your original Hyprsunset configuration is preserved.
+
+**Follow sunset and sunrise** uses GeoClue's city-level device location when
+available. If location access is unavailable, search for and select your city,
+then enable the sunset toggle. City search uses
+[Open-Meteo / GeoNames](https://open-meteo.com/en/docs/geocoding-api); it sends the
+search text, not device coordinates. A selected city stays fixed until changed.
+Device location refreshes hourly while sunset scheduling is enabled; a failed
+refresh retains the last fix and the panel marks fixes older than 24 hours.
+Use **Use device** to retry after travelling or enabling system location access.
+
+Sunrise and sunset are calculated locally using NOAA's approximate solar equations,
+including polar day/night and the selected city's time zone. Times are approximate
+to a few minutes; no daily network request is needed. Settings and coordinates stay
+in `$XDG_CONFIG_HOME/bartjik/nightlight.json` (owner-only permissions); the existing
+nightlight on/off preference is retained in `$XDG_STATE_HOME/nightlight/state`.
+
+The installer adds a `hyprsunset.service` drop-in that runs Bartjik's scheduler and
+Hyprsunset together. Scheduling continues independently of the bar. The scheduler
+uses a separate temporary Hyprsunset configuration so old fixed profiles cannot
+override solar transitions. It only reapplies colour/brightness when the schedule
+or settings change, allowing idle dimming to work; when Hypridle restores 100%
+brightness on wake, the saved night-time brightness is restored. Installation does not enable
+night light. After installation run `systemctl --user daemon-reload`; if night light
+was already running, restart `hyprsunset.service` to load the scheduler.
 
 Workspace data uses actual compositor ownership, not source assignment rules.
 Numeric names sort numerically, then named workspaces case-insensitively, then
@@ -481,6 +514,7 @@ cd apps/bartjik
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/render.py /tmp/bartjik-previews
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/native.py
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/interaction.py
+dbus-run-session --config-file tests/bus.conf -- python3 -B tests/nightlight_panel.py /tmp/bartjik-nightlight
 python3 -B tests/live_readonly.py  # opt-in; performs read-only API/service queries
 ```
 
