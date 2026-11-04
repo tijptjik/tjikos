@@ -45,6 +45,58 @@ struct FolderPosition {
     reader: ScrollHandle,
 }
 
+#[derive(Default)]
+struct RowSelection {
+    anchor: Option<String>,
+    keys: std::collections::HashSet<String>,
+}
+
+impl RowSelection {
+    fn extend(&mut self, rows: &[Message], current: Option<&Message>, next: usize) {
+        let Some(target) = rows.get(next) else { return };
+        let anchor = self
+            .anchor
+            .as_deref()
+            .and_then(|key| rows.iter().position(|row| row.conversation_key() == key))
+            .or_else(|| {
+                current.and_then(|current| {
+                    rows.iter()
+                        .position(|row| row.conversation_key() == current.conversation_key())
+                })
+            })
+            .unwrap_or(next);
+        self.anchor = Some(rows[anchor].conversation_key().into());
+        self.keys = rows[anchor.min(next)..=anchor.max(next)]
+            .iter()
+            .map(|row| row.conversation_key().to_owned())
+            .collect();
+        debug_assert!(self.keys.contains(target.conversation_key()));
+    }
+
+    fn retain(&mut self, rows: &[Message]) {
+        self.keys
+            .retain(|key| rows.iter().any(|row| row.conversation_key() == key));
+        if !self
+            .anchor
+            .as_ref()
+            .is_some_and(|key| self.keys.contains(key))
+        {
+            *self = Self::default();
+        }
+    }
+
+    fn targets(&self, rows: &[Message], current: Option<&Message>) -> Vec<Message> {
+        if self.keys.is_empty() {
+            current.into_iter().cloned().collect()
+        } else {
+            rows.iter()
+                .filter(|row| self.keys.contains(row.conversation_key()))
+                .cloned()
+                .collect()
+        }
+    }
+}
+
 fn proicon(name: &str) -> Icon {
     let bytes: &[u8] = match name {
         "recipients" => include_bytes!("../assets/proicons/recipients.svg"),
@@ -196,6 +248,7 @@ pub struct MailApp {
     page: Page,
     demo_messages: Vec<Message>,
     selected: Option<Message>,
+    row_selection: RowSelection,
     label: String,
     query: String,
     unread_only: bool,
@@ -607,6 +660,7 @@ impl MailApp {
             demo_messages: page.messages.clone(),
             page,
             selected,
+            row_selection: RowSelection::default(),
             label: "INBOX".into(),
             query: String::new(),
             unread_only: demo
@@ -806,6 +860,7 @@ impl MailApp {
             return;
         }
         if key == "escape" {
+            self.row_selection = RowSelection::default();
             self.shortcuts = false;
             self.queue_expanded = false;
             self.label_menu = None;
@@ -836,8 +891,10 @@ impl MailApp {
             }
             match key {
                 "r" => {
-                    if let Some(message) = self.selected.clone() {
-                        self.reply(&message, window, cx);
+                    if self.row_selection.keys.len() <= 1 {
+                        if let Some(message) = self.selected.clone() {
+                            self.reply(&message, window, cx);
+                        }
                     }
                 }
                 "a" => self.archive_selected(cx),
@@ -911,7 +968,11 @@ impl MailApp {
                         } else {
                             index.saturating_sub(1)
                         };
-                        self.select(next, cx);
+                        if event.keystroke.modifiers.shift {
+                            self.select_range(next, cx);
+                        } else {
+                            self.select(next, cx);
+                        }
                         self.mail_scroll
                             .scroll_to_item(next, ScrollStrategy::Nearest);
                     }
@@ -973,26 +1034,66 @@ impl MailApp {
         cx.notify();
     }
     fn archive_selected(&mut self, cx: &mut Context<Self>) {
-        if let Some(message) = &self.selected {
-            self.modify(message.id.clone(), vec![], vec!["INBOX".into()], cx);
-        }
+        self.modify_selected(false, vec![], vec!["INBOX".into()], cx);
     }
     fn trash_selected(&mut self, cx: &mut Context<Self>) {
+        self.modify_selected(true, vec!["TRASH".into()], vec!["INBOX".into()], cx);
+    }
+    fn selected_rows(&self) -> Vec<Message> {
+        self.row_selection
+            .targets(&self.page.representatives(), self.selected.as_ref())
+    }
+    fn modify_selected(
+        &mut self,
+        trash: bool,
+        add: Vec<String>,
+        remove: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        // Freeze conversation identities before any queued action can refresh
+        // or remove rows and move the reader's current selection.
+        let targets = self.selected_rows();
         self.auto_read_pinned = false;
-        if let Some(message) = &self.selected {
-            if message.label_ids.iter().any(|label| label == "TRASH") {
-                return;
+        if add.iter().any(|label| label == "UNREAD") {
+            let opened = self
+                .conversation
+                .iter()
+                .filter(|message| self.message_open(&message.id))
+                .map(|message| message.id.clone())
+                .collect::<Vec<_>>();
+            self.auto_read_seen.extend(opened);
+        }
+        let mut complete = true;
+        for message in targets {
+            if trash && message.label_ids.iter().any(|label| label == "TRASH") {
+                continue;
             }
             let id = message.id.clone();
             if self.demo && !optimistic_demo() {
                 let ids = self.conversation_ids(&id);
-                self.modified(&ids, &["TRASH".into()], &["INBOX".into()], cx);
+                self.modified(&ids, &add, &remove, cx);
             } else {
                 let thread = message.thread_id.clone();
-                self.enqueue_mail_action(MailAction::Trash { id, thread }, cx);
+                let action = if trash {
+                    MailAction::Trash { id, thread }
+                } else {
+                    MailAction::Labels {
+                        id,
+                        thread,
+                        add: add.clone(),
+                        remove: remove.clone(),
+                    }
+                };
+                if !self.enqueue_mail_action(action, cx) {
+                    complete = false;
+                    break;
+                }
             }
-            cx.notify();
         }
+        if complete {
+            self.row_selection = RowSelection::default();
+        }
+        cx.notify();
     }
     fn changed(&mut self, cx: &mut Context<Self>) {
         let before = self.draft.clone();
@@ -1454,6 +1555,7 @@ impl MailApp {
         };
         let view_key = worker::key(&self.label, &query, &self.page_token);
         if view_key != self.view_key {
+            self.row_selection = RowSelection::default();
             if self.folder_positions.len() >= 64 {
                 self.folder_positions.clear();
             }
@@ -1735,6 +1837,7 @@ impl MailApp {
         }
     }
     fn select(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.row_selection = RowSelection::default();
         self.auto_read_pinned = false;
         self.auto_read_seen.clear();
         self.read_view_started = Instant::now();
@@ -1743,6 +1846,12 @@ impl MailApp {
         self.proposal = None;
         self.refresh_reader();
         cx.notify();
+    }
+    fn select_range(&mut self, index: usize, cx: &mut Context<Self>) {
+        let mut selection = std::mem::take(&mut self.row_selection);
+        selection.extend(&self.page.representatives(), self.selected.as_ref(), index);
+        self.select(index, cx);
+        self.row_selection = selection;
     }
     fn modify(
         &mut self,
@@ -1885,6 +1994,7 @@ impl MailApp {
     fn mark_viewed_read(&mut self, window: &Window, cx: &mut Context<Self>) {
         if self.settings
             || self.composing
+            || self.row_selection.keys.len() > 1
             || !window.is_window_active()
             || self.read_view_started.elapsed() < Duration::from_millis(500)
         {
@@ -3622,6 +3732,7 @@ impl MailApp {
             .into_any_element()
     }
     fn inbox(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        self.row_selection.retain(&self.page.representatives());
         let title = if self.label.is_empty() {
             if self.query.is_empty() {
                 "All".into()
@@ -3636,7 +3747,9 @@ impl MailApp {
                 .unwrap_or_else(|| "Inbox".into())
         };
         let thread_count = self.page.conversations().len();
-        let count_label = if self.loading && self.page.messages.is_empty() {
+        let count_label = if self.row_selection.keys.len() > 1 {
+            format!("{} selected", self.row_selection.keys.len())
+        } else if self.loading && self.page.messages.is_empty() {
             "Loading…".into()
         } else {
             format!("{} thread{}{}", thread_count, if thread_count == 1 { "" } else { "s" }, if self.loading { " · loading" } else { "" })
@@ -3698,10 +3811,13 @@ impl MailApp {
                             .map(|index| {
                                 let row = &conversations[index];
                                 let message = row.message();
-                                let active =
+                                let focused =
                                     this.selected.as_ref().is_some_and(|m| m.conversation_key() == message.conversation_key());
+                                let active = if this.row_selection.keys.is_empty() { focused }
+                                    else { this.row_selection.keys.contains(message.conversation_key()) };
                                 div()
                                     .id(("mail", index))
+                                    .relative()
                                     .h(px(92.))
                                     .px_4()
                                     .py_3()
@@ -3766,6 +3882,9 @@ impl MailApp {
                                             .text_color(rgb(MUTED))
                                             .child(row.latest().snippet.clone()),
                                     )
+                                    .when(focused && this.row_selection.keys.len() > 1, |row| row.child(
+                                        div().absolute().left_0().top_0().bottom_0().w(px(2.)).bg(rgb(ACCENT))
+                                    ))
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.zone = 1;
                                         this.focus.focus(window, cx);
@@ -4085,7 +4204,7 @@ impl MailApp {
                             .icon(proicon("arrow-reply"))
                             .label("Reply")
                             .tooltip("Reply (r)")
-                            .disabled(message.summary_only)
+                            .disabled(message.summary_only || self.row_selection.keys.len() > 1)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 if let Some(message) = this.selected.clone() {
                                     this.reply(&message, window, cx);
@@ -4096,7 +4215,7 @@ impl MailApp {
                         Button::new("archive")
                             .ghost()
                             .icon(proicon("archive"))
-                            .label("Archive")
+                            .label(if self.row_selection.keys.len() > 1 { format!("Archive ({})", self.row_selection.keys.len()) } else { "Archive".into() })
                             .tooltip("Archive (a)")
                             .on_click(cx.listener(|this, _, _, cx| this.archive_selected(cx))),
                     )
@@ -4104,7 +4223,7 @@ impl MailApp {
                         Button::new("trash")
                             .ghost()
                             .icon(proicon("delete"))
-                            .label("Delete")
+                            .label(if self.row_selection.keys.len() > 1 { format!("Delete ({})", self.row_selection.keys.len()) } else { "Delete".into() })
                             .tooltip("Move to Trash (d)")
                             .disabled(message.label_ids.iter().any(|l| l == "TRASH"))
                             .on_click(cx.listener(|this, _, _, cx| this.trash_selected(cx))),
@@ -4115,6 +4234,12 @@ impl MailApp {
                             .icon(proicon(if unread { "mail-open" } else { "mail" }))
                             .label(if unread { "Mark read" } else { "Mark unread" })
                             .on_click(cx.listener(move |this, _, _, cx| {
+                                if this.row_selection.keys.len() > 1 {
+                                    this.modify_selected(false,
+                                        if unread { vec![] } else { vec!["UNREAD".into()] },
+                                        if unread { vec!["UNREAD".into()] } else { vec![] }, cx);
+                                    return;
+                                }
                                 this.modify(
                                     read_id.clone(),
                                     if unread {
@@ -4137,6 +4262,7 @@ impl MailApp {
                             .ghost()
                             .icon(proicon("label"))
                             .label("Filter")
+                            .disabled(self.row_selection.keys.len() > 1)
                             .tooltip("Create a Gmail filter for this sender")
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.open_sender_filter(&from, window, cx)
@@ -4145,6 +4271,7 @@ impl MailApp {
                     .child(
                         Button::new("star")
                             .ghost()
+                            .disabled(self.row_selection.keys.len() > 1)
                             .icon(proicon("star"))
                             .text_color(rgb(if starred { ACCENT } else { TEXT }))
                             .tooltip(if starred { "Unstar" } else { "Star" })
@@ -4733,9 +4860,9 @@ impl MailApp {
                             reading.markdown.clone()
                         },
                     )
-                    // Use a real family with bold and italic faces; the desktop
-                    // font alias can resolve every requested face to Regular.
-                    .font_family("Noto Sans")
+                    // Static faces keep emphasis distinct on desktop font
+                    // backends that flatten variable-font weight requests.
+                    .font_family("Inter")
                     .text_size(px(16.))
                     .selectable(true)
                     // Images only enter through the existing approved image loader.
@@ -5530,7 +5657,7 @@ impl Render for MailApp {
                     ))
                     .when(self.shortcuts, |d| d.child(
                         div().p_4().rounded_lg().bg(rgb(RAISED))
-                            .child("Keyboard shortcuts · ? help · Esc return to navigation · ←/→ labels / messages / reader · ↑/↓ select · Enter/Space fold folder · r reply · a archive · d move to Trash (default address in suggestions) · S label visibility · Ctrl+F search · Ctrl+N compose")
+                            .child("Keyboard shortcuts · ? help · Esc clear selection / return to navigation · ←/→ labels / messages / reader · ↑/↓ select · Shift+↑/↓ extend selection · Enter/Space fold folder · r reply · a archive · d move to Trash (default address in suggestions) · S label visibility · Ctrl+F search · Ctrl+N compose")
                     ))
                     .child(
                         div().flex().items_center().gap_3()
@@ -5649,8 +5776,46 @@ fn successor(messages: &[Message], id: &str) -> Option<String> {
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::successor;
+    use super::{RowSelection, successor};
     use crate::model;
+    #[test]
+    fn shift_range_extends_shrinks_crosses_anchor_and_preserves_thread_identity() {
+        let rows = model::demo().1.representatives();
+        let mut selected = RowSelection::default();
+        selected.extend(&rows, Some(&rows[1]), 2);
+        assert_eq!(selected.keys.len(), 2);
+        selected.extend(&rows, Some(&rows[2]), 4);
+        assert_eq!(selected.keys.len(), 4);
+        selected.extend(&rows, Some(&rows[4]), 0);
+        assert_eq!(selected.keys.len(), 2);
+        assert!(selected.keys.contains(rows[0].conversation_key()));
+        assert!(selected.keys.contains(rows[1].conversation_key()));
+        selected.extend(&rows, Some(&rows[0]), 1);
+        assert_eq!(selected.keys.len(), 1);
+        selected.extend(&rows, Some(&rows[1]), usize::MAX);
+        assert_eq!(selected.keys.len(), 1);
+        selected.retain(&rows[2..]);
+        assert!(selected.keys.is_empty() && selected.anchor.is_none());
+
+        let rows = model::demo_conversations().1.representatives();
+        selected.extend(&rows, Some(&rows[0]), 2);
+        assert_eq!(selected.keys.len(), 3);
+        let frozen = selected.targets(&rows, Some(&rows[2]));
+        assert_eq!(frozen.len(), 3);
+        let mut refreshed = rows.clone();
+        refreshed.reverse();
+        selected.retain(&refreshed);
+        assert_eq!(selected.keys.len(), 3);
+        refreshed.remove(1);
+        selected.retain(&refreshed);
+        assert_eq!(selected.keys.len(), 2);
+        assert_eq!(frozen.len(), 3);
+        assert!(selected.targets(&refreshed, None).iter().all(|row| {
+            frozen
+                .iter()
+                .any(|old| old.conversation_key() == row.conversation_key())
+        }));
+    }
     #[test]
     fn archive_selects_next_then_previous_at_end_and_clears_last() {
         let messages = model::demo().1.messages;

@@ -153,7 +153,7 @@ pub fn parse_with_signature(
             .select(&Selector::parse("style").unwrap())
             .map(|style| style.text().collect::<String>())
             .collect();
-        let indent_styles = stylesheet_indents(&styles);
+        let reading_styles = stylesheet_styles(&styles);
         prune(&mut doc, false);
         let mut unquoted = doc.clone();
         let quoted = crate::quotes::strip_html(&mut unquoted);
@@ -204,7 +204,7 @@ pub fn parse_with_signature(
         let markdown = if hidden(doc.root_element()) {
             String::new()
         } else {
-            normalize(&render(body, 0, &mut images, &indent_styles))
+            normalize(&render(body, 0, &mut images, &reading_styles))
         };
         // A broken/empty HTML alternative must not hide a useful plain body.
         // Do not restore history that was intentionally collapsed above.
@@ -537,7 +537,7 @@ fn quote_block(text: &str) -> String {
     )
 }
 
-fn stylesheet_indents(styles: &[String]) -> Vec<(Selector, String)> {
+fn stylesheet_styles(styles: &[String]) -> Vec<(Selector, String)> {
     let rule = regex::Regex::new(r"(?s)([^{}]+)\{([^{}]*)\}").unwrap();
     styles
         .iter()
@@ -545,7 +545,16 @@ fn stylesheet_indents(styles: &[String]) -> Vec<(Selector, String)> {
             rule.captures_iter(style)
                 .filter_map(|parts| {
                     let declarations = parts[2].to_ascii_lowercase();
-                    if !declarations.contains("margin") && !declarations.contains("padding") {
+                    if ![
+                        "margin",
+                        "padding",
+                        "font-weight",
+                        "font-style",
+                        "text-decoration",
+                    ]
+                    .iter()
+                    .any(|property| declarations.contains(property))
+                    {
                         return None;
                     }
                     Some((Selector::parse(parts[1].trim()).ok()?, declarations))
@@ -965,14 +974,16 @@ fn render(
         _ => {}
     }
     let mut content = children(element, depth, images, styles);
-    // Outlook and web composers often express emphasis with inline CSS.
-    let style = element
-        .attr("style")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    for declaration in style.split(';') {
+    // Generated mail uses stylesheet classes for emphasis as well as indents.
+    let style = element_style(element, styles);
+    let mut applied = std::collections::HashSet::new();
+    for declaration in style.split(';').rev() {
         if let Some((property, value)) = declaration.split_once(':') {
-            match (property.trim(), value.trim()) {
+            if !applied.insert(property.trim()) {
+                continue;
+            }
+            let value = value.trim().trim_end_matches("!important").trim();
+            match (property.trim(), value) {
                 ("font-style", "italic" | "oblique") if !matches!(tag, "em" | "i") => {
                     content = marked(&content, "*")
                 }
@@ -1203,6 +1214,21 @@ mod tests {
         assert!(body.markdown.contains("> A genuine quotation"));
         assert!(body.markdown.contains("*Italic* **Bold** ~~Old~~ ` x `"));
         assert!(!body.markdown.contains("Hidden history"));
+    }
+
+    #[test]
+    fn stylesheet_heading_emphasis_survives_with_inline_normal_overrides() {
+        let body = parse(
+            &mail(
+                "text/html",
+                "<style>.heading { font-family:Georgia; font-size:9pt; font-weight:bold; font-style:normal } .numeric { font-weight:700!important } .italic {font-style:italic} .old {text-decoration:line-through}</style><p><span class='heading'>What does the service do?</span><br>Explanatory body text</p><p><span class='numeric'>How are entries chosen?</span></p><p><span class='heading' style='font-weight:normal'>Ordinary body text</span> <span class='italic'>Emphasis</span> <span class='old'>Previous</span></p>",
+            ),
+            false,
+        );
+        assert!(body.markdown.contains("**What does the service do?**"));
+        assert!(body.markdown.contains("**How are entries chosen?**"));
+        assert!(!body.markdown.contains("**Ordinary body text**"));
+        assert!(body.markdown.contains("*Emphasis* ~~Previous~~"));
     }
 
     #[test]

@@ -30,6 +30,8 @@ native development libraries. On Fedora, these include `libxkbcommon-devel`,
 `libxkbcommon-x11-devel`, `libxcb-devel`, `fontconfig-devel`, `freetype-devel`,
 `wayland-devel`, and `vulkan-loader-devel`. Use the system `tijpset` font for the
 established TjikOS typography; fontconfig provides fallback fonts.
+The readable message body uses Inter (`rsms-inter-fonts` on Fedora) for distinct
+regular, bold and italic faces.
 
 ## Connect Google
 
@@ -303,11 +305,17 @@ Ordinary messages open in a selectable **Readable view**. HTML is converted to
 Markdown structure, preserving headings, paragraphs, lists, emphasis and safe
 links while removing sender fonts, colours, backgrounds and empty spacing.
 Simple wrapper tables and signature logos do not force the original layout.
+Emphasis defined by embedded CSS classes is preserved as well as inline styling.
 Quoted history remains collapsed until requested. Approved inline images remain
 between their surrounding paragraphs, with their aspect ratio and colours intact.
 Markdown resolves only already-approved image bytes; images still pass through
 the existing image loader and remote-image setting. Inline images are not repeated
 in the attachment list, and quoted images remain hidden with their quoted history.
+
+In the message list, **Shift+Up/Down** extends or shrinks a contiguous selection.
+The header shows the selected count; archive, delete and read/unread apply to those
+conversations. Plain arrows, a normal row click, Escape or a view change clear the
+range. Selecting a range does not automatically mark the previewed message read.
 
 Recognized signatures are collapsed behind **Show signature** in both reading
 views, including their logos and contact blocks. Detection uses explicit email

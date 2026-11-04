@@ -52,8 +52,89 @@ with private_compositor(isolate_pointer=True):
                 time.sleep(.3)
                 subprocess.run(["grim", "-o", "GMAIL", str(root / name)], check=True)
 
+            if os.environ.get("GMAILTJIK_DEMO_SCENE") == "multi-select":
+                from PIL import Image
+
+                def keys(*values, shift=False):
+                    command = ["wtype", "-s", "120"]
+                    if shift:
+                        command += ["-M", "shift"]
+                    for value in values:
+                        command += ["-k", value]
+                    if shift:
+                        command += ["-m", "shift"]
+                    subprocess.run(command, check=True)
+                    time.sleep(.3)
+
+                def selected_rows(name):
+                    click_pointer.stdin.write("m 9500 1900\n")
+                    click_pointer.stdin.flush()
+                    assert click_pointer.stdout.readline().strip() == "ok"
+                    capture(name)
+                    with Image.open(root / name) as shot:
+                        return [i for i in range(5) if shot.convert("RGB").getpixel((235, 150 + i * 92)) == (57, 53, 75)]
+
+                def copied_body():
+                    subprocess.run(["wl-copy", "--", "selection-pending"], check=True)
+                    for operation in ["m 4306 2900", "b 1", "m 4792 2900", "b 0"]:
+                        click_pointer.stdin.write(operation + "\n")
+                        click_pointer.stdin.flush()
+                        assert click_pointer.stdout.readline().strip() == "ok"
+                        time.sleep(.15)
+                    subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-k", "c", "-m", "ctrl"], check=True)
+                    def copied():
+                        value = subprocess.check_output(["wl-paste", "--no-newline"], text=True, timeout=5)
+                        return value if value != "selection-pending" else None
+                    return wait_for(copied, timeout=5)
+
+                click(400, 150)
+                keys("Down", "Down", shift=True)
+                assert selected_rows("range-three.png") == [0, 1, 2]
+                keys("Up", shift=True)
+                assert selected_rows("range-shrunk.png") == [0, 1]
+                keys("Up", shift=True)
+                assert selected_rows("range-anchor.png") == [0]
+                keys("Down")
+                assert selected_rows("range-plain-arrow.png") == [1]
+                keys("Up", shift=True)
+                assert selected_rows("range-reversed.png") == [0, 1]
+                keys("Escape")
+                assert selected_rows("range-cleared.png") == [0]
+                keys("Down", "Down", shift=True)
+                click(400, 420)
+                assert selected_rows("range-click-reset.png") == [3]
+                keys("Up", shift=True)
+                click(85, 166)
+                click(85, 98)
+                assert len(selected_rows("range-folder-reset.png")) <= 1
+                click(400, 250)
+                keys("Down", "Down", shift=True)
+                assert selected_rows("range-before-archive.png") == [1, 2, 3]
+                subprocess.run(["wtype", "a"], check=True)
+                capture("range-archived.png")
+                click(400, 150)
+                assert "first notes for our new mail client" in copied_body()
+                click(400, 250)
+                assert "Tuesday works well" in copied_body()
+                click(400, 250)
+                keys("Down")
+                assert "Tuesday works well" in copied_body()
+                click(400, 150)
+                keys("Down", shift=True)
+                subprocess.run(["wtype", "d"], check=True)
+                capture("range-trashed.png")
+                assert "panicked" not in (root / "gmailtjik.log").read_text()
+                sys.exit(0)
+
             if os.environ.get("GMAILTJIK_DEMO_SCENE") == "reader-indents":
                 capture("reader-indents.png")
+                from PIL import Image
+                with Image.open(root / "reader-indents.png") as shot:
+                    def text_ink(box):
+                        return sum(min(pixel) > 120 for pixel in shot.convert("RGB").crop(box).get_flattened_data())
+                    bold = text_ink((608, 318, 810, 343))
+                    regular = text_ink((608, 344, 810, 369))
+                    assert bold > regular * 1.1, (bold, regular)
                 subprocess.run(["wl-copy", "--", "selection-pending"], check=True)
                 # Focus the selectable readable body, then copy its full content.
                 for operation in ["m 4306 2900", "b 1", "m 4792 2900", "b 0"]:
