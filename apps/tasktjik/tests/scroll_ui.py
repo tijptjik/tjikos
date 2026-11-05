@@ -22,6 +22,7 @@ import Quickshell.Io
 ShellRoot {
     TestCase {id:input;when:false}
     FloatingWindow {
+        title:'Tasktjik scroll fixture'
         implicitWidth:700;implicitHeight:700;color:'#26233a'
         TodoApp {id:view;anchors.fill:parent;view:'all';stateData:STATE
             theme:({background:'#26233a',surface:'#39354b',text:'#f5f5f7',muted:'#aaa5ba',accent:'#a8c7a0',border:'#555169'})
@@ -29,6 +30,30 @@ ShellRoot {
     }
     IpcHandler {target:'scroll-test'
         function ready():string {return JSON.stringify({height:input.findChild(view,'task-scroll').contentItem.contentHeight});}
+        function keyboard(direction:int,control:bool):string {
+            const f=input.findChild(view,'task-scroll').contentItem;
+            const rows=control?view.visualRows():view.navigationRows();
+            if(direction<0)rows.reverse();
+            view.focusRow(rows[0]);input.wait(30);
+            const samples=[];
+            for(let i=0;i<rows.length;i++) {
+                if(i)input.keyClick(direction>0?Qt.Key_Down:Qt.Key_Up,control?Qt.ControlModifier:Qt.NoModifier);
+                input.wait(10);
+                const expected=rows[i],card=input.findChild(view,'task-'+expected.id);
+                const item=expected.item || card,p=item.mapToItem(f,0,0);
+                samples.push({expected:expected.id,selected:view.selectedId,
+                    subtask:expected.subtaskId || '',selectedSubtask:view.selectedSubtaskId,
+                    y:p.y,height:Math.min(item.height,48),offset:f.contentY,viewport:f.height});
+            }
+            return JSON.stringify(samples);
+        }
+        function expand():void {
+            const draft=JSON.parse(JSON.stringify(view.stateData));
+            draft.tasks[50].subtasks=Array.from({length:8},(_,i)=>({id:'nav-step-'+i,
+                title:'Synthetic navigation step '+i,kind:'task',done:false,due:'',items:[]}));
+            draft.tasks[50].workflowRows=draft.tasks[50].subtasks.map(row=>Object.assign({},row,{status:'ready',depth:0}));
+            view.stateData=draft;view.toggleExpanded(draft.tasks[50].id);input.wait(250);
+        }
         function measure(count:int,spacing:int):string {
             const scroll=input.findChild(view,'task-scroll'),f=scroll.contentItem;
             scroll.stopWheelScroll();f.cancelFlick();f.contentY=1000;input.wait(50);
@@ -115,8 +140,10 @@ ShellRoot {
     }
 }
 '''.replace("STATE", json.dumps({"tasks": tasks, "groups": ["All"], "today": "2099-01-01"})))
-env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software",
-       "XDG_RUNTIME_DIR": str(root / "runtime"), "XDG_CONFIG_HOME": str(root / "config"),
+platform = os.environ.get("TASKTJIK_TEST_PLATFORM", "offscreen")
+env = {**os.environ, "QT_QPA_PLATFORM": platform, "QT_QUICK_BACKEND": "software",
+       "XDG_RUNTIME_DIR": os.environ["XDG_RUNTIME_DIR"] if platform == "wayland" else str(root / "runtime"),
+       "XDG_CONFIG_HOME": str(root / "config"),
        "XDG_CACHE_HOME": str(root / "cache")}
 
 
@@ -139,6 +166,19 @@ with (root / "qml.log").open("w") as log:
             time.sleep(.1)
         else:
             raise AssertionError("Scrolling fixture did not start: " + str(root))
+        for expanded in [False, True]:
+            if expanded:
+                ipc("expand")
+            for control in [False, True]:
+                for direction in [1, -1]:
+                    samples = json.loads(ipc("keyboard", direction, str(control).lower()))
+                    assert len(samples) == (108 if expanded and not control else 100), (expanded, control, len(samples))
+                    for sample in samples:
+                        assert sample["selected"] == sample["expected"], sample
+                        assert sample["selectedSubtask"] == sample["subtask"], sample
+                        assert -.5 <= sample["y"] <= sample["viewport"] - sample["height"] + .5, sample
+                    assert all(direction * (b["offset"] - a["offset"]) >= -.5
+                               for a, b in zip(samples, samples[1:])), samples
         for bottom in [False, True]:
             for distance in [10, 120]:
                 edge = json.loads(ipc("edge", str(bottom).lower(), distance))
@@ -169,7 +209,7 @@ with (root / "qml.log").open("w") as log:
         assert ipc("controls").strip() == "PASS"
         errors = (root / "qml.log").read_text()
         assert not any(word in errors for word in ["TypeError", "ReferenceError", "Binding loop", "Cannot assign"]), errors
-        print("PASS wheel travel, rapid acceleration, momentum, reversal, click stop, edge and gesture passthrough:", root)
+        print("PASS long-list keyboard navigation, expanded steps, wheel travel, momentum, edges and gestures:", root)
     finally:
         if process.poll() is None:
             process.terminate()

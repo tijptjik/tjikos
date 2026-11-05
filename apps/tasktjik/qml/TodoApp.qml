@@ -389,8 +389,11 @@ Pane {
     }
     function visualRows() {
         const rows=[];
+        // Navigation compares these positions with Flickable.contentY. Map to
+        // its scrolling content, so row coordinates stay stable while scrolling.
+        const content=taskScroll.contentItem.contentItem;
         for(const group of dropGroups)for(let i=0;i<group.rows.count;i++) {
-            const row=group.rows.itemAt(i);if(!row.visible)continue;const p=row.mapToItem(taskScroll.contentItem,0,0);
+            const row=group.rows.itemAt(i);if(!row.visible)continue;const p=row.mapToItem(content,0,0);
             rows.push({id:row.modelData.id,x:p.x,y:p.y,height:row.height});
         }
         return rows.sort((a,b)=>Math.abs(a.x-b.x)>1?a.x-b.x:a.y-b.y);
@@ -401,7 +404,7 @@ Pane {
             rows.push(Object.assign({},task,{subtaskId:'',height:Math.min(task.height,48)}));
             for(const group of dropGroups)for(let i=0;i<group.rows.count;i++) {
                 const card=group.rows.itemAt(i);if(card.modelData.id!==task.id)continue;
-                for(const item of card.navigationItems()) {const p=item.mapToItem(taskScroll.contentItem,0,0);rows.push({id:task.id,subtaskId:item.modelData.id,x:p.x,y:p.y,height:item.height,item:item});}
+                for(const item of card.navigationItems()) {const p=item.mapToItem(taskScroll.contentItem.contentItem,0,0);rows.push({id:task.id,subtaskId:item.modelData.id,x:p.x,y:p.y,height:item.height,item:item});}
             }
         }
         return rows;
