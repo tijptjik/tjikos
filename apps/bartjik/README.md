@@ -514,6 +514,7 @@ Synthetic acceptance (no real network/audio mutations):
 
 ```sh
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/hover.py --connectivity-only
+dbus-run-session --config-file tests/bus.conf -- python3 -B tests/hover_motion.py
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/panel_crossing.py /tmp/bartjik-panel-crossing
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/native_panels.py /tmp/bartjik-native-panels
 dbus-run-session --config-file tests/bus.conf -- python3 -B tests/panel_resize.py /tmp/bartjik-panel-resize
@@ -526,7 +527,10 @@ dbus-run-session --config-file tests/bus.conf -- python3 -B tests/drag_frames.py
 The fixtures exercise real Qt mouse events, icon/value/padding hover, moving
 anchors, dwell cancellation, monitor changes, all four bar sides, gap traversal,
 dismissal, pinning and control clicks. Demo mode uses synthetic network/audio
-state and never starts traffic or meter helpers. The resize fixture samples 24
+state and never starts traffic or meter helpers. Pointer motion is sampled at
+most once every 16ms; moving within a panel's current target preserves its selection
+and workspace capture model. The motion fixture checks 1,000-event bursts and
+cancellation on leave. The resize fixture samples 24
 expand/shrink and panel-handoff cases, including a scrolled list that becomes shorter.
 
 ## Extending modules
@@ -706,11 +710,12 @@ workspace does not replace them. The close button appears only after dropping.
 A shared native Hyprland service maps each workspace's windows to native toplevel
 handles; `ScreencopyView` uses `hyprland-toplevel-export-v1`. We verified capture of
 an inactive workspace on the installed compositor without switching workspaces.
-Thumbnails use source-resolution GPU layers with mipmap filtering for downscaling,
-with their bounds snapped to physical pixels at the destination monitor scale.
+Thumbnails use GPU layers at twice their displayed physical pixel size, capped
+at the source resolution, with mipmap filtering for downscaling. Their bounds
+are snapped to physical pixels at the destination monitor scale.
 The default refresh interval is 50ms (20 fps); explicit intervals from 33 to 5000ms
-are supported. Filtering adds a source-sized GPU texture and mipmaps per captured
-window while open. This preserves application layout without resizing the apps.
+are supported. The additional filtering textures follow thumbnail size rather
+than full window size. This preserves application layout without resizing the apps.
 Thumbnails preserve logical window positions relative to their own monitor, including
 negative monitor origins and scale. Recent windows paint on top. Up to `maxWindows`
 most recently focused windows are captured; pinned windows on that monitor are included.

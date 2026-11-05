@@ -30,8 +30,12 @@ def main():
         const thumb=thumbs.children.find(t=>t.clientData?.title===req.title);
         if(!thumb)throw Error('missing synthetic thumbnail '+req.title);
         const point=thumb.mapToItem(body,thumb.width/2,thumb.height/2);
+        const stream=thumb.children.find(c=>c.item?.captureSource)?.item;
+        const allocation=stream?{width:stream.layer.textureSize.width,height:stream.layer.textureSize.height,
+            maxWidth:Math.ceil(thumb.width*popup.pixelScale*2),maxHeight:Math.ceil(thumb.height*popup.pixelScale*2),
+            sourceWidth:stream.sourceSize.width,sourceHeight:stream.sourceSize.height}:null;
         if(req.click)testInput.mouseClick(body,point.x,point.y,Qt.LeftButton,Qt.NoModifier,0);
-        return {ok:true,key:thumb.key,raw:thumb.clientData.address,opened:opened,point:{x:point.x,y:point.y},width:body.width,height:body.height};
+        return {ok:true,key:thumb.key,raw:thumb.clientData.address,opened:opened,point:{x:point.x,y:point.y},width:body.width,height:body.height,allocation:allocation};
     }
     Timer {interval:50;running:popup.opened;repeat:true;onTriggered:Hyprland.refreshToplevels()}
 ''',1)
@@ -39,6 +43,7 @@ def main():
         # compositor windows and the production focus action without a recorder.
         source=source.replace('!opened ? [] : controller.demo ? [','!opened ? [] : false ? [',1)
         source=source.replace('popup.controller.demo ? {x:0,y:0}','false ? {x:0,y:0}',1)
+        source=source.replace('captureSource:popup.opened && !popup.controller.demo', 'captureSource:popup.opened',1)
         start=source.index('    function focusWindow(')
         end=source.index('    function closeOffscreen(',start)
         source=source[:start]+source[start:end].replace('controller.demo','false')+source[end:]
@@ -83,6 +88,12 @@ def main():
                     ipc({'op':'workspacePreviewTest','module':'spaces','item':str(by_title[title]['workspace']['id']),'x':600})
                     wait_for(lambda:ipc({'op':'workspacePreviewState'})['preview']['opened'])
                     wait_for(lambda:ipc({'op':'workspacePreviewState'})['preview']['windows']==2)
+                    wait_for(lambda:ipc({'op':'workspacePreviewState'})['preview']['captured']==2)
+                    allocation=ipc({'op':'focusFixture','title':title})['allocation']
+                    assert allocation and 0<allocation['width']<=allocation['maxWidth'],allocation
+                    assert 0<allocation['height']<=allocation['maxHeight'],allocation
+                    assert allocation['width']<=allocation['sourceWidth'],allocation
+                    assert allocation['height']<=allocation['sourceHeight'],allocation
                     time.sleep(.2)
                     probe=ipc({'op':'focusFixture','title':title,'click':True})
                     assert probe['raw']=='0x'+probe['key'],probe
@@ -93,7 +104,7 @@ def main():
                 process.terminate();process.wait(timeout=5)
         errors=[line for line in log_path.read_text().splitlines() if any(s in line for s in ('WARN scene','ERROR','TypeError','ReferenceError'))]
         assert not errors,errors[:20]
-    print('Preview focus passed: real Quickshell addresses, unmocked compositor actions and confirmed active windows')
+    print('Preview focus passed: real Quickshell addresses, unmocked compositor actions and confirmed active windows and bounded native capture layers')
 
 
 if __name__=='__main__':

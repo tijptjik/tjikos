@@ -64,7 +64,11 @@ DetachablePopup {
         hide.stop();hoverKey=key(context);options=settings || {};pending={context:context,window:window};
         if(opened && selected?.window===window){
             panelShell.show(popup);
-            if(key(selected.context)===key(context)){++transitionSerial;selected=pending;Qt.callLater(syncGeometry);return;}
+            if(key(selected.context)===key(context)){
+                ++transitionSerial;
+                selected.context=context;
+                locate(context,window);return;
+            }
             switchCard();return;
         }
         if(panelShell.canCross(window)){delay.stop();reveal();}

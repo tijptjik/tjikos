@@ -31,7 +31,7 @@ DetachablePopup {
         pending={context:Object.assign({},context,{event:'hoverEnter'}),window:window,row:row};
         if(opened && anchor.window===window){
             panelShell.show(popup);
-            if(selectionKey===key(context)){delay.stop();selectedContext=context;position(context,window);}
+            if(selectionKey===key(context)){delay.stop();selectedContext.anchor=context.anchor;selectedContext.hoverRegion=context.hoverRegion;position(context,window);}
             else controller.act('crypto.panel',pending.context,window,row);
             return;
         }

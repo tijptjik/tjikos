@@ -63,7 +63,13 @@ DetachablePopup {
         if(opened && selected?.window===window){
             panelShell.show(popup);
             delay.stop();
-            if(same){selected=pending;locate(context.anchor.x+context.anchor.width/2,context.anchor.y+context.anchor.height/2);}
+            if(same){
+                // Moving within one workspace must not invalidate sourceList
+                // and every native thumbnail. Retain the selection, updating
+                // only its input context for later positioning and dismissal.
+                selected.context=context;
+                locate(context.anchor.x+context.anchor.width/2,context.anchor.y+context.anchor.height/2);
+            }
             else reveal();
         }
         else if(panelShell.canCross(window)){delay.stop();reveal();}
@@ -161,11 +167,12 @@ DetachablePopup {
                                 id:stream;anchors.fill:parent
                                 captureSource:popup.opened && !popup.controller.demo ? thumb.source?.wayland || null : null
                                 live:false;paintCursor:false
-                                // Preserve source detail in the offscreen texture, then use
-                                // mipmaps for minification instead of undersampling fine lines.
+                                // Supersample the displayed thumbnail, not the entire source
+                                // window. Full-resolution mipmap layers multiply GPU memory
+                                // and rendering work for every captured window on every frame.
                                 smooth:true
                                 layer.enabled:hasContent
-                                layer.textureSize:Qt.size(Math.max(1,sourceSize.width),Math.max(1,sourceSize.height))
+                                layer.textureSize:Qt.size(Math.max(1,Math.min(sourceSize.width,Math.ceil(width*popup.pixelScale*2))),Math.max(1,Math.min(sourceSize.height,Math.ceil(height*popup.pixelScale*2))))
                                 layer.mipmap:true
                                 layer.smooth:true
                                 Timer {interval:popup.options.refreshInterval ?? 50;running:popup.opened && !!stream.captureSource && stream.hasContent;repeat:true;onTriggered:stream.captureFrame()}

@@ -26,7 +26,17 @@ HoverHandler {
         else if(target.provider==='workspaces')island.controller.workspaceEnter(context,island.window,target.row,target.options);
         else island.controller.detailEnter(context,island.window,target.row,target.options);
     }
-    onHoveredChanged: {if(hovered)root.move(point.position.x,point.position.y);else root.leave();}
-    onPointChanged: if(hovered)root.move(point.position.x,point.position.y)
+    // Motion can arrive much faster than the scene can render. Keep only the
+    // newest point instead of rebuilding panel state for every queued event.
+    property Timer motion: Timer {
+        interval:16
+        onTriggered:if(root.hovered)root.move(root.point.position.x,root.point.position.y)
+    }
+    onHoveredChanged: {
+        motion.stop();
+        if(hovered){root.move(point.position.x,point.position.y);motion.start();}
+        else root.leave();
+    }
+    onPointChanged:if(hovered && !motion.running)motion.start()
     Component.onDestruction: leave()
 }
