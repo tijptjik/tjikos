@@ -40,7 +40,7 @@ ShellRoot {
                     ctx.reset();
                     const gradient = ctx.createLinearGradient(32, 28, 112, 116);
                     root.rainbow.forEach((colour, i) => gradient.addColorStop(i / (root.rainbow.length - 1), colour));
-                    ctx.font = "bold 88px 'Noto Sans Mono'";
+                    ctx.font = "bold 88px monospace";
                     ctx.textAlign = "center";
                     ctx.textBaseline = "middle";
                     ctx.lineWidth = 4;
