@@ -136,7 +136,7 @@ print('83.25')
                 actions = json.loads(notice[notice.index('--actions') + 1])
                 assert [action['label'] for action in actions] == ['View video', 'Share on Telegram']
                 assert actions[0]['identifier'] == 'default'
-                assert actions[0]['command'] == ['vlc', '--', str(output)]
+                assert actions[0]['command'] == [str(APP / 'runtjik-core'), 'view-recording', str(output)]
                 assert actions[1]['command'] == [str(APP / 'runtjik-core'), 'share-recording-telegram', str(output)]
             if cancellation:
                 assert not notification.exists(), 'Cancelled/failed capture advertised a saved video'

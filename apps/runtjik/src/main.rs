@@ -57,6 +57,10 @@ fn execute() -> Result<()> {
             args.get(1)
                 .ok_or_else(|| anyhow::anyhow!("Missing recording path"))?,
         )?,
+        "view-recording" => crate::capture_worker::view_recording(
+            args.get(1)
+                .ok_or_else(|| anyhow::anyhow!("Missing recording path"))?,
+        )?,
         "image" => crate::image_viewer::cli(&args[1..])?,
         "image-viewer" => crate::image_viewer::open(&serde_json::from_str(
             args.get(1)

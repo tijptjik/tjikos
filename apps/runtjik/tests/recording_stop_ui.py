@@ -123,7 +123,7 @@ while True: time.sleep(.01)
             actions = json.loads(notice[notice.index('--actions') + 1])
             assert [action['label'] for action in actions] == ['View video', 'Share on Telegram']
             assert actions[0]['identifier'] == 'default'
-            assert actions[0]['command'] == ['vlc', '--', str(capture_dir / (key + '.mp4'))]
+            assert actions[0]['command'][1:] == ['view-recording', str(capture_dir / (key + '.mp4'))]
             assert actions[1]['command'][1:] == ['share-recording-telegram', str(capture_dir / (key + '.mp4'))]
             worker.stdout.close()
             worker = None

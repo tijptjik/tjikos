@@ -21,9 +21,32 @@ static STOP: AtomicBool = AtomicBool::new(false);
 
 fn recording_actions(file: &str) -> Value {
     json!([
-        {"label":"View video", "identifier":"default", "command":["vlc", "--", file]},
+        {"label":"View video", "identifier":"default", "command":[crate::paths::root().join("runtjik-core"), "view-recording", file]},
         {"label":"Share on Telegram", "identifier":"telegram", "command":[crate::paths::root().join("runtjik-core"), "share-recording-telegram", file]}
     ])
+}
+
+pub fn view_recording(file: &str) -> Result<()> {
+    ensure!(Path::new(file).is_file(), "Recording no longer exists");
+    // Match the desktop launcher's Qt interface, and keep this recording's
+    // player separate from any existing VLC session or playback.
+    let mut command = if let Some(qvlc) = which("qvlc") {
+        Command::new(qvlc)
+    } else {
+        let mut command = Command::new("vlc");
+        command.args(["--intf", "qt"]);
+        command
+    };
+    let mut child = command
+        .args(["--no-one-instance", "--", file])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let pid = child.id() as u64;
+    focus_recording_window(&mut child, "VLC", |client| {
+        client["pid"].as_u64() == Some(pid)
+    })
 }
 
 pub fn share_recording_telegram(file: &str) -> Result<()> {
@@ -38,25 +61,37 @@ pub fn share_recording_telegram(file: &str) -> Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
+    focus_recording_window(&mut child, "Telegram", |client| {
+        let class = s(&client["class"]).to_ascii_lowercase();
+        (matches!(
+            class.as_str(),
+            "telegram" | "telegram-desktop" | "telegramdesktop" | "org.telegram.desktop"
+        ) || class.starts_with("org.telegram.desktop."))
+            && !s(&client["title"]).contains("Media viewer")
+    })
+}
+
+fn focus_recording_window(
+    child: &mut std::process::Child,
+    app: &str,
+    matches: impl Fn(&Value) -> bool,
+) -> Result<()> {
     if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none() {
         return Ok(());
     }
-    // Telegram may need to start before a mapped window becomes available.
+    // Wait for cold starts without handing focus to an unrelated existing player.
     for _ in 0..100 {
         std::thread::sleep(Duration::from_millis(100));
-        let _ = child.try_wait();
+        if let Some(status) = child.try_wait()? {
+            ensure!(
+                status.success(),
+                "{app} exited before opening its window ({status})"
+            );
+        }
         let clients = crate::windows::clients()?;
         let target = clients
             .iter()
-            .filter(|client| {
-                let class = s(&client["class"]).to_ascii_lowercase();
-                (matches!(
-                    class.as_str(),
-                    "telegram" | "telegram-desktop" | "telegramdesktop" | "org.telegram.desktop"
-                ) || class.starts_with("org.telegram.desktop."))
-                    && client["mapped"] != false
-                    && !s(&client["title"]).contains("Media viewer")
-            })
+            .filter(|client| client["mapped"] != false && matches(client))
             .min_by_key(|client| {
                 client["focusHistoryID"]
                     .as_i64()
@@ -64,10 +99,38 @@ pub fn share_recording_telegram(file: &str) -> Result<()> {
                     .unwrap_or(i64::MAX)
             });
         if let Some(target) = target {
-            return crate::windows::focus(target);
+            crate::windows::focus(target)?;
+            // Mapping and desktop width rules may still be settling. Verify
+            // focus after that initial event before revealing the column.
+            std::thread::sleep(Duration::from_millis(150));
+            let active: Value =
+                serde_json::from_str(&command(&["hyprctl", "-j", "activewindow"])?)?;
+            if active["address"] != target["address"] {
+                continue;
+            }
+            let workspace: Value =
+                serde_json::from_str(&command(&["hyprctl", "-j", "activeworkspace"])?)?;
+            if workspace["tiledLayout"] == "scrolling" && target["floating"] != true {
+                // IPC focus alone can leave a column outside the viewport.
+                // Center scrolls the tape without resizing or moving windows.
+                let is_lua = command(&["hyprctl", "eval", "return"])
+                    .map(|v| v.trim() == "ok")
+                    .unwrap_or(false);
+                let result = if is_lua {
+                    command(&["hyprctl", "dispatch", "hl.dsp.layout(\"center\")"])?
+                } else {
+                    command(&["hyprctl", "dispatch", "layoutmsg", "center"])?
+                };
+                ensure!(
+                    result.trim() == "ok",
+                    "Could not reveal {app}: {}",
+                    result.trim()
+                );
+            }
+            return Ok(());
         }
     }
-    bail!("Telegram did not expose a window to focus")
+    bail!("{app} did not expose a window to focus")
 }
 
 fn recording_duration(file: &str) -> Option<String> {

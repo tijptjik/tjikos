@@ -632,7 +632,8 @@ Bundled desktop plugins:
   recording directly and does nothing when none is active.
   Once the video is finalized, a completion notification shows its duration with
   artwork from Notjik's bonsai collection and stays visible until dismissed or
-  acted on. **View video** is the primary action and opens VLC;
+  acted on. **View video** is the primary action and opens/focuses a dedicated
+  VLC Qt window for the recording, leaving existing playback alone;
   **Share on Telegram** opens Telegram's recipient picker with the saved video
   and reveals/focuses its window, including on a special workspace.
   Choose the recipient in Telegram before sending.
