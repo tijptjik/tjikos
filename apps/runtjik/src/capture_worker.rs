@@ -3,7 +3,7 @@ use anyhow::{bail, ensure, Result};
 use serde_json::{json, Value};
 use std::{
     fs,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     os::{
         fd::AsRawFd,
         unix::{
@@ -17,6 +17,54 @@ use std::{
     time::{Duration, Instant},
 };
 static STOP: AtomicBool = AtomicBool::new(false);
+
+fn recording_actions(file: &str) -> Value {
+    let telegram = which("telegram-desktop")
+        .or_else(|| which("Telegram"))
+        .or_else(|| which("/opt/Telegram/Telegram"))
+        .unwrap_or_else(|| PathBuf::from("telegram-desktop"));
+    json!([
+        {"label":"Open in VLC", "command":["vlc", "--", file]},
+        {"label":"Send to Telegram", "command":[telegram, "-sendpath", file]}
+    ])
+}
+
+fn notify_finished(file: &str, success: bool, logdir: &Path) {
+    let message = if success {
+        format!("Saved {file}")
+    } else {
+        format!(
+            "Recording failed; inspect {}",
+            logdir.join("capture.log").display()
+        )
+    };
+    if success && which("notjikctl").is_some() {
+        // Persist command actions in Notjik; never wait for a click while owning
+        // the recorder lock, socket or temporary Super bindings.
+        let actions = recording_actions(file).to_string();
+        if command(&[
+            "notjikctl",
+            "send",
+            "Screen recording",
+            &message,
+            "--app",
+            "Runtjik",
+            "--actions",
+            &actions,
+        ])
+        .is_ok()
+        {
+            return;
+        }
+    }
+    let _ = command(&[
+        "notify-send",
+        "--app-name=Runtjik",
+        "Screen recording",
+        &message,
+    ]);
+}
+
 extern "C" fn stop(_: libc::c_int) {
     STOP.store(true, Ordering::Relaxed);
 }
@@ -142,6 +190,108 @@ fn recorder_disconnected(error: &std::io::Error) -> bool {
             | std::io::ErrorKind::UnexpectedEof
     )
 }
+
+fn encoder_request(path: &Path, name: &str, timeout: Duration) -> Result<Value> {
+    let mut stream = UnixStream::connect(path)?;
+    stream.set_read_timeout(Some(timeout))?;
+    stream.set_write_timeout(Some(timeout))?;
+    writeln!(stream, "{}", json!({"id":1,"name":name}))?;
+    let mut line = String::new();
+    BufReader::new(stream).take(8193).read_line(&mut line)?;
+    ensure!(
+        line.len() <= 8192 && line.ends_with('\n'),
+        "Invalid encoder response"
+    );
+    let response: Value = serde_json::from_str(&line)?;
+    ensure!(response["id"] == 1, "Unexpected encoder response");
+    Ok(response)
+}
+
+fn finish_window(directory: PathBuf, output: PathBuf) -> Result<()> {
+    let reply = encoder_request(
+        &directory.join("encoder.sock"),
+        "stop-replay-recording",
+        Duration::from_secs(20),
+    )?;
+    ensure!(
+        reply["result"] == "ok",
+        "Could not save window recording: {}",
+        reply["data"]
+    );
+    let saved = fs::canonicalize(s(&reply["data"]))?;
+    ensure!(
+        saved.starts_with(directory.canonicalize()?),
+        "Unexpected recording path"
+    );
+    fs::rename(saved, output)?;
+    Ok(())
+}
+
+fn wait_for_picker(child: &mut std::process::Child, ipc: &Path) -> Result<bool> {
+    let deadline = Instant::now() + Duration::from_secs(150);
+    let mut connection = None;
+    let mut bytes = Vec::new();
+    loop {
+        ensure!(!STOP.load(Ordering::Relaxed), "Recording cancelled");
+        if let Some(status) = child.try_wait()? {
+            ensure!(
+                status.success(),
+                "Recorder startup failed ({status}); {}",
+                fs::read_to_string(xdg("state").join("capture.log"))
+                    .unwrap_or_default()
+                    .lines()
+                    .find(|line| line.contains("error"))
+                    .unwrap_or("Inspect the Runtjik capture log")
+            );
+            return Ok(false);
+        }
+        ensure!(Instant::now() < deadline, "Window picker timed out");
+        if connection.is_none() {
+            if let Ok(mut stream) = UnixStream::connect(ipc) {
+                stream.set_read_timeout(Some(Duration::from_millis(100)))?;
+                stream.set_write_timeout(Some(Duration::from_millis(100)))?;
+                writeln!(stream, "{}", json!({"id":1,"name":"stop-replay-recording"}))?;
+                connection = Some(stream);
+            }
+        }
+        if let Some(stream) = &mut connection {
+            let mut buffer = [0; 1024];
+            match stream.read(&mut buffer) {
+                Ok(0) => {
+                    // Picker cancellation can close IPC just before waitpid
+                    // reports the child's exit. Classify its exit next loop.
+                    connection = None;
+                    bytes.clear();
+                }
+                Ok(n) => {
+                    bytes.extend_from_slice(&buffer[..n]);
+                    ensure!(bytes.len() <= 8192, "Invalid encoder response");
+                    if bytes.contains(&b'\n') {
+                        let reply: Value = serde_json::from_slice(&bytes)?;
+                        ensure!(reply["id"] == 1, "Unexpected encoder response");
+                        // The event loop replies only after the picker completes.
+                        return Ok(true);
+                    }
+                }
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    ) =>
+                {
+                    ()
+                }
+                Err(e) if recorder_disconnected(&e) => {
+                    connection = None;
+                    bytes.clear();
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 fn argv(spec: &Value) -> Result<Vec<String>> {
     if spec["mode"] == "window" {
         let mut a: Vec<String> = [
@@ -210,8 +360,6 @@ pub fn serve(spec: Value) -> Result<()> {
         "A Runtjik recording is already active"
     );
     let _ = fs::remove_file(&path);
-    let server = UnixListener::bind(&path)?;
-    server.set_nonblocking(true)?;
     let result = (|| -> Result<()> {
         let logdir = xdg("state");
         private_dir(&logdir)?;
@@ -221,8 +369,34 @@ pub fn serve(spec: Value) -> Result<()> {
             .truncate(true)
             .mode(0o600)
             .open(logdir.join("capture.log"))?;
-        let a = argv(&spec)?;
-        let _shortcut = StopShortcut::install()?;
+        let mut a = argv(&spec)?;
+        // Keep the selected portal session alive, but start the saved video only
+        // after countdown. Replay stays in RAM and is never saved.
+        let portal = if spec["mode"] == "window" {
+            let temp = tempfile::Builder::new()
+                .prefix(".runtjik-window-")
+                .tempdir_in(Path::new(s(&spec["file"])).parent().unwrap())?;
+            a.pop(); // replace -o's regular file with the private replay directory
+            a.push(temp.path().to_string_lossy().into_owned());
+            a.extend([
+                "-r".into(),
+                "3".into(), // GPU Screen Recorder requires a buffer greater than 2 seconds.
+                "-c".into(),
+                "mp4".into(),
+                "-replay-storage".into(),
+                "ram".into(),
+                "-ro".into(),
+                temp.path().to_string_lossy().into_owned(),
+                "-ipc".into(),
+                temp.path()
+                    .join("encoder.sock")
+                    .to_string_lossy()
+                    .into_owned(),
+            ]);
+            Some(temp)
+        } else {
+            None
+        };
         let mut child = Command::new(&a[0])
             .args(&a[1..])
             .stdin(Stdio::null())
@@ -230,14 +404,36 @@ pub fn serve(spec: Value) -> Result<()> {
             .stderr(log)
             .spawn()?;
         let mut stopping = None;
+        let mut finalizer = None;
         let mut workspace_check = Instant::now();
         let outcome = (|| -> Result<()> {
+            if let Some(portal) = &portal {
+                let ipc = portal.path().join("encoder.sock");
+                if !wait_for_picker(&mut child, &ipc)? {
+                    println!("{}", json!({"cancelled":true}));
+                    return Ok(());
+                }
+                if !capture::countdown(&spec)? {
+                    println!("{}", json!({"cancelled":true}));
+                    return Ok(());
+                }
+                let reply =
+                    encoder_request(&ipc, "start-replay-recording", Duration::from_secs(2))?;
+                ensure!(
+                    reply["result"] == "ok",
+                    "Could not start window recording: {}",
+                    reply["data"]
+                );
+            }
             std::thread::sleep(Duration::from_millis(300));
             ensure!(
                 child.try_wait()?.is_none(),
                 "Recorder exited during startup; inspect {}",
                 logdir.join("capture.log").display()
             );
+            let _shortcut = StopShortcut::install()?;
+            let server = UnixListener::bind(&path)?;
+            server.set_nonblocking(true)?;
             println!("{}", json!({"ready":true}));
             std::io::stdout().flush()?;
             while child.try_wait()?.is_none() {
@@ -267,10 +463,29 @@ pub fn serve(spec: Value) -> Result<()> {
                     }
                 }
                 if STOP.load(Ordering::Relaxed) && stopping.is_none() {
+                    if let Some(portal) = &portal {
+                        let directory = portal.path().to_path_buf();
+                        let output = PathBuf::from(s(&spec["file"]));
+                        // Continue answering bar/launcher status while the
+                        // encoder flushes and closes the MP4.
+                        finalizer =
+                            Some(std::thread::spawn(move || finish_window(directory, output)));
+                    } else {
+                        unsafe {
+                            libc::kill(child.id() as i32, libc::SIGINT);
+                        }
+                    }
+                    stopping = Some(Instant::now());
+                }
+                if finalizer.as_ref().is_some_and(|h| h.is_finished()) {
+                    finalizer
+                        .take()
+                        .unwrap()
+                        .join()
+                        .map_err(|_| anyhow::anyhow!("Recording finalizer failed"))??;
                     unsafe {
                         libc::kill(child.id() as i32, libc::SIGINT);
                     }
-                    stopping = Some(Instant::now());
                 }
                 if stopping.is_some_and(|t| t.elapsed() > Duration::from_secs(20)) {
                     child.kill()?;
@@ -297,20 +512,7 @@ pub fn serve(spec: Value) -> Result<()> {
                 || status.code() == Some(130)
                 || status.signal() == Some(libc::SIGINT))
                 && fs::metadata(s(&spec["file"])).is_ok_and(|m| m.len() > 0);
-            let message = if success {
-                format!("Saved {}", s(&spec["file"]))
-            } else {
-                format!(
-                    "Recording failed; inspect {}",
-                    logdir.join("capture.log").display()
-                )
-            };
-            let _ = command(&[
-                "notify-send",
-                "--app-name=Runtjik",
-                "Screen recording",
-                &message,
-            ]);
+            notify_finished(s(&spec["file"]), success, &logdir);
             Ok(())
         })();
         if child.try_wait()?.is_none() {
@@ -325,6 +527,16 @@ pub fn serve(spec: Value) -> Result<()> {
                 child.kill()?;
             }
             child.wait()?;
+        }
+        if let Some(finalizer) = finalizer {
+            let _ = finalizer.join();
+        }
+        if outcome.is_err() {
+            // Retain any partial video for recovery if the encoder could not
+            // finish; cancellation before recording still removes its scratch dir.
+            if let Some(portal) = portal {
+                let _ = portal.keep();
+            }
         }
         outcome
     })();

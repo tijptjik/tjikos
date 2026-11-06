@@ -2838,6 +2838,10 @@
         [
           "/screenrecord",
           "/rec"
+        ],
+        [
+          "/sr",
+          "/rec"
         ]
       ],
       "icon": "@app/qml/icons/capture-record-screen.svg",

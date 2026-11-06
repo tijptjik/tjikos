@@ -724,7 +724,7 @@ fn open_image(path: &Path, options: &Value, rec: bool, temporary: bool) -> Resul
     dispatch(argv, &json!({}))?;
     Ok(json!({"kind":"activated"}))
 }
-fn countdown(spec: &Value) -> Result<bool> {
+pub(crate) fn countdown(spec: &Value) -> Result<bool> {
     let seconds = spec["countdown_seconds"].as_u64().unwrap_or(0);
     if seconds == 0 {
         return Ok(true);
@@ -885,7 +885,7 @@ fn capture(data: &Value, options: &Value, rec: bool) -> Result<Value> {
         "window" => (),
         _ => bail!("Unknown capture type"),
     }
-    if rec && !countdown(&spec)? {
+    if rec && mode != "window" && !countdown(&spec)? {
         return Ok(message("Recording cancelled"));
     }
     let directory = directory(s(&options["directory"]))?;
@@ -914,11 +914,19 @@ fn capture(data: &Value, options: &Value, rec: bool) -> Result<Value> {
             let _ = tx.send(result);
         });
         let reply = rx
-            .recv_timeout(Duration::from_secs(5))
+            .recv_timeout(Duration::from_secs(if mode == "window" {
+                180 + spec["countdown_seconds"].as_u64().unwrap_or(0)
+            } else {
+                5
+            }))
             .ok()
             .and_then(Result::ok)
             .and_then(|s| serde_json::from_str::<Value>(&s).ok())
             .unwrap_or(json!({}));
+        if reply["cancelled"] == true {
+            child.wait()?;
+            return Ok(message("Recording cancelled"));
+        }
         if reply["ready"] != true {
             unsafe {
                 libc::kill(child.id() as i32, libc::SIGTERM);
@@ -935,6 +943,7 @@ fn capture(data: &Value, options: &Value, rec: bool) -> Result<Value> {
                 "{}",
                 reply["error"]
                     .as_str()
+                    .or_else(|| reply["message"].as_str())
                     .unwrap_or("Recorder did not start; check the Runtjik capture log")
             );
         }

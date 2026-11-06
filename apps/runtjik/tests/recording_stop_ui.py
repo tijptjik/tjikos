@@ -67,6 +67,10 @@ while True: time.sleep(.01)
     notify = bindir / 'notify-send'
     notify.write_text('#!/bin/sh\nexit 0\n')
     notify.chmod(0o700)
+    # Never submit synthetic recording notifications to the real desktop.
+    notjik = bindir / 'notjikctl'
+    notjik.write_text('#!/usr/bin/python3\nimport json, os, pathlib, sys\npathlib.Path(os.environ["STOP_STAMP"] + ".notification").write_text(json.dumps(sys.argv[1:]))\n')
+    notjik.chmod(0o700)
     env['PATH'] = str(bindir) + ':' + os.environ['PATH']
     capture_dir = temp / 'captures'
     capture_dir.mkdir()
@@ -115,6 +119,11 @@ while True: time.sleep(.01)
             assert latency < .25, (key, latency)
             assert status()['stopping']
             assert worker.wait(timeout=5) == 0
+            notice = json.loads(Path(str(stamp) + '.notification').read_text())
+            actions = json.loads(notice[notice.index('--actions') + 1])
+            assert [action['label'] for action in actions] == ['Open in VLC', 'Send to Telegram']
+            assert actions[0]['command'] == ['vlc', '--', str(capture_dir / (key + '.mp4'))]
+            assert actions[1]['command'][1:] == ['-sendpath', str(capture_dir / (key + '.mp4'))]
             worker.stdout.close()
             worker = None
             assert not (Path(env['XDG_RUNTIME_DIR']) / 'runtjik-capture/recorder.sock').exists()

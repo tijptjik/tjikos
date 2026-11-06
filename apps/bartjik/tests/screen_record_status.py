@@ -4,9 +4,11 @@ import os
 from pathlib import Path
 import selectors
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,11 +40,14 @@ def main():
         temp = Path(directory)
         pid_file = temp / "pid"
         pid_file.write_text("0")
+        socket_dir = temp / "runtjik-capture"
+        socket_dir.mkdir()
         fake_recorder = temp / "gpu-screen-recorder"
         shutil.copy2("/usr/bin/sleep", fake_recorder)
         with subprocess.Popen(["/usr/bin/python3", __file__, "serve", str(pid_file)], stdout=subprocess.PIPE, text=True) as server:
             assert server.stdout.readline().strip() == "ready"
-            helper = subprocess.Popen([str(ROOT / "dist/bin/bartjik-core"), "helper", "screen-record-status"], stdout=subprocess.PIPE)
+            helper = subprocess.Popen([str(ROOT / "dist/bin/bartjik-core"), "helper", "screen-record-status"], stdout=subprocess.PIPE,
+                                      env={**os.environ, "XDG_RUNTIME_DIR": str(temp)})
             selector = selectors.DefaultSelector()
             selector.register(helper.stdout, selectors.EVENT_READ)
 
@@ -63,6 +68,27 @@ def main():
                 server.terminate()
                 server.wait(timeout=3)
                 expect(False, False)
+                # Runtjik owns a socket, independent of the legacy systemd unit.
+                for stopping in (False, True):
+                    with socket.socket(socket.AF_UNIX) as listener:
+                        listener.bind(str(socket_dir / "recorder.sock"))
+                        listener.listen()
+                        listener.settimeout(5)
+
+                        def reply():
+                            connection, _ = listener.accept()
+                            with connection:
+                                assert connection.recv(64) == b"status\n"
+                                connection.sendall(json.dumps({"file": "synthetic.mp4", "mode": "region",
+                                                               "stopping": stopping}).encode())
+
+                        thread = threading.Thread(target=reply)
+                        thread.start()
+                        expect(True, True)
+                        thread.join(timeout=5)
+                    # A stale socket after a crash must clear the indicator.
+                    expect(False, False)
+                    (socket_dir / "recorder.sock").unlink()
             finally:
                 helper.terminate()
                 try:
@@ -74,7 +100,7 @@ def main():
                 selector.close()
                 if server.poll() is None:
                     server.terminate()
-        print("Screen recorder: private systemd status, recorder lifecycle, change-only output and service failure passed")
+        print("Screen recorder: systemd lifecycle, Runtjik recording/finalization, stale socket and change-only output passed")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,30 @@
-//! Read-only status of Dotjik's systemd-owned screen recorder.
+//! Read-only status of Runtjik and Dotjik screen recorders.
 use anyhow::{Context, Result};
 use gio::glib::variant::ToVariant;
 use serde_json::json;
-use std::{collections::HashSet, path::Path, time::Duration};
+use std::{
+    collections::HashSet,
+    io::{Read, Write},
+    os::unix::net::UnixStream,
+    path::Path,
+    time::Duration,
+};
+
+fn runtjik_recording(path: &Path) -> bool {
+    let status = (|| -> Result<serde_json::Value> {
+        let mut stream = UnixStream::connect(path)?;
+        stream.set_read_timeout(Some(Duration::from_millis(500)))?;
+        stream.set_write_timeout(Some(Duration::from_millis(500)))?;
+        stream.write_all(b"status\n")?;
+        let mut bytes = Vec::new();
+        stream.take(8193).read_to_end(&mut bytes)?;
+        anyhow::ensure!(bytes.len() <= 8192, "Invalid recorder status");
+        Ok(serde_json::from_slice(&bytes)?)
+    })();
+    // Keep the indicator visible while the encoder finalizes the file.
+    status
+        .is_ok_and(|s| s["file"].is_string() && s["mode"].is_string() && s["stopping"].is_boolean())
+}
 
 fn recording(proc_root: &Path, main_pid: u32) -> bool {
     let mut pending = vec![main_pid];
@@ -66,7 +88,18 @@ pub async fn watch() -> Result<()> {
         // Only finite queries run on the blocking pool so SIGTERM can stop the helper.
         let current = tokio::task::spawn_blocking(move || {
             let pid = main_pid(&connection);
-            (pid.is_ok(), recording(Path::new("/proc"), pid.unwrap_or(0)))
+            let runtjik = runtjik_recording(
+                &std::env::var_os("XDG_RUNTIME_DIR")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| {
+                        std::path::PathBuf::from(format!("/run/user/{}", unsafe { libc::getuid() }))
+                    })
+                    .join("runtjik-capture/recorder.sock"),
+            );
+            (
+                pid.is_ok() || runtjik,
+                runtjik || recording(Path::new("/proc"), pid.unwrap_or(0)),
+            )
         })
         .await?;
         if previous != Some(current) {

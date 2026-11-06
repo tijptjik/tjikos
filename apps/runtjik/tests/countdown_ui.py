@@ -17,6 +17,7 @@ with private_compositor():
         process = subprocess.Popen(args, stdout=log, stderr=log, env=env)
         try:
             wait_for(lambda: 'runtjik-countdown' in subprocess.check_output(['hyprctl', '-j', 'layers'], text=True))
+            time.sleep(.4)  # Let the compositor's layer fade finish before capture.
             subprocess.run(['grim', '-o', monitor['name'], str(temp / 'countdown.png')], check=True)
             subprocess.run(['wtype', '-k', 'Escape'], check=True)
             assert process.wait(timeout=5) == 0

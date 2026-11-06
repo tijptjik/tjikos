@@ -245,7 +245,7 @@ impl Launcher {
         let capture_provider =
             if ["/grab", "/shot", "/screenshot", "/ss", "/snap"].contains(&command) {
                 "Screenshots"
-            } else if ["/rec", "/screenrecord"].contains(&command) {
+            } else if ["/rec", "/sr", "/screenrecord"].contains(&command) {
                 "Recorder"
             } else {
                 ""

@@ -218,7 +218,7 @@ highlighted; keyboard scrolling preserves the keyboard selection.
 | `/stats` | Open the activity graph and daily-average / all-time statistics in the main pane |
 | `/cliphist [text]` | Search mixed clipboard history; Enter copies, Ctrl+Enter deletes the selected item. |
 | `/cliphist images [text]` | Show only clipboard images, optionally filtered by preview text. |
-| `/rec`, `/screenrecord` | Recording targets, Stop recording, and previous recordings. |
+| `/rec`, `/sr`, `/screenrecord` | Recording targets, Stop recording, and previous recordings. |
 | `/grab`, `/shot`, `/screenshot`, `/ss`, `/snap` | Screenshot targets and previous screenshots. |
 | `/define word`, `/synonym word` | Look up definitions/examples or synonyms; Results appear inline after a typing pause; Enter opens a source while retaining results. |
 | `/config` | Browse and edit featured settings |
@@ -613,10 +613,12 @@ Bundled desktop plugins:
   does not start a second watcher or log clipboard selections. `/cliphist images`
   shows only images; Ctrl+Enter deletes the selected history item and refreshes
   the current search without closing the launcher.
-- **Recorder** registers `/rec`, with `/screenrecord` as an alias. Screen selects a
+- **Recorder** registers `/rec`, with `/sr` and `/screenrecord` as aliases. Screen selects a
   monitor; region uses `slurp`; window uses the desktop portal picker through
-  `gpu-screen-recorder`, following the selected window. Screen/region/workspace
-  use `wf-recorder`. Workspace lists currently visible workspaces and records that
+  `gpu-screen-recorder`, following the selected window.
+  Window recording opens the portal picker first, then shows the rainbow countdown
+  in Rose Punk colours before starting the saved video. Escape cancels the countdown.
+  Screen/region/workspace use `wf-recorder`. Workspace lists currently visible workspaces and records that
   monitor until that monitor changes workspace. Moving the mouse or focusing
   another monitor does not stop it; changing another monitor’s workspace does
   not stop it either. Switching is detected by polling, so a
@@ -628,6 +630,10 @@ Bundled desktop plugins:
   finishes. `/rec` shows immediate stopping/saving feedback, then removes Stop
   when the file is finalized. `runtjik stop-recording` also stops the owned
   recording directly and does nothing when none is active.
+  Successful recordings show a Notjik notification with **Open in VLC** as the
+  primary action and **Send to Telegram** as the secondary action. Telegram opens
+  its chat chooser with the saved video; choose the recipient before sending.
+  Both actions remain available in notification history.
 - **Screenshots** registers `/grab`, with `/shot` and `/screenshot` as aliases.
   Screen selects a monitor. Window focuses the selected
   window and captures its visible rectangle; region uses `slurp` (Escape cancels).
