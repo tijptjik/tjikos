@@ -3,6 +3,7 @@ use anyhow::{bail, ensure, Result};
 use serde_json::{json, Value};
 use std::{
     fs,
+    hash::{DefaultHasher, Hash, Hasher},
     io::{BufRead, BufReader, Read, Write},
     os::{
         fd::AsRawFd,
@@ -19,19 +20,120 @@ use std::{
 static STOP: AtomicBool = AtomicBool::new(false);
 
 fn recording_actions(file: &str) -> Value {
+    json!([
+        {"label":"View video", "identifier":"default", "command":["vlc", "--", file]},
+        {"label":"Share on Telegram", "identifier":"telegram", "command":[crate::paths::root().join("runtjik-core"), "share-recording-telegram", file]}
+    ])
+}
+
+pub fn share_recording_telegram(file: &str) -> Result<()> {
+    ensure!(Path::new(file).is_file(), "Recording no longer exists");
     let telegram = which("telegram-desktop")
         .or_else(|| which("Telegram"))
         .or_else(|| which("/opt/Telegram/Telegram"))
         .unwrap_or_else(|| PathBuf::from("telegram-desktop"));
-    json!([
-        {"label":"View video", "identifier":"default", "command":["vlc", "--", file]},
-        {"label":"Share on Telegram", "identifier":"telegram", "command":[telegram, "-sendpath", file]}
-    ])
+    let mut child = Command::new(telegram)
+        .args(["-sendpath", file])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none() {
+        return Ok(());
+    }
+    // Telegram may need to start before a mapped window becomes available.
+    for _ in 0..100 {
+        std::thread::sleep(Duration::from_millis(100));
+        let _ = child.try_wait();
+        let clients = crate::windows::clients()?;
+        let target = clients
+            .iter()
+            .filter(|client| {
+                let class = s(&client["class"]).to_ascii_lowercase();
+                (matches!(
+                    class.as_str(),
+                    "telegram" | "telegram-desktop" | "telegramdesktop" | "org.telegram.desktop"
+                ) || class.starts_with("org.telegram.desktop."))
+                    && client["mapped"] != false
+                    && !s(&client["title"]).contains("Media viewer")
+            })
+            .min_by_key(|client| {
+                client["focusHistoryID"]
+                    .as_i64()
+                    .filter(|id| *id >= 0)
+                    .unwrap_or(i64::MAX)
+            });
+        if let Some(target) = target {
+            return crate::windows::focus(target);
+        }
+    }
+    bail!("Telegram did not expose a window to focus")
+}
+
+fn recording_duration(file: &str) -> Option<String> {
+    let raw = run(
+        &[
+            "ffprobe".into(),
+            "-v".into(),
+            "error".into(),
+            "-show_entries".into(),
+            "format=duration".into(),
+            "-of".into(),
+            "default=noprint_wrappers=1:nokey=1".into(),
+            "-i".into(),
+            file.into(),
+        ],
+        None,
+        3,
+    )
+    .ok()?;
+    let seconds = raw.trim().parse::<f64>().ok()?;
+    if !seconds.is_finite() || seconds <= 0.0 {
+        return None;
+    }
+    let seconds = seconds.round().max(1.0) as u64;
+    Some(if seconds >= 3600 {
+        format!(
+            "{}:{:02}:{:02}",
+            seconds / 3600,
+            seconds / 60 % 60,
+            seconds % 60
+        )
+    } else {
+        format!("{}:{:02}", seconds / 60, seconds % 60)
+    })
+}
+
+fn recording_artwork(file: &str) -> Option<PathBuf> {
+    let root = std::env::var_os("NOTJIK_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home().join(".local/lib/notjik"));
+    let mut images: Vec<_> = fs::read_dir(root.join("qml/icons/bonsai"))
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path.extension().is_some_and(|ext| ext == "png")
+                && path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with("bonsai-"))
+        })
+        .collect();
+    images.sort();
+    if images.is_empty() {
+        return None;
+    }
+    let mut hash = DefaultHasher::new();
+    file.hash(&mut hash);
+    Some(images[hash.finish() as usize % images.len()].clone())
 }
 
 fn notify_finished(file: &str, success: bool, logdir: &Path) {
     let message = if success {
-        format!("Saved {file}")
+        recording_duration(file)
+            .map(|duration| format!("Duration: {duration}"))
+            .unwrap_or_else(|| "Duration unavailable".into())
     } else {
         format!(
             "Recording failed; inspect {}",
@@ -42,7 +144,8 @@ fn notify_finished(file: &str, success: bool, logdir: &Path) {
         // Persist command actions in Notjik; never wait for a click while owning
         // the recorder lock, socket or temporary Super bindings.
         let actions = recording_actions(file).to_string();
-        if command(&[
+        let artwork = recording_artwork(file);
+        let mut args = vec![
             "notjikctl",
             "send",
             "Screen recording",
@@ -53,15 +156,16 @@ fn notify_finished(file: &str, success: bool, logdir: &Path) {
             "status",
             "--data",
             r#"{"state":"Recording complete","tone":"success"}"#,
-            "--icon",
-            "video-x-generic",
             "--timeout",
             "never",
             "--actions",
             &actions,
-        ])
-        .is_ok()
-        {
+        ];
+        let image = artwork.as_ref().map(|path| path.to_string_lossy());
+        if let Some(image) = &image {
+            args.extend(["--image", image.as_ref()]);
+        }
+        if command(&args).is_ok() {
             return;
         }
     }

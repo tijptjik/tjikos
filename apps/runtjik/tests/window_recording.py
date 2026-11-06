@@ -73,6 +73,12 @@ assert pathlib.Path(os.environ['EVENTS']).read_text().splitlines()[-1] == 'saved
 assert not (pathlib.Path(os.environ['XDG_RUNTIME_DIR']) / 'runtjik-capture/recorder.sock').exists()
 pathlib.Path(os.environ['NOTICE']).write_text(json.dumps(sys.argv[1:]))
 ''')
+    (bindir / 'ffprobe').write_text('''#!/usr/bin/python3
+import os, pathlib, sys
+assert sys.argv[-2:] == ['-i', os.environ['VIDEO']]
+assert pathlib.Path(os.environ['VIDEO']).read_bytes() == b'synthetic video'
+print('83.25')
+''')
     for name, contents in {'hyprctl': '#!/bin/sh\necho "[]"\n',
                            'notify-send': '#!/bin/sh\nexit 0\n'}.items():
         (bindir / name).write_text(contents)
@@ -83,7 +89,8 @@ pathlib.Path(os.environ['NOTICE']).write_text(json.dumps(sys.argv[1:]))
         case.mkdir()
         events = case / 'events'
         env = {**os.environ, 'PATH': str(bindir) + ':' + os.environ['PATH'],
-               'XDG_RUNTIME_DIR': str(case), 'XDG_STATE_HOME': str(case), 'EVENTS': str(events)}
+               'XDG_RUNTIME_DIR': str(case), 'XDG_STATE_HOME': str(case), 'EVENTS': str(events),
+               'NOTJIK_HOME': str(APP.parent / 'notjik')}
         env.pop('HYPRLAND_INSTANCE_SIGNATURE', None)
         if cancellation:
             env[cancellation] = '1'
@@ -119,6 +126,10 @@ pathlib.Path(os.environ['NOTICE']).write_text(json.dumps(sys.argv[1:]))
                 assert events.read_text().splitlines() == ['picker', 'selected', 'countdown', 'countdown-complete', 'recording', 'saved']
                 notice = json.loads(notification.read_text())
                 assert notice[:2] == ['send', 'Screen recording'], notice
+                assert notice[2] == 'Duration: 1:23', notice
+                assert str(output) not in notice[2]
+                image = Path(notice[notice.index('--image') + 1])
+                assert image.is_file() and image.parent.name == 'bonsai' and image.suffix == '.png'
                 assert notice[notice.index('--type') + 1] == 'status', notice
                 assert json.loads(notice[notice.index('--data') + 1])['tone'] == 'success'
                 assert notice[notice.index('--timeout') + 1] == 'never'
@@ -126,7 +137,7 @@ pathlib.Path(os.environ['NOTICE']).write_text(json.dumps(sys.argv[1:]))
                 assert [action['label'] for action in actions] == ['View video', 'Share on Telegram']
                 assert actions[0]['identifier'] == 'default'
                 assert actions[0]['command'] == ['vlc', '--', str(output)]
-                assert actions[1]['command'][1:] == ['-sendpath', str(output)]
+                assert actions[1]['command'] == [str(APP / 'runtjik-core'), 'share-recording-telegram', str(output)]
             if cancellation:
                 assert not notification.exists(), 'Cancelled/failed capture advertised a saved video'
             assert not (case / 'runtjik-capture/recorder.sock').exists()

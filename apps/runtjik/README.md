@@ -630,12 +630,12 @@ Bundled desktop plugins:
   finishes. `/rec` shows immediate stopping/saving feedback, then removes Stop
   when the file is finalized. `runtjik stop-recording` also stops the owned
   recording directly and does nothing when none is active.
-  Once the video is finalized, a completion notification stays visible until
-  dismissed or acted on. **View video** is the primary action and opens VLC;
-  **Share on Telegram** opens Telegram's recipient picker with the saved video.
-  Successful recordings show a Notjik notification with **Open in VLC** as the
-  primary action and **Send to Telegram** as the secondary action. Telegram opens
-  its chat chooser with the saved video; choose the recipient before sending.
+  Once the video is finalized, a completion notification shows its duration with
+  artwork from Notjik's bonsai collection and stays visible until dismissed or
+  acted on. **View video** is the primary action and opens VLC;
+  **Share on Telegram** opens Telegram's recipient picker with the saved video
+  and reveals/focuses its window, including on a special workspace.
+  Choose the recipient in Telegram before sending.
   Both actions remain available in notification history.
 - **Screenshots** registers `/grab`, with `/shot` and `/screenshot` as aliases.
   Screen selects a monitor. Window focuses the selected

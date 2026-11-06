@@ -53,6 +53,10 @@ fn execute() -> Result<()> {
         "stop-recording" => {
             crate::capture_worker::request("stop")?;
         }
+        "share-recording-telegram" => crate::capture_worker::share_recording_telegram(
+            args.get(1)
+                .ok_or_else(|| anyhow::anyhow!("Missing recording path"))?,
+        )?,
         "image" => crate::image_viewer::cli(&args[1..])?,
         "image-viewer" => crate::image_viewer::open(&serde_json::from_str(
             args.get(1)
