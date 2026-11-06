@@ -121,7 +121,8 @@ while True: time.sleep(.01)
             assert worker.wait(timeout=5) == 0
             notice = json.loads(Path(str(stamp) + '.notification').read_text())
             actions = json.loads(notice[notice.index('--actions') + 1])
-            assert [action['label'] for action in actions] == ['Open in VLC', 'Send to Telegram']
+            assert [action['label'] for action in actions] == ['View video', 'Share on Telegram']
+            assert actions[0]['identifier'] == 'default'
             assert actions[0]['command'] == ['vlc', '--', str(capture_dir / (key + '.mp4'))]
             assert actions[1]['command'][1:] == ['-sendpath', str(capture_dir / (key + '.mp4'))]
             worker.stdout.close()

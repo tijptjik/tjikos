@@ -65,8 +65,15 @@ if os.environ.get('CANCEL_COUNTDOWN') != '1':
     pathlib.Path(os.environ['RUNTJIK_COUNTDOWN_SUCCESS']).touch()
     with log.open('a') as out: out.write('countdown-complete\\n')
 ''')
+    notice = bindir / 'notjikctl'
+    notice.write_text('''#!/usr/bin/python3
+import json, os, pathlib, sys
+assert pathlib.Path(os.environ['VIDEO']).read_bytes() == b'synthetic video'
+assert pathlib.Path(os.environ['EVENTS']).read_text().splitlines()[-1] == 'saved'
+assert not (pathlib.Path(os.environ['XDG_RUNTIME_DIR']) / 'runtjik-capture/recorder.sock').exists()
+pathlib.Path(os.environ['NOTICE']).write_text(json.dumps(sys.argv[1:]))
+''')
     for name, contents in {'hyprctl': '#!/bin/sh\necho "[]"\n',
-                           'notjikctl': '#!/bin/sh\nexit 0\n',
                            'notify-send': '#!/bin/sh\nexit 0\n'}.items():
         (bindir / name).write_text(contents)
     for executable in bindir.iterdir():
@@ -81,6 +88,8 @@ if os.environ.get('CANCEL_COUNTDOWN') != '1':
         if cancellation:
             env[cancellation] = '1'
         output = case / "recording with spaces ' and ;.mp4"
+        notification = case / 'notification.json'
+        env.update(VIDEO=str(output), NOTICE=str(notification))
         spec = dict(mode='window', fps=30, audio=False, file=str(output), countdown_seconds=3)
         worker = subprocess.Popen([str(APP / 'runtjik-core'), 'capture-worker', json.dumps(spec)],
                                   env=env, stdout=subprocess.PIPE, text=True)
@@ -108,6 +117,18 @@ if os.environ.get('CANCEL_COUNTDOWN') != '1':
                 assert worker.wait(timeout=5) == 0, (worker.returncode, events.read_text(), worker.stdout.read(), (case / 'runtjik/capture.log').read_text())
                 assert output.read_bytes() == b'synthetic video'
                 assert events.read_text().splitlines() == ['picker', 'selected', 'countdown', 'countdown-complete', 'recording', 'saved']
+                notice = json.loads(notification.read_text())
+                assert notice[:2] == ['send', 'Screen recording'], notice
+                assert notice[notice.index('--type') + 1] == 'status', notice
+                assert json.loads(notice[notice.index('--data') + 1])['tone'] == 'success'
+                assert notice[notice.index('--timeout') + 1] == 'never'
+                actions = json.loads(notice[notice.index('--actions') + 1])
+                assert [action['label'] for action in actions] == ['View video', 'Share on Telegram']
+                assert actions[0]['identifier'] == 'default'
+                assert actions[0]['command'] == ['vlc', '--', str(output)]
+                assert actions[1]['command'][1:] == ['-sendpath', str(output)]
+            if cancellation:
+                assert not notification.exists(), 'Cancelled/failed capture advertised a saved video'
             assert not (case / 'runtjik-capture/recorder.sock').exists()
             if cancellation != 'FAIL_STARTUP':
                 assert not list(case.glob('.runtjik-window-*'))

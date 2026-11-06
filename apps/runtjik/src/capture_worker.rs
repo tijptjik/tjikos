@@ -24,8 +24,8 @@ fn recording_actions(file: &str) -> Value {
         .or_else(|| which("/opt/Telegram/Telegram"))
         .unwrap_or_else(|| PathBuf::from("telegram-desktop"));
     json!([
-        {"label":"Open in VLC", "command":["vlc", "--", file]},
-        {"label":"Send to Telegram", "command":[telegram, "-sendpath", file]}
+        {"label":"View video", "identifier":"default", "command":["vlc", "--", file]},
+        {"label":"Share on Telegram", "identifier":"telegram", "command":[telegram, "-sendpath", file]}
     ])
 }
 
@@ -49,6 +49,14 @@ fn notify_finished(file: &str, success: bool, logdir: &Path) {
             &message,
             "--app",
             "Runtjik",
+            "--type",
+            "status",
+            "--data",
+            r#"{"state":"Recording complete","tone":"success"}"#,
+            "--icon",
+            "video-x-generic",
+            "--timeout",
+            "never",
             "--actions",
             &actions,
         ])
