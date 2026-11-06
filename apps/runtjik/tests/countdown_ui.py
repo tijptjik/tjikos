@@ -7,8 +7,11 @@ import time
 from private_compositor import private_compositor, wait_for
 
 app = Path(__file__).resolve().parents[1]
+os.environ['AQ_BACKEND'] = 'headless'
 with private_compositor():
     temp = Path(os.environ['XDG_RUNTIME_DIR']).parent
+    subprocess.run(['hyprctl', 'output', 'create', 'headless'], check=True, stdout=subprocess.DEVNULL)
+    wait_for(lambda: json.loads(subprocess.check_output(['hyprctl', '-j', 'monitors'])))
     monitor = json.loads(subprocess.check_output(['hyprctl', '-j', 'monitors']))[0]
     success = temp / 'countdown-complete'
     args = ['quickshell', '--path', str(app / 'qml/countdown')]
