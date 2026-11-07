@@ -209,7 +209,11 @@ fn zed(repo: &Path, args: &[String]) -> Result<i32> {
     let managed = crate::managed_files::source_path(&manifest, &ctx, &target)?.is_some();
     let command = home.join(format!(".local/bin/zed{suffix}"));
     let command_managed = crate::managed_files::source_path(&manifest, &ctx, &command)?.is_some();
-    if !managed && !command_managed {
+    // Preview and nightly installers also replace the unsuffixed CLI launcher.
+    let generic_command = home.join(".local/bin/zed");
+    let generic_managed = !suffix.is_empty()
+        && crate::managed_files::source_path(&manifest, &ctx, &generic_command)?.is_some();
+    if !managed && !command_managed && !generic_managed {
         return Ok(Command::new(&args[3])
             .args(&args[4..])
             .status()?
@@ -232,6 +236,9 @@ fn zed(repo: &Path, args: &[String]) -> Result<i32> {
     let wrapper = command_managed
         .then(|| ZedManagedFile::capture(command.clone(), &backup))
         .transpose()?;
+    let generic_wrapper = generic_managed
+        .then(|| ZedManagedFile::capture(generic_command.clone(), &backup))
+        .transpose()?;
     let code = Command::new(&args[3])
         .args(&args[4..])
         .status()?
@@ -241,6 +248,13 @@ fn zed(repo: &Path, args: &[String]) -> Result<i32> {
         wrapper.restore(|info| {
             Ok(info.is_symlink()
                 && fs::read_link(&command)? == home.join(format!(".local/zed{suffix}.app/bin/zed")))
+        })?;
+    }
+    if let Some(wrapper) = generic_wrapper {
+        wrapper.restore(|info| {
+            Ok(info.is_symlink()
+                && fs::read_link(&generic_command)?
+                    == home.join(format!(".local/zed{suffix}.app/bin/zed")))
         })?;
     }
     if let Some(launcher) = launcher {

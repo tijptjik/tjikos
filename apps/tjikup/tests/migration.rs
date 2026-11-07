@@ -507,51 +507,52 @@ fn zed_preserves_managed_command_wrappers_across_vendor_success_and_failure() {
                 } else {
                     format!("-{channel}")
                 };
-                let relative = format!(".local/bin/zed{suffix}");
-                let wrapper = r.join("home").join(&relative);
-                fs::create_dir_all(wrapper.parent().unwrap()).unwrap();
-                let original = "#!/bin/sh\n# personal wrapper\nexit 0\n";
-                if installed {
-                    executable(&wrapper, original);
-                }
-                // The CLI can be managed without a desktop launcher declaration.
-                write(&r.join("native/home/wrapper"), "declared wrapper\n");
-                write(&r.join("native/home/files-device.json"), json!({"version":1,"id":"fixture","entries":[{"kind":"file","path":format!("{{{{ user.home }}}}/{relative}"),"source":"wrapper"}]}).to_string());
-                let editor = r.join(format!("home/.local/zed{suffix}.app/bin/zed"));
-                executable(&editor, "#!/bin/sh\n# vendor binary\n");
-                executable(&r.join("bin/vendor"), &format!("#!/bin/sh\n/usr/bin/rm -f \"$HOME/{relative}\"\n/usr/bin/ln -s \"$HOME/.local/zed{suffix}.app/bin/zed\" \"$HOME/{relative}\"\nexit {exit}\n"));
-                let out = command(r)
-                    .args([
-                        "workflow",
-                        "desktop",
-                        "zed",
-                        "--channel",
-                        channel,
-                        "--",
-                        "vendor",
-                    ])
-                    .output()
-                    .unwrap();
-                assert_eq!(
-                    out.status.code(),
-                    Some(exit),
-                    "{}",
-                    String::from_utf8_lossy(&out.stderr)
-                );
-                if installed {
-                    assert!(!wrapper.is_symlink());
-                    assert_eq!(fs::read_to_string(&wrapper).unwrap(), original);
+                for relative in [format!(".local/bin/zed{suffix}"), ".local/bin/zed".into()] {
+                    let wrapper = r.join("home").join(&relative);
+                    fs::create_dir_all(wrapper.parent().unwrap()).unwrap();
+                    let original = "#!/bin/sh\n# personal wrapper\nexit 0\n";
+                    if installed {
+                        executable(&wrapper, original);
+                    }
+                    // The CLI can be managed without a desktop launcher declaration.
+                    write(&r.join("native/home/wrapper"), "declared wrapper\n");
+                    write(&r.join("native/home/files-device.json"), json!({"version":1,"id":"fixture","entries":[{"kind":"file","path":format!("{{{{ user.home }}}}/{relative}"),"source":"wrapper"}]}).to_string());
+                    let editor = r.join(format!("home/.local/zed{suffix}.app/bin/zed"));
+                    executable(&editor, "#!/bin/sh\n# vendor binary\n");
+                    executable(&r.join("bin/vendor"), &format!("#!/bin/sh\n/usr/bin/rm -f \"$HOME/{relative}\"\n/usr/bin/ln -s \"$HOME/.local/zed{suffix}.app/bin/zed\" \"$HOME/{relative}\"\nexit {exit}\n"));
+                    let out = command(r)
+                        .args([
+                            "workflow",
+                            "desktop",
+                            "zed",
+                            "--channel",
+                            channel,
+                            "--",
+                            "vendor",
+                        ])
+                        .output()
+                        .unwrap();
                     assert_eq!(
-                        fs::metadata(&wrapper).unwrap().permissions().mode() & 0o777,
-                        0o755
+                        out.status.code(),
+                        Some(exit),
+                        "{}",
+                        String::from_utf8_lossy(&out.stderr)
                     );
-                } else {
-                    assert!(fs::symlink_metadata(&wrapper).is_err());
+                    if installed {
+                        assert!(!wrapper.is_symlink());
+                        assert_eq!(fs::read_to_string(&wrapper).unwrap(), original);
+                        assert_eq!(
+                            fs::metadata(&wrapper).unwrap().permissions().mode() & 0o777,
+                            0o755
+                        );
+                    } else {
+                        assert!(fs::symlink_metadata(&wrapper).is_err());
+                    }
+                    assert_eq!(
+                        fs::read_to_string(editor).unwrap(),
+                        "#!/bin/sh\n# vendor binary\n"
+                    );
                 }
-                assert_eq!(
-                    fs::read_to_string(editor).unwrap(),
-                    "#!/bin/sh\n# vendor binary\n"
-                );
             }
         }
     }
