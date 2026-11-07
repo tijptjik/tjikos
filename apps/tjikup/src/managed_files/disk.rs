@@ -90,6 +90,60 @@ impl Existing {
     }
 }
 
+fn read_xattr(file: &File, name: &CStr) -> Result<Vec<u8>> {
+    let fd = file.as_raw_fd();
+    let len = unsafe { libc::fgetxattr(fd, name.as_ptr(), std::ptr::null_mut(), 0) };
+    if len < 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let mut value = vec![0u8; len as usize];
+    let len = unsafe { libc::fgetxattr(fd, name.as_ptr(), value.as_mut_ptr().cast(), value.len()) };
+    if len < 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    value.truncate(len as usize);
+    Ok(value)
+}
+
+fn verify_xattr_write(
+    result: std::io::Result<()>,
+    expected: &[u8],
+    read: impl FnOnce() -> Result<Vec<u8>>,
+) -> Result<()> {
+    match result {
+        Ok(()) => Ok(()),
+        // FUSE can expose a mount-wide SELinux label while rejecting writes.
+        // Accept that only when the same descriptor proves the value is intact.
+        Err(error) if error.raw_os_error() == Some(libc::ENOTSUP) => {
+            if read()? == expected {
+                Ok(())
+            } else {
+                Err(error.into())
+            }
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn write_xattr(file: &File, name: &CStr, value: &[u8]) -> Result<()> {
+    let code = unsafe {
+        libc::fsetxattr(
+            file.as_raw_fd(),
+            name.as_ptr(),
+            value.as_ptr().cast(),
+            value.len(),
+            0,
+        )
+    };
+    let result = if code < 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    };
+    verify_xattr_write(result, value, || read_xattr(file, name))
+        .with_context(|| format!("preserve extended attribute {}", name.to_string_lossy()))
+}
+
 fn xattrs(file: &File) -> Result<BTreeMap<String, Vec<u8>>> {
     let fd = file.as_raw_fd();
     let size = unsafe { libc::flistxattr(fd, std::ptr::null_mut(), 0) };
@@ -109,17 +163,7 @@ fn xattrs(file: &File) -> Result<BTreeMap<String, Vec<u8>>> {
     let mut result = BTreeMap::new();
     for name in names.split(|c| *c == 0).filter(|s| !s.is_empty()) {
         let c_name = string(name)?;
-        let len = unsafe { libc::fgetxattr(fd, c_name.as_ptr(), std::ptr::null_mut(), 0) };
-        if len < 0 {
-            return Err(std::io::Error::last_os_error().into());
-        }
-        let mut value = vec![0u8; len as usize];
-        let len =
-            unsafe { libc::fgetxattr(fd, c_name.as_ptr(), value.as_mut_ptr().cast(), value.len()) };
-        if len < 0 {
-            return Err(std::io::Error::last_os_error().into());
-        }
-        value.truncate(len as usize);
+        let value = read_xattr(file, &c_name)?;
         result.insert(String::from_utf8(name.to_vec())?, value);
     }
     Ok(result)
@@ -249,15 +293,7 @@ impl Parent {
                 checked(unsafe { libc::fchown(file.as_raw_fd(), *uid, *gid) })?;
             }
             for (key, value) in &previous.xattrs {
-                checked(unsafe {
-                    libc::fsetxattr(
-                        file.as_raw_fd(),
-                        string(key.as_bytes())?.as_ptr(),
-                        value.as_ptr().cast(),
-                        value.len(),
-                        0,
-                    )
-                })?;
+                write_xattr(&file, &string(key.as_bytes())?, value)?;
             }
             file.set_permissions(std::fs::Permissions::from_mode(*mode))?;
             file.sync_all()?;
@@ -285,15 +321,7 @@ impl Parent {
                 }
                 // Preserve existing ACLs and SELinux labels; never silently drop xattrs.
                 for (key, value) in &previous.xattrs {
-                    checked(unsafe {
-                        libc::fsetxattr(
-                            fd,
-                            string(key.as_bytes())?.as_ptr(),
-                            value.as_ptr().cast(),
-                            value.len(),
-                            0,
-                        )
-                    })?;
+                    write_xattr(staged.as_file(), &string(key.as_bytes())?, value)?;
                 }
                 // chmod last: an explicitly changed mode must also update any ACL mask.
                 staged
@@ -319,15 +347,11 @@ impl Parent {
                     // the kernel at creation; <<none>> is not a security context.
                     if context.trim() != "<<none>>" {
                         let label = string(context.trim().as_bytes())?;
-                        checked(unsafe {
-                            libc::fsetxattr(
-                                fd,
-                                c"security.selinux".as_ptr(),
-                                label.as_ptr().cast(),
-                                label.as_bytes_with_nul().len(),
-                                0,
-                            )
-                        })?;
+                        write_xattr(
+                            staged.as_file(),
+                            c"security.selinux",
+                            label.as_bytes_with_nul(),
+                        )?;
                     }
                 }
                 staged.as_file().sync_all()?;
@@ -376,5 +400,57 @@ pub fn read(root: &Path, path: &Path) -> Result<Existing> {
     match parent(root, path, false)? {
         Some(parent) => parent.read(),
         None => Ok(Existing::absent()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unsupported() -> std::io::Result<()> {
+        Err(std::io::Error::from_raw_os_error(libc::ENOTSUP))
+    }
+
+    #[test]
+    fn readonly_mount_attribute_requires_exact_readback() {
+        let label = b"system_u:object_r:fusefs_t:s0\0";
+        assert!(verify_xattr_write(unsupported(), label, || Ok(label.to_vec())).is_ok());
+        for other in [
+            b"".as_slice(),
+            b"system_u:object_r:fusefs_t:s0",
+            b"different\0",
+        ] {
+            assert!(verify_xattr_write(unsupported(), label, || Ok(other.to_vec())).is_err());
+        }
+    }
+
+    #[test]
+    fn unreadable_or_missing_mount_attribute_still_fails() {
+        for errno in [libc::ENODATA, libc::ENOTSUP, libc::EACCES, libc::ERANGE] {
+            assert!(verify_xattr_write(unsupported(), b"expected", || {
+                Err(std::io::Error::from_raw_os_error(errno).into())
+            })
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn other_write_errors_are_not_suppressed() {
+        for errno in [libc::EPERM, libc::EACCES, libc::ENOSPC, libc::EIO] {
+            let result = verify_xattr_write(
+                Err(std::io::Error::from_raw_os_error(errno)),
+                b"expected",
+                || panic!("only unsupported writes may use readback"),
+            );
+            assert_eq!(
+                result
+                    .unwrap_err()
+                    .downcast_ref::<std::io::Error>()
+                    .unwrap()
+                    .raw_os_error(),
+                Some(errno)
+            );
+        }
+        assert!(verify_xattr_write(Ok(()), b"expected", || panic!("write succeeded")).is_ok());
     }
 }
