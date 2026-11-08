@@ -92,6 +92,13 @@
       "name": "@tjikos/notjik-sync",
       "version": "0.1.0",
     },
+    "packages/tasktjik-gtk": {
+      "name": "@tjikos/tasktjik-gtk",
+      "version": "0.1.0",
+      "dependencies": {
+        "@tjikos/gtk": "workspace:*",
+      },
+    },
     "packages/tjik-gtk": {
       "name": "@tjikos/gtk",
       "version": "0.1.0",
@@ -325,6 +332,7 @@
 
     "@tjikos/tasktjik": ["@tjikos/tasktjik@workspace:apps/tasktjik"],
 
+    "@tjikos/tasktjik-gtk": ["@tjikos/tasktjik-gtk@workspace:packages/tasktjik-gtk"],
 
     "@tjikos/tjik-ui": ["@tjikos/tjik-ui@workspace:packages/tjik-ui"],
 

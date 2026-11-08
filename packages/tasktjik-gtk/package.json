@@ -1,0 +1,1 @@
+{"name":"@tjikos/tasktjik-gtk","private":true,"version":"0.1.0","dependencies":{"@tjikos/gtk":"workspace:*"},"scripts":{"check":"cargo fmt --check"}}

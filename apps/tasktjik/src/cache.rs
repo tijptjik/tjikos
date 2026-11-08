@@ -44,6 +44,9 @@ fn refresh(path: &Path, fetch: impl FnOnce() -> Result<Value>) -> Result<()> {
 impl CachedTodo {
     pub fn state(&mut self, request: Value, settings: &Value, demo: bool) -> Result<Value> {
         let action = request["action"].as_str().unwrap_or("list");
+        if action == "image-get" {
+            return self.direct.request(request, settings, demo);
+        }
         let options = if demo || action == "plans" {
             json!({})
         } else {
@@ -142,6 +145,40 @@ impl CachedTodo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn attached_images_are_read_without_a_task_mutation() {
+        use base64::Engine;
+        let mut todo = CachedTodo::default();
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let saved = todo
+            .state(
+                json!({"action":"create","fields":{"title":"Synthetic image"}}),
+                &json!({}),
+                true,
+            )
+            .unwrap();
+        let task = &saved["tasks"][0];
+        let attached = todo.state(json!({"action":"attach-image","id":task["id"],"revision":task["revision"],"data":base64::engine::general_purpose::STANDARD.encode(png.into_inner())}), &json!({}), true).unwrap();
+        let task = &attached["tasks"][0];
+        let source = todo
+            .state(
+                json!({"action":"image-get","id":task["id"],"image_id":task["images"][0]["id"]}),
+                &json!({}),
+                true,
+            )
+            .unwrap();
+        assert!(source["source"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
+        let after = todo
+            .state(json!({"action":"refresh"}), &json!({}), true)
+            .unwrap();
+        assert_eq!(after["tasks"], attached["tasks"]);
+    }
     #[test]
     fn polling_is_not_a_mutation_and_demo_edits_are_acknowledged() {
         let mut todo = CachedTodo::default();
