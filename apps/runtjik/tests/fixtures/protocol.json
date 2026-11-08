@@ -13,16 +13,6 @@
           "version": "0.8.3",
           "results": [
             {
-              "id": "apps:com.discordapp.Discord.desktop",
-              "name": "Discord",
-              "subtitle": "Internet Messenger",
-              "provider": "apps",
-              "favicon": "",
-              "keep_open": false,
-              "count": 0,
-              "windows": 0
-            },
-            {
               "id": "apps:fixture-0000.desktop",
               "name": "Fixture App 0000",
               "subtitle": "Application",
@@ -1011,6 +1001,16 @@
               "keep_open": false,
               "count": 0,
               "windows": 0
+            },
+            {
+              "count": 0,
+              "favicon": "",
+              "id": "apps:fixture-0099.desktop",
+              "keep_open": false,
+              "name": "Fixture App 0099",
+              "provider": "apps",
+              "subtitle": "Application",
+              "windows": 0
             }
           ],
           "config": {
@@ -1024,7 +1024,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -1137,10 +1140,10 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
-          "total": 264,
+          "total": 251,
           "query": "",
           "offset": 0,
           "next_offset": 100,
@@ -2171,7 +2174,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -2284,7 +2290,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 250,
@@ -2528,7 +2534,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -2641,7 +2650,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 21,
@@ -3675,7 +3684,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -3788,7 +3800,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 250,
@@ -3821,7 +3833,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -3934,7 +3949,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 0,
@@ -3978,7 +3993,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -4091,7 +4109,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 1,
@@ -4135,7 +4153,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -4248,7 +4269,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 1,
@@ -4286,6 +4307,33 @@
               "disabled": false,
               "provider": "internal",
               "count": 0,
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": false,
+              "id": "/config ui.close_on_outside_click",
+              "name": "ui.close_on_outside_click = true",
+              "provider": "internal",
+              "subtitle": "Close the launcher when clicking outside its window",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": false,
+              "id": "/config ui.auto_launch_applications",
+              "name": "ui.auto_launch_applications = true",
+              "provider": "internal",
+              "subtitle": "Activate an application automatically when typing leaves only one result",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": false,
+              "id": "/config ui.auto_launch_commands",
+              "name": "ui.auto_launch_commands = true",
+              "provider": "internal",
+              "subtitle": "Activate a command automatically when typing leaves only one result",
               "windows": 0
             },
             {
@@ -4670,7 +4718,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -4783,7 +4834,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "query": "/config",
@@ -4821,7 +4872,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -4934,7 +4988,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "query": "/config ui.columns",
@@ -5071,7 +5125,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -5184,7 +5241,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "query": "/bindings",
@@ -5283,7 +5340,7 @@
             },
             {
               "id": "/rec",
-              "name": "/rec  ·  /screenrecord",
+              "name": "/rec  ·  /screenrecord, /sr",
               "subtitle": "Record screen, workspace, window or region · previous recordings",
               "provider": "internal",
               "count": 0,
@@ -5341,7 +5398,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -5454,7 +5514,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "query": "/",
@@ -5654,7 +5714,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -5767,7 +5830,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 250,
@@ -5972,7 +6035,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -6085,7 +6151,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 250,
@@ -6290,7 +6356,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -6403,7 +6472,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 250,
@@ -6448,7 +6517,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -6561,7 +6633,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 250,
@@ -6595,7 +6667,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -6708,7 +6783,7 @@
               "enabled": true
             }
           },
-          "indexed": 264,
+          "indexed": 251,
           "warnings": [],
           "demo": false,
           "total": 250,
@@ -6789,7 +6864,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -6952,7 +7030,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -7115,7 +7196,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -7255,7 +7339,7 @@
             {
               "id": "Screenshots:region",
               "name": "Region",
-              "subtitle": "Drag to select an area · Escape cancels",
+              "subtitle": "Drag to select an area",
               "provider": "Screenshots",
               "favicon": "",
               "hide_launcher": true,
@@ -7297,7 +7381,7 @@
             {
               "id": "Screenshots:history",
               "name": "History",
-              "subtitle": "Browse your gallery · Enter opens it",
+              "subtitle": "Browse your gallery",
               "provider": "Screenshots",
               "favicon": "",
               "hide_launcher": false,
@@ -7320,7 +7404,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -7483,7 +7570,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -7646,7 +7736,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -7921,7 +8014,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -8061,7 +8157,7 @@
             {
               "id": "Recorder:region",
               "name": "Region",
-              "subtitle": "Drag to select an area · Escape cancels",
+              "subtitle": "Drag to select an area",
               "provider": "Recorder",
               "favicon": "",
               "hide_launcher": true,
@@ -8117,7 +8213,7 @@
             {
               "id": "Recorder:history",
               "name": "History",
-              "subtitle": "Browse your gallery · Enter opens it",
+              "subtitle": "Browse your gallery",
               "provider": "Recorder",
               "favicon": "",
               "hide_launcher": false,
@@ -8154,7 +8250,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -8317,7 +8416,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -8592,7 +8694,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -8779,7 +8884,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -8969,7 +9077,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -9120,7 +9231,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -9261,7 +9375,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -9402,7 +9519,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -9543,7 +9663,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -9689,6 +9812,33 @@
               "disabled": false,
               "provider": "internal",
               "count": 0,
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": false,
+              "id": "/config ui.close_on_outside_click",
+              "name": "ui.close_on_outside_click = true",
+              "provider": "internal",
+              "subtitle": "Close the launcher when clicking outside its window",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": false,
+              "id": "/config ui.auto_launch_applications",
+              "name": "ui.auto_launch_applications = true",
+              "provider": "internal",
+              "subtitle": "Activate an application automatically when typing leaves only one result",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": false,
+              "id": "/config ui.auto_launch_commands",
+              "name": "ui.auto_launch_commands = true",
+              "provider": "internal",
+              "subtitle": "Activate a command automatically when typing leaves only one result",
               "windows": 0
             },
             {
@@ -10073,7 +10223,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -10323,7 +10476,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -10475,7 +10631,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -10632,7 +10791,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -10789,7 +10951,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -10946,7 +11111,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -11163,7 +11331,7 @@
             },
             {
               "id": "/rec",
-              "name": "/rec  ·  /screenrecord",
+              "name": "/rec  ·  /screenrecord, /sr",
               "subtitle": "Record screen, workspace, window or region · previous recordings",
               "provider": "internal",
               "count": 0,
@@ -11221,7 +11389,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -11367,6 +11538,33 @@
               "disabled": false,
               "provider": "internal",
               "count": 0,
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": false,
+              "id": "/config ui.close_on_outside_click",
+              "name": "ui.close_on_outside_click = true",
+              "provider": "internal",
+              "subtitle": "Close the launcher when clicking outside its window",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": false,
+              "id": "/config ui.auto_launch_applications",
+              "name": "ui.auto_launch_applications = true",
+              "provider": "internal",
+              "subtitle": "Activate an application automatically when typing leaves only one result",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": false,
+              "id": "/config ui.auto_launch_commands",
+              "name": "ui.auto_launch_commands = true",
+              "provider": "internal",
+              "subtitle": "Activate a command automatically when typing leaves only one result",
               "windows": 0
             },
             {
@@ -11751,7 +11949,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -11931,7 +12132,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -12082,7 +12286,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -12213,7 +12420,8 @@
               "Tech"
             ],
             "today": "2026-10-31",
-            "collection": "todo"
+            "collection": "todo",
+            "groupsRevision": 0
           },
           "serial": 7
         }
@@ -12239,7 +12447,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -12370,7 +12581,8 @@
               "Tech"
             ],
             "today": "2026-10-31",
-            "collection": "reading"
+            "collection": "reading",
+            "groupsRevision": 0
           },
           "serial": 7
         }
@@ -12396,7 +12608,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -12537,7 +12752,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -12678,7 +12896,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -12830,7 +13051,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -13019,7 +13243,10 @@
               "font_size": 14,
               "monitor": "focused",
               "max_results": 100,
-              "keep_alive": true
+              "keep_alive": true,
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true
             },
             "theme": {
               "background": "#191724",
@@ -13150,7 +13377,8 @@
               "Tech"
             ],
             "today": "2026-10-31",
-            "collection": "todo"
+            "collection": "todo",
+            "groupsRevision": 0
           },
           "edit_query": "/todo",
           "serial": 0

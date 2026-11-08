@@ -13,7 +13,8 @@ BINARY = Path(os.environ.get('RUNTJIK_TEST_BINARY', str(APP / 'runtjik-core')))
 
 def fixture(root, count=250):
     root = Path(root)
-    env = {**os.environ, 'RUNTJIK_HOME': str(APP), 'XDG_CONFIG_HOME': str(root / 'config'),
+    (root / 'home').mkdir(exist_ok=True)
+    env = {**os.environ, 'HOME': str(root / 'home'), 'RUNTJIK_HOME': str(APP), 'XDG_CONFIG_HOME': str(root / 'config'),
            'XDG_DATA_HOME': str(root / 'data'), 'XDG_DATA_DIRS': str(root / 'system'),
            'XDG_CACHE_HOME': str(root / 'cache'), 'XDG_STATE_HOME': str(root / 'state'),
            'RUNTJIK_CONFIG': str(root / 'runtjik.conf')}
@@ -78,7 +79,12 @@ def main():
     checks = 0
     for session in json.loads((APP / 'tests/fixtures/protocol.json').read_text()):
         with tempfile.TemporaryDirectory(prefix='runtjik-contract-') as temp:
-            backend = Backend('rust', fixture(temp), session['demo'])
+            env = fixture(temp)
+            # An explicit XDG search path must not leak package exports from HOME.
+            exported = Path(env['HOME']) / '.local/share/flatpak/exports/share/applications'
+            exported.mkdir(parents=True)
+            (exported / 'must-not-leak.desktop').write_text('[Desktop Entry]\nType=Application\nName=Host package must not leak\nExec=/usr/bin/true\n')
+            backend = Backend('rust', env, session['demo'])
             try:
                 for case in session['cases']:
                     result = backend.request(**case['request'])

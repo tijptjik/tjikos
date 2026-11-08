@@ -43,14 +43,18 @@ fn app_dirs() -> Vec<PathBuf> {
     let mut roots = vec![env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home().join(".local/share"))];
-    roots.extend(env::split_paths(
-        &env::var_os("XDG_DATA_DIRS").unwrap_or_else(|| "/usr/local/share:/usr/share".into()),
-    ));
-    roots.extend([
-        home().join(".local/share/flatpak/exports/share"),
-        PathBuf::from("/var/lib/flatpak/exports/share"),
-        PathBuf::from("/var/lib/snapd/desktop"),
-    ]);
+    if let Some(dirs) = env::var_os("XDG_DATA_DIRS") {
+        // Explicit search roots are authoritative, including isolated fixtures.
+        roots.extend(env::split_paths(&dirs));
+    } else {
+        roots.extend([
+            PathBuf::from("/usr/local/share"),
+            PathBuf::from("/usr/share"),
+            home().join(".local/share/flatpak/exports/share"),
+            PathBuf::from("/var/lib/flatpak/exports/share"),
+            PathBuf::from("/var/lib/snapd/desktop"),
+        ]);
+    }
     let mut seen = HashSet::new();
     roots
         .into_iter()
