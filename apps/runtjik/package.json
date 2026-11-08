@@ -5,17 +5,19 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "check": "bash scripts/check.sh",
-    "test": "python3 -B tests/private_compositor_cleanup.py && cargo test --release --locked && python3 -B tests/rust_parity.py && python3 -B tests/command_transitions.py && python3 -B tests/reading.py && python3 -B tests/rust_migration.py && python3 -B tests/clipboard.py && python3 -B tests/capture_clipboard.py && python3 -B tests/capture_history.py && python3 -B tests/stats.py && bun run test:browser",
+    "test": "python3 -B tests/private_compositor_cleanup.py && cargo test --release --locked && python3 -B tests/desktop_observe.py && python3 -B tests/rust_parity.py && python3 -B tests/command_transitions.py && python3 -B tests/reading.py && python3 -B tests/rust_migration.py && python3 -B tests/clipboard.py && python3 -B tests/capture_clipboard.py && python3 -B tests/capture_history.py && python3 -B tests/stats.py && bun run test:browser",
     "test:browser": "node tests/browser_extension.cjs && node tests/browser_reconnect.cjs && python3 -B tests/offline_history.py && python3 -B tests/browser_reconnect.py",
     "demo": "bin/runtjik --demo",
     "browser:dev": "bash scripts/browser-extension.sh dev",
     "browser:lint": "bash scripts/browser-extension.sh lint",
     "browser:build": "bash scripts/browser-extension.sh build",
     "browser:sign:listed": "bash scripts/browser-extension.sh sign-listed",
-    "browser:sign:unlisted": "bash scripts/browser-extension.sh sign-unlisted"
+    "browser:sign:unlisted": "bash scripts/browser-extension.sh sign-unlisted",
+    "test:desktop": "cargo test --manifest-path ../../packages/tjik-desktop/Cargo.toml --locked && cargo build --manifest-path ../../packages/tjik-desktop/Cargo.toml --release --locked --example probe"
   },
   "dependencies": {
-    "@tjikos/tasktjik": "workspace:*"
+    "@tjikos/tasktjik": "workspace:*",
+    "@tjikos/desktop": "workspace:*"
   },
   "devDependencies": {
     "web-ext": "10.2.0"

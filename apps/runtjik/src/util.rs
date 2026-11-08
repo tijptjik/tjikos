@@ -161,7 +161,6 @@ pub fn dispatch(mut args: Vec<String>, settings: &Value) -> Result<()> {
         for key in [
             "WAYLAND_DISPLAY",
             "DISPLAY",
-            "HYPRLAND_INSTANCE_SIGNATURE",
             "XDG_CURRENT_DESKTOP",
             "XDG_SESSION_TYPE",
             "XDG_RUNTIME_DIR",
@@ -172,6 +171,9 @@ pub fn dispatch(mut args: Vec<String>, settings: &Value) -> Result<()> {
             if let Ok(v) = env::var(key) {
                 prefix.push(format!("--setenv={key}={v}"));
             }
+        }
+        for (key, value) in tjik_desktop::environment() {
+            prefix.push(format!("--setenv={key}={value}"));
         }
         prefix.push(format!("--working-directory={}", home().display()));
         prefix.push("--".into());

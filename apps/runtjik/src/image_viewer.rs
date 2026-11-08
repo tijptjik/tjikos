@@ -24,9 +24,7 @@ fn size(iw: f64, ih: f64, w: f64, h: f64) -> (i64, i64) {
     )
 }
 fn monitors() -> Result<Vec<Value>> {
-    Ok(serde_json::from_str(&command(&[
-        "hyprctl", "-j", "monitors",
-    ])?)?)
+    crate::windows::outputs()
 }
 pub fn open(spec: &Value) -> Result<()> {
     let viewer = strings(&spec["viewer"]);
@@ -171,20 +169,24 @@ pub fn open(spec: &Value) -> Result<()> {
                 let ms = monitors()?;
                 let m = ms
                     .iter()
-                    .find(|m| m["id"] == c["monitor"])
+                    .find(|m| m["id"] == c["output"])
                     .context("Monitor disconnected")?;
                 let (sw, sh) = dimensions(m);
                 let (w, h) = size(iw, ih, sw, sh);
-                let x = (m["x"].as_f64().unwrap_or(0.) + (sw - w as f64) / 2.).round_ties_even();
-                let y = (m["y"].as_f64().unwrap_or(0.) + (sh - h as f64) / 2.).round_ties_even();
+                let x = (m["logical"]["x"].as_f64().unwrap_or(0.) + (sw - w as f64) / 2.)
+                    .round_ties_even();
+                let y = (m["logical"]["y"].as_f64().unwrap_or(0.) + (sh - h as f64) / 2.)
+                    .round_ties_even();
                 std::thread::sleep(Duration::from_millis(150));
-                let target = serde_json::to_string(&format!("address:{}", s(&c["address"])))?;
-                for cmd in [
-                    format!("hl.dsp.window.resize({{x={w},y={h},relative=false,window={target}}})"),
-                    format!("hl.dsp.window.move({{x={x},y={y},relative=false,window={target}}})"),
-                ] {
-                    command(&["hyprctl", "dispatch", &cmd])?;
-                }
+                tjik_desktop::selected().place(
+                    &crate::windows::id(c)?,
+                    tjik_desktop::Rect {
+                        x,
+                        y,
+                        width: w as f64,
+                        height: h as f64,
+                    },
+                )?;
                 break;
             }
             std::thread::sleep(Duration::from_millis(50));

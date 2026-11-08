@@ -43,7 +43,7 @@ fn marked_window(marker: &str) -> Result<Value> {
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    bail!("Could not identify the browser window in Hyprland")
+    bail!("Could not identify the browser window in the desktop session")
 }
 pub fn serve() -> Result<()> {
     unsafe {
@@ -148,15 +148,9 @@ pub fn serve() -> Result<()> {
                     }
                     let client = marked_window(&marker)?;
                     if close {
-                        let target =
-                            serde_json::to_string(&format!("address:{}", s(&client["address"])))?;
-                        command(&[
-                            "hyprctl",
-                            "dispatch",
-                            &format!("hl.dsp.window.close({{window={target}}})"),
-                        ])?;
+                        crate::windows::close(&client)?;
                         Ok(
-                            json!({"message":"Hyprland close requested; Zen may ask for confirmation"}),
+                            json!({"message":"Window close requested; Zen may ask for confirmation"}),
                         )
                     } else {
                         crate::windows::focus(&client)?;

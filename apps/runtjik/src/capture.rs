@@ -20,15 +20,8 @@ use std::{
     thread::JoinHandle,
     time::Duration,
 };
-pub fn hypr(kind: &str) -> Result<Vec<Value>> {
-    Ok(serde_json::from_str(&command(&["hyprctl", "-j", kind])?)?)
-}
 pub fn workspace(m: &Value) -> &Value {
-    if m["specialWorkspace"]["id"].as_i64().unwrap_or(0) != 0 {
-        &m["specialWorkspace"]
-    } else {
-        &m["activeWorkspace"]
-    }
+    &m["workspace"]
 }
 pub fn directory(value: &str) -> Result<PathBuf> {
     let path = if let Some(value) = value.strip_prefix("xdg:") {
@@ -294,14 +287,14 @@ impl Captures {
                         json!({"capture":"window"}),
                     )]);
                 }
-                let mut clients = hypr("clients")?;
+                let mut clients = crate::windows::clients()?;
                 clients.retain(|c| c["mapped"] == true && c["hidden"] != true);
                 clients.sort_by_key(|c| {
                     folded(
                         c["title"]
                             .as_str()
                             .filter(|s| !s.is_empty())
-                            .unwrap_or(s(&c["class"])),
+                            .unwrap_or(s(&c["app_id"])),
                     )
                 });
                 return Ok(clients
@@ -309,21 +302,21 @@ impl Captures {
                     .map(|c| {
                         row(
                             name,
-                            s(&c["address"]),
+                            s(&c["id"]),
                             c["title"]
                                 .as_str()
                                 .filter(|s| !s.is_empty())
-                                .unwrap_or(s(&c["class"])),
+                                .unwrap_or(s(&c["app_id"])),
                             &format!(
                                 "Workspace {} · visible window area",
                                 s(&c["workspace"]["name"])
                             ),
-                            json!({"capture":term,"target":c["address"]}),
+                            json!({"capture":term,"target":c["id"]}),
                         )
                     })
                     .collect());
             }
-            let mut monitors = hypr("monitors")?;
+            let mut monitors = crate::windows::outputs()?;
             monitors.sort_by_key(|m| {
                 folded(if term == "screen" {
                     s(&m["name"])
@@ -729,7 +722,7 @@ pub(crate) fn countdown(spec: &Value) -> Result<bool> {
         return Ok(true);
     }
     let mut output = s(&spec["output"]).to_owned();
-    let monitors = hypr("monitors")?;
+    let monitors = crate::windows::outputs()?;
     if let Some(area) = spec["area"].as_str() {
         let nums: Vec<i64> = area
             .split([',', ' ', 'x'])
@@ -738,8 +731,8 @@ pub(crate) fn countdown(spec: &Value) -> Result<bool> {
         if nums.len() == 4 {
             let (x, y) = (nums[0] + nums[2] / 2, nums[1] + nums[3] / 2);
             if let Some(m) = monitors.iter().find(|m| {
-                let mx = m["x"].as_i64().unwrap_or(0);
-                let my = m["y"].as_i64().unwrap_or(0);
+                let mx = m["logical"]["x"].as_f64().unwrap_or(0.) as i64;
+                let my = m["logical"]["y"].as_f64().unwrap_or(0.) as i64;
                 let scale = m["scale"].as_f64().unwrap_or(1.);
                 let (w, h) = if m["transform"].as_i64().unwrap_or(0) % 2 == 0 {
                     (&m["width"], &m["height"])
@@ -844,30 +837,36 @@ fn capture(data: &Value, options: &Value, rec: bool) -> Result<Value> {
             spec["area"] = json!(area);
         }
         "window" if !rec => {
-            let clients = hypr("clients")?;
+            let clients = crate::windows::clients()?;
             let client = clients
                 .iter()
-                .find(|c| {
-                    c["address"] == data["target"] && c["mapped"] == true && c["hidden"] != true
-                })
+                .find(|c| c["id"] == data["target"] && c["mapped"] == true && c["hidden"] != true)
                 .context("Window has closed")?;
             crate::windows::focus(client)?;
             std::thread::sleep(Duration::from_millis(300));
-            let clients = hypr("clients")?;
+            let clients = crate::windows::clients()?;
             let c = clients
                 .iter()
-                .find(|c| c["address"] == data["target"])
+                .find(|c| c["id"] == data["target"])
                 .context("Window has closed")?;
-            let n = |v: &Value| v.as_i64().context("Invalid window geometry");
-            let (w, h) = (n(&c["size"][0])?, n(&c["size"][1])?);
+            let n = |v: &Value| {
+                v.as_f64()
+                    .map(|n| n.round() as i64)
+                    .context("Invalid window geometry")
+            };
+            let (w, h) = (n(&c["geometry"]["width"])?, n(&c["geometry"]["height"])?);
             ensure!(
                 w >= 2 && h >= 2,
                 "Target must be at least 2 pixels wide and high"
             );
-            spec["area"] = json!(format!("{},{} {w}x{h}", n(&c["at"][0])?, n(&c["at"][1])?));
+            spec["area"] = json!(format!(
+                "{},{} {w}x{h}",
+                n(&c["geometry"]["x"])?,
+                n(&c["geometry"]["y"])?
+            ));
         }
         "screen" | "workspace" => {
-            let ms = hypr("monitors")?;
+            let ms = crate::windows::outputs()?;
             let m = ms
                 .iter()
                 .find(|m| m["name"] == data["target"])

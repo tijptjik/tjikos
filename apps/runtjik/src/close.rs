@@ -105,32 +105,11 @@ pub fn pending(store: &Store, e: &Entry, settings: &Value) -> Result<Pending> {
 }
 pub fn close_windows(clients: &[Value]) -> Result<()> {
     for c in clients {
-        windows::focus_commands(c, &[], true)?;
-    }
-    let lua = command(&["hyprctl", "eval", "return"]).is_ok_and(|v| v.trim() == "ok");
-    for c in clients {
-        let address = s(&c["address"]);
-        let args = if lua {
-            vec![
-                "hyprctl".into(),
-                "dispatch".into(),
-                format!("hl.dsp.window.close({{window=\"address:{address}\"}})"),
-            ]
-        } else {
-            vec![
-                "hyprctl".into(),
-                "dispatch".into(),
-                "closewindow".into(),
-                format!("address:{address}"),
-            ]
-        };
-        let out = run(&args, None, 3)?;
-        if out.trim() != "ok" {
-            bail!("Window close request failed: {}", out.trim());
-        }
+        windows::close(c)?;
     }
     Ok(())
 }
+
 pub fn close(
     e: &Entry,
     store: &Store,
@@ -141,7 +120,7 @@ pub fn close(
     tracking: &mut Tracking,
 ) -> Result<Value> {
     if !address.is_empty() {
-        clients.retain(|c| c["address"] == address);
+        clients.retain(|c| c["id"] == address);
         if clients.is_empty() {
             return Ok(json!({"kind":"message","message":"That window has already closed"}));
         }
@@ -213,7 +192,7 @@ pub fn close(
     tracking
         .entry(e.id.clone())
         .or_default()
-        .extend(clients.iter().map(|c| s(&c["address"]).to_owned()));
+        .extend(clients.iter().map(|c| s(&c["id"]).to_owned()));
     let labels = ["graceful close", "SIGTERM", "SIGKILL"];
     Ok(
         json!({"kind":"activated","action":"close","demo":false,"entry":e.id,"message":format!("Close requested for {}: {}",e.name,stages.into_iter().map(|n|labels[n as usize]).collect::<Vec<_>>().join(", "))}),

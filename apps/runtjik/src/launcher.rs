@@ -150,12 +150,10 @@ impl Launcher {
                 .unwrap()
                 .clone();
         }
-        if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none() {
+        if !tjik_desktop::selected().diagnostics().capabilities.windows {
             return vec![];
         }
-        match command(&["hyprctl", "-j", "clients"])
-            .and_then(|s| Ok(serde_json::from_str::<Vec<Value>>(&s)?))
-        {
+        match crate::windows::clients() {
             Ok(v) => v,
             Err(e) => {
                 let warning = e.to_string();
@@ -179,7 +177,7 @@ impl Launcher {
             .iter()
             .filter(|w| {
                 w["mapped"] != false
-                    && ["class", "initialClass"].iter().any(|k| {
+                    && ["app_id", "initial_app_id"].iter().any(|k| {
                         let n = discovery::folded(s(&w[k]));
                         tokens
                             .iter()
@@ -188,7 +186,7 @@ impl Launcher {
             })
             .cloned()
             .collect();
-        result.sort_by_key(|w| w["focusHistoryID"].as_i64().unwrap_or(9999));
+        result.sort_by_key(|w| w["focus_order"].as_i64().unwrap_or(9999));
         result
     }
     pub fn query(&mut self, display: &str, offset: usize, limit: Option<usize>) -> Result<Value> {
@@ -360,10 +358,8 @@ impl Launcher {
             }
         }
         let clients = self.clients();
-        let live: std::collections::HashSet<_> = clients
-            .iter()
-            .map(|c| s(&c["address"]).to_owned())
-            .collect();
+        let live: std::collections::HashSet<_> =
+            clients.iter().map(|c| s(&c["id"]).to_owned()).collect();
         self.closing.retain(|_, addresses| {
             addresses.retain(|a| live.contains(a));
             !addresses.is_empty()
@@ -645,17 +641,22 @@ impl Launcher {
             .as_ref()
             .filter(|e| ["apps", "commands"].contains(&e.provider.as_str()) && mode == "switch")
         {
+            let prepare = req["prepare"] == true;
+            let observe = prepare && req["observe"] == true;
             let clients = if self.demo {
                 config::contract()["demo_windows"]
                     .as_array()
                     .unwrap()
                     .clone()
             } else {
-                crate::windows::clients()?
+                match crate::windows::clients() {
+                    Ok(clients) => clients,
+                    Err(_) if observe => vec![],
+                    Err(e) => return Err(e),
+                }
             };
             let clients = self.matched(e, &clients);
-            let prepare = req["prepare"] == true;
-            if clients.is_empty() {
+            if clients.is_empty() && !observe {
                 if prepare {
                     return Ok(json!({"kind":"launch","entry":id}));
                 }
@@ -666,20 +667,17 @@ impl Launcher {
             let address = s(&req["address"]);
             if address.is_empty() && (prepare || clients.len() > 1) {
                 let icon = self.icons.resolve(&e.icon);
-                let rows: Vec<_> = clients.iter().map(|w| json!({"id":w["address"],"name":if s(&w["title"]).is_empty(){e.name.as_str()}else{s(&w["title"])},"subtitle":format!("Workspace {}",s(&w["workspace"]["name"])),"icon":icon,"provider":"windows","windows":0,"count":0})).collect();
+                let rows: Vec<_> = clients.iter().map(|w| json!({"id":w["id"],"name":if s(&w["title"]).is_empty(){e.name.as_str()}else{s(&w["title"])},"subtitle":format!("Workspace {}",s(&w["workspace"]["name"])),"icon":icon,"provider":"windows","windows":0,"count":0})).collect();
                 return Ok(
-                    json!({"kind":"windows","entry":id,"auto_select":prepare && clients.len()==1,"results":rows}),
+                    json!({"kind":"windows","entry":id,"auto_select":!observe && prepare && clients.len()==1,"results":rows}),
                 );
             }
             let target = if address.is_empty() {
                 &clients[0]
             } else {
-                clients
-                    .iter()
-                    .find(|w| w["address"] == address)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("That window has closed; select another instance")
-                    })?
+                clients.iter().find(|w| w["id"] == address).ok_or_else(|| {
+                    anyhow::anyhow!("That window has closed; select another instance")
+                })?
             };
             if !self.demo {
                 crate::windows::focus(target)?;

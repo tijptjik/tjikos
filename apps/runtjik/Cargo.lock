@@ -1321,6 +1321,7 @@ dependencies = [
  "shlex 1.3.0",
  "tasktjik-api",
  "tempfile",
+ "tjik-desktop",
  "toml 0.8.23",
  "toml_edit 0.22.27",
  "url",
@@ -1739,6 +1740,14 @@ checksum = "abc840c238154d58f9e86b2792261edfde565a17696e1cda1a449de27979801a"
 dependencies = [
  "displaydoc",
  "zerovec",
+]
+
+[[package]]
+name = "tjik-desktop"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

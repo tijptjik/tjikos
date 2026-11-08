@@ -391,16 +391,16 @@
   ],
   "demo_windows": [
     {
-      "address": "0xdemo1",
-      "class": "firefox",
+      "id": "0xdemo1",
+      "app_id": "firefox",
       "title": "Design notes \u2014 Firefox",
       "workspace": {
         "name": "1"
       }
     },
     {
-      "address": "0xdemo2",
-      "class": "firefox",
+      "id": "0xdemo2",
+      "app_id": "firefox",
       "title": "Documentation \u2014 Firefox",
       "workspace": {
         "name": "2"

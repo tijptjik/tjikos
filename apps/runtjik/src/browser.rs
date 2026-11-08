@@ -344,7 +344,7 @@ impl Browser {
         }
         if mode == "close" {
             return Ok(
-                json!({"refresh_query":if e.data["tab"].is_null(){"/browser"}else{"/tabs"},"message":if e.data["tab"].is_null(){response["message"].as_str().unwrap_or("Hyprland window close requested")}else{"Tab closed"}}),
+                json!({"refresh_query":if e.data["tab"].is_null(){"/browser"}else{"/tabs"},"message":if e.data["tab"].is_null(){response["message"].as_str().unwrap_or("Window close requested")}else{"Tab closed"}}),
             );
         }
         Ok(json!({"kind":"activated","demo":demo}))

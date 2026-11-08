@@ -50,6 +50,9 @@ fn execute() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("serve");
     match cmd {
+        "desktop-status" => emit(&serde_json::to_value(
+            tjik_desktop::selected().diagnostics(),
+        )?)?,
         "stop-recording" => {
             crate::capture_worker::request("stop")?;
         }

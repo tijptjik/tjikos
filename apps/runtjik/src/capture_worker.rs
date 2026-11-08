@@ -62,7 +62,7 @@ pub fn share_recording_telegram(file: &str) -> Result<()> {
         .stderr(Stdio::null())
         .spawn()?;
     focus_recording_window(&mut child, "Telegram", |client| {
-        let class = s(&client["class"]).to_ascii_lowercase();
+        let class = s(&client["app_id"]).to_ascii_lowercase();
         (matches!(
             class.as_str(),
             "telegram" | "telegram-desktop" | "telegramdesktop" | "org.telegram.desktop"
@@ -76,7 +76,7 @@ fn focus_recording_window(
     app: &str,
     matches: impl Fn(&Value) -> bool,
 ) -> Result<()> {
-    if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none() {
+    if !tjik_desktop::selected().diagnostics().capabilities.activate {
         return Ok(());
     }
     // Wait for cold starts without handing focus to an unrelated existing player.
@@ -93,40 +93,13 @@ fn focus_recording_window(
             .iter()
             .filter(|client| client["mapped"] != false && matches(client))
             .min_by_key(|client| {
-                client["focusHistoryID"]
+                client["focus_order"]
                     .as_i64()
                     .filter(|id| *id >= 0)
                     .unwrap_or(i64::MAX)
             });
         if let Some(target) = target {
-            crate::windows::focus(target)?;
-            // Mapping and desktop width rules may still be settling. Verify
-            // focus after that initial event before revealing the column.
-            std::thread::sleep(Duration::from_millis(150));
-            let active: Value =
-                serde_json::from_str(&command(&["hyprctl", "-j", "activewindow"])?)?;
-            if active["address"] != target["address"] {
-                continue;
-            }
-            let workspace: Value =
-                serde_json::from_str(&command(&["hyprctl", "-j", "activeworkspace"])?)?;
-            if workspace["tiledLayout"] == "scrolling" && target["floating"] != true {
-                // IPC focus alone can leave a column outside the viewport.
-                // Center scrolls the tape without resizing or moving windows.
-                let is_lua = command(&["hyprctl", "eval", "return"])
-                    .map(|v| v.trim() == "ok")
-                    .unwrap_or(false);
-                let result = if is_lua {
-                    command(&["hyprctl", "dispatch", "hl.dsp.layout(\"center\")"])?
-                } else {
-                    command(&["hyprctl", "dispatch", "layoutmsg", "center"])?
-                };
-                ensure!(
-                    result.trim() == "ok",
-                    "Could not reveal {app}: {}",
-                    result.trim()
-                );
-            }
+            tjik_desktop::selected().activate_newly_mapped(&crate::windows::id(target)?)?;
             return Ok(());
         }
     }
@@ -243,45 +216,29 @@ fn notify_finished(file: &str, success: bool, logdir: &Path) {
 extern "C" fn stop(_: libc::c_int) {
     STOP.store(true, Ordering::Relaxed);
 }
-fn lua_string(value: &str) -> String {
-    let mut equals = String::new();
-    while value.contains(&format!("]{equals}]")) {
-        equals.push('=');
-    }
-    format!("[{equals}[{value}]{equals}]")
-}
 struct StopShortcut(u32);
 impl StopShortcut {
     fn install() -> Result<Option<Self>> {
-        if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none() {
+        if !tjik_desktop::selected()
+            .diagnostics()
+            .capabilities
+            .recording_shortcut
+        {
             return Ok(None);
         }
         let executable = std::env::current_exe()?;
         let command = format!(
-            "'{}' stop-recording",
-            executable.to_string_lossy().replace('\'', "'\\''")
+            "{} stop-recording",
+            shlex::try_quote(&executable.to_string_lossy())?
         );
         let token = std::process::id();
-        let script = format!(
-            "local stop_command = {}; local stop_token = {token};\n{}",
-            lua_string(&command),
-            include_str!("recording_stop.lua")
-        );
-        command_eval(&script)?;
+        tjik_desktop::selected().recording_shortcut(token, Some(&command))?;
         Ok(Some(Self(token)))
     }
 }
-fn command_eval(script: &str) -> Result<String> {
-    run(&["hyprctl".into(), "eval".into(), script.into()], None, 2)
-}
 impl Drop for StopShortcut {
     fn drop(&mut self) {
-        let _ = command_eval(&format!(
-            "if _G.runtjikRecordingStop and _G.runtjikRecordingStop.token == {} then \
-             for _, binding in ipairs(_G.runtjikRecordingStop.bindings) do binding:remove() end; \
-             _G.runtjikRecordingStop = nil end",
-            self.0
-        ));
+        let _ = tjik_desktop::selected().recording_shortcut(self.0, None);
     }
 }
 pub fn socket() -> Result<PathBuf> {
@@ -629,7 +586,7 @@ pub fn serve(spec: Value) -> Result<()> {
                     && workspace_check.elapsed() >= Duration::from_millis(100)
                 {
                     workspace_check = Instant::now();
-                    let same = capture::hypr("monitors")
+                    let same = crate::windows::outputs()
                         .ok()
                         .and_then(|ms| ms.into_iter().find(|m| m["name"] == spec["output"]))
                         .is_some_and(|m| capture::workspace(&m)["id"] == spec["workspace"]);

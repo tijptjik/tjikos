@@ -1,138 +1,47 @@
-use crate::util::*;
-use anyhow::{bail, Result};
+//! Presentation serialization of the shared desktop model; no compositor schema.
+use anyhow::Result;
 use serde_json::Value;
-fn lua(value: &str) -> String {
-    let mut out = String::from("\"");
-    for c in value.chars() {
-        if c == '\\' || c == '"' {
-            out.push('\\');
-            out.push(c);
-        } else if (c as u32) < 32 {
-            out.push_str(&format!("\\{:03}", c as u32));
-        } else {
-            out.push(c);
-        }
-    }
-    out.push('"');
-    out
-}
-pub fn focus_commands(
-    client: &Value,
-    monitors: &[Value],
-    is_lua: bool,
-) -> Result<Vec<Vec<String>>> {
-    let address = s(&client["address"]);
-    if !address.starts_with("0x")
-        || address.len() < 3
-        || !address[2..].bytes().all(|c| c.is_ascii_hexdigit())
-    {
-        bail!("Invalid compositor window address");
-    }
-    let monitor = monitors.iter().find(|m| m["id"] == client["monitor"]);
-    let workspace = s(&client["workspace"]["name"]);
-    let mut commands = vec![];
-    let focus = |name: &str| {
-        if is_lua {
-            vec![format!("hl.dsp.focus({{ monitor = {} }})", lua(name))]
-        } else {
-            vec!["focusmonitor".into(), name.into()]
-        }
-    };
-    let toggle = |name: &str| {
-        let name = if name == "special" {
-            ""
-        } else {
-            name.strip_prefix("special:").unwrap_or(name)
-        };
-        if is_lua {
-            vec![format!("hl.dsp.workspace.toggle_special({})", lua(name))]
-        } else {
-            vec!["togglespecialworkspace".into(), name.into()]
-        }
-    };
-    if let Some(m) = monitor {
-        for other in monitors {
-            let special = s(&other["specialWorkspace"]["name"]);
-            if special.is_empty() || (other["id"] == m["id"] && special == workspace) {
-                continue;
-            }
-            commands.push(focus(s(&other["name"])));
-            commands.push(toggle(special));
-        }
-        commands.push(focus(s(&m["name"])));
-        if (workspace == "special" || workspace.starts_with("special:"))
-            && s(&m["specialWorkspace"]["name"]) != workspace
-        {
-            commands.push(toggle(workspace));
-        }
-    }
-    commands.push(if is_lua {
-        vec![format!(
-            "hl.dsp.focus({{ window = {} }})",
-            lua(&format!("address:{address}"))
-        )]
-    } else {
-        vec!["focuswindow".into(), format!("address:{address}")]
-    });
-    Ok(commands
+use tjik_desktop::{Desktop, WindowId};
+pub fn clients_from(desktop: &dyn Desktop) -> Result<Vec<Value>> {
+    Ok(desktop
+        .snapshot()?
+        .windows
         .into_iter()
-        .map(|mut args| {
-            let mut prefix = vec!["hyprctl".into(), "dispatch".into()];
-            prefix.append(&mut args);
-            prefix
-        })
+        .map(|w| serde_json::to_value(w).expect("window serialization"))
+        .collect())
+}
+pub fn clients() -> Result<Vec<Value>> {
+    clients_from(tjik_desktop::selected().as_ref())
+}
+pub fn outputs() -> Result<Vec<Value>> {
+    Ok(tjik_desktop::selected()
+        .snapshot()?
+        .outputs
+        .into_iter()
+        .map(|o| serde_json::to_value(o).expect("output serialization"))
         .collect())
 }
 pub fn focus(client: &Value) -> Result<()> {
-    let is_lua = command(&["hyprctl", "eval", "return"])
-        .map(|v| v.trim() == "ok")
-        .unwrap_or(false);
-    let monitors: Vec<Value> = serde_json::from_str(&command(&["hyprctl", "-j", "monitors"])?)?;
-    for argv in focus_commands(client, &monitors, is_lua)? {
-        let result = run(&argv, None, 3)?;
-        if result.trim() != "ok" {
-            bail!("Window switch failed: {}", result.trim());
-        }
-    }
-    Ok(())
+    Ok(tjik_desktop::selected().activate(&id(client)?)?)
 }
-pub fn clients() -> Result<Vec<Value>> {
-    if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none() {
-        return Ok(vec![]);
-    }
-    Ok(serde_json::from_str(&command(&[
-        "hyprctl", "-j", "clients",
-    ])?)?)
+pub fn close(client: &Value) -> Result<()> {
+    Ok(tjik_desktop::selected().close(&id(client)?)?)
+}
+pub fn id(client: &Value) -> Result<WindowId> {
+    Ok(serde_json::from_value(client["id"].clone())?)
 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use tjik_desktop::WindowActions;
     #[test]
-    fn special_workspace_focus() {
-        let c = json!({"address":"0xabc","monitor":2,"workspace":{"name":"special:notes"}});
-        let m = vec![
-            json!({"id":1,"name":"DP-1","specialWorkspace":{"name":"special:other"}}),
-            json!({"id":2,"name":"DP-2","specialWorkspace":{"name":""}}),
-        ];
-        let commands = focus_commands(&c, &m, false).unwrap();
-        assert_eq!(
-            commands
-                .iter()
-                .map(|v| v[2..].join(" "))
-                .collect::<Vec<_>>(),
-            [
-                "focusmonitor DP-1",
-                "togglespecialworkspace other",
-                "focusmonitor DP-2",
-                "togglespecialworkspace notes",
-                "focuswindow address:0xabc"
-            ]
-        );
-    }
-    #[test]
-    fn rejects_address_injection() {
-        assert!(focus_commands(&json!({"address":"0xabc;exec bad"}), &[], true).is_err());
-        assert_eq!(lua("a\"\n\\b"), "\"a\\\"\\010\\\\b\"");
+    fn fake_windows_use_the_application_path() {
+        let fake = tjik_desktop::fake::Fake::default();
+        let clients = clients_from(&fake).unwrap();
+        assert_eq!(clients[0]["app_id"], "editor");
+        let id = id(&clients[0]).unwrap();
+        fake.activate(&id).unwrap();
+        fake.close(&id).unwrap();
+        assert_eq!(fake.commands.lock().unwrap().len(), 2);
     }
 }

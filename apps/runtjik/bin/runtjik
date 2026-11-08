@@ -11,7 +11,7 @@ fi
 core=("$RUNTJIK_HOME/runtjik-core")
 case "${1:-toggle}" in
     --version|version) exec "${core[@]}" version ;;
-    refresh|stats|rebuild-counts|check|migrate-config|stop-recording) exec "${core[@]}" "$@" ;;
+    desktop-status|refresh|stats|rebuild-counts|check|migrate-config|stop-recording) exec "${core[@]}" "$@" ;;
     status) exec quickshell ipc --path "$RUNTJIK_HOME/qml" call runtjik status ;;
     close|quit|toggle|show) ;;
     --demo) export RUNTJIK_DEMO=1 ;;
