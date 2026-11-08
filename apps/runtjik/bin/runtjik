@@ -9,6 +9,15 @@ else
     export RUNTJIK_HOME="${RUNTJIK_HOME:-$HOME/.local/lib/runtjik}"
 fi
 core=("$RUNTJIK_HOME/runtjik-core")
+# A failed/live-but-unresponsive app must never authorize closing another window.
+if [[ "${1:-}" == close-active ]]; then
+    handled="$("$RUNTJIK_HOME/runtjik-gtk" close-target)"
+    case "$handled" in
+        true) exit 0 ;;
+        false) exec hyprctl eval 'hl.dispatch(hl.dsp.window.close())' ;;
+        *) echo 'Runtjik did not return a close decision' >&2; exit 1 ;;
+    esac
+fi
 legacy=false
 if [[ "${1:-}" == --quickshell ]]; then legacy=true; shift; fi
 if [[ "$legacy" == false ]]; then
@@ -24,7 +33,7 @@ case "${1:-toggle}" in
     status) exec quickshell ipc --path "$RUNTJIK_HOME/qml" call runtjik status ;;
     close|quit|toggle|show) ;;
     --demo) export RUNTJIK_DEMO=1 ;;
-    *) printf 'Usage: runtjik [compare [show|close|status]] | [--gtk|--quickshell [show|toggle|close|quit|status|--demo]] | [toggle|show|close|quit|refresh|stats|rebuild-counts|check|migrate-config|stop-recording|status|--demo|--version]\n' >&2; exit 2 ;;
+    *) printf 'Usage: runtjik [compare [show|close|status]] | [--gtk|--quickshell [show|toggle|close|quit|status|--demo]] | [toggle|show|close|close-active|quit|refresh|stats|rebuild-counts|check|migrate-config|stop-recording|status|--demo|--version]\n' >&2; exit 2 ;;
 esac
 command -v quickshell >/dev/null || { echo 'Runtjik needs Quickshell on a Wayland desktop.' >&2; exit 1; }
 # Match the personal icon theme without forcing Qt platform/style integration.

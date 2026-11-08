@@ -22,6 +22,7 @@ fn s<'a>(v: &'a Value, k: &str) -> &'a str {
 }
 struct Ui {
     window: gtk::ApplicationWindow,
+    pointer: gtk::EventControllerMotion,
     search: gtk::Entry,
     mark: tjik_gtk::mark::Mark,
     topbar: gtk::Box,
@@ -116,7 +117,7 @@ impl Ui {
         } else {
             vec![]
         };
-        json!({"lastActivation":self.last_activation.borrow().as_str(),"selectedBounds":selected_bounds,"desktop_sequence":self.desktop_sequence.get(),"pinAngle":self.mark.angle(),"captureUi":if self.demo {views::inspect(&self.word_header,&self.results,&self.window)}else{Value::Null},"resultGeometry":result_geometry,"wordUi": if self.demo { views::inspect(&self.word_header, &self.rich, &self.window) } else { Value::Null }, "scrollY":scroll_y,"rowPitch":row_pitch,"input":self.search.text().as_str(),"composing":self.composing.get(),"startup":self.startup.is_visible(),"renderer":"gtk4","surface":if self.layer{"layer"}else{"window"},"running":true,"pid":std::process::id(),"ready":self.ready.get(),"visible":self.window.is_visible(),"busy":self.busy.get(),"demo":self.demo,"query":self.query.borrow().as_str(),"resultQuery":self.display_query.borrow().as_str(),"total":self.total.get(),"indexed":self.indexed.get(),"view":self.view.borrow().as_str(),"columns":self.columns.get(),"pinned":self.pinned.get(),"app_state":self.tasks.state(),"rows":self.rows.borrow().clone(),"selected":self.selection.selected(),"backend_error":self.error.borrow().as_str(),"message":self.message.text().as_str()})
+        json!({"lastActivation":self.last_activation.borrow().as_str(),"selectedBounds":selected_bounds,"desktop_sequence":self.desktop_sequence.get(),"pinAngle":self.mark.angle(),"captureUi":if self.demo {views::inspect(&self.word_header,&self.results,&self.window)}else{Value::Null},"resultGeometry":result_geometry,"wordUi": if self.demo { views::inspect(&self.word_header, &self.rich, &self.window) } else { Value::Null }, "scrollY":scroll_y,"rowPitch":row_pitch,"input":self.search.text().as_str(),"composing":self.composing.get(),"startup":self.startup.is_visible(),"renderer":"gtk4","surface":if self.layer{"layer"}else{"window"},"running":true,"pid":std::process::id(),"ready":self.ready.get(),"visible":self.window.is_visible(),"focused":self.window.is_active(),"hovered":self.pointer.contains_pointer(),"busy":self.busy.get(),"demo":self.demo,"query":self.query.borrow().as_str(),"resultQuery":self.display_query.borrow().as_str(),"total":self.total.get(),"indexed":self.indexed.get(),"view":self.view.borrow().as_str(),"columns":self.columns.get(),"pinned":self.pinned.get(),"app_state":self.tasks.state(),"rows":self.rows.borrow().clone(),"selected":self.selection.selected(),"backend_error":self.error.borrow().as_str(),"message":self.message.text().as_str()})
     }
     fn message(&self, text: &str) {
         self.message.set_text(text);
@@ -1080,7 +1081,10 @@ fn build(
     window.set_child(Some(&frame));
     let css = theme::provider();
     theme::apply(&css, &Default::default(), "tijpset", 14);
+    let pointer = gtk::EventControllerMotion::new();
+    window.add_controller(pointer.clone());
     let ui = Rc::new(Ui {
+        pointer,
         window,
         search,
         mark,
@@ -1452,6 +1456,14 @@ pub fn run(demo: bool) -> Result<()> {
                                 } else {
                                     ui.show();
                                 }
+                            }
+                            "close-target" => {
+                                let handled = ui.window.is_visible()
+                                    && (ui.window.is_active() || ui.pointer.contains_pointer());
+                                if handled {
+                                    ui.hide();
+                                }
+                                result = json!({"handled":handled});
                             }
                             "close" => ui.hide(),
                             "outside-click" => ui.outside(),

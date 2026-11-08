@@ -915,3 +915,8 @@ explicit close/toggle, and action-specific dismissal continue to work normally.
 The Rust core and GTK frontend share [the desktop adapter boundary](docs/desktop-adapter.md). Use `runtjik desktop-status` for capabilities and `TJIK_COMPOSITOR=hyprland|fake` for explicit selection before opening the launcher. Legacy Quickshell remains available.
 
 Desktop events now update visible window counts and pickers. Runtjik automatically reconnects on the same runtime/Wayland display and restores launcher state after a compositor restart; hidden launchers remain hidden. See the [event and recovery contract](docs/desktop-adapter.md) for boundaries and checks.
+
+Command-Q uses `runtjik close-active`: a visible GTK applet consumes the shortcut
+when it has keyboard focus or contains the pointer, including when pinned.
+Otherwise it closes the active desktop window. Control errors stop the action
+without closing another window.

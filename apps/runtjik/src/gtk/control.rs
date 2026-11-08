@@ -124,6 +124,7 @@ pub fn run(action: &str, args: &[String], demo: bool) -> Result<()> {
             "show",
             "toggle",
             "close",
+            "close-target",
             "quit",
             "status",
             "test-query",
@@ -151,6 +152,13 @@ pub fn run(action: &str, args: &[String], demo: bool) -> Result<()> {
     // A live socket returning an error must not be treated as permission to spawn.
     if UnixStream::connect(&path).is_ok() {
         if let Some(reply) = request_or_gone(&path, &command)? {
+            if action == "close-target" {
+                anyhow::ensure!(
+                    reply["handled"].is_boolean(),
+                    "Missing close-target decision"
+                );
+                println!("{}", reply["handled"]);
+            }
             if action == "status" {
                 println!("{reply}");
             }
@@ -160,11 +168,22 @@ pub fn run(action: &str, args: &[String], demo: bool) -> Result<()> {
     let recovery = crate::recovery::path(demo)?;
     if UnixStream::connect(&recovery).is_ok() {
         if let Some(reply) = request_or_gone(&recovery, &command)? {
+            if action == "close-target" {
+                anyhow::ensure!(
+                    reply["handled"].is_boolean(),
+                    "Missing close-target decision"
+                );
+                println!("{}", reply["handled"]);
+            }
             if action == "status" {
                 println!("{reply}");
             }
             return Ok(());
         }
+    }
+    if action == "close-target" {
+        println!("false");
+        return Ok(());
     }
     if ["close", "quit"].contains(&action) {
         return Ok(());
