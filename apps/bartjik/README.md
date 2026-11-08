@@ -4,6 +4,9 @@ A configurable Quickshell bar with independent monitor layouts, transparent gaps
 rounded islands and typed, individually interactive items. `bartjikctl` controls
 visibility and exposes configuration, provider data and resolved geometry.
 
+For the planned Rust + GTK frontend and shared compositor adapters, see the
+[GTK migration handoff](docs/gtk-migration-handoff.md).
+
 | Rose-punk                                                           | Monochrome                                                            |
 | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | ![Rose-punk status islands](docs/rose-punk-status-bar.png)          | ![Monochrome status islands](docs/monochrome-status-bar.png)          |
