@@ -2,10 +2,48 @@
 
 ![Runtjik with real installed apps, screenshot targets and recording targets](../../docs/showcase/runtjik.png)
 
-A Quickshell top-layer launcher with an icon grid, fuzzy search, launch history, and
+A Rust + GTK top-layer launcher with an icon grid, fuzzy search, launch history, and
 Hyprland window switching. The layout takes inspiration from
 [Hamr](https://github.com/Stewart86/hamr); this implementation is independent. Rose Pine
 surfaces and Rose Punk accents match Bartjik and Notjik.
+
+## Rust + GTK frontend
+
+`runtjik --gtk` opens the GTK4 implementation; `show`, `close`, `quit`, and `status`
+control that instance. `runtjik --gtk --demo` uses synthetic fixtures in its own
+instance. GTK is the default; `runtjik --quickshell` selects the legacy frontend while migration parity is reviewed.
+
+GTK now provides the themed grid/list launcher, window picker, paging, command
+history, rich dictionary cards, statistics, capture menus/galleries and a native
+countdown. Enter switches to an existing application; Shift+Enter launches a new
+instance; Ctrl+Enter closes the selection. Escape leaves command views or hides
+ordinary app search. The layer supports monitor placement, pinning, outside-click
+dismissal, dragging by the command symbol and resizing by the bottom grip.
+
+The shared Tasktjik view provides task/reading/project/template collections,
+revision-checked editing, completion, group changes, drag ordering, snooze,
+verification, workflow editing and templates, image attachments and viewing.
+Ctrl+N opens an editor and Ctrl+Enter saves it. Backend operations run off the GTK
+thread. Unchanged task snapshots and launcher results preserve existing widgets.
+
+Reusable crates live in `packages/tjik-gtk` (theme, result widgets and surfaces)
+and `packages/tasktjik-gtk` (task presentation and editor). Neither duplicates the
+backend's persistence, recurrence or workflow rules. Physical CJK composition,
+mixed-DPI transfer and full visual/interaction parity still require verification.
+
+The GTK executable uses the existing warm Rust backend over its versioned JSON protocol.
+This is a transitional boundary: the backend icon resolver links GTK3, which cannot
+safely share a process with GTK4. Neither frontend nor backend uses JavaScript. The
+legacy frontend requires Quickshell; GTK capture uses its native countdown.
+
+Build dependencies include GTK 4.12+ development libraries, in addition to the existing
+GTK3 icon/theme dependencies. `bun run build --filter=@tjikos/runtjik` builds and
+packages both frontends; `scripts/install.sh` installs the GTK binary atomically
+alongside the core. `dev-check python3 -B apps/runtjik/tests/gtk_ui.py` checks synthetic
+search/actions, real keyboard input, stale-result handling, concurrent startup, atomic
+installation and warm reopen on a private compositor whose parent window is placed
+silently on workspace 7 before launch. Its timing and PSS samples describe that fixture
+and renderer, not a toolkit comparison.
 
 ## Native backend
 
@@ -854,3 +892,26 @@ queue. Acknowledged tasks update the cache immediately, followed by full reconci
 Reminder ownership/claims continue to use the live Tasktjik client. Existing
 HTTPS/Tailscale authentication and certificate checks are unchanged; configure the
 canonical HTTPS URL when using a redirect alias.
+
+### Compare the frontends before switching
+
+`runtjik compare` opens GTK on the left and Quickshell on the right, silently on
+workspace 7. Both use synthetic data with the same private configuration and
+history disabled. Your normal launcher and default frontend remain unchanged.
+Use `runtjik compare status` to inspect them and `runtjik compare close` to close
+the comparison. Switch to workspace 7 yourself when ready to review.
+
+See [GTK migration](docs/gtk-migration.md) for input-method, scale and gesture
+verification, animation behavior and the remaining physical-device review boundary.
+
+To keep the launcher visible when clicking another window, enter
+`/config ui.close_on_outside_click false` and confirm it. This persistent setting
+works in both frontends. Outside clicks still release keyboard focus; click the
+search field to resume typing. Set it to `true` to restore dismissal. Escape,
+explicit close/toggle, and action-specific dismissal continue to work normally.
+
+### Desktop adapters
+
+The Rust core and GTK frontend share [the desktop adapter boundary](docs/desktop-adapter.md). Use `runtjik desktop-status` for capabilities and `TJIK_COMPOSITOR=hyprland|fake` for explicit selection before opening the launcher. Legacy Quickshell remains available.
+
+Desktop events now update visible window counts and pickers. Runtjik automatically reconnects on the same runtime/Wayland display and restores launcher state after a compositor restart; hidden launchers remain hidden. See the [event and recovery contract](docs/desktop-adapter.md) for boundaries and checks.

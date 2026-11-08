@@ -8,7 +8,7 @@ import Quickshell.Wayland
 
 ShellRoot {
     id: root
-    property var settings: ({ui:{width:720,height:600,columns:5,icon_size:52,font:'tijpset',font_size:14,monitor:'focused',keep_alive:true},theme:{background:'#191724',surface:'#26233a',tile:'#1f1d2e',text:'#e0def4',muted:'#908caa',accent:'#ff53a6',border:'#403a52'},index:{refresh_seconds:5}})
+    property var settings: ({ui:{width:720,height:600,columns:5,icon_size:52,font:'tijpset',font_size:14,monitor:'focused',keep_alive:true,close_on_outside_click:true},theme:{background:'#191724',surface:'#26233a',tile:'#1f1d2e',text:'#e0def4',muted:'#908caa',accent:'#ff53a6',border:'#403a52'},index:{refresh_seconds:5}})
     readonly property var theme: settings.theme
     readonly property bool demo: Quickshell.env('RUNTJIK_DEMO') === '1'
     property var closingIds: []
@@ -424,7 +424,7 @@ ShellRoot {
         function releaseKeyboard(): void {if(panel.pinned && !results[selected]?.hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}}
         function outsideClick(): void {
             // Consult current UI state even if the passive observer is still rearming.
-            if(panel.pinned && !results[selected]?.hide_launcher){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
+            if(root.settings.ui.close_on_outside_click===false || (panel.pinned && !results[selected]?.hide_launcher)){panel.ownsKeyboard=false;panel.acquiringKeyboard=false;searchBox.focus=false;}
             else root.close();
         }
         function focusSearch(): void {root.focusSearch();}
@@ -468,6 +468,7 @@ ShellRoot {
     }
     LauncherWindow {
         id: panel
+        closeOnOutsideClick: root.settings.ui.close_on_outside_click!==false
         visible: root.opened && root.ready && root.initialCaptured && panel.styled
         targetScreen: Quickshell.screens.find(s=>s.name === (root.movedMonitor || (root.settings.ui.monitor === 'focused'?root.initialMonitor:root.settings.ui.monitor))) || Quickshell.screens[0]
         color: 'transparent'
@@ -586,6 +587,8 @@ ShellRoot {
                     Text {
                         width: 28;height:parent.height
                         text:'⌘';font.pixelSize:28;color:root.theme.accent
+                        rotation:panel.pinned?45:0
+                        Behavior on rotation {NumberAnimation {duration:180;easing.type:Easing.OutCubic}}
                         horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter
                     }
                     Rectangle {
@@ -647,7 +650,7 @@ ShellRoot {
                     width:parent.width;height:visible?(root.wordMode?34:24):0;spacing:12
                     Text {
                         id: resultsLabel
-                        width:root.wordMode?headingMetrics.advanceWidth:parent.width-(pinStatus.visible?pinStatus.width+parent.spacing:0);height:parent.height
+                        width:root.wordMode?headingMetrics.advanceWidth:parent.width;height:parent.height
                         text:root.statistics?'STATISTICS':root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.displayQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.displayQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.resultQuery.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.resultQuery?'SEARCH RESULTS':'APPLICATIONS'))))
                         font.family:root.settings.ui.font;font.pixelSize:11;font.letterSpacing:1.8
                         verticalAlignment:Text.AlignVCenter;color:root.theme.muted
@@ -656,17 +659,10 @@ ShellRoot {
                     Item {
                         id: wordProviderHeader
                         visible: root.wordMode
-                        width: parent.width-resultsLabel.width-parent.spacing-(pinStatus.visible?pinStatus.width+parent.spacing:0)
+                        width: parent.width-resultsLabel.width-parent.spacing
                         height: parent.height
                     }
-                    Text {
-                        id:pinStatus
-                        visible:panel.pinned
-                        width:implicitWidth;height:parent.height
-                        text:'Pinned';color:root.theme.accent
-                        font.family:root.settings.ui.font;font.pixelSize:11
-                        verticalAlignment:Text.AlignVCenter
-                    }
+
                 }
                 Column {
                     width:parent.width;height:parent.height-(resultsHeading.visible?74+resultsHeading.height:60);spacing:4
@@ -754,10 +750,24 @@ ShellRoot {
                                 anchors.fill: parent
                                 z: 1
                                 acceptedButtons: Qt.NoButton
+                                property real wheelRemainder: 0
                                 onWheel: event=>{
                                     root.pointerSelection=true;
                                     Qt.callLater(()=>selectionPointer.select());
-                                    event.accepted=false;
+                                    const units = event.angleDelta.y / 120;
+                                    if(units!==0) {
+                                        wheelRemainder+=units;
+                                        const steps=Math.trunc(wheelRemainder);
+                                        wheelRemainder-=steps;
+                                        event.accepted=true;
+                                        if(steps===0)return;
+                                        items.cancelFlick();
+                                        const offset=items.contentY-items.originY;
+                                        const row=steps<0?Math.floor(offset/items.cellHeight+.001):Math.ceil(offset/items.cellHeight-.001);
+                                        const maximum=Math.max(0,items.contentHeight-items.height);
+                                        items.contentY=items.originY+Math.max(0,Math.min(maximum,(row-steps)*items.cellHeight));
+                                        event.accepted=true;
+                                    } else event.accepted=false;
                                 }
                             }
                             HoverHandler {

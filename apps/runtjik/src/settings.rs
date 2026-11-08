@@ -243,6 +243,21 @@ mod tests {
     }
 
     #[test]
+    fn outside_click_policy_is_boolean_editable_and_defaults_to_dismissal() {
+        let defaults = config::parse("").unwrap();
+        assert_eq!(defaults["ui"]["close_on_outside_click"], true);
+        assert!(featured(&defaults)
+            .iter()
+            .any(|(key, _)| key == "ui.close_on_outside_click"));
+        let source = edit("", "ui.close_on_outside_click", &json!(false)).unwrap();
+        assert_eq!(
+            config::parse(&source).unwrap()["ui"]["close_on_outside_click"],
+            false
+        );
+        assert!(edit("", "ui.close_on_outside_click", &json!("false")).is_err());
+    }
+
+    #[test]
     fn preserves_comments_and_rejects_invalid() {
         let src = "# header\n[ui] # settings\ncolumns = 5 # count\nview = \"grid\"\n";
         let result = edit(src, "ui.columns", &json!(6)).unwrap();

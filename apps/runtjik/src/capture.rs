@@ -759,11 +759,19 @@ pub(crate) fn countdown(spec: &Value) -> Result<bool> {
         .prefix("runtjik-countdown-")
         .tempdir()?;
     let success = temp.path().join("complete");
-    let mut child = Command::new("quickshell")
-        .args([
+    let mut command = if std::env::var("RUNTJIK_FRONTEND").as_deref() == Ok("gtk") {
+        let mut command = Command::new(paths::root().join("runtjik-gtk"));
+        command.arg("countdown");
+        command
+    } else {
+        let mut command = Command::new("quickshell");
+        command.args([
             "--path",
             &paths::root().join("qml/countdown").to_string_lossy(),
-        ])
+        ]);
+        command
+    };
+    let mut child = command
         .env("RUNTJIK_COUNTDOWN_SECONDS", seconds.to_string())
         .env("RUNTJIK_COUNTDOWN_OUTPUT", output)
         .env("RUNTJIK_COUNTDOWN_SUCCESS", &success)

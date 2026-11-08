@@ -49,7 +49,9 @@
       "version": "0.8.3",
       "dependencies": {
         "@tjikos/desktop": "workspace:*",
+        "@tjikos/gtk": "workspace:*",
         "@tjikos/tasktjik": "workspace:*",
+        "@tjikos/tasktjik-gtk": "workspace:*",
       },
       "devDependencies": {
         "web-ext": "10.2.0",

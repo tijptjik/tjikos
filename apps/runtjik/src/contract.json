@@ -11,6 +11,7 @@
       "monitor": "focused",
       "max_results": 100,
       "keep_alive": true,
+      "close_on_outside_click": true,
       "auto_launch_applications": true,
       "auto_launch_commands": true
     },
@@ -2648,6 +2649,10 @@
     [
       "ui.keep_alive",
       "Keep the launcher warm in memory while hidden"
+    ],
+    [
+      "ui.close_on_outside_click",
+      "Close the launcher when clicking outside its window"
     ],
     [
       "ui.auto_launch_applications",

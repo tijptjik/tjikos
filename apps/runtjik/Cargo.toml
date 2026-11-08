@@ -3,6 +3,14 @@ name = "runtjik-core"
 version = "0.8.3"
 edition = "2021"
 
+[features]
+gtk-ui = ["dep:gtk", "dep:async-channel", "dep:tjik-gtk", "dep:tasktjik-gtk"]
+
+[[bin]]
+name = "runtjik-gtk"
+path = "src/gtk/main.rs"
+required-features = ["gtk-ui"]
+
 [dependencies]
 tjik-desktop = { path = "../../packages/tjik-desktop" }
 anyhow = "1"
@@ -26,6 +34,10 @@ tempfile = "3"
 chrono = "0.4"
 uuid = { version = "1", features = ["v4"] }
 scraper = "0.24"
+gtk = { package = "gtk4", version = "0.10", features = ["v4_12"], optional = true }
+async-channel = { version = "2.5", optional = true }
+tjik-gtk = { path = "../../packages/tjik-gtk", optional = true }
+tasktjik-gtk = { path = "../../packages/tasktjik-gtk", optional = true }
 
 [profile.release]
 lto = "thin"

@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""Isolated synthetic comparison; ordinary windows silently placed before launch."""
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+
+def command(args, env=None, check=True):
+    return subprocess.run(args, env=env, check=check, text=True, capture_output=True, timeout=25)
+
+
+def main():
+    action = sys.argv[1] if len(sys.argv) > 1 else "show"
+    if action not in ("show", "close", "status") or len(sys.argv) > 2:
+        raise ValueError("Usage: runtjik compare [show|close|status]")
+    home = Path(os.environ["RUNTJIK_HOME"])
+    identity = hashlib.sha256((str(home) + os.environ.get("WAYLAND_DISPLAY", "")).encode()).hexdigest()[:12]
+    directory = Path(os.environ["XDG_RUNTIME_DIR"]) / ("runtjik-compare-" + identity)
+    directory.mkdir(mode=0o700, exist_ok=True)
+    directory.chmod(0o700)
+    with (directory / "lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        run(action, home, directory, identity)
+
+
+def run(action, home, directory, identity):
+    qml = directory / "qml"
+    titles = ("Runtjik comparison GTK " + identity, "Runtjik comparison Quickshell " + identity)
+    env = {**os.environ, "RUNTJIK_COMPARE_ID": identity, "RUNTJIK_SESSION": "compare-"+identity, "TJIK_GTK_WINDOWED": "1",
+           "RUNTJIK_DEMO": "1", "RUNTJIK_CONFIG": str(directory / "runtjik.conf"),
+           "XDG_STATE_HOME": str(directory / "state"), "QT_QUICK_CONTROLS_STYLE": "Basic"}
+    gtk = [str(home / "runtjik-gtk")]
+    qs = ["quickshell", "ipc", "--path", str(qml), "call", "runtjik"]
+    def state():
+        g = command([*gtk, "status", "--demo"], env, False)
+        q = command([*qs, "status"], env, False)
+        return {"gtk": json.loads(g.stdout) if g.returncode == 0 else {"running": False},
+                "quickshell": json.loads(q.stdout) if q.returncode == 0 else {"running": False}}
+    if action == "status":
+        print(json.dumps(state()))
+        return
+    rule = "runtjik_compare_" + identity
+    def hypr(*args):
+        return command(["hyprctl", *args]).stdout
+    def disable():
+        hypr("eval", f'if _G.{rule} then for _,r in ipairs(_G.{rule}) do r:set_enabled(false) end; _G.{rule}=nil end')
+    def close():
+        command([*gtk, "quit", "--demo"], env, False)
+        command([*qs, "quit"], env, False)
+        disable()
+    if action == "close":
+        close()
+        print("Comparison closed; normal launchers unchanged.")
+        return
+    current = state()
+    if current["gtk"].get("running") or current["quickshell"].get("pid"):
+        print("Comparison already exists on workspace 7. Use runtjik compare close to reset it.")
+        return
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        raise RuntimeError("Comparison needs Hyprland to guarantee silent workspace 7 placement")
+    active = json.loads(hypr("-j", "activeworkspace"))["name"]
+    workspaces = json.loads(hypr("-j", "workspaces"))
+    target = next((w["monitor"] for w in workspaces if w.get("id") == 7), None)
+    monitors = json.loads(hypr("-j", "monitors"))
+    monitor = next((m for m in monitors if m["name"] == target), next(m for m in monitors if m["focused"]))
+    width, height = monitor["width"], monitor["height"]
+    if monitor.get("transform", 0) % 2:
+        width, height = height, width
+    width, height = int(width / monitor["scale"]), int(height / monitor["scale"])
+    w, h = min(720, (width-48)//2), min(600, height-64)
+    if w < 360 or h < 300:
+        raise RuntimeError("Side-by-side comparison needs at least 768×364 logical pixels")
+    env.update(RUNTJIK_COMPARE_WIDTH=str(w), RUNTJIK_COMPARE_HEIGHT=str(h))
+    # Retain personal theme choices, with all comparison state and history isolated.
+    config = Path(os.environ.get("RUNTJIK_CONFIG", str(Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home()/".config"))) / "runtjik/runtjik.conf")))
+    source = config.read_text() if config.exists() else ""
+    def setting(text, section, key, value):
+        pattern = re.compile(r"(?ms)^\["+re.escape(section)+r"\]\s*\n(.*?)(?=^\[|\Z)")
+        match = pattern.search(text)
+        if not match:
+            return text + f"\n[{section}]\n{key}={value}\n"
+        body = re.sub(r"(?m)^\s*"+re.escape(key)+r"\s*=.*\n?", "", match[1])
+        return text[:match.start(1)] + body + f"{key}={value}\n" + text[match.end(1):]
+    for section, key, value in [("ui","width",w),("ui","height",h),("ui","auto_launch_applications","false"),("ui","auto_launch_commands","false"),("ui","keep_alive","true"),("history","enabled","false")]:
+        source = setting(source, section, key, value)
+    (directory / "runtjik.conf").write_text(source)
+    if qml.exists():
+        shutil.rmtree(qml)
+    shutil.copytree(home / "qml", qml)
+    shell = (qml / "shell.qml").read_text().replace("    LauncherWindow {", "    ComparisonWindow {")
+    shell = shell.replace("panel.width-32", "panel.width").replace("panel.height-32", "panel.height")
+    (qml / "shell.qml").write_text(shell)
+    disable()
+    rules = []
+    for index, label in enumerate(("GTK", "Quickshell")):
+        x, y = (width-2*w-16)//2+index*(w+16), (height-h)//2
+        rules.append('hl.window_rule({name='+json.dumps(rule+label)+',workspace="7 silent",float=true,no_initial_focus=true,no_focus=false,border_size=0,rounding=0,no_shadow=true,no_blur=true,no_anim=true,size={'+str(w)+','+str(h)+'},move={"('+str(x)+')","('+str(y)+')"},match={initial_title="^Runtjik comparison '+label+' '+identity+'$"}})')
+    result = hypr("eval", '_G.'+rule+'={'+','.join(rules)+'}')
+    if "error" in result.lower():
+        raise RuntimeError(result)
+    child = None
+    try:
+        with (directory / "quickshell.log").open("w") as log:
+            child = subprocess.Popen(["quickshell", "--path", str(qml), "--no-duplicate"], env=env,
+                             stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+        command([*gtk, "show", "--demo"], env)
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            clients = [c for c in json.loads(hypr("-j", "clients")) if c["initialTitle"] in titles]
+            if len(clients) == 2:
+                assert all(c["workspace"]["id"] == 7 for c in clients), "Incorrect comparison workspace"
+                assert json.loads(hypr("-j", "activeworkspace"))["name"] == active, "Workspace changed"
+                print("GTK and Quickshell are side by side on workspace 7 (synthetic data). Default frontend unchanged.")
+                return
+            time.sleep(.1)
+        raise RuntimeError(f"Comparison did not open; see {directory}/quickshell.log")
+    except Exception:
+        close()
+        if child and child.poll() is None:
+            child.terminate()
+            child.wait(timeout=5)
+        raise
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as error:
+        print(f"Runtjik comparison: {error}", file=sys.stderr)
+        sys.exit(1)

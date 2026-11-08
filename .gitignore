@@ -15,6 +15,7 @@ __pycache__/
 **/target/
 apps/runtjik/target
 apps/runtjik/runtjik-core
+apps/runtjik/runtjik-gtk
 
 /apps/tasktjik/tasktjik-api
 
@@ -25,3 +26,5 @@ apps/runtjik/runtjik-core
 **/.wrangler/
 **/.dev.vars*
 **/worker-configuration.d.ts
+
+apps/runtjik/lib/

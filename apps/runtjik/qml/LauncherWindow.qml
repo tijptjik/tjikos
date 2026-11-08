@@ -9,6 +9,8 @@ PanelWindow {
     id: window
     required property var targetScreen
     property bool pinned: false
+    property bool closeOnOutsideClick: true
+    onCloseOnOutsideClickChanged: {boundsRevision++;observerDelay.restart();}
     property bool ownsKeyboard: true
     property bool acquiringKeyboard: false
     function acquireKeyboard() {
@@ -47,7 +49,7 @@ PanelWindow {
         armedRevision=boundsRevision;
         observer.command=['hyprctl','eval','assert(loadfile('+JSON.stringify(hook)+'))()('
             +Quickshell.processId+','+Math.round(screen.x+frameX)+','+Math.round(screen.y+frameY)+','
-            +Math.round(frameWidth)+','+Math.round(frameHeight)+','+pinned+')'];
+            +Math.round(frameWidth)+','+Math.round(frameHeight)+','+(pinned || !closeOnOutsideClick)+')'];
         observer.running=true;
     }
     onBackingWindowVisibleChanged: {if (backingWindowVisible) observerDelay.restart();else observed=false;}
