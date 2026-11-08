@@ -1,187 +1,182 @@
 # Native cutover status — 2026-10-30
 
 For the current 1 November failures, preserved commits and update runs, see
-[FLEET-UPDATE-20261101.md](FLEET-UPDATE-20261101.md). The following is the
-30 October deployment record; Si's Drive restore validation has since passed.
+[FLEET-UPDATE-20261101.md](FLEET-UPDATE-20261101.md). The following is the 30 October
+deployment record; Si's Drive restore validation has since passed.
 
-**Li's native release catch-up and convergence are complete.** The fleet is not
-yet fully cut over: Si still awaits its backup and restore-validation gates.
+**Li's native release catch-up and convergence are complete.** The fleet is not yet
+fully cut over: Si still awaits its backup and restore-validation gates.
 
 ## Fleet release adoption completed
 
-On 30 October, all nine Tjikup runtime copies (user, privileged system and
-weekly on Fi/Li/Si) were upgraded to published `bootstrap.7` and verified against
-SHA-256 `1f981f941e508f873521ae191bb081afc1552e3de3a532f6544cf68dcdeeac2e`.
-Native configuration checks passed for Fi (103 recipes), Li (96), and Si (46).
-Previous runtimes are preserved privately under
-`~/.local/state/tjikup/bootstrap7-adoption-20261030/` on each machine.
+On 30 October, all nine Tjikup runtime copies (user, privileged system and weekly on
+Fi/Li/Si) were upgraded to published `bootstrap.7` and verified against SHA-256
+`1f981f941e508f873521ae191bb081afc1552e3de3a532f6544cf68dcdeeac2e`. Native configuration
+checks passed for Fi (103 recipes), Li (96), and Si (46). Previous runtimes are
+preserved privately under `~/.local/state/tjikup/bootstrap7-adoption-20261030/` on each
+machine.
 
-Si's queued cutover is now
-`tjikup-si-native-cutover-bootstrap7-20261030.service`. Its reviewed tools pin
-is `8a54f8ca7cb0d067cbbdf2948dc613db2acb0ed0`, and its Tjikup checksum gate uses
-the release above. All backup, restore, clean-checkout and home-baseline gates
-remain in place. The prior waiting job was replaced; the Drive process and
-invocation remained unchanged (PID 2968161, invocation
-`e49234b147e04a2dad79550ba87362c1`). The published runtime's Transmission dry-run
-passed with no removal candidates; the cleanup timer remains active.
+Si's queued cutover is now `tjikup-si-native-cutover-bootstrap7-20261030.service`. Its
+reviewed tools pin is `8a54f8ca7cb0d067cbbdf2948dc613db2acb0ed0`, and its Tjikup
+checksum gate uses the release above. All backup, restore, clean-checkout and
+home-baseline gates remain in place. The prior waiting job was replaced; the Drive
+process and invocation remained unchanged (PID 2968161, invocation
+`e49234b147e04a2dad79550ba87362c1`). The published runtime's Transmission dry-run passed
+with no removal candidates; the cleanup timer remains active.
 
-Remaining operational work: finish Si's Drive backup, pass restore validation,
-complete and verify the queued native cutover, then review retirement of the
-remaining legacy compatibility/recovery paths. No Tjikup release rollout is
-pending. Concurrent application development is outside this migration work.
+Remaining operational work: finish Si's Drive backup, pass restore validation, complete
+and verify the queued native cutover, then review retirement of the remaining legacy
+compatibility/recovery paths. No Tjikup release rollout is pending. Concurrent
+application development is outside this migration work.
 
 ## Completed
 
 - Published signed `synctjik-v0.1.0-bootstrap.4` from
-  `2c0963bfc806f100dc292b2036e9cb83823eeba8`.
-  Static Linux x86_64 executable SHA-256:
-  `eaf2e98fcd4bc0ad41d324170ceca763ad5161d224982146914c89e520e0a426`.
-  Downloaded assets, checksum manifest, source provenance, static linking and
-  native/protection capabilities were verified.
-- Fixed `private-assets crypt-password` to use BWS directly with the existing
-  private token file or environment. It no longer invokes the removed Fish
-  helper. Synthetic tests cover successful encryption, provider failures,
-  mismatched secret IDs, token-file permissions and preservation of old output.
-  No live encryption password was changed.
-- Fixed a directory-order-dependent application-backup bug: SQLite snapshot
-  replacement removes staged WAL/SHM/journal files; the scanner now skips those
-  deliberately removed paths. The live source database remains untouched.
-- Fixed release CI's sparse checkout to include shared Fish completion files
-  and installed its real restore-test dependencies. The earlier `.3` tag failed
-  CI and produced no release; its immutable tag was not rewritten.
-- Updated binary and source pins, removed obsolete Python enrollment guidance,
-  and deployed `https://sh.type.hk`. The public `/init` and `/guide` were compared
+  `2c0963bfc806f100dc292b2036e9cb83823eeba8`. Static Linux x86_64 executable SHA-256:
+  `eaf2e98fcd4bc0ad41d324170ceca763ad5161d224982146914c89e520e0a426`. Downloaded assets,
+  checksum manifest, source provenance, static linking and native/protection
+  capabilities were verified.
+- Fixed `private-assets crypt-password` to use BWS directly with the existing private
+  token file or environment. It no longer invokes the removed Fish helper. Synthetic
+  tests cover successful encryption, provider failures, mismatched secret IDs,
+  token-file permissions and preservation of old output. No live encryption password was
+  changed.
+- Fixed a directory-order-dependent application-backup bug: SQLite snapshot replacement
+  removes staged WAL/SHM/journal files; the scanner now skips those deliberately removed
+  paths. The live source database remains untouched.
+- Fixed release CI's sparse checkout to include shared Fish completion files and
+  installed its real restore-test dependencies. The earlier `.3` tag failed CI and
+  produced no release; its immutable tag was not rewritten.
+- Updated binary and source pins, removed obsolete Python enrollment guidance, and
+  deployed `https://sh.type.hk`. The public `/init` and `/guide` were compared
   byte-for-byte with the reviewed artifacts. Worker version:
   `42e63974-3974-4c81-b1db-8f21d91d8bdf`.
-- Fi now runs the published Synctjik binary; readiness passes and schedule
-  migration reports current. Its next scheduled jobs use this binary.
+- Fi now runs the published Synctjik binary; readiness passes and schedule migration
+  reports current. Its next scheduled jobs use this binary.
 - Fi, Li and Si user, weekly and privileged Tjikup copies converge on published
   `tjikup-v0.2.0-bootstrap.6`, SHA-256
-  `2419a610a0cc47f6d96b7d590b022cf870638ebd0afc0b4ba9af39599e0f55af`.
-  Native system applies found 19/20/90 unchanged files respectively.
-- Merged Li and Si's equivalent Telegram-policy commits into shared history.
-  Both remote checkouts were clean when inspected. Published policy revision
+  `2419a610a0cc47f6d96b7d590b022cf870638ebd0afc0b4ba9af39599e0f55af`. Native system
+  applies found 19/20/90 unchanged files respectively.
+- Merged Li and Si's equivalent Telegram-policy commits into shared history. Both remote
+  checkouts were clean when inspected. Published policy revision
   `a28c5f8046b16bcdd6594818671bb63192fc9f72` includes removal rules for an older
-  `chezup` launcher and obsolete Python Tjikup/Chezup modules discovered during
-  this pass. Fi's copies were moved to private recovery storage.
+  `chezup` launcher and obsolete Python Tjikup/Chezup modules discovered during this
+  pass. Fi's copies were moved to private recovery storage.
 - Preserved all unrelated local icon edits and all running archive workers.
 
 ## Further Fi-only cleanup
 
 Completed without contacting Si or Li:
 
-- Dotjik and Systjik now have canonical icon files, catalog keys and fleet
-  mappings. Old icon paths are removal tombstones. Artwork bytes are unchanged.
-  Fi received only the eight affected icon-path changes through native receipts,
-  and its icon cache was refreshed. All eight entries then checked unchanged.
-- Integrated the rename through an isolated worktree; verified all 68 existing
-  dirty files retained their prior edits, including overlapping catalog metadata.
-- Discovered and retired the older `chezupdate` Python launcher/package as well.
-  Removal rules are published in policy revision
-  `58b328a7c9ce13fce663d576d2a64a76664a8f4e`.
-- Moved Fi's duplicate legacy age identity, unused legacy configuration folders,
-  two inactive Fish snapshots and an old migration-recovery directory into
+- Dotjik and Systjik now have canonical icon files, catalog keys and fleet mappings. Old
+  icon paths are removal tombstones. Artwork bytes are unchanged. Fi received only the
+  eight affected icon-path changes through native receipts, and its icon cache was
+  refreshed. All eight entries then checked unchanged.
+- Integrated the rename through an isolated worktree; verified all 68 existing dirty
+  files retained their prior edits, including overlapping catalog metadata.
+- Discovered and retired the older `chezupdate` Python launcher/package as well. Removal
+  rules are published in policy revision `58b328a7c9ce13fce663d576d2a64a76664a8f4e`.
+- Moved Fi's duplicate legacy age identity, unused legacy configuration folders, two
+  inactive Fish snapshots and an old migration-recovery directory into
   `~/.local/state/tjikup/native-cutover-20261030/`. Key bytes were compared before
   moving the duplicate; the canonical private identity passed the system check.
-- Active Fish configuration, user units, text launchers and installed source
-  modules scan clean for the retired deployment names. Native Tjikup validation
-  and Synctjik readiness pass. Recovery copies and migration fallbacks remain.
+- Active Fish configuration, user units, text launchers and installed source modules
+  scan clean for the retired deployment names. Native Tjikup validation and Synctjik
+  readiness pass. Recovery copies and migration fallbacks remain.
 - Replaced the Python context-command example and obsolete adapter/system-runtime
   guidance with native workflow commands. Updated icon documentation.
 - Published bootstrap source pins containing this cleanup and verified the public
   installer and release manifest. No new runtime release was needed.
-- Revalidated the dirty policy checkout: 321 tests, nine skipped, passed; all
-  nine workspace build tasks and all ten bootstrap checks passed. Fi's final
-  native configuration, icon-file checks and archive readiness passed.
+- Revalidated the dirty policy checkout: 321 tests, nine skipped, passed; all nine
+  workspace build tasks and all ten bootstrap checks passed. Fi's final native
+  configuration, icon-file checks and archive readiness passed.
 
-The previously queued Si/Li work retains its reviewed pins. These newer cosmetic
-and cleanup changes can reach them through normal policy synchronization after
-that cutover; no remote job was changed during this follow-up.
+The previously queued Si/Li work retains its reviewed pins. These newer cosmetic and
+cleanup changes can reach them through normal policy synchronization after that cutover;
+no remote job was changed during this follow-up.
 
 ## Si: repaired backup and new guarded cutover
 
-The original Drive run failed at 03:45 HKT on 2026-10-30; its validator and
-cutover stopped safely. See [SI-BACKUP-REPAIR.md](SI-BACKUP-REPAIR.md) for the
-current repair evidence and exact follow-up commands/paths.
+The original Drive run failed at 03:45 HKT on 2026-10-30; its validator and cutover
+stopped safely. See [SI-BACKUP-REPAIR.md](SI-BACKUP-REPAIR.md) for the current repair
+evidence and exact follow-up commands/paths.
 
-- Application backup now succeeds with the SQLite-fixed release: snapshot
-  `9f078a50`, 25,797 files / 23.3 GB; 46 SQLite checks and a sample restore passed.
-- Concurrent recovery restarted Drive at 14:08:38 HKT with a new validator.
-  Both remain active; no current Drive success is claimed.
-- `bootstrap.5` adds private dependency logs and is staged for installation only
-  after the running validator finishes.
+- Application backup now succeeds with the SQLite-fixed release: snapshot `9f078a50`,
+  25,797 files / 23.3 GB; 46 SQLite checks and a sample restore passed.
+- Concurrent recovery restarted Drive at 14:08:38 HKT with a new validator. Both remain
+  active; no current Drive success is claimed.
+- `bootstrap.5` adds private dependency logs and is staged for installation only after
+  the running validator finishes.
 - `tjikup-si-native-cutover-bootstrap7-20261030.service` is queued against the new
   validator and also requires a fresh successful application backup.
-- Transmission's sandbox and native shared-file filename check are repaired.
-  After explicit approval, all 12 approved torrents and downloaded files were
-  removed and verified at 14:54 HKT. The cleanup timer is restored. The system
-  runtime now uses published `bootstrap.7`. The fix is
-  published in signed `tjikup-v0.2.0-bootstrap.7` from `c303b00`; release CI
-  passed and downloaded checksums, provenance, capabilities and static linking
-  were verified. Fleet adoption and Si's reviewed checksum-gate update are
-  complete as recorded above.
+- Transmission's sandbox and native shared-file filename check are repaired. After
+  explicit approval, all 12 approved torrents and downloaded files were removed and
+  verified at 14:54 HKT. The cleanup timer is restored. The system runtime now uses
+  published `bootstrap.7`. The fix is published in signed `tjikup-v0.2.0-bootstrap.7`
+  from `c303b00`; release CI passed and downloaded checksums, provenance, capabilities
+  and static linking were verified. Fleet adoption and Si's reviewed checksum-gate
+  update are complete as recorded above.
 
 The original cutover evidence is preserved; the new attempt writes `repair-run.*`
-markers in the same private cutover directory. Neither a queued unit nor an
-inactive unit establishes successful cutover.
+markers in the same private cutover directory. Neither a queued unit nor an inactive
+unit establishes successful cutover.
 
 ## Li: catch-up completed on 30 October
 
-- Connected through native pinned-host resolution. Both managed repositories
-  were clean initially and fast-forwarded to policy `971db4a6` and tools
-  `12a6158`; no local changes needed merging.
-- Waited for the existing private-folder sync to finish before installing
-  Synctjik `bootstrap.5`. User/system checksums match the published release.
-  All three Tjikup copies match published `bootstrap.6`.
+- Connected through native pinned-host resolution. Both managed repositories were clean
+  initially and fast-forwarded to policy `971db4a6` and tools `12a6158`; no local
+  changes needed merging.
+- Waited for the existing private-folder sync to finish before installing Synctjik
+  `bootstrap.5`. User/system checksums match the published release. All three Tjikup
+  copies match published `bootstrap.6`.
 - Preserved obsolete Python runtime material under
   `~/.local/state/tjikup/native-cutover-20261030/retired-python/`.
-- Native convergence succeeded in
-  `tjikup-li-converge-path-20261030.service`; configuration, icons, services and
-  missing terminal tools converged. A first manually launched job lacked PATH;
-  its corrected retry passed.
-- Package updates succeeded in `tjikup-li-updates-20261030.service`, including
-  OBS 33.0.1 and ChatGPT Desktop 26.1027.30824-1. The previous Zed installer
-  failure is resolved; Zed and the application verification tasks passed.
-- Retried the native encrypted private-assets backup to Si. Snapshot
-  `0a37770d`, dated 15:04:10 HKT, contains documents/media/projects/resources
-  (151.852 MiB). The service exited 0 and the durable success receipt is dated
-  `20261030T070558Z`. Native verification and retention completed. No additional
-  sample restore was performed during this catch-up.
-- Readiness and schedule migration passed. All four managed sync/backup/weekly
-  timers are enabled and active. Resolved historical failure flags were cleared;
-  final user and system failed-unit lists are empty.
-- Fi's old catch-up retry was disabled and marked complete. After the initially
-  clean checkout, concurrent Bartjik battery edits appeared on Li; these were
-  preserved untouched and are not included in this work.
+- Native convergence succeeded in `tjikup-li-converge-path-20261030.service`;
+  configuration, icons, services and missing terminal tools converged. A first manually
+  launched job lacked PATH; its corrected retry passed.
+- Package updates succeeded in `tjikup-li-updates-20261030.service`, including OBS
+  33.0.1 and ChatGPT Desktop 26.1027.30824-1. The previous Zed installer failure is
+  resolved; Zed and the application verification tasks passed.
+- Retried the native encrypted private-assets backup to Si. Snapshot `0a37770d`, dated
+  15:04:10 HKT, contains documents/media/projects/resources (151.852 MiB). The service
+  exited 0 and the durable success receipt is dated `20261030T070558Z`. Native
+  verification and retention completed. No additional sample restore was performed
+  during this catch-up.
+- Readiness and schedule migration passed. All four managed sync/backup/weekly timers
+  are enabled and active. Resolved historical failure flags were cleared; final user and
+  system failed-unit lists are empty.
+- Fi's old catch-up retry was disabled and marked complete. After the initially clean
+  checkout, concurrent Bartjik battery edits appeared on Li; these were preserved
+  untouched and are not included in this work.
 
 ## Remaining names and wider Python scope
 
 This is not a claim that every historical string or Python file has vanished.
 
-- Keep removal tombstones until obsolete clients have converged. Old lock,
-  baseline and receipt paths remain compatibility contracts.
-- Existing age identity recovery copies and the migration fallback are retained.
-  Fi now keeps its duplicate only in private recovery storage.
-- Si's old checkout paths remain until home acceptance. Li's old compatibility
-  links and clean legacy system checkout remain as recovery material. Fi's old Tooltjik checkout is clean
-  and its commit is ancestral to TjikOS, but an open Fish shell still uses it
+- Keep removal tombstones until obsolete clients have converged. Old lock, baseline and
+  receipt paths remain compatibility contracts.
+- Existing age identity recovery copies and the migration fallback are retained. Fi now
+  keeps its duplicate only in private recovery storage.
+- Si's old checkout paths remain until home acceptance. Li's old compatibility links and
+  clean legacy system checkout remain as recovery material. Fi's old Tooltjik checkout
+  is clean and its commit is ancestral to TjikOS, but an open Fish shell still uses it
   as its working directory, so it was not moved.
-- Canonical icon naming is complete in policy and on Fi/Li. Si still needs
-  final acceptance after its guarded native cutover.
-- Frozen Python test oracles, build/test utilities and Python application or
-  host extensions remain. They are not all responsibilities of Tjikup/Synctjik.
+- Canonical icon naming is complete in policy and on Fi/Li. Si still needs final
+  acceptance after its guarded native cutover.
+- Frozen Python test oracles, build/test utilities and Python application or host
+  extensions remain. They are not all responsibilities of Tjikup/Synctjik.
 
 ## Validation
 
-- Published release CI: 24 Rust tests passed, one intentionally ignored;
-  all 75 Python compatibility/protection tests passed.
-- Local protection rerun after the WAL fix: 28 passed, including synthetic
-  Restic restore verification. Installer tests: 7 passed.
+- Published release CI: 24 Rust tests passed, one intentionally ignored; all 75 Python
+  compatibility/protection tests passed.
+- Local protection rerun after the WAL fix: 28 passed, including synthetic Restic
+  restore verification. Installer tests: 7 passed.
 - Workspace `bun install` / `bun run build`: all nine build tasks passed.
 - Bootstrap checks: 10 passed; deployed installer and guide byte checks passed.
-- Policy validation: 321 tests, nine skipped, passed; native task templates
-  rendered for Fi, Li and Si. An initial isolated rendering failure passed its
-  focused rerun and subsequent full validation runs.
+- Policy validation: 321 tests, nine skipped, passed; native task templates rendered for
+  Fi, Li and Si. An initial isolated rendering failure passed its focused rerun and
+  subsequent full validation runs.
 
-Fleet results are observations at deployment time. Successful release tests and
-Fi/Li readiness do not establish Si restore success.
+Fleet results are observations at deployment time. Successful release tests and Fi/Li
+readiness do not establish Si restore success.

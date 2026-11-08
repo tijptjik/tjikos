@@ -7,10 +7,12 @@
     "whatsover": "cargo run --manifest-path packages/whatsover-engine/Cargo.toml --locked --bin whatsover --",
     "build": "turbo run build",
     "check": "turbo run check",
+    "format:markdown": "prettier --write \"**/*.md\" && prettier --parser markdown --write --no-error-on-unmatched-pattern \"**/llms.txt\"",
+    "format:markdown:check": "prettier --check \"**/*.md\" && prettier --parser markdown --check --no-error-on-unmatched-pattern \"**/llms.txt\"",
     "demo": "turbo run demo --filter=@tjikos/mailtjik",
     "install:local": "bun run build && bash scripts/install.sh --from-build",
     "dev": "bun scripts/run-local.ts",
     "test:local-run": "bun test scripts/tests/run-local.test.ts"
   },
-  "devDependencies": {"turbo": "2.5.8"}
+  "devDependencies": {"prettier": "^3.9.10", "turbo": "2.5.8"}
 }

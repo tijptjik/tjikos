@@ -1,34 +1,34 @@
 # Card types and calling Notjik
 
-Notjik accepts ordinary desktop notifications and richer cards from `notjikctl`.
-The CLI uses Quickshell IPC; a running Notjik session is required.
+Notjik accepts ordinary desktop notifications and richer cards from `notjikctl`. The CLI
+uses Quickshell IPC; a running Notjik session is required.
 
 ```sh
 notify-send 'Flight recorder secured' 'Black box synced.'
 notjikctl send 'Flight recorder secured' 'Black box synced.' --app flight-deck
 ```
 
-`notify-send` uses the standard desktop D-Bus interface. Use `notjikctl` when you
-need structured status, timers, progress or explicit command buttons.
+`notify-send` uses the standard desktop D-Bus interface. Use `notjikctl` when you need
+structured status, timers, progress or explicit command buttons.
 
 ## Types at a glance
 
-| Card | How to request it | Data |
-| --- | --- | --- |
-| Standard | `--type standard` (default) | Title and optional body |
-| Icon / artwork | Any type with `--icon` or `--image` | Icon name, or local image path |
-| Status / error | `--type status` | `state`, optional `detail`, `tone` |
-| Progress / update | `--type progress` | `value` from 0 to 100, optional `label` |
-| Results table | `--type results-table` | `results` rows, optional `state`, `tone`, `duration` |
-| Countdown | `--type timer` | `seconds`, optional `label`, `doneLabel` |
-| Multiple actions | Any type with `--actions` | JSON array of labels and command argument arrays |
-| Urgency | Any type with `--urgency` | `low`, `normal`, `critical` |
-| Grouped | Any type with `--group` | Shared group key within the sender application |
-| Telegram | Optional Telegram bridge | Text, photo, voice, sticker, emoji and animation |
+| Card              | How to request it                   | Data                                                 |
+| ----------------- | ----------------------------------- | ---------------------------------------------------- |
+| Standard          | `--type standard` (default)         | Title and optional body                              |
+| Icon / artwork    | Any type with `--icon` or `--image` | Icon name, or local image path                       |
+| Status / error    | `--type status`                     | `state`, optional `detail`, `tone`                   |
+| Progress / update | `--type progress`                   | `value` from 0 to 100, optional `label`              |
+| Results table     | `--type results-table`              | `results` rows, optional `state`, `tone`, `duration` |
+| Countdown         | `--type timer`                      | `seconds`, optional `label`, `doneLabel`             |
+| Multiple actions  | Any type with `--actions`           | JSON array of labels and command argument arrays     |
+| Urgency           | Any type with `--urgency`           | `low`, `normal`, `critical`                          |
+| Grouped           | Any type with `--group`             | Shared group key within the sender application       |
+| Telegram          | Optional Telegram bridge            | Text, photo, voice, sticker, emoji and animation     |
 
 Icon, error, update, urgency and grouped are presentation variations, not separate
-`--type` values. Telegram cards come from the bridge; the synthetic demo provides
-an account-free way to inspect them.
+`--type` values. Telegram cards come from the bridge; the synthetic demo provides an
+account-free way to inspect them.
 
 ## Standard cards and artwork
 
@@ -39,9 +39,9 @@ notjikctl send 'Surface survey' 'First light on Nacre.' \
   --image /absolute/path/surface.png --timeout never
 ```
 
-`--icon` uses an installed icon name. `--image` supplies local artwork. Omitting
-artwork allows the configured robot fallback. `--timeout` accepts durations such
-as `8s`, `2m` and `never`; omitting it uses the configured urgency timeout.
+`--icon` uses an installed icon name. `--image` supplies local artwork. Omitting artwork
+allows the configured robot fallback. `--timeout` accepts durations such as `8s`, `2m`
+and `never`; omitting it uses the configured urgency timeout.
 
 ## Status and errors
 
@@ -53,13 +53,13 @@ notjikctl send 'Reactor fault' 'Engineering · deck 4' --type status \
   --data '{"state":"Failed","tone":"critical","detail":"Containment field unstable"}'
 ```
 
-`tone: "critical"` uses the error accent; `"success"` uses the success accent.
-Other tone values use the theme accent. Urgency controls the notification's
-priority and default lifetime independently of its status text.
+`tone: "critical"` uses the error accent; `"success"` uses the success accent. Other
+tone values use the theme accent. Urgency controls the notification's priority and
+default lifetime independently of its status text.
 
-Set `"rainbow-text": true` to render a status state character-by-character in
-Tjikup's six-colour rainbow palette. This is intended for celebratory, compact states
-such as `ALL SYSTEMS GO`; the status tone still controls the leading indicator.
+Set `"rainbow-text": true` to render a status state character-by-character in Tjikup's
+six-colour rainbow palette. This is intended for celebratory, compact states such as
+`ALL SYSTEMS GO`; the status tone still controls the leading indicator.
 
 ## Update one card in place
 
@@ -93,10 +93,10 @@ notjikctl send 'Unidentified cargo aboard' 'It is warm. It is humming.' \
   --actions '[{"label":"Open manifest","command":["xdg-open","https://github.com/tijptjik/tjikos"]},{"label":"Open home folder","command":["xdg-open","."]}]'
 ```
 
-Buttons reveal on hover or keyboard selection. Commands are argument arrays,
-not shell strings, and run only when invoked. `--resident` keeps a notification
-open after an action. Native D-Bus actions are returned to the originating app;
-they do not grant that app arbitrary command execution through notification hints.
+Buttons reveal on hover or keyboard selection. Commands are argument arrays, not shell
+strings, and run only when invoked. `--resident` keeps a notification open after an
+action. Native D-Bus actions are returned to the originating app; they do not grant that
+app arbitrary command execution through notification hints.
 
 ## Grouping and history
 
@@ -108,15 +108,15 @@ notjikctl history show
 notjikctl history hide
 ```
 
-With grouping enabled, related notices share a card and count indicator. Hovering
-the grouped card opens its conversation in notification history. History is local;
+With grouping enabled, related notices share a card and count indicator. Hovering the
+grouped card opens its conversation in notification history. History is local;
 `--transient` excludes a notice unless `history.logTransient` is enabled.
 
 ## Telegram cards
 
-The optional bridge supplies text replies, photo previews and mark-as-read,
-voice playback and recording, and animated media with quote replies.
-Follow [Telegram setup and account requirements](../README.md#telegram-photos-and-voice-messages)
+The optional bridge supplies text replies, photo previews and mark-as-read, voice
+playback and recording, and animated media with quote replies. Follow
+[Telegram setup and account requirements](../README.md#telegram-photos-and-voice-messages)
 for a real account. Media and microphone support have additional dependencies.
 
 To preview those interactions with synthetic messages and no account or microphone:
@@ -131,37 +131,37 @@ These directed demos simulate sends and recording. They do not send Telegram mes
 
 ### Clipboard formats
 
-**Shift+left-click** anywhere on a card copies Markdown text to the regular
-clipboard and shows “Copied as Markdown”. This works on popups, detached cards,
-and history. Shift takes priority over Ctrl, dismissal, selection and action
-buttons. Ordinary clicks and drags retain their usual behaviour.
+**Shift+left-click** anywhere on a card copies Markdown text to the regular clipboard
+and shows “Copied as Markdown”. This works on popups, detached cards, and history. Shift
+takes priority over Ctrl, dismissal, selection and action buttons. Ordinary clicks and
+drags retain their usual behaviour.
 
-The export includes the full body even when the card truncates it. It omits the
-title unless there is no body or structured content, when the title is the
-fallback. Body text retains its original line breaks and any authored Markdown;
-generated labels and table cells escape Markdown punctuation.
+The export includes the full body even when the card truncates it. It omits the title
+unless there is no body or structured content, when the title is the fallback. Body text
+retains its original line breaks and any authored Markdown; generated labels and table
+cells escape Markdown punctuation.
 
-| Card | Clipboard output |
-| --- | --- |
-| Standard, artwork, urgency or action variants | Body text. Artwork, urgency decoration and buttons add nothing. |
-| Status / error | Body, then `**Status:** state`, then the detail paragraph. |
-| Progress / update | Body, then `**label:** 75%` using the current rounded percentage; label defaults to “Progress”. |
-| Countdown | Body, then `**label:** MM:SS` at click time. Finished timers use the done label and `00:00`. |
-| Results table | Body, then a Markdown Field/Value table; ingredient rows have a `↳` prefix, followed by status and optional duration. |
-| Parsed key/value view | Heading and a Markdown Field/Value table, replacing the raw body as on the card. |
-| Task / todo | Body, then `**Group:** group` and `**Due:** due`. |
-| Telegram text | Original message text, without display-only HTML. |
+| Card                                               | Clipboard output                                                                                                                         |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Standard, artwork, urgency or action variants      | Body text. Artwork, urgency decoration and buttons add nothing.                                                                          |
+| Status / error                                     | Body, then `**Status:** state`, then the detail paragraph.                                                                               |
+| Progress / update                                  | Body, then `**label:** 75%` using the current rounded percentage; label defaults to “Progress”.                                          |
+| Countdown                                          | Body, then `**label:** MM:SS` at click time. Finished timers use the done label and `00:00`.                                             |
+| Results table                                      | Body, then a Markdown Field/Value table; ingredient rows have a `↳` prefix, followed by status and optional duration.                    |
+| Parsed key/value view                              | Heading and a Markdown Field/Value table, replacing the raw body as on the card.                                                         |
+| Task / todo                                        | Body, then `**Group:** group` and `**Due:** due`.                                                                                        |
+| Telegram text                                      | Original message text, without display-only HTML.                                                                                        |
 | Telegram photo, sticker, emoji, animation or voice | Body or caption, a `**Media:**` description with duration/emoji when supplied, and any available transcript. Media files are not copied. |
-| Custom component | Body text, or the title when empty. Arbitrary component data is not exported. |
-| Grouped card | Only the displayed notice; open history to copy individual messages. |
+| Custom component                                   | Body text, or the title when empty. Arbitrary component data is not exported.                                                            |
+| Grouped card                                       | Only the displayed notice; open history to copy individual messages.                                                                     |
 
 Table cell line breaks become `<br>`. Clipboard content excludes action commands,
-internal IDs, cached media paths, reply drafts and artwork. History exports its
-stored message content; countdowns are calculated at click time.
+internal IDs, cached media paths, reply drafts and artwork. History exports its stored
+message content; countdowns are calculated at click time.
 
 For the screen-recording card, for example, the clipboard contains
-`Saved /tmp/runtjik-native-migration-4431gucv/synthetic.mp4`. The backup warning
-copies the complete log-check instructions without its title.
+`Saved /tmp/runtjik-native-migration-4431gucv/synthetic.mp4`. The backup warning copies
+the complete log-check instructions without its title.
 
 ### CLI controls
 
@@ -182,14 +182,14 @@ See [configuration](../README.md#configuration),
 
 ## Results tables
 
-`results-table` is built into Notjik and needs no `components` registration.
-Each row in `results` has a `label`, `value`, optional `tone`, and optional
-`ingredients`: secondary rows with `label` and `value`. The footer accepts
-`state` (defaults to `Running`), `tone`, and `duration`. Critical row values use
-the error accent; other values use the theme accent. Footer tone supports
-`critical`, `success`, or the theme accent. Set `"rainbow-text": true` to colour
-the footer state character-by-character, matching Tjikup's completion banner.
-Text is rendered literally, including when rainbow colouring is enabled.
+`results-table` is built into Notjik and needs no `components` registration. Each row in
+`results` has a `label`, `value`, optional `tone`, and optional `ingredients`: secondary
+rows with `label` and `value`. The footer accepts `state` (defaults to `Running`),
+`tone`, and `duration`. Critical row values use the error accent; other values use the
+theme accent. Footer tone supports `critical`, `success`, or the theme accent. Set
+`"rainbow-text": true` to colour the footer state character-by-character, matching
+Tjikup's completion banner. Text is rendered literally, including when rainbow colouring
+is enabled.
 
 ```sh
 notjikctl send 'Surface survey complete' --app survey --id sector-report \
@@ -197,5 +197,5 @@ notjikctl send 'Surface survey complete' --app survey --id sector-report \
   --data '{"results":[{"label":"Sectors mapped","value":"12","ingredients":[{"label":"New signals","value":"3"}]}],"state":"Complete","tone":"success","duration":"42s"}'
 ```
 
-Sending the same application and ID again updates the table in place. The QML
-component ships at `qml/components/ResultsTable.qml` in the Notjik package.
+Sending the same application and ID again updates the table in place. The QML component
+ships at `qml/components/ResultsTable.qml` in the Notjik package.
