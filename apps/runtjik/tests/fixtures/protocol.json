@@ -7296,7 +7296,7 @@
             },
             {
               "id": "Screenshots:history",
-              "name": "Previous screenshots",
+              "name": "History",
               "subtitle": "Browse your gallery · Enter opens it",
               "provider": "Screenshots",
               "favicon": "",
@@ -8116,7 +8116,7 @@
             },
             {
               "id": "Recorder:history",
-              "name": "Previous recordings",
+              "name": "History",
               "subtitle": "Browse your gallery · Enter opens it",
               "provider": "Recorder",
               "favicon": "",

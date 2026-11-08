@@ -80,9 +80,9 @@ class CaptureHistoryTests(unittest.TestCase):
             time.sleep(.02)
             result = backend.request(op='query', query='/grab history')
         rows = result['results']
-        self.assertEqual([row['name'] for row in rows[:2]], ['Hyprshot.png', 'Runtjik.png'])
+        self.assertEqual([row['name'] for row in rows[1:]], ['Hyprshot.png', 'Runtjik.png'])
         self.assertEqual(len(rows), 3)
-        clip = rows[2]
+        clip = rows[0]
         self.assertTrue(clip['name'].startswith('Clipboard · PNG image'))
         self.assertTrue(Path(clip['thumbnail']).is_file())
         self.assertEqual(backend.request(op='activate', id=clip['id'])['kind'], 'activated')

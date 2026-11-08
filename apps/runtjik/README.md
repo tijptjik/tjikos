@@ -647,7 +647,7 @@ excluded until finalized. Aliases share one command-menu row.
 Screenshot history also includes images retained by `cliphist`, including captures from
 clipboard-only Hyprshot shortcuts. These cards are labelled **Clipboard**; cliphist
 cannot distinguish screenshots from other copied images or identify their capture app.
-Saved files appear newest first, followed by clipboard images newest first
+Clipboard images appear newest first, followed by saved files newest first
 (`max_results` applies to each source). Search also matches clipboard image format and
 dimensions. Enter opens the original image, Ctrl+C copies it, and Ctrl+Enter deletes
 that clipboard entry (clipboard deletion cannot be undone). Clipboard previews and

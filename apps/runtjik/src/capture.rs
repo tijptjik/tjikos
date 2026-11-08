@@ -360,7 +360,7 @@ impl Captures {
                 name,
                 "region",
                 "Region",
-                "Drag to select an area · Escape cancels",
+                "Drag to select an area",
                 json!({"capture":"region"}),
             ),
             row(
@@ -394,12 +394,8 @@ impl Captures {
         rows.push(row(
             name,
             "history",
-            if rec {
-                "Previous recordings"
-            } else {
-                "Previous screenshots"
-            },
-            "Browse your gallery · Enter opens it",
+            "History",
+            "Browse your gallery",
             json!({"edit":format!("{base} history")}),
         ));
         if rec {
@@ -534,7 +530,7 @@ impl Captures {
         }
         if !rec && options["include_clipboard"].as_bool().unwrap_or(true) {
             // cliphist has ordering but no capture timestamps or source app metadata.
-            // Keep its newest-first images after the dated saved captures.
+            // Show recent clipboard captures before older saved files.
             let mut clipboard_settings = settings.clone();
             clipboard_settings["plugin_settings"]["Clipboard"]["max_results"] =
                 options["max_results"].clone();
@@ -544,6 +540,7 @@ impl Captures {
                 false,
             ) {
                 self.pending |= self.clipboard.pending;
+                let mut clipboard_rows = Vec::new();
                 for mut clip in clips
                     .into_iter()
                     .filter(|clip| clip.data["clip_id"].is_string())
@@ -559,8 +556,10 @@ impl Captures {
                     clip.name = format!("Clipboard · {}", clip.name);
                     clip.subtitle = "Clipboard history · image source unknown".into();
                     clip.data["keep_open"] = json!(false);
-                    rows.push(clip);
+                    clipboard_rows.push(clip);
                 }
+                clipboard_rows.append(&mut rows);
+                rows = clipboard_rows;
             }
         }
         if rows.is_empty() {
