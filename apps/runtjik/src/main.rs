@@ -22,6 +22,7 @@ mod todo;
 mod trash;
 mod util;
 mod windows;
+mod word_cache;
 mod word_entry;
 mod words;
 use anyhow::Result;

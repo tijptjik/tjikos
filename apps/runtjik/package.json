@@ -13,6 +13,7 @@
     "browser:build": "bash scripts/browser-extension.sh build",
     "browser:sign:listed": "bash scripts/browser-extension.sh sign-listed",
     "browser:sign:unlisted": "bash scripts/browser-extension.sh sign-unlisted",
+    "test:words": "cargo test --release --locked word_cache && python3 -B tests/word_history.py && python3 -B tests/word_history_ui.py",
     "test:close": "python3 -B tests/close_shortcut_wrapper.py && python3 -B tests/close_shortcut.py",
     "test:desktop": "cargo test --manifest-path ../../packages/tjik-desktop/Cargo.toml --locked && cargo build --manifest-path ../../packages/tjik-desktop/Cargo.toml --release --locked --example probe && dbus-run-session -- python3 -B tests/desktop_adapter.py && dbus-run-session -- python3 -B tests/desktop_push_ui.py && dbus-run-session -- python3 -B tests/desktop_recovery.py"
   },

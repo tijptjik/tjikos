@@ -24,6 +24,7 @@ Item {
     function enterSelected() {
         const row=rows[selected];
         if(!row || row.disabled || !rowVisible(row))return;
+        if(row.recent_word){activateRow(selected,false);return;}
         if(navigatingTerms){
             const target=selectedTerms[termIndex];
             leaveTerms();lookupWord(target.term || target.text);return;
@@ -70,7 +71,8 @@ Item {
     }
     readonly property bool synonyms: query.startsWith('/synonym')
     readonly property string term: query.replace(/^\/\S+\s*/, '').trim()
-    readonly property bool empty: term.length === 0
+    readonly property bool recent: rows.some(row=>row.recent_word)
+    readonly property bool empty: term.length === 0 && !recent
     readonly property bool loadingOnly: rows.length === 1 && rows[0].id === 'Words:loading'
     readonly property var sourceNames: ({wiktionary:'Wiktionary',urban_dictionary:'Urban Dictionary',free_dictionary:'Free Dictionary',datamuse:'Datamuse'})
     readonly property var providers: {
@@ -80,7 +82,7 @@ Item {
         return names.map(name=>({name:name,count:sourceCounts[name] ?? rows.filter(row=>rowSource(row)===name && !row.disabled).length}));
     }
     readonly property var visibleIndices: rows.map((row,index)=>!row.disabled && rowVisible(row)?index:-1).filter(index=>index>=0)
-    readonly property bool allHidden: providers.length>0 && providers.every(provider=>hiddenSources.includes(provider.name))
+    readonly property bool allHidden: !recent && providers.length>0 && providers.every(provider=>hiddenSources.includes(provider.name))
     readonly property bool showIndicator: empty || rows.length === 0 || loadingOnly || allHidden
     function rowSource(row) {
         if(!row)return '';
@@ -393,7 +395,7 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: entry.disabled ? Qt.ArrowCursor : Qt.PointingHandCursor
-                    onClicked: if(!entry.disabled)pane.selectRow(entry.index,true);
+                    onClicked: if(!entry.disabled){if(modelData.recent_word)pane.activateRow(entry.index,false);else pane.selectRow(entry.index,true);}
                 }
                 Text {
                     id: senseNumber

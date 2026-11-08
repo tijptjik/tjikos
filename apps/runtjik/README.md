@@ -924,3 +924,12 @@ without closing another window.
 After a unique command opens automatically, matching letters from the rest of
 its name are consumed while typing continues. A 500 ms pause, a different
 character, or an edit ends this guard and lets argument input continue normally.
+
+The empty definition/synonym view shows up to 100 recent successful word lookups.
+Existing definition/synonym command history is imported once, behind newer lookups.
+Tab and Shift-Tab select a word; Enter or a click looks it up in the current mode.
+Successful source responses are reused across restarts, keyed by the word, mode,
+sources and word settings. The private `words.sqlite3` in Runtjik’s XDG state
+directory retains at most 256 source responses / 32 MiB; old responses are evicted
+first. Failed requests are not cached. Disabling `history.enabled` hides history
+and uses only an in-memory cache. Demo fixtures never persist word data.

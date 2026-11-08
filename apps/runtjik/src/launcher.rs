@@ -122,7 +122,7 @@ impl Launcher {
         let total = entries.len();
         self.current = entries.iter().map(|e| (e.id.clone(), e.clone())).collect();
         let rows:Vec<_>=entries.into_iter().skip(offset).take(limit).map(|e| { let mut row = json!({"id":e.id,"name":e.name,"subtitle":e.subtitle,"provider":e.provider,"icon":self.icons.resolve(&e.icon),"favicon":s(&e.data["favicon"]),"hide_launcher":e.data["capture"].as_str().is_some_and(|s|!s.is_empty()),"keep_open":e.data["keep_open"]==true,"thumbnail":s(&e.data["thumbnail"]),"empty_state":e.data["empty_state"]==true,"disabled":e.data["disabled"]==true,"count":0,"windows":0});
-            for key in ["word_source", "part_of_speech", "examples", "url", "language", "section", "group", "etymology", "headword", "sense_number", "sense_depth", "sense_synonyms", "terms", "context"] {
+            for key in ["recent_word", "lookup_query", "word_source", "part_of_speech", "examples", "url", "language", "section", "group", "etymology", "headword", "sense_number", "sense_depth", "sense_synonyms", "terms", "context"] {
                 if e.provider == "Words" {
                     if let Some(value) = e.data.get(key) { row[key] = value.clone(); }
                 }
@@ -310,6 +310,9 @@ impl Launcher {
             let mut value =
                 self.provider_payload(rows, display, offset, limit, self.words.pending, false);
             value["word_source_counts"] = json!(counts);
+            if self.words.cache_hits > 0 {
+                value["word_cache_hits"] = json!(self.words.cache_hits);
+            }
             return Ok(value);
         }
         if enabled.iter().any(|s| s == "Browser")
@@ -596,6 +599,9 @@ impl Launcher {
                     return Ok(
                         json!({"kind":"message","message":"Ctrl+Enter is available for applications and commands with matching windows"}),
                     );
+                }
+                if let Some(query) = e.data["lookup_query"].as_str().map(str::to_owned) {
+                    return self.open_query(&query);
                 }
                 return crate::words::Words::activate(e, self.demo);
             }

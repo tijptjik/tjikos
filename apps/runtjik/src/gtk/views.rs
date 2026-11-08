@@ -84,6 +84,44 @@ pub fn words(
             providers.push(source.into());
         }
     }
+    if rows.iter().any(|row| row["recent_word"] == true) {
+        heading.set_text("RECENT WORDS");
+        let hint = label("Tab / Shift-Tab to select · Enter to look up");
+        hint.set_selectable(false);
+        hint.add_css_class("word-caption");
+        hint.set_margin_bottom(6);
+        content.append(&hint);
+        for (index, row) in rows.iter().enumerate() {
+            let card = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+            card.add_css_class("recent-word");
+            card.add_css_class("word-sense");
+            card.set_widget_name(&format!("word-{index}"));
+            let text = label(s(row, "name"));
+            text.set_selectable(false);
+            text.set_xalign(0.0);
+            text.set_hexpand(true);
+            card.append(&text);
+            let action = label("↵");
+            action.set_selectable(false);
+            action.add_css_class("recent-action");
+            card.append(&action);
+            if selection.selected() == index as u32 {
+                card.add_css_class("word-selected");
+            }
+            let lookup = lookup.clone();
+            let query = s(row, "lookup_query").to_owned();
+            let select = selection.clone();
+            let click = gtk::GestureClick::new();
+            click.connect_released(move |_, _, _, _| {
+                select.set_selected(index as u32);
+                lookup(query.clone());
+            });
+            card.add_controller(click);
+            card.set_cursor_from_name(Some("pointer"));
+            content.append(&card);
+        }
+        return root.upcast();
+    }
     let indicator = gtk::Box::new(gtk::Orientation::Vertical, 14);
     indicator.set_valign(gtk::Align::Center);
     indicator.set_halign(gtk::Align::Center);
@@ -469,7 +507,7 @@ pub fn inspect(
             || widget.has_css_class("capture-choice")
         {
             let bounds = widget.compute_bounds(window);
-            output.push(serde_json::json!({"class": if widget.has_css_class("word-provider") {"provider"} else {"sense"}, "name": widget.widget_name().as_str(), "visible": widget.is_mapped(), "active": widget.downcast_ref::<gtk::ToggleButton>().map(|t|t.is_active()), "x": bounds.as_ref().map(|b|b.x()), "y": bounds.as_ref().map(|b|b.y()), "width": bounds.as_ref().map(|b|b.width()), "height": bounds.as_ref().map(|b|b.height())}));
+            output.push(serde_json::json!({"class": if widget.has_css_class("word-provider") {"provider"} else {"sense"}, "name": widget.widget_name().as_str(), "visible": widget.is_mapped(), "selected": widget.has_css_class("word-selected"), "active": widget.downcast_ref::<gtk::ToggleButton>().map(|t|t.is_active()), "x": bounds.as_ref().map(|b|b.x()), "y": bounds.as_ref().map(|b|b.y()), "width": bounds.as_ref().map(|b|b.width()), "height": bounds.as_ref().map(|b|b.height())}));
         }
         let mut child = widget.first_child();
         while let Some(w) = child {

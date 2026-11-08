@@ -1,4 +1,4 @@
-//! Bounded asynchronous dictionary lookups. No query text is persisted.
+//! Bounded asynchronous dictionary lookups with private recent words and cached results.
 use crate::{config, discovery::Entry, util::*};
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
@@ -260,6 +260,10 @@ pub struct Words {
     key: String,
     sources: Vec<String>,
     results: std::collections::HashMap<String, std::result::Result<Vec<Row>, String>>,
+    cache: Option<crate::word_cache::WordCache>,
+    persistent: Option<bool>,
+    recorded: bool,
+    pub cache_hits: usize,
     pub pending: bool,
 }
 impl Default for Words {
@@ -271,6 +275,10 @@ impl Default for Words {
             key: String::new(),
             sources: vec![],
             results: std::collections::HashMap::new(),
+            cache: None,
+            persistent: None,
+            recorded: false,
+            cache_hits: 0,
             pending: false,
         }
     }
@@ -324,17 +332,54 @@ impl Words {
         }
         self.jobs = Some(tx);
     }
+    fn remember(&self, term: &str, settings: &Value) {
+        if settings["history"]["enabled"] != false {
+            if let Some(cache) = &self.cache {
+                if let Err(e) = cache.remember(term) {
+                    eprintln!("Word history: {e}");
+                }
+            }
+        }
+    }
     pub fn query(&mut self, q: &str, settings: &Value, demo: bool) -> Vec<Entry> {
+        let persistent = !demo && settings["history"]["enabled"] != false;
+        if self.persistent != Some(persistent) {
+            let path = crate::util::xdg("state").join("words.sqlite3");
+            self.cache = crate::word_cache::WordCache::open(persistent.then_some(path.as_path()))
+                .map_err(|e| eprintln!("Word cache: {e}"))
+                .ok();
+            self.persistent = Some(persistent);
+            self.key.clear();
+        }
         let (command, term) = q.trim().split_once(' ').unwrap_or((q.trim(), ""));
         let term = term.trim();
         if term.is_empty() {
+            self.cache_hits = 0;
             self.pending = false;
+            self.key.clear();
+            self.generation.fetch_add(1, Ordering::Relaxed);
+            self.receiver = None;
+            if settings["history"]["enabled"] != false {
+                if let Some(cache) = &self.cache {
+                    match cache.history() {
+                        Ok(terms) if !terms.is_empty() => return terms.into_iter().map(|term| {
+                            row(&format!("recent:{}", encode(&term)), &term, "Look up again",
+                                json!({"recent_word":true,"lookup_query":format!("{command} {term}")}))
+                        }).collect(),
+                        Err(e) => eprintln!("Word history: {e}"),
+                        _ => (),
+                    }
+                }
+            }
             return vec![row(
                 "hint",
                 "Type a word to look up",
                 "Definitions and synonyms appear here as you type",
                 json!({"disabled":true,"empty_state":true}),
             )];
+        }
+        if demo {
+            self.remember(term, settings);
         }
         if demo && term == "glimmer" {
             self.pending = false;
@@ -402,16 +447,28 @@ impl Words {
         );
         let key = json!([command, term, sources, options]).to_string();
         if self.key != key {
-            if !sources.is_empty() {
-                self.pool();
-            }
             self.key = key;
+            self.recorded = false;
+            self.cache_hits = 0;
             self.sources = sources;
             self.results.clear();
             let generation = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
             let (tx, rx) = mpsc::channel();
             self.receiver = Some(rx);
-            for source in &self.sources {
+            for source in self.sources.clone() {
+                let cache_key = json!([1, self.key, source]).to_string();
+                if let Some(values) = self.cache.as_ref().and_then(|cache| {
+                    cache
+                        .get(&cache_key)
+                        .map_err(|e| eprintln!("Word cache: {e}"))
+                        .ok()
+                        .flatten()
+                }) {
+                    self.results.insert(source, Ok(values));
+                    self.cache_hits += 1;
+                    continue;
+                }
+                self.pool();
                 let _ = self.jobs.as_ref().unwrap().send(Job {
                     generation,
                     source: source.clone(),
@@ -426,10 +483,26 @@ impl Words {
         }
         if let Some(rx) = &self.receiver {
             while let Ok((source, result)) = rx.try_recv() {
+                if let (Some(cache), Ok(values)) = (&self.cache, &result) {
+                    let cache_key = json!([1, self.key, source]).to_string();
+                    if let Err(e) = cache.put(&cache_key, values) {
+                        eprintln!("Word cache: {e}");
+                    }
+                }
                 self.results.insert(source, result);
             }
         }
         self.pending = self.results.len() < self.sources.len();
+        if !self.pending
+            && !self.recorded
+            && self
+                .results
+                .values()
+                .any(|r| r.as_ref().is_ok_and(|rows| !rows.is_empty()))
+        {
+            self.remember(term, settings);
+            self.recorded = true;
+        }
         let mut rows = vec![];
         for source in &self.sources {
             if let Some(result) = self.results.get(source) {
@@ -551,6 +624,7 @@ mod tests {
     fn no_sources_and_demo_do_not_start_workers() {
         let mut w = Words::default();
         let mut settings = config::contract()["DEFAULTS"].clone();
+        settings["history"]["enabled"] = json!(false);
         settings["plugin_settings"]["Words"]["define_sources"] = json!([]);
         assert_eq!(
             w.query("/define test", &settings, false)[0].id,

@@ -75,6 +75,11 @@ window.tjik {{ background: transparent; color: {text}; font-family: "{font}"; fo
 .tjik .word-stripe {{ background: transparent; border-radius: 1px; }}
 .tjik .word-selected .word-stripe {{ background: {accent}; }}
 .tjik .word-selected {{ background: {surface}; }}
+.tjik .recent-word.word-sense {{ padding: 10px 14px; border: 1px solid transparent; border-radius: 9px; min-height: 24px; }}
+.tjik .recent-word:hover {{ background: alpha({surface}, .5); }}
+.tjik .recent-word.word-selected {{ background: {surface}; border-color: {accent}; }}
+.tjik .recent-action {{ opacity: 0; color: {accent}; }}
+.tjik .recent-word.word-selected .recent-action {{ opacity: 1; }}
 .tjik button.word-provider {{ background: transparent; opacity: .5; padding: 6px 10px; }}
 .tjik button.word-provider:checked {{ background: {surface}; border-color: {border}; opacity: 1; }}
 .tjik button.word-term, .tjik button.word-source {{ border: 0; background: transparent; color: {accent}; padding: 4px 7px; }}

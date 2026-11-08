@@ -570,7 +570,11 @@ impl Ui {
                 self.hidden_sources.clone(),
                 move |word| {
                     if let Some(ui) = weak.upgrade() {
-                        ui.lookup(&format!("/define {word}"));
+                        if word.starts_with('/') {
+                            ui.lookup(&word);
+                        } else {
+                            ui.lookup(&format!("/define {word}"));
+                        }
                     }
                 },
             )));
