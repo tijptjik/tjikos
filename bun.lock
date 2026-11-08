@@ -99,6 +99,10 @@
         "@tjikos/gtk": "workspace:*",
       },
     },
+    "packages/tjik-desktop": {
+      "name": "@tjikos/desktop",
+      "version": "0.1.0",
+    },
     "packages/tjik-gtk": {
       "name": "@tjikos/gtk",
       "version": "0.1.0",
@@ -305,6 +309,7 @@
 
     "@tjikos/bartjik": ["@tjikos/bartjik@workspace:apps/bartjik"],
 
+    "@tjikos/desktop": ["@tjikos/desktop@workspace:packages/tjik-desktop"],
 
     "@tjikos/gmailtjik": ["@tjikos/gmailtjik@workspace:apps/gmailtjik"],
 

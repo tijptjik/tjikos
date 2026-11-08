@@ -1,0 +1,1 @@
+{"name":"@tjikos/desktop","private":true,"version":"0.1.0","scripts":{"check":"cargo fmt --check","test":"cargo test --locked"}}
