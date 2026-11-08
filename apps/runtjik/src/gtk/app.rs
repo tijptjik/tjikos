@@ -53,6 +53,7 @@ struct Ui {
     ready: Cell<bool>,
     busy: Cell<bool>,
     changing_text: Cell<bool>,
+    completion: RefCell<crate::completion::Completion>,
     debounce: RefCell<Option<glib::SourceId>>,
     refresh: RefCell<Option<glib::SourceId>>,
     error: RefCell<String>,
@@ -239,6 +240,7 @@ impl Ui {
         self.lookup(&text);
     }
     fn show(self: &Rc<Self>) {
+        self.completion.borrow_mut().clear();
         if !self.opened.replace(true) {
             self.set_text("");
             self.next_generation();
@@ -273,6 +275,7 @@ impl Ui {
         });
     }
     fn hide(&self) {
+        self.completion.borrow_mut().clear();
         tjik_gtk::removal::cancel(&self.effects);
         self.cancel_timer();
         self.cancel_refresh();
@@ -819,6 +822,11 @@ impl Ui {
                         };
                         drop(settings);
                         if auto && row["disabled"] != true {
+                            if s(&row, "id").starts_with('/') {
+                                self.completion
+                                    .borrow_mut()
+                                    .arm(&self.query.borrow(), s(&row, "id"));
+                            }
                             self.activate("default");
                         }
                     }
@@ -1116,6 +1124,7 @@ fn build(
         ready: Cell::new(false),
         busy: Cell::new(true),
         changing_text: Cell::new(false),
+        completion: RefCell::new(Default::default()),
         debounce: RefCell::new(None),
         refresh: RefCell::new(None),
         error: RefCell::new(String::new()),
@@ -1156,6 +1165,7 @@ fn build(
         ui.cancel_timer();
         ui.cancel_refresh();
         if !preedit.is_empty() {
+            ui.completion.borrow_mut().clear();
             ui.next_generation();
         }
         if preedit.is_empty() && was_composing {
@@ -1175,7 +1185,19 @@ fn build(
     ui.search.connect_changed(move |entry| {
         if let Some(ui) = weak.upgrade() {
             if !ui.changing_text.get() && !ui.composing.get() && !ui.composition_commit.get() {
-                ui.auto.set(entry.text().len() > ui.query.borrow().len());
+                let previous = ui.query.borrow().clone();
+                let filtered = ui.completion.borrow_mut().edit(
+                    &previous,
+                    entry.text().as_str(),
+                    std::time::Instant::now(),
+                );
+                if let Some(text) = filtered {
+                    ui.set_text(&text);
+                    if text == previous {
+                        return;
+                    }
+                }
+                ui.auto.set(entry.text().len() > previous.len());
                 ui.history_cursor.set(usize::MAX);
                 ui.query(true);
             }

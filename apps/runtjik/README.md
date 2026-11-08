@@ -920,3 +920,7 @@ Command-Q uses `runtjik close-active`: a visible GTK applet consumes the shortcu
 when it has keyboard focus or contains the pointer, including when pinned.
 Otherwise it closes the active desktop window. Control errors stop the action
 without closing another window.
+
+After a unique command opens automatically, matching letters from the rest of
+its name are consumed while typing continues. A 500 ms pause, a different
+character, or an edit ends this guard and lets argument input continue normally.
