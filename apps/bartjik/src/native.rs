@@ -109,6 +109,7 @@ fn endpoint(name: &str) -> (String, String) {
 struct Bus {
     connection: gio::DBusConnection,
     registered: RefCell<Vec<String>>,
+    observed_owners: RefCell<Vec<String>>,
     host_registered: RefCell<String>,
     dirty: Cell<bool>,
     send: Box<dyn Fn(Value)>,
@@ -185,6 +186,11 @@ impl Bus {
                 tray.push(json!({"id":format!("{owner}{path}"),"service":service,"owner":owner,"path":path,"props":props}));
             }
         }
+        *self.observed_owners.borrow_mut() = players
+            .iter()
+            .chain(tray.iter())
+            .filter_map(|v| v["owner"].as_str().map(str::to_owned))
+            .collect();
         (self.send)(
             json!({"players":players,"tray":tray,"watcher":if watcher_owner==own{"owned"}else{"external"},"error":""}),
         );
@@ -211,7 +217,7 @@ pub fn watch(send: impl Fn(Value) + Send + Sync + 'static) {
         let context = glib::MainContext::default();
         let result=context.with_thread_default(||->Result<()>{
  let c=gio::bus_get_sync(gio::BusType::Session,gio::Cancellable::NONE)?;
- let bus=Rc::new(Bus{connection:c.clone(),registered:RefCell::new(vec![]),host_registered:RefCell::new(String::new()),dirty:Cell::new(false),send:{let send=send.clone();Box::new(move|value|send(value))}});
+ let bus=Rc::new(Bus{connection:c.clone(),registered:RefCell::new(vec![]),observed_owners:RefCell::new(vec![]),host_registered:RefCell::new(String::new()),dirty:Cell::new(false),send:{let send=send.clone();Box::new(move|value|send(value))}});
  // The send closure cannot borrow across callbacks, so this scope owns the loop.
  let xml=r#"<node><interface name='org.kde.StatusNotifierWatcher'><method name='RegisterStatusNotifierItem'><arg type='s' direction='in'/></method><method name='RegisterStatusNotifierHost'><arg type='s' direction='in'/></method><property name='RegisteredStatusNotifierItems' type='as' access='read'/><property name='IsStatusNotifierHostRegistered' type='b' access='read'/><property name='ProtocolVersion' type='i' access='read'/><signal name='StatusNotifierItemRegistered'><arg type='s'/></signal><signal name='StatusNotifierItemUnregistered'><arg type='s'/></signal><signal name='StatusNotifierHostRegistered'/></interface></node>"#;
  let info=gio::DBusNodeInfo::for_xml(xml)?;let iface=info.lookup_interface(WATCHER).unwrap();let b=bus.clone();let prop=bus.clone();
@@ -226,7 +232,16 @@ pub fn watch(send: impl Fn(Value) + Send + Sync + 'static) {
  let b=bus.clone();let lost=bus.clone();let ownership=gio::bus_own_name_on_connection(&c,WATCHER,gio::BusNameOwnerFlags::NONE,move|_,_|b.schedule(),move|_,_|{lost.host_registered.borrow_mut().clear();lost.schedule();});
  let b=bus.clone();let subscription=c.signal_subscribe(None,None,None,None,None,gio::DBusSignalFlags::NONE,move|connection,sender,path,interface,member,args|{
   if interface=="com.canonical.dbusmenu" {(b.send)(json!({"kind":"menuChanged","owner":sender,"path":path}));}
-  if [PROPS,SNI,WATCHER,DBUS].contains(&interface){b.schedule();}
+  // Unrelated PropertiesChanged and transient helper bus connections must not
+  // trigger full media/tray rereads (including expensive pixmap decoding).
+  if interface==WATCHER || ([PROPS,SNI].contains(&interface)
+      && b.observed_owners.borrow().iter().any(|v| v==sender)) {b.schedule();}
+  if interface==DBUS && member=="NameOwnerChanged" {
+   let (name,old,_new)=args.get::<(String,String,String)>().unwrap_or_default();
+   if name==WATCHER || name.starts_with("org.mpris.MediaPlayer2.")
+       || b.observed_owners.borrow().contains(&old)
+       || b.registered.borrow().iter().any(|v| endpoint(v).0==name) {b.schedule();}
+  }
   if interface==DBUS && member=="NameOwnerChanged"{let (name,_old,new)=args.get::<(String,String,String)>().unwrap_or_default();if new.is_empty(){let removed:Vec<_>=b.registered.borrow().iter().filter(|v|endpoint(v).0==name).cloned().collect();b.registered.borrow_mut().retain(|v|endpoint(v).0!=name);for name in removed{let _=connection.emit_signal(None,"/StatusNotifierWatcher",WATCHER,"StatusNotifierItemUnregistered",Some(&(name,).to_variant()));}}}
  });
  let loop_ = glib::MainLoop::new(Some(&context), false);

@@ -19,6 +19,7 @@ from gi.repository import GLib
 DBusGMainLoop(set_as_default=True)
 bus = dbus.SessionBus(private=True)
 calls = []
+property_reads = []
 PLAYER = 'org.mpris.MediaPlayer2.Player'
 SNI = 'org.kde.StatusNotifierItem'
 WATCHER = 'org.kde.StatusNotifierWatcher'
@@ -34,6 +35,7 @@ class Player(dbus.service.Object):
                            'Metadata': dbus.Dictionary({'xesam:title': 'Fixture track', 'xesam:artist': dbus.Array(['Fixture artist'], signature='s'), 'mpris:trackid': dbus.ObjectPath('/track/one')}, signature='sv')}
     @dbus.service.method(PROPS, in_signature='s', out_signature='a{sv}')
     def GetAll(self, interface):
+        property_reads.append(str(interface))
         return self.properties if interface == PLAYER else {'Identity': 'Fixture', 'DesktopEntry': 'fixture', 'CanRaise': True, 'CanQuit': True}
     @dbus.service.method(PROPS, in_signature='ss', out_signature='v')
     def Get(self, interface, prop):
@@ -146,6 +148,15 @@ with tempfile.TemporaryDirectory(prefix='bartjik-services-') as tmp:
         watcher.RegisterStatusNotifierItem('org.example.TrayFixture')
         state=wait(lambda v:row(v,'tray') is not None)
         tray=row(state,'tray');assert tray['icon']['kind']=='pixmap'
+        time.sleep(.15)
+        before_reads = len(property_reads)
+        for _ in range(8):
+            unrelated = dbus.SessionBus(private=True)
+            unrelated.set_exit_on_disconnect(False)
+            unrelated.close()
+            time.sleep(.04)
+        time.sleep(.15)
+        assert len(property_reads) == before_reads, 'Unrelated bus churn refreshed media/tray state'
         action('music',media['id'],'scrollDown','track');called('Next')
         action('music',media['id'],'scrollUp','track');called('SetPosition')
         action('music',media['id'],'leftClick');called('PlayPause')
