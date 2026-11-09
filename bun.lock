@@ -12,6 +12,10 @@
     "apps/bartjik": {
       "name": "@tjikos/bartjik",
       "version": "0.1.0",
+      "dependencies": {
+        "@tjikos/desktop": "workspace:*",
+        "@tjikos/gtk": "workspace:*",
+      },
     },
     "apps/gmailtjik": {
       "name": "@tjikos/gmailtjik",

@@ -1,0 +1,996 @@
+use crate::{
+    clock_card, clocks, comparison, config, edges, layout, pointer,
+    util::{arr, num, s},
+    Action, Event,
+};
+use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use serde_json::{json, Value};
+use std::{
+    cell::{Cell, RefCell},
+    collections::BTreeMap,
+    rc::Rc,
+    sync::atomic::{AtomicU64, Ordering},
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tjik_desktop::{Output, Rect, Snapshot};
+use tjik_gtk::gtk::{self, gdk, glib, prelude::*};
+fn clear(container: &gtk::Box) {
+    while let Some(child) = container.first_child() {
+        container.remove(&child);
+    }
+}
+pub(super) fn surface(
+    app: &gtk::Application,
+    monitor: &gdk::Monitor,
+    namespace: &str,
+    layer: Layer,
+) -> gtk::ApplicationWindow {
+    let window = gtk::ApplicationWindow::builder()
+        .application(app)
+        .decorated(false)
+        .build();
+    window.add_css_class("tjik");
+    window.init_layer_shell();
+    window.set_namespace(Some(namespace));
+    window.set_monitor(Some(monitor));
+    window.set_layer(layer);
+    window.set_anchor(Edge::Top, true);
+    window.set_anchor(Edge::Left, true);
+    window.set_exclusive_zone(-1);
+    window.set_keyboard_mode(KeyboardMode::None);
+    // Never intercept desktop input between mapping and the first layout frame.
+    window.connect_realize(|w| {
+        if let Some(surface) = w.surface() {
+            surface.set_input_region(&gtk::cairo::Region::create());
+        }
+    });
+    window
+}
+fn position(window: &gtk::ApplicationWindow, r: Rect) {
+    window.set_margin(Edge::Top, r.y.round() as i32);
+    window.set_margin(Edge::Left, r.x.round() as i32);
+    window.set_default_size(
+        r.width.ceil().max(1.) as i32,
+        r.height.ceil().max(1.) as i32,
+    );
+}
+fn input_regions(window: &gtk::ApplicationWindow, islands: &[gtk::Box]) {
+    let weak = window.downgrade();
+    let islands: Vec<_> = islands.iter().map(|w| w.downgrade()).collect();
+    let frames = std::cell::Cell::new(0);
+    window.add_tick_callback(move |_, _| {
+        let Some(window) = weak.upgrade() else {
+            return glib::ControlFlow::Break;
+        };
+        let region = gtk::cairo::Region::create();
+        for island in islands.iter().filter_map(|w| w.upgrade()) {
+            // A queued layout callback must not restore input after concealment.
+            if window.opacity() <= 0.01 {
+                break;
+            }
+            if let Some(r) = island.compute_bounds(&window) {
+                let x = r.x().max(0.).floor() as i32;
+                let y = r.y().max(0.).floor() as i32;
+                let right = (r.x() + r.width()).min(window.width() as f32).ceil() as i32;
+                let bottom = (r.y() + r.height()).min(window.height() as f32).ceil() as i32;
+                if right > x && bottom > y {
+                    let _ = region.union_rectangle(&gtk::cairo::RectangleInt::new(
+                        x,
+                        y,
+                        right - x,
+                        bottom - y,
+                    ));
+                }
+            }
+        }
+        if let Some(surface) = window.surface() {
+            surface.set_input_region(&region);
+            surface.queue_render();
+        }
+        frames.set(frames.get() + 1);
+        if frames.get() >= 3 {
+            glib::ControlFlow::Break
+        } else {
+            glib::ControlFlow::Continue
+        }
+    });
+}
+pub(super) fn full_input(window: &gtk::ApplicationWindow) {
+    let weak = window.downgrade();
+    let frames = std::cell::Cell::new(0);
+    window.add_tick_callback(move |_, _| {
+        let Some(w) = weak.upgrade() else {
+            return glib::ControlFlow::Break;
+        };
+        if let Some(s) = w.surface() {
+            s.set_input_region(&gtk::cairo::Region::create_rectangle(
+                &gtk::cairo::RectangleInt::new(0, 0, w.width(), w.height()),
+            ));
+            s.queue_render();
+        }
+        frames.set(frames.get() + 1);
+        if frames.get() >= 3 {
+            glib::ControlFlow::Break
+        } else {
+            glib::ControlFlow::Continue
+        }
+    });
+}
+
+struct Bar {
+    window: gtk::ApplicationWindow,
+    panel: gtk::ApplicationWindow,
+    body: gtk::Box,
+    rows: gtk::Box,
+    islands: Vec<gtk::Box>,
+    clocks: Vec<Rc<clock_card::Card>>,
+    workspace_buttons: Vec<gtk::Button>,
+    definition: Value,
+    geometry: Rect,
+    output: String,
+    unsupported: Vec<String>,
+    css: gtk::CssProvider,
+    content: Value,
+    resizing: bool,
+    comparisons: Vec<(String, comparison::Module)>,
+    hovered: Rc<Cell<bool>>,
+    topology: Option<Output>,
+    opacity: f64,
+    target_opacity: f64,
+    fade_from: f64,
+    fade_started: Instant,
+    input_active: bool,
+}
+impl Drop for Bar {
+    fn drop(&mut self) {
+        self.panel.destroy();
+        self.window.destroy();
+        if let Some(d) = gdk::Display::default() {
+            gtk::style_context_remove_provider_for_display(&d, &self.css);
+        }
+    }
+}
+impl Bar {
+    fn new(app: &gtk::Application, monitor: &gdk::Monitor, definition: &Value) -> Self {
+        let layer = match s(&definition["layer"]) {
+            "overlay" => Layer::Overlay,
+            "bottom" => Layer::Bottom,
+            "background" => Layer::Background,
+            _ => Layer::Top,
+        };
+        let window = surface(app, monitor, "bartjik-gtk-bar", layer);
+        let panel = surface(app, monitor, "bartjik-gtk-panel", Layer::Overlay);
+        panel.set_keyboard_mode(KeyboardMode::OnDemand);
+        panel.set_default_size(360, 240);
+        let orientation = if layout::horizontal(definition) {
+            gtk::Orientation::Horizontal
+        } else {
+            gtk::Orientation::Vertical
+        };
+        let body = gtk::Box::new(orientation, num(&definition["islandGap"]) as i32);
+        let viewport = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::External)
+            .vscrollbar_policy(gtk::PolicyType::External)
+            .child(&body)
+            .build();
+        window.set_child(Some(&viewport));
+        let pane = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        pane.add_css_class("pane");
+        pane.append(&gtk::Label::new(Some("RUNNING WINDOWS")));
+        let rows = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        let scroll = gtk::ScrolledWindow::builder()
+            .min_content_height(120)
+            .max_content_height(420)
+            .propagate_natural_height(true)
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .child(&rows)
+            .build();
+        pane.append(&scroll);
+        let close = gtk::Button::with_label("Close");
+        let target = panel.downgrade();
+        close.connect_clicked(move |_| {
+            if let Some(p) = target.upgrade() {
+                p.set_visible(false);
+            }
+        });
+        pane.append(&close);
+        panel.set_child(Some(&pane));
+        let keys = gtk::EventControllerKey::new();
+        let target = panel.downgrade();
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if key == gdk::Key::Escape {
+                if let Some(p) = target.upgrade() {
+                    p.set_visible(false);
+                }
+                glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
+            }
+        });
+        panel.add_controller(keys);
+        panel.connect_close_request(|p| {
+            p.set_visible(false);
+            glib::Propagation::Stop
+        });
+        panel.connect_map(full_input);
+        let hovered = Rc::new(Cell::new(false));
+        let motion = gtk::EventControllerMotion::new();
+        let entered = hovered.clone();
+        motion.connect_enter(move |_, _, _| entered.set(true));
+        let left = hovered.clone();
+        motion.connect_leave(move |_| left.set(false));
+        window.add_controller(motion);
+        let css = tjik_gtk::theme::provider();
+        Self {
+            window,
+            panel,
+            body,
+            rows,
+            islands: vec![],
+            clocks: vec![],
+            workspace_buttons: vec![],
+            definition: definition.clone(),
+            geometry: Rect {
+                x: 0.,
+                y: 0.,
+                width: 0.,
+                height: 0.,
+            },
+            output: s(&definition["screen"]).into(),
+            unsupported: vec![],
+            css,
+            content: Value::Null,
+            resizing: false,
+            comparisons: vec![],
+            hovered,
+            topology: None,
+            opacity: 1.,
+            target_opacity: 1.,
+            fade_from: 1.,
+            fade_started: Instant::now(),
+            input_active: true,
+        }
+    }
+    fn refresh(
+        &mut self,
+        snapshot: &Snapshot,
+        output: &Output,
+        actions: &async_channel::Sender<Action>,
+        _demo: bool,
+        can_select: bool,
+    ) {
+        self.topology = Some(output.clone());
+        // Focus-only push events must not replace a button during its press/release.
+        let content = json!({"generation":snapshot.generation,"output":output,"modules":self.definition["moduleConfigs"],
+            "workspaces":snapshot.workspaces,
+            "windows":snapshot.windows.iter().map(|w|json!({"id":w.id,"title":w.title,
+                "app_id":w.app_id,"output":w.output,"workspace":w.workspace,"mapped":w.mapped,"hidden":w.hidden})).collect::<Vec<_>>()});
+        if self.content == content {
+            return;
+        }
+        self.content = content;
+        if !self.comparisons.is_empty() {
+            for (id, view) in &mut self.comparisons {
+                view.update(&self.definition["moduleConfigs"][id.as_str()]);
+            }
+            self.relayout();
+            return;
+        }
+        clear(&self.body);
+        clear(&self.rows);
+        self.islands.clear();
+        let mut previous_clocks = std::mem::take(&mut self.clocks);
+        self.workspace_buttons.clear();
+        self.unsupported.clear();
+        let horizontal = layout::horizontal(&self.definition);
+        let orientation = if horizontal {
+            gtk::Orientation::Horizontal
+        } else {
+            gtk::Orientation::Vertical
+        };
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        let class = format!("bartjik-{}", NEXT.fetch_add(1, Ordering::Relaxed));
+        // Replace the previous scope rather than accumulate providers or global rules.
+        for old in self.window.css_classes() {
+            if old.starts_with("bartjik-") {
+                self.window.remove_css_class(&old);
+            }
+        }
+        self.window.add_css_class(&class);
+        let color = |v: &Value| {
+            gdk::RGBA::parse(s(v))
+                .unwrap_or(gdk::RGBA::BLACK)
+                .to_string()
+        };
+        let mut css=format!(".{class} button {{min-width:16px;min-height:20px;padding:0 3px;border:0;background:transparent;box-shadow:none;}} .{class} .workspace-active {{color:{};}} .{class} button:hover {{background:alpha({},0.12);}}",color(&self.definition["style"]["accent"]),color(&self.definition["style"]["accent"]));
+        for (index, definition) in arr(&self.definition["islands"]).iter().enumerate() {
+            if arr(&definition["modules"]).is_empty() {
+                continue;
+            }
+            let style = config::merge(&self.definition["style"], &definition["style"]);
+            let island = gtk::Box::new(orientation, num(&style["moduleGap"]) as i32);
+            island.add_css_class(&format!("island-{index}"));
+            let px = style["paddingX"].as_f64().unwrap_or(num(&style["padding"]));
+            let py = style["paddingY"].as_f64().unwrap_or(num(&style["padding"]));
+            css+=&format!(".{class} .island-{index} {{background:{};color:{};border:{}px solid {};border-radius:{}px;padding:{}px {}px;}}",color(&style["background"]),color(&style["text"]),num(&style["borderWidth"]),color(&style["border"]),num(&style["radius"]),py,px);
+            if horizontal {
+                island.set_size_request(-1, num(&self.definition["thickness"]) as i32);
+            } else {
+                island.set_size_request(num(&self.definition["verticalWidth"]) as i32, -1);
+            }
+            for id in arr(&definition["modules"]) {
+                let module = &self.definition["moduleConfigs"][s(id)];
+                if module["comparisonItems"].is_array() {
+                    let view = comparison::Module::new(module, &style, orientation);
+                    island.append(&view.root);
+                    self.comparisons.push((s(id).into(), view));
+                    continue;
+                }
+                match s(&module["provider"]) {
+                    "workspaces" => {
+                        let group = gtk::Box::new(orientation, num(&style["itemGap"]) as i32);
+                        for row in layout::workspaces(snapshot, output, &self.output, module) {
+                            let button = gtk::Button::with_label(&row.label);
+                            button
+                                .set_tooltip_text(Some(&format!("Workspace {}", row.target.name)));
+                            button.set_sensitive(can_select);
+                            if row.active {
+                                button.add_css_class("workspace-active");
+                            }
+                            let send = actions.clone();
+                            button.connect_clicked(move |_| {
+                                let _ = send.try_send(Action::Workspace(row.target.clone()));
+                            });
+                            group.append(&button);
+                            self.workspace_buttons.push(button);
+                        }
+                        let open = gtk::Button::with_label("▦");
+                        open.set_tooltip_text(Some("Running windows"));
+                        let target = self.panel.downgrade();
+                        open.connect_clicked(move |_| {
+                            if let Some(p) = target.upgrade() {
+                                p.set_visible(!p.is_visible());
+                            }
+                        });
+                        group.append(&open);
+                        island.append(&group);
+                    }
+                    "datetime" => {
+                        let card = if let Some(index) =
+                            previous_clocks.iter().position(|c| c.module == *module)
+                        {
+                            previous_clocks.remove(index)
+                        } else {
+                            clock_card::Card::new(
+                                &self.window.application().unwrap(),
+                                &self.window.monitor().unwrap(),
+                                module,
+                            )
+                        };
+                        for old in card.panel.css_classes() {
+                            if old.starts_with("bartjik-") {
+                                card.panel.remove_css_class(&old);
+                            }
+                        }
+                        card.panel.add_css_class(&class);
+                        island.append(&card.button);
+                        self.clocks.push(card);
+                    }
+                    provider => {
+                        let label = gtk::Label::new(Some(&format!("{provider} · unavailable")));
+                        label.set_tooltip_text(Some(
+                            "This provider has not been migrated to GTK yet",
+                        ));
+                        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                        label.set_max_width_chars(22);
+                        island.append(&label);
+                        self.unsupported.push(provider.into());
+                    }
+                }
+            }
+            self.body.append(&island);
+            self.islands.push(island);
+        }
+        css += &format!(".{class} .clock-row {{background:{};border-radius:8px;padding:10px 12px;min-height:36px;}} .{class} .clock-city {{font-size:13px;}} .{class} .clock-detail {{font-size:10px;color:{};}} .{class} .clock-value {{font-size:23px;}} .{class} .clock-heading {{font-size:16px;}}", color(&self.definition["style"]["surface"]),color(&self.definition["style"]["muted"]));
+        self.css.load_from_string(&css);
+
+        for window in snapshot.windows.iter().filter(|w| {
+            w.output.as_ref() == Some(&output.id)
+                && w.mapped != Some(false)
+                && w.hidden != Some(true)
+        }) {
+            let button = gtk::Button::with_label(
+                window
+                    .title
+                    .as_deref()
+                    .or(window.app_id.as_deref())
+                    .unwrap_or("Window"),
+            );
+            if let Some(l) = button.child().and_downcast::<gtk::Label>() {
+                l.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                l.set_max_width_chars(40);
+            }
+            let id = window.id.clone();
+            let send = actions.clone();
+            let panel = self.panel.downgrade();
+            button.connect_clicked(move |_| {
+                if send.try_send(Action::Window(id.clone())).is_ok() {
+                    if let Some(p) = panel.upgrade() {
+                        p.set_visible(false);
+                    }
+                }
+            });
+            self.rows.append(&button);
+        }
+        if self.rows.first_child().is_none() {
+            self.rows
+                .append(&gtk::Label::new(Some("No windows on this output")));
+        }
+        self.relayout();
+    }
+    fn relayout(&mut self) {
+        let Some(output) = self.topology.clone() else {
+            return;
+        };
+        let width = self.body.measure(gtk::Orientation::Horizontal, -1).1 as f64;
+        let height = self
+            .body
+            .measure(gtk::Orientation::Vertical, width as i32)
+            .1 as f64;
+        self.geometry = layout::geometry(
+            &self.definition,
+            output.logical.width,
+            output.logical.height,
+            width,
+            height,
+            output.scale,
+        );
+        position(&self.window, self.geometry);
+        let visible = self.definition["visible"] != false
+            && self.geometry.width > 0.
+            && self.geometry.height > 0.;
+        self.window.set_visible(visible);
+        if visible && self.input_active {
+            input_regions(&self.window, &self.islands);
+        } else if !visible {
+            self.panel.set_visible(false);
+        }
+        let r = self.geometry;
+        let panel_height = 240_f64.min(output.logical.height);
+        let panel_width = 360_f64.min(output.logical.width);
+        let (x, y) = match s(&self.definition["side"]) {
+            "b" => (r.x, (r.y - panel_height - 8.).max(0.)),
+            "l" => (r.x + r.width + 8., r.y),
+            "r" => ((r.x - panel_width - 8.).max(0.), r.y),
+            _ => (r.x, r.y + r.height + 8.),
+        };
+        position(
+            &self.panel,
+            Rect {
+                x: x.min((output.logical.width - panel_width).max(0.)).max(0.),
+                y: y.min((output.logical.height - panel_height).max(0.))
+                    .max(0.),
+                width: panel_width,
+                height: panel_height,
+            },
+        );
+        for clock in &self.clocks {
+            let width = 440_f64.min(output.logical.width);
+            let height = (160.
+                + 58.
+                    * (if clock.module["worldClocks"].is_null() {
+                        4
+                    } else {
+                        arr(&clock.module["worldClocks"]).len().clamp(1, 7)
+                    }) as f64)
+                .min(output.logical.height);
+            let bounds = clock.button.compute_bounds(&self.window);
+            let center_x = r.x
+                + bounds
+                    .as_ref()
+                    .map(|v| (v.x() + v.width() / 2.) as f64)
+                    .unwrap_or(r.width / 2.);
+            let center_y = r.y
+                + bounds
+                    .as_ref()
+                    .map(|v| (v.y() + v.height() / 2.) as f64)
+                    .unwrap_or(r.height / 2.);
+            let (x, y) = match s(&self.definition["side"]) {
+                "b" => (center_x - width / 2., r.y - height - 8.),
+                "l" => (r.x + r.width + 8., center_y - height / 2.),
+                "r" => (r.x - width - 8., center_y - height / 2.),
+                _ => (center_x - width / 2., r.y + r.height + 8.),
+            };
+            position(
+                &clock.panel,
+                Rect {
+                    x: x.clamp(0., (output.logical.width - width).max(0.)),
+                    y: y.clamp(0., (output.logical.height - height).max(0.)),
+                    width,
+                    height,
+                },
+            );
+            if !visible {
+                clock.hide();
+            }
+        }
+    }
+    fn conceal(&mut self, concealed: bool) {
+        let target = if concealed { 0. } else { 1. };
+        if target != self.target_opacity {
+            self.fade_from = self.opacity;
+            self.target_opacity = target;
+            self.fade_started = Instant::now();
+        }
+        if !concealed {
+            for (_, view) in &self.comparisons {
+                view.wake_icons();
+                for visual in view.visuals() {
+                    visual.wake();
+                }
+            }
+        }
+        let duration = num(&self.definition["fadeDuration"]);
+        let t = if duration <= 0. {
+            1.
+        } else {
+            (self.fade_started.elapsed().as_secs_f64() * 1000. / duration).min(1.)
+        };
+        let eased = if t < 0.5 {
+            2. * t * t
+        } else {
+            1. - (-2. * t + 2.).powi(2) / 2.
+        };
+        self.opacity = self.fade_from + (self.target_opacity - self.fade_from) * eased;
+        if (self.window.opacity() - self.opacity).abs() > 0.0001 {
+            self.window.set_opacity(self.opacity);
+        }
+        let active = self.opacity > 0.01;
+        if active != self.input_active {
+            self.input_active = active;
+            if active {
+                input_regions(&self.window, &self.islands);
+            } else if let Some(surface) = self.window.surface() {
+                surface.set_input_region(&gtk::cairo::Region::create());
+                surface.queue_render();
+                self.hovered.set(false);
+            }
+        }
+    }
+    fn clock(&mut self, readings: &BTreeMap<String, clocks::Reading>) {
+        let mut changed = false;
+        for clock in &self.clocks {
+            changed |= clock.update(readings.get(&clock.key));
+        }
+        if changed {
+            self.relayout();
+        }
+    }
+}
+struct Reservation(gtk::ApplicationWindow);
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        self.0.destroy();
+    }
+}
+pub struct Ui {
+    pub app: gtk::Application,
+    pub snapshot: RefCell<Option<Snapshot>>,
+    bars: RefCell<BTreeMap<String, Bar>>,
+    reservations: RefCell<BTreeMap<String, Reservation>>,
+    configuration: RefCell<Value>,
+    comparison: RefCell<Value>,
+    error: RefCell<String>,
+    actions: async_channel::Sender<Action>,
+    demo: bool,
+    reserve: bool,
+    can_select: bool,
+    pointer: pointer::Pointer,
+    clocks: clocks::Service,
+    edge_states: RefCell<BTreeMap<String, edges::State>>,
+    edge_timer: RefCell<Option<glib::SourceId>>,
+    started: Instant,
+}
+impl Ui {
+    pub fn new(
+        app: gtk::Application,
+        configuration: Value,
+        actions: async_channel::Sender<Action>,
+        demo: bool,
+        reserve: bool,
+        can_select: bool,
+        desktop: Arc<dyn tjik_desktop::Desktop>,
+    ) -> Self {
+        Self {
+            app,
+            snapshot: RefCell::new(None),
+            bars: RefCell::new(BTreeMap::new()),
+            reservations: RefCell::new(BTreeMap::new()),
+            configuration: RefCell::new(configuration),
+            comparison: RefCell::new(Value::Null),
+            error: RefCell::new(String::new()),
+            actions,
+            demo,
+            reserve,
+            can_select,
+            pointer: pointer::Pointer::new(desktop),
+            clocks: clocks::Service::new(demo),
+            edge_states: RefCell::new(BTreeMap::new()),
+            edge_timer: RefCell::new(None),
+            started: Instant::now(),
+        }
+    }
+    pub fn clock(&self) {
+        let readings = self.clocks.readings();
+        for b in self.bars.borrow_mut().values_mut() {
+            b.clock(&readings);
+        }
+    }
+    fn inspect(
+        widgets: impl Iterator<Item = gtk::Widget>,
+        window: &gtk::ApplicationWindow,
+    ) -> Vec<Value> {
+        widgets.filter_map(|w|{let r=w.compute_bounds(window)?;let label=w.downcast_ref::<gtk::Button>().and_then(|b|b.label()).map(|s|s.to_string());Some(json!({"label":label,"x":r.x(),"y":r.y(),"width":r.width(),"height":r.height()}))}).collect()
+    }
+    fn status(&self) -> Value {
+        json!({"ok":true,"pid":std::process::id(),"demo":self.demo,"reserve":self.reserve,"autoHideError":self.pointer.latest().1,"pointerSampling":self.edge_timer.borrow().is_some(),"clockProviders":self.clocks.count(),"comparison":std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some(),"error":self.error.borrow().as_str(),"revision":self.snapshot.borrow().as_ref().map(|s|s.revision),"bars":self.bars.borrow().iter().map(|(key,b)|{
+            let mut children=vec![];let mut child=b.rows.first_child();while let Some(w)=child {child=w.next_sibling();if w.is::<gtk::Button>(){children.push(w);}}
+            json!({"key":key,"output":b.output,"side":b.definition["side"],"visible":b.window.is_visible(),"concealed":self.edge_states.borrow().get(key).is_some_and(|s|s.concealed),"opacity":b.opacity,"inputActive":b.input_active,"geometry":b.geometry,"width":b.window.width(),"height":b.window.height(),"unsupported":b.unsupported,"panel":b.panel.is_visible(),"items":Self::inspect(children.into_iter(),&b.panel),"clocks":b.clocks.iter().map(|c|{let mut v=c.status();v["bounds"]=Self::inspect(std::iter::once(c.button.clone().upcast()),&b.window).first().cloned().unwrap_or(Value::Null);v}).collect::<Vec<_>>(),"workspaces":Self::inspect(b.workspace_buttons.iter().map(|w|w.clone().upcast()),&b.window),"motion":b.comparisons.iter().map(|(id,v)|json!({"id":id,"visible":v.root.is_visible(),"icons":v.icon_status(),"tray":v.tray_status(),"visuals":v.visuals().iter().map(|v|v.status()).collect::<Vec<_>>()})).collect::<Vec<_>>(),"islands":Self::inspect(b.islands.iter().map(|w|w.clone().upcast()),&b.window)})
+        }).collect::<Vec<_>>()})
+    }
+    pub fn render(self: &Rc<Self>, snapshot: &Snapshot) {
+        let display = gdk::Display::default().unwrap();
+        let monitors: Vec<_> = display
+            .monitors()
+            .iter::<gdk::Monitor>()
+            .flatten()
+            .collect();
+        let outputs: Vec<_> = monitors
+            .iter()
+            .filter_map(|m| {
+                let name = m.connector()?.to_string();
+                let mut output = if self.demo {
+                    snapshot.outputs.first()?.clone()
+                } else {
+                    snapshot.outputs.iter().find(|o| o.name == name)?.clone()
+                };
+                if self.demo {
+                    let g = m.geometry();
+                    output.name = name;
+                    output.logical.width = g.width() as f64;
+                    output.logical.height = g.height() as f64;
+                    output.scale = m.scale_factor() as f64;
+                }
+                Some(output)
+            })
+            .collect();
+        let screens=json!(outputs.iter().map(|o|json!({"name":o.name,"width":o.logical.width,"height":o.logical.height,"scale":o.scale})).collect::<Vec<_>>());
+        let definitions = match config::resolve_all(&self.configuration.borrow(), &screens) {
+            Ok(v) => v,
+            Err(e) => {
+                *self.error.borrow_mut() = e.to_string();
+                return;
+            }
+        };
+        let mut live = vec![];
+        let mut depths = BTreeMap::<(String, String), i32>::new();
+        for mut definition in definitions {
+            if std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some() {
+                let rows = self.comparison.borrow();
+                let id = s(&definition["id"]).to_owned();
+                let output = s(&definition["screen"]).to_owned();
+                let islands = definition["islands"].clone();
+                let configured = definition["moduleConfigs"].clone();
+                if let Some(modules) = definition["moduleConfigs"].as_object_mut() {
+                    for (name, module) in modules {
+                        let peer = |provider: &str| {
+                            arr(&islands)
+                                .iter()
+                                .find(|island| arr(&island["modules"]).iter().any(|v| v == name))
+                                .and_then(|island| {
+                                    arr(&island["modules"]).iter().find(|v| {
+                                        s(v) != name && configured[s(v)]["provider"] == provider
+                                    })
+                                })
+                                .map(|v| s(v).to_owned())
+                        };
+                        let mirrored = |key: &str| {
+                            rows.as_array().and_then(|rs| {
+                                rs.iter().find(|r| {
+                                    r["bar"] == id && r["monitor"] == output && r["id"] == key
+                                })
+                            })
+                        };
+                        module["comparisonActivity"] = mirrored(name)
+                            .map(|r| r["activity"].clone())
+                            .unwrap_or(Value::Null);
+                        module["comparisonHidden"] =
+                            json!(module["provider"] == "tailscale" && peer("mullvad").is_some());
+                        module["comparisonTailnet"] = json!(
+                            module["provider"] == "mullvad"
+                                && peer("tailscale")
+                                    .and_then(|p| mirrored(&p))
+                                    .is_some_and(|r| r["items"][0]["connection"] == "Running")
+                        );
+                        module["comparisonItems"] = rows
+                            .as_array()
+                            .and_then(|rs| {
+                                rs.iter().find(|r| {
+                                    r["bar"] == id && r["monitor"] == output && r["id"] == *name
+                                })
+                            })
+                            .map(|r| r["items"].clone())
+                            .unwrap_or_else(|| json!([]));
+                    }
+                }
+            }
+            let Some(output) = outputs.iter().find(|o| o.name == s(&definition["screen"])) else {
+                continue;
+            };
+            let Some(monitor) = monitors
+                .iter()
+                .find(|m| m.connector().as_deref() == Some(&output.name))
+            else {
+                continue;
+            };
+            let key = s(&definition["key"]).to_owned();
+            live.push(key.clone());
+            let mut bars = self.bars.borrow_mut();
+            let structural = |value: &Value| {
+                let mut value = value.clone();
+                if let Some(modules) = value["moduleConfigs"].as_object_mut() {
+                    for module in modules.values_mut() {
+                        if let Some(m) = module.as_object_mut() {
+                            m.retain(|key, _| !key.starts_with("comparison"));
+                        }
+                    }
+                }
+                value
+            };
+            if bars
+                .get(&key)
+                .is_some_and(|b| structural(&b.definition) != structural(&definition))
+            {
+                bars.remove(&key);
+            }
+            let bar = bars
+                .entry(key.clone())
+                .or_insert_with(|| Bar::new(&self.app, monitor, &definition));
+            bar.definition = definition.clone();
+            bar.refresh(snapshot, output, &self.actions, self.demo, self.can_select);
+            if !bar.resizing && bar.comparisons.iter().any(|(_, v)| v.resizing()) {
+                bar.resizing = true;
+                let weak = Rc::downgrade(self);
+                let key = key.clone();
+                bar.window.add_tick_callback(move |_, _| {
+                    let Some(ui) = weak.upgrade() else {
+                        return glib::ControlFlow::Break;
+                    };
+                    let mut bars = ui.bars.borrow_mut();
+                    let Some(bar) = bars.get_mut(&key) else {
+                        return glib::ControlFlow::Break;
+                    };
+                    for (_, view) in &bar.comparisons {
+                        view.resize_frame();
+                    }
+                    bar.relayout();
+                    let moving = bar.comparisons.iter().any(|(_, v)| v.resizing());
+                    if moving {
+                        glib::ControlFlow::Continue
+                    } else {
+                        bar.resizing = false;
+                        glib::ControlFlow::Break
+                    }
+                });
+            }
+            if self.reserve && bar.window.is_visible() {
+                let depth = layout::reserve(
+                    &definition,
+                    bar.geometry,
+                    output.logical.width,
+                    output.logical.height,
+                );
+                let d = depths
+                    .entry((output.name.clone(), s(&definition["side"]).into()))
+                    .or_default();
+                *d = (*d).max(depth);
+            }
+        }
+        self.bars.borrow_mut().retain(|k, _| live.contains(k));
+        let mut reservations = self.reservations.borrow_mut();
+        let mut live = vec![];
+        for ((name, side), depth) in depths {
+            if depth <= 0 {
+                continue;
+            }
+            let Some(monitor) = monitors
+                .iter()
+                .find(|m| m.connector().as_deref() == Some(&name))
+            else {
+                continue;
+            };
+            let key = format!("{name}/{side}");
+            live.push(key.clone());
+            let reservation = reservations.entry(key.clone()).or_insert_with(|| {
+                let w = surface(&self.app, monitor, "bartjik-gtk-reservation", Layer::Top);
+                for edge in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
+                    w.set_anchor(edge, false);
+                }
+                let edges = match side.as_str() {
+                    "t" => vec![Edge::Top, Edge::Left, Edge::Right],
+                    "b" => vec![Edge::Bottom, Edge::Left, Edge::Right],
+                    "l" => vec![Edge::Left, Edge::Top, Edge::Bottom],
+                    _ => vec![Edge::Right, Edge::Top, Edge::Bottom],
+                };
+                for e in edges {
+                    w.set_anchor(e, true);
+                }
+                w.set_default_size(1, 1);
+                Reservation(w)
+            });
+            reservation.0.set_exclusive_zone(depth);
+            reservation.0.set_visible(true);
+        }
+        reservations.retain(|k, _| live.contains(k));
+        drop(reservations);
+        self.clocks.configure(
+            self.bars
+                .borrow()
+                .values()
+                .filter(|b| b.window.is_visible())
+                .flat_map(|b| b.clocks.iter().map(|c| c.module.clone())),
+        );
+        self.clock();
+        self.configure_edges();
+    }
+    fn configure_edges(self: &Rc<Self>) {
+        let enabled = self
+            .bars
+            .borrow()
+            .values()
+            .any(|b| b.window.is_visible() && b.definition["autoHide"] == true);
+        self.pointer.enable(enabled);
+        if enabled && self.edge_timer.borrow().is_none() {
+            let weak = Rc::downgrade(self);
+            *self.edge_timer.borrow_mut() = Some(glib::timeout_add_local(
+                Duration::from_millis(25),
+                move || {
+                    let Some(ui) = weak.upgrade() else {
+                        return glib::ControlFlow::Break;
+                    };
+                    ui.update_edges();
+                    glib::ControlFlow::Continue
+                },
+            ));
+        } else if !enabled {
+            if let Some(timer) = self.edge_timer.borrow_mut().take() {
+                timer.remove();
+            }
+        }
+        self.update_edges();
+    }
+    fn update_edges(&self) {
+        let (pointer, _) = self.pointer.latest();
+        let mut bars = self.bars.borrow_mut();
+        let entries: Vec<_> = bars
+            .iter()
+            .filter(|(_, b)| b.window.is_visible())
+            .filter_map(|(key, b)| {
+                Some(edges::Entry {
+                    key,
+                    definition: &b.definition,
+                    output: b.topology.as_ref()?,
+                    hovered: b.hovered.get()
+                        || b.panel.is_visible()
+                        || b.clocks.iter().any(|c| c.panel.is_visible()),
+                    fading: b.opacity > 0.01,
+                })
+            })
+            .collect();
+        let states = edges::update(
+            &self.edge_states.borrow(),
+            &entries,
+            pointer,
+            self.started.elapsed().as_millis() as u64,
+        );
+        for (key, bar) in bars.iter_mut() {
+            bar.conceal(states.get(key).is_some_and(|s| s.concealed));
+        }
+        // Match legacy reservation policy: concealed bars release their edge.
+        for (key, reservation) in self.reservations.borrow().iter() {
+            let depth = bars
+                .iter()
+                .filter(|(bar_key, b)| {
+                    format!("{}/{}", b.output, s(&b.definition["side"])) == *key
+                        && b.window.is_visible()
+                        && !states.get(*bar_key).is_some_and(|s| s.concealed)
+                })
+                .filter_map(|(_, b)| {
+                    b.topology.as_ref().map(|o| {
+                        layout::reserve(
+                            &b.definition,
+                            b.geometry,
+                            o.logical.width,
+                            o.logical.height,
+                        )
+                    })
+                })
+                .max()
+                .unwrap_or(0);
+            reservation.0.set_exclusive_zone(depth);
+            reservation.0.set_visible(depth > 0);
+        }
+        *self.edge_states.borrow_mut() = states;
+    }
+    pub fn event(self: &Rc<Self>, event: Event) {
+        match event {
+            Event::Quit => {
+                self.clocks.stop();
+                self.app.quit();
+            }
+            Event::Control(value, reply) => {
+                match value["action"].as_str().unwrap_or("") {
+                    "panel" | "hide-panel" => {
+                        for b in self.bars.borrow().values() {
+                            b.panel
+                                .set_visible(value["action"] == "panel" && b.window.is_visible());
+                            if value["action"] == "hide-panel" {
+                                for c in &b.clocks {
+                                    c.hide();
+                                }
+                            }
+                        }
+                    }
+                    "reload" => match config::load() {
+                        Ok(c) => {
+                            *self.configuration.borrow_mut() = c;
+                            if let Some(s) = self.snapshot.borrow().as_ref() {
+                                self.render(s);
+                            }
+                        }
+                        Err(e) => {
+                            let _ = reply.send(json!({"ok":false,"error":e.to_string()}));
+                            return;
+                        }
+                    },
+                    "status" => (),
+                    _ => {
+                        let _ = reply.send(json!({"ok":false,"error":"Unknown action"}));
+                        return;
+                    }
+                }
+                let _ = reply.send(self.status());
+            }
+            Event::Comparison(value) => {
+                *self.comparison.borrow_mut() = value;
+                if let Some(snapshot) = self.snapshot.borrow().as_ref() {
+                    self.render(snapshot);
+                }
+            }
+            Event::Result(message) => {
+                for b in self.bars.borrow().values() {
+                    b.window.set_tooltip_text(if message.is_empty() {
+                        None
+                    } else {
+                        Some(&message)
+                    });
+                }
+                *self.error.borrow_mut() = message;
+            }
+            Event::Desktop(tjik_desktop::DesktopState::Unavailable(error)) => {
+                *self.error.borrow_mut() = error.to_string();
+                self.bars.borrow_mut().clear();
+                self.reservations.borrow_mut().clear();
+                self.snapshot.borrow_mut().take();
+                self.clocks.configure(std::iter::empty());
+                self.configure_edges();
+            }
+            Event::Desktop(tjik_desktop::DesktopState::Ready(snapshot)) => {
+                self.error.borrow_mut().clear();
+                self.render(&snapshot);
+                *self.snapshot.borrow_mut() = Some(snapshot);
+            }
+        }
+    }
+}
