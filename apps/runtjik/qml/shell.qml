@@ -920,7 +920,7 @@ ShellRoot {
                                 }
                                 Image {
                                     id:art
-                                    visible:modelData.provider!=='Emoji'
+                                    visible:modelData.provider!=='Emoji' || !modelData.preview
                                     SequentialAnimation on opacity {
                                         running: art.parent.closing
                                         loops: Animation.Infinite
@@ -935,7 +935,7 @@ ShellRoot {
                                     fillMode:Image.PreserveAspectFit;asynchronous:root.galleryMode
                                 }
                                 Text {
-                                    visible:modelData.provider==='Emoji' || art.status===Image.Error || art.source.toString()===''
+                                    visible:(modelData.provider==='Emoji' && !!modelData.preview) || art.status===Image.Error || art.source.toString()===''
                                     x:art.x;y:art.y;width:art.width;height:art.height
                                     text:modelData.provider==='Emoji'?modelData.preview:modelData.name.slice(0,1).toUpperCase();color:root.theme.accent;font.pixelSize:modelData.provider==='Emoji'?Math.min(art.height*.78,48):28
                                     horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter

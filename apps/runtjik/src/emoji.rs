@@ -61,7 +61,7 @@ fn load() -> Result<Vec<Emoji>> {
 fn row(glyph: &str, name: &str, tone: bool, has_tones: bool) -> Entry {
     Entry {
         id: format!("Emoji:{glyph}"),
-        name: format!("{glyph}  {name}"),
+        name: name.to_owned(),
         subtitle: if tone {
             "Skin tone variant".into()
         } else {

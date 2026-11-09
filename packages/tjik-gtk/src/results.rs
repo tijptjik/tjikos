@@ -95,7 +95,16 @@ pub fn factory(
         emoji.add_css_class("emoji-preview");
         emoji.set_halign(gtk::Align::Center);
         emoji.set_valign(gtk::Align::Center);
-        emoji.set_size_request(icon_size, icon_size);
+        emoji.set_xalign(0.5);
+        emoji.set_yalign(0.5);
+        emoji.set_size_request(
+            if vertical { icon_size } else { 104 },
+            if vertical { icon_size } else { 56 },
+        );
+        if !vertical {
+            emoji.set_hexpand(true);
+            emoji.set_vexpand(true);
+        }
         emoji.set_visible(false);
         icon_slot.append(&emoji);
         row.append(&icon_slot);
@@ -182,9 +191,9 @@ pub fn factory(
             .unwrap()
             .downcast::<gtk::Label>()
             .unwrap();
-        let is_emoji = text(&value, "provider") == "Emoji";
+        let preview = text(&value, "preview");
+        let is_emoji = text(&value, "provider") == "Emoji" && !preview.is_empty();
         icon.set_visible(!is_emoji);
-        emoji.set_text(text(&value, "preview"));
         emoji.set_visible(is_emoji);
         emoji.set_css_classes(&["emoji-preview"]);
         emoji.set_markup(&format!(
@@ -194,7 +203,7 @@ pub fn factory(
             } else {
                 42000
             },
-            glib::markup_escape_text(text(&value, "preview"))
+            glib::markup_escape_text(preview)
         ));
         if matches!(layout, Layout::List) {
             let image = !text(&value, "thumbnail").is_empty();
