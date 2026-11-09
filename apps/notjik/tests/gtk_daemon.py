@@ -232,7 +232,75 @@ def motion_acceptance(request, send, config, env, work, daemon):
         control_click(frame['x']+180,frame['y']+row(frame,telegram)['y']+24)
         wait_for(lambda: request({"op":"status"})['queued']==1)
         assert request({"op":"list"})['notices'][0]['id']==plain
+        time.sleep(.6)  # Let the dismissed neighbour finish collapsing before aiming.
+        frame=next(f for f in reversed(frames()) if row(f,plain))
+        global_move(frame['x']+180,frame['y']+row(frame,plain)['y']+24)
+        keyboard=subprocess.Popen(["wtype","-M","shift","-s","600","-m","shift"],env=env)
+        time.sleep(.15); click(); keyboard.wait(timeout=3)
+        assert request({"op":"status"})['queued']==1, "Shift-click dismissed the card"
+        copied=subprocess.check_output(["wl-paste","--no-newline"],env=env,text=True,timeout=3)
+        assert "Keep this ordinary card" in copied
         print("Native Ctrl-click: ordinary dismiss-all and Telegram single-card safe-read intent passed")
+
+        # Real typing must remain in another app on arrival, hover, replacement,
+        # grouped updates and remapping an empty notification surface.
+        request({"op":"dismiss","id":"all"})
+        request({"op":"unfocus"})
+        time.sleep(.6)
+        config.write_text(json.dumps({"theme":"rose-punk", "placement":{"monitors":"all","edge":"b","position":"r"}, "grouping":{"enabled":True}, "stack":{"animationMs":400}}))
+        time.sleep(1.3)
+        move(100,100)
+        probe_file=work/"focus-probe.json"
+        probe=subprocess.Popen(["/usr/bin/python3",str(ROOT/"tests/focus_probe.py"),str(probe_file)],env=env,stdout=(work/"focus-probe.log").open("w"),stderr=subprocess.STDOUT)
+        try:
+            wait_for(lambda: probe_file.exists() and json.loads(probe_file.read_text())["active"])
+            expected=""
+            def type_into_probe(text):
+                nonlocal expected
+                expected+=text
+                subprocess.run(["wtype",text],env=env,check=True)
+                wait_for(lambda: json.loads(probe_file.read_text())["text"]==expected,timeout=3)
+                assert json.loads(probe_file.read_text())["active"], "Notification took keyboard focus"
+            type_into_probe("before")
+            ids=[]
+            for count in range(1,7):
+                ids.append(send("Synthetic grouped chat",body="Typing in another app stays uninterrupted.",group="focus-test",timeout=0))
+                time.sleep(.65)
+                type_into_probe(str(count))
+                frame=next(f for f in reversed(frames()) if row(f,ids[0]))
+                move(frame['x']+180,frame['y']+row(frame,ids[0])['y']+24)
+                time.sleep(.2)
+                type_into_probe("hover")
+                subprocess.run(["grim","-o","NOTJIK",str(work/f"group-notches-{count}.png")],check=True,capture_output=True)
+            send("Synthetic replacement",replace=ids[0],group="focus-test",timeout=0)
+            time.sleep(.5)
+            type_into_probe("replacement")
+            for key in reversed(ids[1:]):
+                request({"op":"dismiss","id":key})
+                time.sleep(.5)
+                type_into_probe("merge")
+            request({"op":"dismiss","id":"all"})
+            time.sleep(.6)
+            send("Remapped popup",timeout=0)
+            time.sleep(.4)
+            type_into_probe("remap")
+            request({"op":"navigate","direction":"previous"})
+            wait_for(lambda: not json.loads(probe_file.read_text())["active"])
+            subprocess.run(["wtype","-k","Escape"],env=env,check=True)
+            wait_for(lambda: json.loads(probe_file.read_text())["active"])
+            type_into_probe("escape")
+            request({"op":"navigate","direction":"previous"})
+            wait_for(lambda: not json.loads(probe_file.read_text())["active"])
+            move(100,450); click()
+            wait_for(lambda: json.loads(probe_file.read_text())["active"])
+            wait_for(lambda: request({"op":"status"})["selectedId"]=="")
+            subprocess.run(["wtype","-k","End"],env=env,check=True)
+            move(800,810)
+            time.sleep(.3)
+            type_into_probe("returned")
+            print("Keyboard focus: arrivals, hover, group splits/merges and remap preserve typing; explicit selection and Escape passed")
+        finally:
+            probe.terminate(); probe.wait(timeout=5)
 
         print("Pinned card: hover footer collapse and workspace hide/restore passed")
         print("Native drag: plain-text pickup, live held movement, release without dismissal and repeated floating drag passed")

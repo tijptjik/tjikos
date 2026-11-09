@@ -31,6 +31,8 @@ struct Surface {
     snapshots: HashMap<String, Value>,
     states: HashMap<String, String>,
     keyboard_selected: bool,
+    keyboard_was_active: bool,
+    pointer_keyboard_until: Rc<std::cell::Cell<Option<Instant>>>,
     keyboard_release_until: Rc<std::cell::Cell<Option<Instant>>>,
 }
 struct Detached {
@@ -59,6 +61,7 @@ struct PointerPress {
     y: f64,
     active: bool,
     control: bool,
+    shift: bool,
     native: Option<gdk::Drag>,
     monitor_x: f64,
     monitor_y: f64,
@@ -435,6 +438,17 @@ impl Host {
         self.retained.retain(|id, _| active.contains(id));
         self.feedback.retain(|id, _| active.contains(id));
         self.busy.retain(|id| active.contains(id));
+        for surface in self.windows.values_mut() {
+            let active = surface.window.is_active();
+            if surface.keyboard_was_active && !active && surface.keyboard_selected {
+                // Leaving a deliberately selected card ends keyboard ownership;
+                // later hover or arrivals must not reacquire it.
+                self.controller.borrow_mut().selected.clear();
+                surface.window.set_keyboard_mode(KeyboardMode::None);
+                surface.pointer_keyboard_until.set(None);
+            }
+            surface.keyboard_was_active = active;
+        }
         self.render();
     }
     fn request(&mut self, request: Value) -> Result<Value> {
@@ -539,6 +553,13 @@ impl Host {
             .context("Notification no longer active")?;
         anyhow::ensure!(c.allowed(&n), "Actions unavailable");
         match event.intent {
+            Intent::CopyMarkdown => {
+                if let Some(display) = gdk::Display::default() {
+                    display
+                        .clipboard()
+                        .set_text(&super::clipboard::markdown(&Notice(n), now() as f64));
+                }
+            }
             Intent::ControlDismiss => c.control_dismiss(&id),
             Intent::Dismiss => {
                 let shown = c.visible().iter().map(|n| text(&n["id"])).collect();
@@ -1112,9 +1133,16 @@ impl Host {
                     } else if selected_here && !surface.keyboard_selected {
                         tjik_gtk::surface::keyboard(&surface.window, true);
                     } else if !selected_here {
-                        // Click focus delivers held keyboard modifiers (notably Ctrl)
-                        // without taking focus merely because a notification appears.
-                        surface.window.set_keyboard_mode(KeyboardMode::OnDemand);
+                        // Idle arrivals and pointer hover must never acquire keyboard focus.
+                        // A short explicit-click lease allows Wayland to deliver modifiers.
+                        if !surface
+                            .pointer_keyboard_until
+                            .get()
+                            .is_some_and(|until| until > Instant::now())
+                            && self.pointer.borrow().is_none()
+                        {
+                            surface.window.set_keyboard_mode(KeyboardMode::None);
+                        }
                     }
                     surface.keyboard_selected = selected_here;
                     let monitor_name = detached.map(|d| d.monitor.as_str()).unwrap_or(name);
@@ -1245,6 +1273,35 @@ fn compositor_cursor() -> Option<(f64, f64)> {
     Some((value["x"].as_f64()?, value["y"].as_f64()?))
 }
 
+// Wayland delivers held modifiers only after the explicit click has acquired
+// keyboard focus. Native DnD can defer that enter until its pointer grab ends.
+fn finish_click(
+    tx: mpsc::Sender<(String, CardEvent)>,
+    source: String,
+    id: String,
+    control: bool,
+    shift: bool,
+    floating: bool,
+) {
+    glib::timeout_add_local_once(Duration::from_millis(60), move || {
+        let modifiers = gdk::Display::default()
+            .and_then(|display| display.default_seat())
+            .and_then(|seat| seat.keyboard())
+            .map(|keyboard| keyboard.modifier_state())
+            .unwrap_or_else(gdk::ModifierType::empty);
+        let intent = if shift || modifiers.contains(gdk::ModifierType::SHIFT_MASK) {
+            Intent::CopyMarkdown
+        } else if control || modifiers.contains(gdk::ModifierType::CONTROL_MASK) {
+            Intent::ControlDismiss
+        } else if !floating {
+            Intent::Dismiss
+        } else {
+            return;
+        };
+        let _ = tx.send((source, CardEvent { id, intent }));
+    });
+}
+
 fn popup(
     app: &gtk::Application,
     monitor: &gdk::Monitor,
@@ -1295,6 +1352,17 @@ fn popup(
     window.set_default_size(geometry.width(), geometry.height());
     // Layer surfaces do not provide a widget-local grab outside a card's bounds.
     // Keep pointer ownership on the stable monitor-sized native surface instead.
+    let pointer_keyboard_until = Rc::new(std::cell::Cell::new(None));
+    let modifiers = gtk::EventControllerKey::new();
+    let modifier_press = press.clone();
+    modifiers.connect_modifiers(move |_, modifiers| {
+        if let Some(press) = modifier_press.borrow_mut().as_mut() {
+            press.control |= modifiers.contains(gdk::ModifierType::CONTROL_MASK);
+            press.shift |= modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+        }
+        glib::Propagation::Proceed
+    });
+    window.add_controller(modifiers);
     let pointer = gtk::EventControllerLegacy::new();
     pointer.set_propagation_phase(gtk::PropagationPhase::Capture);
     let weak = window.downgrade();
@@ -1339,11 +1407,17 @@ fn popup(
                 finished,
                 pointer: Some((gx - p.monitor_x, gy - p.monitor_y)),
             })
-        } else if finished && p.control {
-            Some(Intent::ControlDismiss)
-        } else if finished && !target_owner.borrow().floating.contains(&p.id) {
-            Some(Intent::Dismiss)
         } else {
+            if finished {
+                finish_click(
+                    target_tx.clone(),
+                    p.source.clone(),
+                    p.id.clone(),
+                    p.control,
+                    p.shift,
+                    target_owner.borrow().floating.contains(&p.id),
+                );
+            }
             None
         };
         if let Some(intent) = intent {
@@ -1375,14 +1449,12 @@ fn popup(
         true
     });
     window.add_controller(target);
+    let click_until = pointer_keyboard_until.clone();
     pointer.connect_event(move |_, event| {
         if event.event_type() != gdk::EventType::ButtonPress
             || event
                 .downcast_ref::<gdk::ButtonEvent>()
                 .is_none_or(|b| b.button() != 1)
-            || event
-                .modifier_state()
-                .contains(gdk::ModifierType::SHIFT_MASK)
         {
             return glib::Propagation::Proceed;
         }
@@ -1392,6 +1464,8 @@ fn popup(
         let Some(window) = weak.upgrade() else {
             return glib::Propagation::Proceed;
         };
+        click_until.set(Some(Instant::now() + Duration::from_millis(350)));
+        tjik_gtk::surface::keyboard(&window, true);
         if press.borrow().is_some() {
             return glib::Propagation::Stop;
         }
@@ -1446,6 +1520,9 @@ fn popup(
             control: event
                 .modifier_state()
                 .contains(gdk::ModifierType::CONTROL_MASK),
+            shift: event
+                .modifier_state()
+                .contains(gdk::ModifierType::SHIFT_MASK),
             native: Some(drag.clone()),
             monitor_x: bounds.x() as f64,
             monitor_y: bounds.y() as f64,
@@ -1469,19 +1546,24 @@ fn popup(
                 return;
             }
             if let Some(p) = current.borrow_mut().take() {
-                let intent = if !p.active
-                    && reason == gdk::DragCancelReason::NoTarget
-                    && (p.control || !cancel_owner.borrow().floating.contains(&p.id))
-                {
-                    if p.control {
-                        Intent::ControlDismiss
-                    } else {
-                        Intent::Dismiss
-                    }
+                if !p.active && reason == gdk::DragCancelReason::NoTarget {
+                    finish_click(
+                        cancel_tx.clone(),
+                        p.source,
+                        p.id.clone(),
+                        p.control,
+                        p.shift,
+                        cancel_owner.borrow().floating.contains(&p.id),
+                    );
                 } else {
-                    Intent::CancelDrag
-                };
-                let _ = cancel_tx.send((p.source, CardEvent { id: p.id, intent }));
+                    let _ = cancel_tx.send((
+                        p.source,
+                        CardEvent {
+                            id: p.id,
+                            intent: Intent::CancelDrag,
+                        },
+                    ));
+                }
             }
             drag.drop_done(false);
         });
@@ -1554,6 +1636,8 @@ fn popup(
         snapshots: HashMap::new(),
         states: HashMap::new(),
         keyboard_selected: false,
+        keyboard_was_active: false,
+        pointer_keyboard_until,
         keyboard_release_until,
     }
 }
@@ -1742,7 +1826,7 @@ mod tests {
         host.render();
         assert_eq!(
             host.windows[&source].window.keyboard_mode(),
-            KeyboardMode::OnDemand
+            KeyboardMode::None
         );
         let card = host.windows[&source].cards[&id].clone();
         *card.context.draft.borrow_mut() = "Unsent synthetic reply".into();

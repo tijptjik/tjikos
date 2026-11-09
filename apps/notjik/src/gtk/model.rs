@@ -139,6 +139,7 @@ pub struct Recording {
 /// Widgets never execute payload command arrays, send messages, or open a microphone.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Intent {
+    CopyMarkdown,
     Invoke(usize),
     Dismiss,
     ControlDismiss,

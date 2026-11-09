@@ -212,6 +212,7 @@ pub(super) fn content(ctx: &Rc<Context>, parent: &gtk::Box) {
             e.set_visible(show);
             q.set_visible(quoted);
             if show {
+                c.emit(Intent::Select);
                 i.grab_focus();
             }
             c.sync_reveal();
