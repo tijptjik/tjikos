@@ -307,6 +307,10 @@ the Bitwarden desktop URI when available, then opens the matching web-vault item
 
 ### Text expansion
 
+Use ISO dates for `:date`: `%Y-%m-%d` produces `YYYY-MM-DD`. The
+[ISO-date example](examples/espanso/iso-date.yml) replaces the existing `:date` match;
+do not install a second match with the same trigger.
+
 For stalled startup or reloads on Wayland, see the
 [Espanso modifier-sync repair](docs/espanso-wayland.md).
 

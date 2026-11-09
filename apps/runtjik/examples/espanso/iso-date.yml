@@ -1,0 +1,9 @@
+# Replace Espanso's existing :date match with this entry; do not duplicate it.
+matches:
+  - trigger: ":date"
+    replace: "{{mydate}}"
+    vars:
+      - name: mydate
+        type: date
+        params:
+          format: "%Y-%m-%d"
