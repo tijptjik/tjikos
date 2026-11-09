@@ -26,6 +26,8 @@ use tjik_gtk::gtk::{self, gdk, glib, prelude::*};
 
 #[path = "../action_choice.rs"]
 mod action_choice;
+mod audio_card;
+mod audio_service;
 mod clock_card;
 mod clocks;
 mod codex_card;

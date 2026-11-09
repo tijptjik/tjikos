@@ -116,9 +116,19 @@ pub async fn levels(microphone: bool) -> Result<()> {
                     }
                 }
                 if microphone {
-                    for source in arr(&jc(&["pactl", "-f", "json", "list", "sources"]).await?) {
+                    let sources = jc(&["pactl", "-f", "json", "list", "sources"]).await?;
+                    let preferred = arr(&sources).iter().any(|source| {
+                        s(&source["name"]).starts_with("alsa_input.usb-046d_Logitech_BRIO_")
+                    });
+                    let default_source = cmd(&["pactl", "get-default-source"])
+                        .await
+                        .unwrap_or_default();
+                    for source in arr(&sources) {
                         let name = s(&source["name"]);
-                        if name.starts_with("alsa_input.usb-046d_Logitech_BRIO_")
+                        if (name.starts_with("alsa_input.usb-046d_Logitech_BRIO_")
+                            || (!preferred
+                                && name == default_source
+                                && !name.ends_with(".monitor")))
                             && !truth(&source["mute"])
                         {
                             wanted.insert(

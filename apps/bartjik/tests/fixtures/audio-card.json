@@ -1,0 +1,54 @@
+{
+  "headphones": true,
+  "route": true,
+  "groups": [
+    {
+      "key": "__output",
+      "title": "Output",
+      "detail": "USB Audio Speakers",
+      "targets": [
+        {
+          "kind": "sink",
+          "index": 1,
+          "identity": "__output"
+        }
+      ],
+      "volume": 0.4,
+      "muted": false,
+      "microphone": false,
+      "master": true
+    },
+    {
+      "key": "__input",
+      "title": "Microphone",
+      "detail": "BRIO microphone",
+      "targets": [
+        {
+          "kind": "source",
+          "index": 2,
+          "identity": "__input"
+        }
+      ],
+      "volume": 0.65,
+      "muted": false,
+      "microphone": true,
+      "master": true
+    },
+    {
+      "key": "Music",
+      "title": "Music",
+      "detail": "",
+      "targets": [
+        {
+          "kind": "sink-input",
+          "index": 3,
+          "identity": "Music"
+        }
+      ],
+      "volume": 0.7,
+      "muted": false,
+      "microphone": false,
+      "master": false
+    }
+  ]
+}

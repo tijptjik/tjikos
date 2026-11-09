@@ -679,3 +679,33 @@ changes, host clipboard writes, pings, or browser launches occur during testing.
 Artifacts: `/tmp/bartjik-connectivity-primitives.png` and
 `/tmp/bartjik-connectivity-reference.png`. Real VPN state changes remain a user-driven
 acceptance check.
+
+### Audio panel and quick-location flag sizing
+
+Quick locations now always reserve five equal slots, including when only three countries
+are configured. A three-country render regression prevents flags from stretching across
+the entire card.
+
+The GTK audio panel reproduces the Master/output/microphone grouping, playback-client
+groups, mute controls and headphones routing button. Its tracks use 40 rounded marks
+with 3px gaps, 12px/16px heights, a quarter-opacity volume fill, independent logarithmic
+live levels, and the 16×26 notched handle. A transparent native GTK scale supplies
+pointer, wheel, keyboard and accessibility behavior; the custom drawing supplies the
+reference appearance. Volume stays independent of the meter. Muted groups dim.
+
+`audio_service.rs` contains the PulseAudio-compatibility transport; GTK widgets never
+spawn tools. Volume updates debounce for 150ms, commands are bounded, and device/stream
+identities are revalidated before writes. The existing core route helper preserves
+output-switching/stream-move policy. This is not a new native PipeWire backend. The
+existing meter helper runs only while mapped and its owned process group is killed when
+hidden. BRIO preference stays in the backend; another default microphone is used when
+BRIO is absent. Status polls every two seconds; errors and authoritative updates
+reconcile the controls. No meter audio is saved to files.
+
+Validation: `dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py --audio`
+compares the QML/GTK tracks and exercises synthetic debounce, mute, output switching,
+and teardown. `dev-check python3 apps/bartjik/tests/audio_tools.py` substitutes private
+pactl/helper executables for volume/mute, stale-target and routing contract checks.
+Artifacts: `/tmp/bartjik-audio-primitives.png` and `/tmp/bartjik-audio-reference.png`.
+Real device mutation, microphone/stream meter responsiveness and IME/accessibility
+acceptance still require user-driven checks; fixtures do not change host audio.
