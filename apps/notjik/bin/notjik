@@ -5,6 +5,11 @@ if [[ ! -f "$root/qml/shell.qml" ]]; then
     root="${NOTJIK_HOME:-$HOME/.local/lib/notjik}"
 fi
 export NOTJIK_HOME="$root"
+if [[ "${1:-}" == --gtk ]]; then
+    shift
+    if [[ -x "$root/bin/notjik-gtk" ]]; then exec "$root/bin/notjik-gtk" --serve "$@"; fi
+    exec "$root/dist/bin/notjik-gtk" --serve "$@"
+fi
 if [[ "${1:-}" == --gtk-cards ]]; then
     shift
     if [[ -x "$root/bin/notjik-gtk" ]]; then

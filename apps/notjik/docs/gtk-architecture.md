@@ -1,77 +1,75 @@
-# GTK migration architecture
+# GTK architecture
 
-Native services are callable from a GTK application, and the
-[GTK card library](gtk-cards.md) implements the built-in card presentations. The
-installed notification frontend remains Quickshell; the synthetic GTK gallery does not
-introduce a second notification server. The Control Center/history panel is deferred to
-a BarTjik panel.
+GTK is the default Notjik notification frontend. `notjik --quickshell` retains the
+compatibility frontend; `notjik --gtk-cards --demo` runs the isolated synthetic gallery.
+The Control Center/history UI remains deferred to a BarTjik panel.
 
-## Implemented boundary
+## Ownership
 
-`notjik-core` now has a library as well as the existing CLI binary:
+| Module               | Responsibility                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `controller.rs`      | Toolkit-independent identity, replacement, queue bounds, grouping, expiry, holds, selection, privacy and notification commands         |
+| `gtk/desktop_bus.rs` | Freedesktop Notifications name, methods, image decoding and action/close signals                                                       |
+| `ipc.rs`             | Private bounded Unix-socket requests, exclusive ownership and stale socket recovery                                                    |
+| `gtk/host.rs`        | GTK main loop, monitor routing, layer surfaces, detached cards, keyboard focus and intent dispatch                                     |
+| `gtk/executor.rs`    | Command execution, Telegram requests, single voice player and recording helper                                                         |
+| `backend.rs`         | Configuration reload, pause persistence, Wayland lock/idle observation, SQLite history, sync dismissal and Telegram dismissal dispatch |
+| `backend_channel.rs` | Bounded in-process service requests and updates, explicit backpressure and disconnection                                               |
+| `worker.rs`          | Existing stdin/stdout adapter for the compatibility frontend                                                                           |
+| `gtk/` card modules  | Shared presentations and typed interaction intents                                                                                     |
 
-- `backend::run(root, transport)` owns configuration reloads, persisted pause
-  preferences, lock observation, history retention and updates, sync dismissal
-  enqueueing, and Telegram dismissal dispatch. It runs on a service thread.
-- `backend::Transport` separates those services from their transport. Requests and
-  updates retain the existing JSON worker protocol, including history snapshots and
-  error messages. This is the worker protocol, not the `notjikctl` IPC API.
-- `backend_channel::channel()` supplies a bounded in-process adapter. The UI submits
-  requests without blocking and drains updates on its main loop. Queue saturation and
-  disconnection are explicit errors. Service updates apply backpressure rather than
-  silently dropping state. Drop the client before joining the service thread.
-- `worker.rs` adapts stdin/stdout to the same runtime for the existing QML frontend. It
-  retains bounded input and the 128 KiB request limit. Output failure now ends the
-  worker instead of silently discarding updates.
-- `cli.rs` owns process entry, argument parsing, launching and CLI dispatch. The binary
-  retains its existing name, command behavior and process umask; the library runtime
-  does not change the embedding process's umask.
+The controller accepts elapsed time and explicit state rather than reading widgets or
+spawning processes. Its effects go through the host to one backend or executor. Backend
+history writes retain ordering across channel backpressure. Configuration, account data,
+credentials, captures and history stay outside the repository.
 
-A native frontend can establish its service connection like this, with no GTK objects
-crossing the thread boundary:
+## Startup and lifecycle
 
-```rust,ignore
-let (client, mut transport) = notjik_core::backend_channel::channel();
-let service = std::thread::spawn(move || {
-    notjik_core::backend::run(&root, &mut transport)
-});
-// GTK main loop: client.submit(request), then drain client.try_recv().
-// Handle service errors/disconnection by clearing readiness and lock knowledge.
-// Shutdown: drop(client), then join service outside the GTK main loop.
+The native daemon claims `org.freedesktop.Notifications` without replacing an existing
+owner. It serves `$XDG_RUNTIME_DIR/notjik.sock` with private permissions and an
+ownership lock. `NOTJIK_SOCKET` overrides that path for isolated tests. `notjikctl`
+prefers this socket and falls back to Quickshell only if no native endpoint is
+listening; failed submitted mutations are never retried against another frontend.
+
+Readiness and lock state begin unknown. Backend disconnection conceals cards and blocks
+actions. Bus disconnection closes native surfaces and exits. Unknown idle state reports
+120 seconds to avoid advertising an unobserved device as active to Notjik sync.
+
+Native replacements always reset expiry. Hover, selection, interactions, pause and lock
+hold expiry. Ordinary popups do not take keyboard focus; explicit selection enables
+keyboard navigation, activation, dismissal and Escape to release focus. Drag release
+creates a detached card with an expiry hold; live movement during drag is not yet
+implemented. Monitor removal closes its surfaces.
+
+The executor keeps playback and recording ownership separate from widgets. Concealment
+stops audio and stops an active recording. Synthetic notifications never send Telegram
+actions or open the microphone. A pending or uncertain voice send retains its capture.
+
+## Compatibility boundaries
+
+All built-in card types use the GTK card library. Registered custom QML components fall
+back to standard cards in GTK. The `--quickshell` frontend remains available for those
+components and the old drawer. GTK returns an explicit deferred-panel error for drawer
+commands, while local history data/action APIs remain available. Global history merging
+and the six-card demo-only stack exception are not implemented by the GTK controller.
+
+## Validation
+
+Run heavy validation through `dev-check` on managed desktops:
+
+```sh
+dev-check bash -c 'bun run --filter @tjikos/notjik build && bun run --filter @tjikos/notjik check && bash apps/notjik/scripts/test-gtk.sh && python3 -B apps/notjik/tests/native_contracts.py && python3 -B apps/notjik/tests/gtk_daemon.py && python3 -B apps/notjik/tests/gtk_cards.py'
 ```
 
-The process supplies its configured resource root and environment before spawning
-services. Keep state, account configuration, credentials and captures outside the
-repository. A native frontend must begin with unknown lock state and preserve the
-current fail-closed privacy behavior if the service stops. No renderer may infer that
-absence of updates means the session is unlocked.
+`gtk_daemon.py` uses a private D-Bus session, synthetic notifications and a private
+Wayland compositor whose host window is placed silently on workspace 7. It checks name
+ownership, private IPC, replacements, expiry holds, native actions/signals and image
+data, command execution, configuration reload, history and layer surfaces. The gallery
+checks 19 variants in two themes against the QML reference. Unit tests cover controller
+privacy, suppression, overflow and idle observation. These checks do not establish real
+Telegram delivery, microphone capture, or end-to-end drag/keyboard interaction parity.
 
-## Next ownership changes
-
-| Responsibility                                                            | Current owner                                | GTK migration target                                                 |
-| ------------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------- |
-| Configuration, SQLite history, lock observation, worker side effects      | Shared Rust backend                          | Same backend through the in-process adapter                          |
-| Notification identity, replacement, queue, grouping, expiry and selection | `shell.qml` and `Logic.js`                   | Toolkit-independent Rust controller with explicit inputs and effects |
-| Desktop notification D-Bus interface and action/close signals             | Quickshell notification service              | Rust service adapter feeding that controller                         |
-| `notjikctl` request transport                                             | Quickshell IPC                               | Native IPC adapter using the same controller commands                |
-| Monitor routing, layer-shell surfaces, focus and geometry                 | QML panels                                   | GTK frontend using `tjik-gtk` primitives where appropriate           |
-| Card presentations                                                        | GTK card library and existing QML components | Connect GTK intents to the native controller and media executor      |
-| Control Center/history panel                                              | Existing QML component                       | Deferred to a BarTjik panel                                          |
-
-Move controller state before switching the launcher. The controller must accept explicit
-elapsed time, hover/focus holds, lock state and display availability; it must not read
-GTK widgets or own subprocesses. Snapshot data must not contain Quickshell
-image-provider handles. D-Bus notification IDs, replacement semantics, close reasons and
-action signals need contract tests before ownership moves. Effects such as history
-writes, Telegram reads and sync dismissals must retain one owner so a staged migration
-cannot execute an action twice.
-
-GTK startup must eventually claim the existing D-Bus name without displacing an owner,
-connect native IPC, and create surfaces on the GTK main loop. Only switch the installed
-launcher when those paths and the necessary cards are ready. Do not start a partial GTK
-server that accepts notifications it cannot display.
-
-Custom QML component paths remain valid for the current renderer. They are not a GTK
-extension API; choose an explicit compatibility or replacement policy when native custom
-component support is added. Existing history data and the history control panel remain
-unchanged in this stage.
+Install the validated build with `bash scripts/install.sh notjik`. On a managed desktop,
+set `TJIKUP_MANAGED_CONFIG=1` to preserve managed service configuration. Replacing files
+does not restart a running daemon or migrate its in-memory queue; restart the service
+when the current notifications can be cleared.

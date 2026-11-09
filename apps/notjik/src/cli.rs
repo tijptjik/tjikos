@@ -191,6 +191,9 @@ fn launch(root: &Path, args: &[String]) -> Result<()> {
     struct Launch {
         #[arg(long)]
         daemon: bool,
+        /// Use the legacy Quickshell renderer for compatibility.
+        #[arg(long)]
+        quickshell: bool,
         #[arg(long)]
         config: Option<PathBuf>,
         #[command(subcommand)]
@@ -219,6 +222,27 @@ fn launch(root: &Path, args: &[String]) -> Result<()> {
         Duration::from_secs(5),
     )?;
     ensure!(!String::from_utf8_lossy(&out).contains("true"),"org.freedesktop.Notifications already has an owner. Stop the existing notification daemon before starting notjik.");
+    if !opts.quickshell {
+        let binary = if root.join("bin/notjik-gtk").is_file() {
+            root.join("bin/notjik-gtk")
+        } else {
+            root.join("dist/bin/notjik-gtk")
+        };
+        ensure!(
+            binary.is_file(),
+            "Native GTK daemon is not installed; rebuild Notjik"
+        );
+        let mut cmd = Command::new(binary);
+        cmd.arg("--serve");
+        if opts.daemon {
+            cmd.stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()?;
+            return Ok(());
+        }
+        return Err(cmd.exec().into());
+    }
     let mut cmd = Command::new("quickshell");
     cmd.arg("--path")
         .arg(root.join("qml"))

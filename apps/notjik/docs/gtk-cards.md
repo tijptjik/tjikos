@@ -10,9 +10,9 @@ notjik --gtk-cards --demo --theme monochrome
 
 This gallery does not claim the notification D-Bus name. It uses synthetic notices,
 simulates action completion and voice playback/recording, and never sends Telegram
-messages, executes notification commands or opens a microphone. Quickshell continues to
-deliver desktop notifications. The Control Center/history panel is deferred to a BarTjik
-panel.
+messages, executes notification commands or opens a microphone. The separate native
+daemon (`notjik`, or `notjik --gtk`) delivers desktop notifications. The Control
+Center/history panel is deferred to a BarTjik panel.
 
 ## Reusable components
 

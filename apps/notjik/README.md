@@ -1,7 +1,7 @@
 # Notjik
 
-A Quickshell notification server with reusable QML cards, desktop notification
-compatibility, command buttons, configurable placement and searchable local history.
+A Rust/GTK notification server with reusable cards, desktop notification compatibility,
+command buttons, configurable placement and local history storage.
 
 ![Dunst and Notjik render the same synthetic notifications](docs/showcase.gif)
 
@@ -16,30 +16,32 @@ synthetic; replies and voice recording are simulated.
 | --------------------------------------------------- | ----------------------------------------------------- |
 | ![Rose-punk notification cards](docs/rose-punk.png) | ![Monochrome notification cards](docs/monochrome.png) |
 
-`notjik` owns `org.freedesktop.Notifications`. Quickshell handles D-Bus, image data,
-icon lookup and standard action signals. QML owns the queue, timing, routing, components
-and rendering. A Rust worker validates live configuration and writes SQLite history; the
-Rust `notjikctl` talks to Quickshell IPC. The launcher, Telegram bridge, media/voice
-helpers, and synthetic demo/comparison commands are native Rust. Python is used only by
-development test drivers.
+`notjik` owns `org.freedesktop.Notifications`. The Rust controller manages identity,
+replacement, grouping, expiry and selection; GTK renders popup and detached surfaces.
+Native adapters handle D-Bus images/signals, private Unix-socket IPC, commands and
+Telegram media actions. The shared Rust backend owns configuration, lock/idle
+observation and SQLite history. Python is used only by development test drivers.
 
-The [GTK migration architecture](docs/gtk-architecture.md) describes the shared Rust
-service boundary and the remaining frontend migration. The
-[GTK cards](docs/gtk-cards.md) are available in a synthetic gallery:
-`notjik --gtk-cards --demo`. The Control Center/history panel is deferred to a BarTjik
-panel; Quickshell remains the installed notification frontend.
+The [GTK architecture](docs/gtk-architecture.md) describes these boundaries. The
+[GTK card gallery](docs/gtk-cards.md) is available with `notjik --gtk-cards --demo`.
+`notjik --quickshell` explicitly selects the compatibility frontend. Existing images,
+animated showcases and drawer-specific instructions below document that frontend; GTK
+has no Control Center/history drawer. That UI is deferred to a BarTjik panel, while
+`history-data`, `history-action` and persisted history remain available. Custom QML
+components render as standard cards in GTK; use the compatibility frontend when their
+custom presentation is required.
 
 ## Install and start
 
-Requires **Quickshell 0.3.2+**, Qt 6 Quick/Controls and Qt5Compat GraphicalEffects,
-`busctl`, and Hyprland with layer-shell and `hyprland_lock_notifier_v1` support. On
-unsupported compositors the lock state stays unknown and the default privacy policy
-hides notices; an explicit `privacy.lockScreen: "show"` opts out of hiding. Bun is used
-by the monorepo tooling; Rust/Cargo and SQLite development libraries are needed to
-build. The GTK card gallery also requires GTK 4 development libraries and uses the
-shared `tjik-gtk` layer-shell build. `tijpset` is the rose-punk font; Qt substitutes a
-font when it is unavailable. No Python runtime or separate notification daemon is
-required.
+Requires GTK 4, `busctl`, and Hyprland with layer-shell and `hyprland_lock_notifier_v1`
+support. Unknown lock state hides notices under the default privacy policy; explicit
+`privacy.lockScreen: "show"` allows noninteractive cards. `ext_idle_notifier_v1`
+supplies presence; unavailable idle state conservatively reports an inactive device.
+`ffplay` provides voice playback and `ffmpeg` provides recording and media conversion.
+Bun, Rust/Cargo, SQLite and GTK development libraries are needed to build; the shared
+`tjik-gtk` build supplies layer-shell. `tijpset` is the rose-punk font, with a system
+fallback. Quickshell 0.3.2+, Qt Quick/Controls and Qt5Compat are needed only for the
+compatibility frontend and QML reference tests. No Python runtime is required.
 
 Clone the repository, then build only Notjik:
 
@@ -192,10 +194,10 @@ remains interactive. Use the wheel, touchpad or scrollbar to scroll a stack that
 the monitor height. `action`/`dismiss` provide keyboard-driven control through the CLI.
 
 `--icon` accepts an icon-theme name or local image path; `--image` takes precedence as
-the card artwork. Quickshell decodes standard `image-data`, `image-path`, their legacy
-aliases, and application/desktop-entry icons. Symbolic icons ending in `-symbolic` are
-tinted with the theme accent; other artwork retains its colors. Standard `value` hints
-produce a progress card (0–100).
+the card artwork. The native D-Bus adapter decodes standard `image-data`, `image-path`,
+their legacy aliases, and application/desktop-entry icons. Symbolic icons ending in
+`-symbolic` are tinted with the theme accent; other artwork retains its colors. Standard
+`value` hints produce a progress card (0–100).
 
 ### Drag out and keep open
 
@@ -313,8 +315,8 @@ rules. Disconnected targets retain pending notices until a selected monitor retu
 
 Offsets apply after anchoring; the stack is clamped to the screen. `all` mirrors the
 same notices across selected monitors. Dismissal, actions and timeout are shared, so a
-click on one monitor also removes the other copies. Hotplug is handled through
-Quickshell's screen model. Each monitor gets one vertical stack.
+click on one monitor also removes the other copies. Hotplug is handled through GTK's
+monitor model. Each monitor gets one vertical stack.
 
 ### Actions per caller
 
@@ -513,15 +515,12 @@ Native in-memory image URLs may no longer resolve after a notification closes.
 
 Standard title/body text, three urgencies, images, replacement, expiration,
 resident/transient hints, actions, `ActionInvoked` and `NotificationClosed` are
-implemented through Quickshell. This version advertises plain body text and image
-support; rich body markup, inline replies, sounds and action icons are not advertised.
-Vendor-specific extensions are outside the standard compatibility contract.
+implemented by the native D-Bus adapter. This version advertises plain body text and
+image support; rich body markup, inline replies, sounds and action icons are not
+advertised. Vendor-specific extensions are outside the standard compatibility contract.
 
-Quickshell 0.3.2 exposes property-change signals for replacements, but no separate
-signal for a byte-for-byte identical native resend. Changed native content resets the
-timeout; an entirely identical resend may not. Local `--replace` always resets it. A
-future Quickshell update with an explicit replacement event would close this gap without
-a D-Bus proxy.
+Native replacements, including byte-for-byte identical resends, reset expiry. The
+Quickshell fallback retains its upstream limitation for identical native resends.
 
 Richer per-application routing remains a possible extension.
 

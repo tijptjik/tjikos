@@ -1,5 +1,5 @@
 [Unit]
-Description=notjik Quickshell notification system
+Description=notjik GTK notification service
 After=graphical-session.target
 PartOf=graphical-session.target
 
