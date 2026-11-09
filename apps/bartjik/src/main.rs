@@ -20,6 +20,7 @@ mod network;
 mod nightlight;
 mod providers;
 mod screen_record;
+mod session_lock;
 mod spotify;
 mod tray;
 mod util;

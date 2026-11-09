@@ -433,11 +433,13 @@ pub async fn action(name: &str, selection: &str) -> Result<String> {
     let _lock = crate::actions::FileLock::acquire("bartjik-idle.lock").await?;
     match name {
         "lock" => {
-            cmd(&["loginctl", "lock-session"]).await?;
-            return Ok("Session locked".into());
+            let policy = source().await?;
+            crate::session_lock::lock(&policy.path).await?;
+            return Ok("Lock requested".into());
         }
         "suspend" => {
-            cmd(&["loginctl", "lock-session"]).await?;
+            let policy = source().await?;
+            crate::session_lock::lock(&policy.path).await?;
             cmd(&["systemctl", "suspend"]).await?;
             return Ok("Sleep requested".into());
         }

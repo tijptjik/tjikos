@@ -13,7 +13,7 @@ APP = Path(__file__).resolve().parents[1]
 BIN = APP / "target/release/bartjik-core"
 NORMAL = """# Preserve this native policy.
 general {
-    lock_cmd = pidof hyprlock || ~/.local/bin/tailscale-lock
+    lock_cmd = loginctl lock-session
     before_sleep_cmd = loginctl lock-session
     after_sleep_cmd = hyprctl dispatch dpms on
 }
@@ -42,7 +42,7 @@ listener {
 }
 """
 GAME = """general {
-    lock_cmd = pidof hyprlock || ~/.local/bin/tailscale-lock
+    lock_cmd = loginctl lock-session
     before_sleep_cmd = loginctl lock-session
     after_sleep_cmd = hyprctl dispatch dpms on
 }
@@ -286,13 +286,20 @@ print(json.dumps({'config':sys.argv[2],'text':Path(sys.argv[2]).read_text()}))
         self.assertEqual(self.preference.read_text(), "on\n")
         self.assertIsNotNone(self.status()["deadline"])
 
+    def test_lock_uses_configured_locker_while_idle_is_stopped(self):
+        self.script("fixture-locker", "from pathlib import Path\nimport os\nPath(os.environ['IDLE_FIXTURE']).joinpath('locked').touch()\n")
+        self.normal.write_text(NORMAL.replace("lock_cmd = loginctl lock-session", "lock_cmd = fixture-locker"))
+        (self.root / "running").unlink(missing_ok=True)
+        self.action("lock")
+        self.assertTrue((self.root / "locked").exists())
+
     def test_lock_suspend_and_confirmed_poweroff_only_call_mock_commands(self):
         self.assertIn("Confirm", self.action("poweroff", "", success=False))
         self.assertFalse((self.root / "events").exists())
         self.action("lock")
         self.action("suspend")
         self.action("poweroff", "confirm")
-        self.assertEqual(self.events(), [["loginctl", "lock-session"], ["loginctl", "lock-session"],
+        self.assertEqual([e for e in self.events() if e != ["systemctl", "--user", "cat", "hypridle.service"]], [["loginctl", "lock-session"], ["loginctl", "lock-session"],
                                         ["systemctl", "suspend"], ["systemctl", "poweroff"]])
         (self.root / "reject-lock").touch()
         self.action("suspend", success=False)
