@@ -1,0 +1,28 @@
+{
+  "state": {
+    "stale": true
+  },
+  "panel": {
+    "title": "OpenRouter",
+    "balance": "1,234.56",
+    "balanceLabel": "Credits remaining",
+    "activityNote": "Last 30 completed days \u00b7 UTC",
+    "rows": [
+      {
+        "label": "2026-11-08",
+        "value": "1,234,567",
+        "tokens": 1234567
+      },
+      {
+        "label": "2026-11-07",
+        "value": "89,012",
+        "tokens": 89012
+      },
+      {
+        "label": "2026-11-06",
+        "value": "0",
+        "tokens": 0
+      }
+    ]
+  }
+}

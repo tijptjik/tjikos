@@ -580,6 +580,26 @@ handoff. Regression coverage repeatedly resets geometry during one content trans
 and injects a late low-progress frame into the rendered fixture. Both must preserve
 forward content progress and release the old snapshot after completion.
 
+### OpenRouter card
+
+The GTK panel now uses the original OpenRouter hierarchy: 32px credit balance with
+baseline-aligned USD, key-limit/credit labels, cached-update notice, and daily token
+usage with 26px rows and 4px gaps. Provider notes preserve restricted, unavailable, and
+empty activity states. Only numeric token rows appear, including zero usage; the shared
+panel supplies scrolling, hover retention, pinning and transitions.
+
+Synthetic comparison:
+`dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py --openrouter`. Artifacts:
+`/tmp/bartjik-openrouter-primitives.png` and `/tmp/bartjik-openrouter-reference.png`.
+Fixtures never query account services.
+
+Attached cards no longer show pin/close controls. Dragging beyond 8px pins the card at
+its output-clamped position and reveals Close; Escape also dismisses it. Dragging uses
+the stationary shell coordinate space and excludes controls, selectable text, and
+scrolling content. Cross-output detachment/reattachment remains a later slice.
+OpenRouter omits the empty token-list container so unavailable usage does not add a
+trailing 10px gap.
+
 ### Network panel and platform boundary
 
 `src/network.rs` defines toolkit-independent device, access-point, address, traffic,

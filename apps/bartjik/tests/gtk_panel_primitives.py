@@ -14,7 +14,7 @@ import sys
 APP = Path(__file__).resolve().parents[1]
 TRANSITION = '--transition' in sys.argv
 CODEX = '--codex' in sys.argv
-ROUTER = False
+ROUTER = '--openrouter' in sys.argv
 NETWORK = '--network' in sys.argv
 VPN = False
 HISTORY = False

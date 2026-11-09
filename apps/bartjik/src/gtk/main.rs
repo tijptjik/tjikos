@@ -40,6 +40,7 @@ mod motion;
 mod network;
 mod network_card;
 mod network_controller;
+mod openrouter_card;
 mod panel_reveal;
 mod panel_view;
 mod panels;

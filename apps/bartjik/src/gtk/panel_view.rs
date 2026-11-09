@@ -133,6 +133,12 @@ fn stylesheet(style: &Value) -> String {
 .panel-card passwordentry.network-password {{padding-right:42px;}}
 .panel-card button.panel-control.network-password-submit {{background:transparent;border:0;}}
 .panel-card passwordentry:focus-within {{border-color:{accent};}}
+.panel-card .router-muted {{font-family:sans-serif;font-size:12px;color:{muted};}}
+.panel-card .router-balance {{font-size:32px;}}
+.panel-card .router-caption {{font-family:sans-serif;font-size:10px;color:{muted};}}
+.panel-card .router-date {{font-size:13px;color:{muted};}}
+.panel-card .router-tokens {{font-size:14px;}}
+.panel-card separator.router-divider {{background:rgba(255,255,255,0.09);}}
 .panel-card .codex-caption {{font-family:sans-serif;font-size:11px;color:{muted};}}
 .panel-card .codex-muted {{font-family:sans-serif;font-size:11px;color:{muted};}}
 .panel-card .codex-account {{font-size:15px;font-weight:600;}}
@@ -241,7 +247,9 @@ pub fn status_content(target: &Target) -> Content {
     if target.provider == "codex" {
         return crate::codex_card::content(&target.row, &target.style);
     }
-
+    if target.provider == "openrouter" {
+        return crate::openrouter_card::content(&target.row);
+    }
     let panel = &target.row["panel"];
     let body = section("");
     if target.provider == "datetime" {
@@ -899,6 +907,7 @@ mod render_tests {
         let fake_network = std::sync::Arc::new(crate::network::Fake::demo());
         let mut network_card = None;
         let codex = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("codex");
+        let router = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("openrouter");
         if codex {
             let (send, _receive) = async_channel::bounded(8);
             let module = json!({"provider":"codex","panel":{"hover":true},"comparisonItems":[{"id":"quota","type":"text","text":{"value":"23%"},"tooltip":"raw account table"}]});
@@ -918,6 +927,8 @@ mod render_tests {
         let header = card_header(
             if network {
                 "Networking"
+            } else if router {
+                "OpenRouter"
             } else if codex {
                 "Codex"
             } else {
@@ -925,6 +936,8 @@ mod render_tests {
             },
             if network {
                 "network"
+            } else if router {
+                "openrouter"
             } else if codex {
                 "codex"
             } else {
@@ -941,6 +954,18 @@ mod render_tests {
             first = content.body.clone();
             card.append(&content.body);
             network_card = Some(view);
+        } else if router {
+            let mut row: Value =
+                serde_json::from_str(include_str!("../../tests/fixtures/openrouter-card.json"))
+                    .unwrap();
+            if std::env::var_os("BARTJIK_EMPTY_USAGE").is_some() {
+                row["panel"]["rows"] = json!([]);
+                row["state"]["stale"] = json!(false);
+                row["panel"]["activityNote"] = json!("Daily usage isn’t available for this key.");
+            }
+            let content = crate::openrouter_card::content(&row);
+            first = content.body.clone();
+            card.append(&content.body);
         } else if codex {
             let row: Value =
                 serde_json::from_str(include_str!("../../tests/fixtures/codex-card.json")).unwrap();
@@ -980,13 +1005,13 @@ mod render_tests {
         let bounds = first.compute_bounds(&window).unwrap();
         let card_bounds = card.compute_bounds(&window).unwrap();
         assert_eq!(card_bounds.width(), if codex { 440. } else { 420. });
-        if !codex && !network {
+        if !codex && !router && !network {
             assert_eq!(first.height(), 56);
         }
         assert_eq!(header.height(), 32);
         assert_eq!(bounds.x(), 16.);
         assert_eq!(bounds.y(), 72.);
-        if !network {
+        if !router && !network {
             assert_eq!(
                 card_bounds.height(),
                 if codex {
