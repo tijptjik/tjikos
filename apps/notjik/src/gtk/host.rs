@@ -956,12 +956,20 @@ impl Host {
                 d.workspace.is_some() && self.workspaces.get(&d.monitor).copied() != d.workspace
             }) && !self.drag.as_ref().is_some_and(|d| d.preview == *name)
             {
-                surface.window.set_visible(false);
+                // Preserve the mapped layer surface and card state. Remapping
+                // it on workspace return replays the compositor's entrance fade.
+                surface.scene.set_visible(false);
+                surface.window.set_keyboard_mode(KeyboardMode::None);
+                surface.list.position(0, 0, false);
+                if let Some(native) = surface.window.surface() {
+                    native.set_input_region(&gtk::cairo::Region::create());
+                }
                 for card in surface.cards.values() {
                     card.set_hovered(false);
                 }
                 continue;
             }
+            surface.scene.set_visible(true);
             if c.concealed() {
                 surface.list.clear();
                 surface.window.set_visible(false);
