@@ -87,8 +87,8 @@ pub(super) fn footer(ctx: &Rc<Context>) -> Option<gtk::Box> {
                 layout.pixel_size().0 + 4
             })
             .collect::<Vec<_>>();
-        let overflow =
-            widths.iter().sum::<i32>() + 8 * (actions.len().saturating_sub(1) as i32) > width;
+        let overflow = actions.len() > 1
+            && widths.iter().sum::<i32>() + 8 * (actions.len().saturating_sub(1) as i32) > width;
         previous.set_visible(overflow);
         next.set_visible(overflow);
         let available = (width - if overflow { 68 } else { 0 }).max(1);
@@ -117,19 +117,16 @@ pub(super) fn footer(ctx: &Rc<Context>) -> Option<gtk::Box> {
                 .chain(group.iter().filter(|i| actions[**i].0 == primary))
             {
                 let a = &actions[*i];
-                if a.0 == primary {
-                    let spacer = column(0);
-                    spacer.set_hexpand(true);
-                    r.append(&spacer);
-                }
                 let b = button(&a.1, &format!("card-action-{}", a.0));
                 b.add_css_class("quiet");
                 if let Some(l) = b.child().and_then(|w| w.downcast::<gtk::Label>().ok()) {
-                    l.set_max_width_chars(a.1.chars().count() as i32);
+                    // Labels must negotiate within the card, never widen its body.
+                    l.set_max_width_chars(1);
                     if a.0 == primary {
                         l.set_xalign(1.);
                     }
-                    b.set_width_request(widths[*i].min(available));
+                    b.set_hexpand(true);
+                    b.set_halign(gtk::Align::Fill);
                 }
                 let c = c.clone();
                 let index = a.0;

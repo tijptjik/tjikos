@@ -197,7 +197,11 @@ pub fn apply_theme(style: &Value) -> gtk::CssProvider {
 .notjik .wave-seek slider {{ opacity: 0; background: {accent}; border: 0; box-shadow: none; min-width: 10px; min-height: 10px; margin: 0; }}
 .notjik .wave-seek:hover slider, .notjik .wave-seek:focus-visible slider {{ opacity: 1; }}
 .notjik .wave-seek:disabled slider {{ opacity: 0; }}
+/* Keep collapsed action indicators in sync with the outline state rules above. */
 .notjik .interaction-hint {{ background: {border}; border-radius: 2px; }}
+.notjik .card-frame.selected .interaction-hint, .notjik .card-frame:focus-within .interaction-hint {{ background: {accent}; }}
+.notjik .card-frame.urgent .interaction-hint {{ background: {critical}; }}
+.notjik .card-frame.floating .interaction-hint {{ background: transparent; }}
 .notjik button.page-action {{ font-size: 16px; }}
 .notjik button.auth-copy {{ min-height: 26px; padding: 0 12px; border: 0; background: transparent; color: {muted}; font-size: {small}px; }}
 .notjik button.auth-copy:hover {{ color: {text}; background: transparent; }}

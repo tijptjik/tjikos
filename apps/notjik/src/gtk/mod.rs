@@ -60,12 +60,12 @@ impl Context {
     }
     fn sync_reveal(&self) {
         let state = self.state.borrow();
-        let reveal = self.revealed()
-            && !state.locked
+        let can_reveal = !state.locked
             && !state.paused
             && !state.history
             && !state.blocked
             && !self.notice.borrow().archived();
+        let reveal = self.revealed() && can_reveal;
         for r in self.revealers.borrow().iter().filter_map(|r| r.upgrade()) {
             if reveal {
                 r.set_visible(true);
@@ -81,7 +81,15 @@ impl Context {
             }
         }
         if let Some(hint) = self.hint.borrow().upgrade() {
-            hint.set_visible(!reveal && (!self.revealers.borrow().is_empty() || state.floating));
+            hint.set_visible(
+                can_reveal
+                    && !reveal
+                    && self
+                        .revealers
+                        .borrow()
+                        .iter()
+                        .any(|r| r.upgrade().is_some()),
+            );
         }
     }
     fn reveal(&self, child: &impl IsA<gtk::Widget>, name: &str) -> gtk::Revealer {

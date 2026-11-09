@@ -305,6 +305,66 @@ fn main() -> glib::ExitCode {
                 texture.save_to_png(path).expect("save gallery screenshot");
             }
             if options.self_test {
+                // Long actions must not change body wrapping or escape the card.
+                let card = all.borrow()[0].clone();
+                let original = card.notice();
+                let mut long = original.clone();
+                long.0["body"] = serde_json::json!("It is warm. It is humming. It has no label.");
+                long.0["actions"] = serde_json::json!([{"label":"Open this notification in the application with a deliberately long action label"}]);
+                card.update(long);
+                lock.grab_focus();
+                card.set_hovered(false);
+                glib::timeout_future(Duration::from_millis(250)).await;
+                let body = find_class(&card.widget, "body").expect("body");
+                let body_bounds = body.compute_bounds(&card.widget).unwrap();
+                assert!(body_bounds.x() + body_bounds.width() <= card.widget.width() as f32, "Body overflows: {body_bounds:?}");
+                let before = (body.width(), body.height(), card.widget.width());
+                card.set_hovered(true);
+                glib::timeout_future(Duration::from_millis(450)).await;
+                assert_eq!(before, (body.width(), body.height(), card.widget.width()), "Action changed body wrapping");
+                if let Some(dir) = &options.snapshot_dir {
+                    let shot = gtk::Snapshot::new();
+                    gtk::WidgetPaintable::new(Some(&card.widget)).snapshot(&shot, card.widget.width() as f64, card.widget.height() as f64);
+                    window.renderer().unwrap().render_texture(&shot.to_node().unwrap(), None).save_to_png(dir.join("long-action.png")).unwrap();
+                }
+                let action = find(&card.widget, "card-action-0").expect("long action");
+                let bounds = action.compute_bounds(&card.widget).unwrap();
+                assert!(bounds.x() >= 0. && bounds.x() + bounds.width() <= card.widget.width() as f32, "Action overflows card: {bounds:?}");
+                let mut plain = original.clone();
+                plain.0["actions"] = serde_json::json!([]);
+                plain.0["title"] = serde_json::json!("Relay link established");
+                plain.0["icon"] = serde_json::json!("network-wireless-symbolic");
+                card.update(plain);
+                card.set_hovered(false);
+                assert!(!find(&card.widget, "interaction-hint").unwrap().is_visible(), "Actionless icon card advertises hidden controls");
+                let mut state = card.state();
+                state.floating = true;
+                card.set_state(state);
+                card.set_hovered(false);
+                assert!(!find(&card.widget, "interaction-hint").unwrap().is_visible(), "Actionless floating card advertises hidden controls");
+                let mut state = card.state();
+                state.floating = false;
+                card.set_state(state);
+                let mut urgent = original.clone();
+                urgent.0["urgency"] = serde_json::json!("critical");
+                card.update(urgent);
+                card.set_hovered(false);
+                lock.grab_focus();
+                glib::timeout_future(Duration::from_millis(250)).await;
+                assert!(find(&card.widget, "interaction-hint").unwrap().is_visible());
+                if let Some(dir) = &options.snapshot_dir {
+                    let shot = gtk::Snapshot::new();
+                    gtk::WidgetPaintable::new(Some(&card.widget)).snapshot(&shot, card.widget.width() as f64, card.widget.height() as f64);
+                    window.renderer().unwrap().render_texture(&shot.to_node().unwrap(), None).save_to_png(dir.join("urgent-action-hint.png")).unwrap();
+                }
+                let mut state = card.state();
+                state.blocked = true;
+                card.set_state(state);
+                assert!(!find(&card.widget, "interaction-hint").unwrap().is_visible(), "Blocked card advertises unavailable actions");
+                let mut state = card.state();
+                state.blocked = false;
+                card.set_state(state);
+                card.update(original);
                 for card in all.borrow().iter() {
                     card.set_hovered(true);
                 }
@@ -315,6 +375,20 @@ fn main() -> glib::ExitCode {
         });
     });
     app.run_with_args::<&str>(&[])
+}
+fn find_class(widget: &impl IsA<gtk::Widget>, class: &str) -> Option<gtk::Widget> {
+    let widget = widget.as_ref();
+    if widget.has_css_class(class) {
+        return Some(widget.clone());
+    }
+    let mut child = widget.first_child();
+    while let Some(w) = child {
+        if let Some(found) = find_class(&w, class) {
+            return Some(found);
+        }
+        child = w.next_sibling();
+    }
+    None
 }
 fn find(widget: &impl IsA<gtk::Widget>, name: &str) -> Option<gtk::Widget> {
     let widget = widget.as_ref();
