@@ -30,7 +30,12 @@ fn symbol(text: &str) -> gtk::Label {
 fn button(icon: &str, accessible: &str) -> gtk::Button {
     let b = gtk::Button::new();
     b.add_css_class("panel-control");
-    b.set_child(Some(&symbol(icon)));
+    let glyph = symbol(icon);
+    glyph.set_xalign(0.5);
+    glyph.set_yalign(0.5);
+    glyph.set_halign(gtk::Align::Center);
+    glyph.set_valign(gtk::Align::Center);
+    b.set_child(Some(&glyph));
     b.update_property(&[gtk::accessible::Property::Label(accessible)]);
     b
 }
