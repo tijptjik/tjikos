@@ -1,0 +1,30 @@
+diff --git a/internal/pipeline/pipeline.go b/internal/pipeline/pipeline.go
+index fba8668..6b64023 100644
+--- a/internal/pipeline/pipeline.go
++++ b/internal/pipeline/pipeline.go
+@@ -299,6 +299,12 @@ func (p *pipeline) handleInjectAction(ctx context.Context, recorder recording.Re
+ 	}
+ 	log.Printf("Pipeline: Final transcription text: %s", transcriptionText)
+ 
++	// Silence is a successful no-op, not an injection error.
++	if strings.TrimSpace(transcriptionText) == "" {
++		p.setStatus(Idle)
++		return
++	}
++
+ 	// LLM post-processing phase
+ 	textToInject := transcriptionText
+ 	if p.config.IsLLMEnabled() {
+@@ -344,6 +350,12 @@ func (p *pipeline) handleInjectAction(ctx context.Context, recorder recording.Re
+ 		return r
+ 	}, textToInject)
+ 
++	// Cleanup may also produce no text.
++	if strings.TrimSpace(textToInject) == "" {
++		p.setStatus(Idle)
++		return
++	}
++
+ 	injector := p.injectorFactory(p.config.ToInjectionConfig())
+ 
+ 	if err := injector.Inject(ctx, textToInject); err != nil {
