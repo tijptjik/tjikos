@@ -1,4 +1,4 @@
-//! Fixed-height popup scene, matching NotificationPanel.qml's measured flow.
+//! Fixed-height popup scene with measured flow and independent departing faces.
 //! Footer allocation, sibling positions and input regions share one GTK frame.
 use gtk::{glib, graphene, gsk, prelude::*, subclass::prelude::*};
 use gtk4_layer_shell::LayerShell;
@@ -7,6 +7,12 @@ use std::{
     time::Instant,
 };
 
+struct Face {
+    node: gsk::RenderNode,
+    y: f64,
+    height: f64,
+    at: Instant,
+}
 struct Slot {
     widget: gtk::Widget,
     height: f64,
@@ -39,6 +45,7 @@ mod imp {
     use super::*;
     pub struct Stack {
         pub(super) slots: RefCell<Vec<Slot>>,
+        pub(super) faces: RefCell<Vec<Face>>,
         pub size: Cell<(i32, i32)>,
         pub gap: Cell<f64>,
         pub offset: Cell<(i32, i32)>,
@@ -58,6 +65,7 @@ mod imp {
         fn default() -> Self {
             Self {
                 slots: RefCell::new(vec![]),
+                faces: RefCell::new(vec![]),
                 size: Cell::new((420, 800)),
                 gap: Cell::new(10.),
                 offset: Cell::new((0, 0)),
@@ -135,6 +143,9 @@ mod imp {
                 .min(0.032);
             let duration = self.duration.get();
             let gap = self.gap.get();
+            self.faces
+                .borrow_mut()
+                .retain(|f| f.at.elapsed().as_secs_f64() < duration);
             let mut slots = self.slots.borrow_mut();
             slots.retain(|s| {
                 if s.retirement
@@ -288,17 +299,21 @@ mod imp {
                     let _ = writeln!(
                         file,
                         "{}",
-                        serde_json::json!({"scroll":self.scroll.get(),"surface":self.obj().widget_name().as_str(),"monitor":self.obj().root().and_then(|r| r.downcast::<gtk::Window>().ok()).and_then(|w| w.monitor()).and_then(|m|m.connector()).map(|s|s.to_string()),"time":super::super::host::now(),"width":width,"height":height,"x":self.offset.get().0,"y":self.offset.get().1,"rows":rows})
+                        serde_json::json!({"groupDepartures":self.faces.borrow().iter().map(|f|serde_json::json!({"y":f.y,"height":f.height,"progress":f.at.elapsed().as_secs_f64()/duration.max(0.001)})).collect::<Vec<_>>(),"scroll":self.scroll.get(),"surface":self.obj().widget_name().as_str(),"monitor":self.obj().root().and_then(|r| r.downcast::<gtk::Window>().ok()).and_then(|w| w.monitor()).and_then(|m|m.connector()).map(|s|s.to_string()),"time":super::super::host::now(),"width":width,"height":height,"x":self.offset.get().0,"y":self.offset.get().1,"rows":rows})
                     );
                 }
             }
-            self.motion.set(slots.iter().any(|s| {
-                s.retirement.is_some()
-                    || (s.entrance.is_some()
-                        && (s.extent < 1.
-                            || s.entrance
-                                .is_some_and(|at| at.elapsed().as_secs_f64() < duration * 0.4)))
-            }));
+            self.motion.set(
+                !self.faces.borrow().is_empty()
+                    || slots.iter().any(|s| {
+                        s.retirement.is_some()
+                            || (s.entrance.is_some()
+                                && (s.extent < 1.
+                                    || s.entrance.is_some_and(|at| {
+                                        at.elapsed().as_secs_f64() < duration * 0.4
+                                    })))
+                    }),
+            );
         }
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
             // An empty render tree may leave the native surface's previous buffer
@@ -314,6 +329,20 @@ mod imp {
             let _ = clear.paint();
             drop(clear);
             let mut slots = self.slots.borrow_mut();
+            for face in self.faces.borrow().iter() {
+                let (opacity, scale, drop, _) =
+                    departure(face.at.elapsed().as_secs_f64() / self.duration.get().max(0.001));
+                snapshot.save();
+                snapshot.push_opacity(opacity);
+                let cx = self.obj().width() as f32 / 2.;
+                let cy = (face.y + face.height / 2.) as f32;
+                snapshot.translate(&graphene::Point::new(cx, cy + drop as f32));
+                snapshot.scale(scale as f32, scale as f32);
+                snapshot.translate(&graphene::Point::new(-cx, -cy));
+                snapshot.append_node(&face.node);
+                snapshot.pop();
+                snapshot.restore();
+            }
             // Retiring faces are behind the live cards and retain their last allocation.
             for s in slots.iter().filter(|s| s.retirement.is_some()) {
                 let Some(node) = &s.node else {
@@ -449,6 +478,28 @@ impl Stack {
         self.imp().motion.set(true);
         self.queue_allocate();
     }
+    /// Keep a group's occupied slot and reveal its successor at full opacity.
+    /// Only the cached outgoing face departs; it never reserves a second gap.
+    pub fn replace_group_face(&self, child: &impl IsA<gtk::Widget>) {
+        let mut slots = self.imp().slots.borrow_mut();
+        if let Some(slot) = slots.iter_mut().find(|s| s.widget == *child.as_ref()) {
+            if let Some(node) = slot.node.take() {
+                if self.imp().duration.get() > 0. {
+                    self.imp().faces.borrow_mut().push(Face {
+                        node,
+                        y: slot.y,
+                        height: slot.height,
+                        at: Instant::now(),
+                    });
+                }
+            }
+            slot.extent = 1.;
+            slot.entrance = Some(Instant::now() - std::time::Duration::from_secs(60));
+        }
+        self.imp().motion.set(true);
+        self.queue_allocate();
+        self.queue_draw();
+    }
     pub fn remove(&self, child: &impl IsA<gtk::Widget>, animate: bool) {
         let mut slots = self.imp().slots.borrow_mut();
         if let Some(i) = slots.iter().position(|s| s.widget == *child.as_ref()) {
@@ -465,6 +516,7 @@ impl Stack {
         self.queue_draw();
     }
     pub fn clear(&self) {
+        self.imp().faces.borrow_mut().clear();
         self.imp().grabbed.set(false);
         for slot in self.imp().slots.borrow_mut().drain(..) {
             slot.widget.unparent();

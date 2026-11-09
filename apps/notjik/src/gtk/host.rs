@@ -1002,6 +1002,32 @@ impl Host {
                 .iter()
                 .map(|n| text(&n["id"]))
                 .collect::<HashSet<_>>();
+            // A dismissed group member reveals its successor in the same slot.
+            // Keep the Card (and its animated notches), snapshot only its old face.
+            if !c.concealed() && !c.locked() && detached.is_none() {
+                for n in &visible {
+                    let key = text(&n["id"]);
+                    if surface.cards.contains_key(&key) {
+                        continue;
+                    }
+                    let successor = surface.snapshots.iter().find_map(|(old, snapshot)| {
+                        if keys.contains(old) || c.find(old).is_some() {
+                            return None;
+                        }
+                        let members = snapshot["memberIds"].as_array()?;
+                        (members.len() > 1 && members.iter().any(|id| id == &n["id"]))
+                            .then(|| old.clone())
+                    });
+                    if let Some(old) = successor {
+                        if let Some(card) = surface.cards.remove(&old) {
+                            surface.list.replace_group_face(&card.widget);
+                            surface.cards.insert(key, card);
+                        }
+                        surface.snapshots.remove(&old);
+                        surface.states.remove(&old);
+                    }
+                }
+            }
             for key in surface
                 .cards
                 .keys()

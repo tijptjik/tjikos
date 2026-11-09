@@ -302,6 +302,31 @@ def motion_acceptance(request, send, config, env, work, daemon):
         finally:
             probe.terminate(); probe.wait(timeout=5)
 
+        # Dismissing a group member retains its slot and immediately reveals the
+        # successor. The old face is drawn behind it without a new entrance/gap.
+        request({"op":"dismiss","id":"all"})
+        time.sleep(.6)
+        group=[send("Group member "+str(i),body="Same group, immediately available successor.",group="transition",timeout=0) for i in range(3)]
+        time.sleep(.7)
+        before=next(f for f in reversed(frames()) if row(f,group[0]))
+        original=row(before,group[0])
+        for index in range(2):
+            current=next(f for f in reversed(frames()) if row(f,group[index]))
+            global_move(current['x']+180,current['y']+row(current,group[index])['y']+24)
+            started=time.time()*1000
+            click()
+            after=wait_for(lambda: next((f for f in reversed(frames()) if f['time']>=started and row(f,group[index+1])),None),timeout=3)
+            incoming=row(after,group[index+1])
+            assert incoming['widget']==original['widget'], "Group successor rebuilt the card/notches"
+            assert incoming['extent']==1, "Group successor played an entrance"
+            assert abs(incoming['y']-original['y'])<1, "Group slot moved during replacement"
+            assert len(after['rows'])==1 and not incoming['retiring'], "Outgoing member reserved a second slot"
+            assert after.get('groupDepartures'), "Missing departing face behind group successor"
+            time.sleep(.08)
+            subprocess.run(["grim","-o","NOTJIK",str(work/f"group-successor-{index+1}.png")],check=True,capture_output=True)
+            time.sleep(.5)
+        print("Grouped dismissal: same widget/slot, immediate full-opacity successor, retained notches and independent departing face passed")
+
         print("Pinned card: hover footer collapse and workspace hide/restore passed")
         print("Native drag: plain-text pickup, live held movement, release without dismissal and repeated floating drag passed")
         print("Native motion: stable playback footer, frame-synchronous neighbours, background dismissal, recede/fade then collapse passed")
