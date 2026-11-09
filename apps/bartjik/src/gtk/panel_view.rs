@@ -27,6 +27,9 @@ fn artwork(provider: &str, size: i32) -> gtk::Widget {
         "battery" => ("image", "icons/battery.svg"),
         "DND" => ("image", "Notifications/history-bell.svg"),
         "datetime" => ("symbol", "schedule"),
+        "crypto" => ("symbol", "show_chart"),
+        "playerctl" => ("symbol", "music_note"),
+        "workspaces" => ("symbol", "dashboard"),
         "locale" => ("symbol", "keyboard"),
         "caffeine" => ("symbol", "coffee"),
         "monitor-layout" => ("symbol", "desktop_windows"),
@@ -95,6 +98,80 @@ pub fn control_symbol(text: &str) -> gtk::Label {
     glyph.set_valign(gtk::Align::Center);
     glyph
 }
+/// The original workspace frame uses concave joins, not a floating rounded button.
+fn workspace_shape(style: &Value, width: i32, close: bool, top: i32, right: i32) -> gtk::Overlay {
+    let background =
+        gdk::RGBA::parse(s(&style["surface"])).unwrap_or(gdk::RGBA::new(0.149, 0.137, 0.227, 1.));
+    let canvas = gtk::DrawingArea::new();
+    canvas.set_content_width(if close { 40 + right } else { width + 16 });
+    canvas.set_content_height(36 + top);
+    canvas.set_can_target(false);
+    canvas.set_draw_func(move |_, cr, _, _| {
+        let q = |cx: f64, cy: f64, x: f64, y: f64| {
+            let (px, py) = cr.current_point().unwrap();
+            cr.curve_to(
+                px + (cx - px) * 2. / 3.,
+                py + (cy - py) * 2. / 3.,
+                x + (cx - x) * 2. / 3.,
+                y + (cy - y) * 2. / 3.,
+                x,
+                y,
+            );
+        };
+        if close {
+            cr.translate(0., top as f64);
+            cr.move_to(0., 0.);
+            q(8., 0., 8., 8.);
+            cr.line_to(8., 20.);
+            q(8., 28., 16., 28.);
+            cr.line_to(32., 28.);
+            q(40., 28., 40., 36.);
+            // Join through the whole top/right gutter. No separate paint edge
+            // remains where a fractional preview allocation could show through.
+            cr.line_to(40. + right as f64, 36.);
+            cr.line_to(40. + right as f64, -(top as f64));
+            cr.line_to(0., -(top as f64));
+        } else {
+            let w = width as f64;
+            cr.move_to(0., 36.);
+            q(8., 36., 8., 28.);
+            cr.line_to(8., 10.);
+            q(8., 0., 18., 0.);
+            cr.line_to(w - 2., 0.);
+            q(w + 8., 0., w + 8., 10.);
+            cr.line_to(w + 8., 28.);
+            q(w + 8., 36., w + 16., 36.);
+        }
+        cr.close_path();
+        cr.set_source_rgba(
+            background.red() as f64,
+            background.green() as f64,
+            background.blue() as f64,
+            background.alpha() as f64,
+        );
+        let _ = cr.fill();
+    });
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(&canvas));
+    overlay
+}
+pub(crate) fn workspace_notch(style: &Value, width: i32) -> gtk::Overlay {
+    let notch = workspace_shape(style, width, false, 0, 0);
+    notch.set_widget_name("workspace-notch");
+    notch
+}
+fn workspace_close_art(style: &Value, top: i32, right: i32) -> gtk::Overlay {
+    let overlay = workspace_shape(style, 32, true, top, right);
+    let glyph = control_symbol("close");
+    glyph.set_size_request(32, 28);
+    glyph.set_margin_top(top);
+    glyph.set_margin_end(right);
+    glyph.set_halign(gtk::Align::End);
+    glyph.set_valign(gtk::Align::Start);
+    glyph.set_can_target(false);
+    overlay.add_overlay(&glyph);
+    overlay
+}
 fn stylesheet(style: &Value) -> String {
     let color = |key: &str, fallback: &str| {
         gdk::RGBA::parse(s(&style[key]))
@@ -113,6 +190,23 @@ fn stylesheet(style: &Value) -> String {
     format!(
         r#"
 .panel-card {{background:{background};color:{text};border:1px solid {border};border-radius:12px;padding:15px;font-family:"{font}";font-size:13px;}}
+.panel-card.panel-edge-content {{padding:0;}}
+popover.workspace-tooltip {{font-family:"{font}";font-size:12px;}}
+popover.workspace-tooltip contents {{background:{background};color:{text};padding:0;margin:0;border:1px solid {border};border-radius:8px;box-shadow:none;min-height:0;}}
+popover.workspace-tooltip label.workspace-tooltip-title {{font-family:"{font}";font-size:12px;font-weight:normal;color:{text};}}
+.panel-card .music-controls {{padding:0 12px;background:{surface};}}
+.panel-card .music-controls button.music-button,
+.panel-card .music-controls button.music-button:hover,
+.panel-card .music-controls button.music-button:active,
+.panel-card .music-controls button.music-button:focus-visible {{padding:0;min-width:0;min-height:0;margin:0;border:0;outline:none;box-shadow:none;background-image:none;border-radius:8px;color:{text};background:transparent;}}
+.panel-card .music-controls button.music-button:hover,
+.panel-card .music-controls button.music-button:focus-visible {{background:rgba(255,255,255,0.1);}}
+.panel-card .music-controls button.music-button:active {{background:rgba(255,255,255,0.15);}}
+.panel-card .music-controls button.music-button:disabled {{opacity:0.35;}}
+.panel-card .music-controls .music-button .panel-control-symbol {{font-size:18px;}}
+.panel-card .music-controls .music-transport .panel-control-symbol {{font-size:24px;}}
+.panel-card .panel-control-symbol.lyrics-placeholder {{font-size:96px;color:{muted};opacity:0.2;}}
+.panel-card .lyric-current {{color:{accent};font-weight:bold;}}
 .panel-card.panel-reveal-content {{background:transparent;border-color:transparent;}}
 .panel-card .panel-symbol {{font-family:"Material Symbols Rounded";}}
 .panel-card scale.audio-scale {{padding:0;margin:0;background:transparent;}}
@@ -191,6 +285,48 @@ fn stylesheet(style: &Value) -> String {
 .panel-card .history-notice:hover, .panel-card .history-detail {{background:{surface};border-radius:8px;}}
 .panel-card .history-detail {{padding:10px;}}
 .panel-card .history-title {{font-weight:600;}}
+.panel-card .left-value {{font-size:16px;}}
+.panel-card .left-art-empty {{font-size:64px;}}
+.panel-card .left-lyrics {{padding:16px;font-size:14px;}}
+.panel-card .left-lyrics.lyric-line {{padding:0;font-size:16px;}}
+.panel-card button.workspace-panel-close, .panel-card button.workspace-panel-close:hover, .panel-card button.workspace-panel-close:active, .panel-card button.workspace-panel-close:focus, .panel-card button.workspace-panel-close:focus-visible {{outline:none;outline-offset:0;background-image:none;padding:0;min-width:0;min-height:0;border:0;border-radius:0;background:transparent;box-shadow:none;}}
+.panel-card button.workspace-panel-close:hover, .panel-card button.workspace-panel-close:focus-visible {{color:{accent};outline:none;box-shadow:none;}}
+.panel-card .workspace-scene {{background:{surface};}}
+.panel-card .workspace-desktop {{background:{background};border-radius:4px;}}
+.panel-card .workspace-overflow {{padding:0;background:transparent;}}
+.panel-card .workspace-overflow button.policy-button {{min-width:20px;min-height:20px;padding:2px;border:0;background:transparent;box-shadow:none;}}
+.panel-card .workspace-overflow button.policy-button {{border-radius:5px;}}
+.panel-card .workspace-overflow button.policy-button:hover,
+.panel-card .workspace-overflow button.policy-button:focus-visible {{background:rgba(255,255,255,0.06);color:{text};outline:none;border:0;}}
+.panel-card .workspace-overflow button.policy-button:active {{background:rgba(255,255,255,0.12);color:{text};outline:none;border:0;}}
+.panel-card .workspace-overflow button.panel-close {{min-width:12px;min-height:12px;padding:0;}}
+.panel-card .workspace-overflow button.panel-close .panel-symbol {{font-size:12px;}}
+.panel-card .left-card button.workspace-tile {{padding:0;min-width:0;min-height:0;border:0;border-radius:0;background:{background};box-shadow:none;}}
+.panel-card .left-card button.workspace-tile:hover {{border:0;}}
+.panel-card .policy-label {{font-size:12px;font-weight:600;}}
+.panel-card .policy-title {{font-size:14px;font-weight:600;}}
+.panel-card .policy-muted {{font-size:11px;color:{muted};}}
+.panel-card .policy-feedback {{color:{accent};}}
+.panel-card button.policy-button {{min-height:30px;padding:0 10px;margin:0;border:1px solid transparent;border-radius:7px;background:{surface};box-shadow:none;color:{text};font-size:12px;}}
+.panel-card button.policy-button:disabled {{opacity:0.45;}}
+.panel-card button.policy-button:hover {{border-color:{border};color:{accent};}}
+.panel-card button.policy-accent {{border-color:{accent};color:{accent};}}
+.panel-card .policy-choice > button {{min-height:32px;padding:0 10px;border:1px solid transparent;border-radius:7px;background:{surface};box-shadow:none;color:{text};font-size:12px;}}
+.panel-card .policy-choice popover contents {{background:{background};color:{text};border:1px solid {border};}}
+.panel-card .policy-field {{min-height:32px;padding:0 10px;border:1px solid transparent;border-radius:7px;background:{surface};color:{text};font-size:12px;}}
+.panel-card .policy-field:focus-within {{border-color:{accent};}}
+.panel-card switch.policy-toggle {{min-width:38px;min-height:22px;padding:0;border:0;border-radius:11px;background:{surface};}}
+.panel-card switch.policy-toggle:checked {{background:{accent};}}
+.panel-card switch.policy-toggle slider {{min-width:13px;min-height:16px;margin:3px;padding:0;border:0;border-radius:8px;background:{text};box-shadow:none;}}
+.panel-card switch.policy-toggle:checked slider {{background:{background};}}
+.panel-card scale.policy-scale {{min-height:26px;padding:0;}}
+.panel-card scale.policy-scale trough {{min-height:4px;border:0;border-radius:2px;background:{surface};}}
+.panel-card scale.policy-scale highlight {{min-width:0;min-height:4px;border:0;border-radius:2px;background:{accent};}}
+.panel-card scale.policy-scale slider {{min-width:12px;min-height:12px;margin:-4px;border:0 solid {surface};border-radius:8px;background:{text};box-shadow:none;}}
+.panel-card scale.policy-scale slider:active {{border-color:{accent};}}
+.panel-card .policy-map {{background:{surface};border-radius:10px;}}
+.panel-card .policy-confirm {{padding:12px;background:{surface};border:1px solid {accent};border-radius:8px;}}
+.panel-card .policy-card flowboxchild {{padding:0;}}
 .panel-card button.panel-control:disabled {{opacity:0.4;}}
 "#,
         background = color("background", "#1f1d2e"),
@@ -381,6 +517,10 @@ pub struct Surface {
     card: gtk::Box,
     reveal: crate::panel_reveal::Reveal,
     header: gtk::Box,
+    top: gtk::Box,
+    divider: gtk::Widget,
+    buttons: gtk::Box,
+    overlay: gtk::Overlay,
     stack: gtk::Stack,
     scroll: gtk::ScrolledWindow,
     detached: Rc<Cell<Option<(f64, f64)>>>,
@@ -438,6 +578,7 @@ impl Surface {
         top.append(&header);
         top.append(&buttons);
         let card = card_frame(&top);
+        let divider = top.next_sibling().unwrap();
         let stack = gtk::Stack::new();
         stack.set_transition_type(gtk::StackTransitionType::None);
         stack.set_transition_duration(140);
@@ -448,7 +589,9 @@ impl Surface {
             .propagate_natural_height(true)
             .build();
         scroll.set_child(Some(&stack));
-        card.append(&scroll);
+        let overlay = gtk::Overlay::new();
+        overlay.set_child(Some(&scroll));
+        card.append(&overlay);
         let footer = gtk::Box::new(gtk::Orientation::Vertical, 0);
         footer.set_visible(false);
         footer.set_margin_top(12);
@@ -491,6 +634,10 @@ impl Surface {
             card,
             reveal,
             header,
+            top,
+            divider,
+            buttons,
+            overlay,
             stack,
             scroll,
             detached: Rc::new(Cell::new(None)),
@@ -592,6 +739,7 @@ impl Surface {
         // The fullscreen shell stays stationary while the card moves beneath it.
         self.window.add_controller(drag);
     }
+
     pub fn rect(&self) -> Rect {
         self.actual.get()
     }
@@ -627,15 +775,75 @@ impl Surface {
             };
             self.reveal
                 .colors(color("background", "#1f1d2e"), color(border, "#555169"));
-            self.close.set_child(Some(&artwork("close", 20)));
+            if target.provider == "workspaces" {
+                self.close.remove_css_class("panel-control");
+                self.close.remove_css_class("panel-close");
+                self.close.set_has_frame(false);
+                self.close.add_css_class("workspace-panel-close");
+                self.close
+                    .set_child(Some(&workspace_close_art(&target.style, 0, 0)));
+            } else {
+                self.close.add_css_class("panel-control");
+                self.close.add_css_class("panel-close");
+                self.close.set_has_frame(true);
+                self.close.remove_css_class("workspace-panel-close");
+                self.close.set_child(Some(&artwork("close", 20)));
+            }
             while let Some(c) = self.header.first_child() {
                 self.header.remove(&c);
             }
             let content = content();
             self.preferred_width = content.preferred_width.clamp(200., 900.);
             self.needs_keyboard = content.needs_keyboard;
-            self.header
-                .append(&card_header(&content.title, &target.provider));
+            let headerless = ["playerctl", "workspaces"].contains(&target.provider.as_str());
+            self.top.set_visible(!headerless);
+            self.divider.set_visible(!headerless);
+            if headerless {
+                self.card.add_css_class("panel-edge-content");
+                if self.close.parent().as_ref() == Some(self.buttons.upcast_ref()) {
+                    self.buttons.remove(&self.close);
+                    self.overlay.add_overlay(&self.close);
+                }
+                self.close.set_halign(gtk::Align::End);
+                self.close.set_valign(gtk::Align::Start);
+                self.close.set_margin_top(10);
+                self.close.set_margin_end(10);
+                if target.provider == "workspaces" {
+                    let h = target.style["previewHeight"]
+                        .as_f64()
+                        .unwrap_or(360.)
+                        .min((target.screen.height - 24.).max(120.));
+                    let scale = ((self.preferred_width - 20.) / target.screen.width.max(1.))
+                        .min((h - 20.) / target.screen.height.max(1.));
+                    let right = ((self.preferred_width - target.screen.width * scale) / 2. - 1.)
+                        .round() as i32;
+                    let top = ((h - target.screen.height * scale) / 2. - 1.).round() as i32;
+                    self.close.set_margin_end(0);
+                    self.close.set_margin_top(0);
+                    self.close
+                        .set_child(Some(&workspace_close_art(&target.style, top, right)));
+                }
+            } else {
+                self.card.remove_css_class("panel-edge-content");
+                if self.close.parent().as_ref() == Some(self.overlay.upcast_ref()) {
+                    self.overlay.remove_overlay(&self.close);
+                    self.buttons.append(&self.close);
+                }
+                self.close.set_margin_top(0);
+                self.close.set_margin_end(0);
+                let header = card_header(&content.title, &target.provider);
+                if target.provider == "crypto" {
+                    if let Some(old) = header.first_child() {
+                        header.remove(&old);
+                    }
+                    header.prepend(&crate::icons::artwork(
+                        &target.row["icon"],
+                        &target.style,
+                        22,
+                    ));
+                }
+                self.header.append(&header);
+            }
             while let Some(child) = self.footer.first_child() {
                 self.footer.remove(&child);
             }
@@ -801,19 +1009,21 @@ fn apply(
     screen: Rect,
     progress: f64,
 ) {
-    let x = r.x - screen.x;
-    let y = r.y - screen.y;
+    let x = (r.x - screen.x).round();
+    let y = (r.y - screen.y).round();
     fixed.move_(reveal, x, y);
     reveal.frame(r.width.ceil() as i32, r.height.ceil() as i32, progress);
     if let Some(surface) = window.surface() {
-        surface.set_input_region(&gtk::cairo::Region::create_rectangle(
-            &gtk::cairo::RectangleInt::new(
+        surface.set_input_region(&if !fixed.is_visible() {
+            gtk::cairo::Region::create()
+        } else {
+            gtk::cairo::Region::create_rectangle(&gtk::cairo::RectangleInt::new(
                 x.floor() as i32,
                 y.floor() as i32,
                 r.width.ceil() as i32,
                 r.height.ceil() as i32,
-            ),
-        ));
+            ))
+        });
         surface.queue_render();
     }
 }
@@ -822,6 +1032,7 @@ fn apply(
 mod render_tests {
     use super::*;
     /// The Python runner installs a workspace-7 rule BEFORE starting this test.
+
     #[test]
     #[ignore = "requires the workspace-7 fixture runner"]
     fn panel_reveal_render() {
@@ -986,6 +1197,11 @@ mod render_tests {
             &css,
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 2,
         );
+        let fixture = std::env::var("BARTJIK_CARD_FIXTURE").unwrap_or_default();
+        let system = ["caffeine", "nightlight", "monitor-layout"].contains(&fixture.as_str());
+        let mut system_card = None;
+        let left = ["crypto", "playerctl", "workspaces"].contains(&fixture.as_str());
+        let mut left_card = None;
         let history = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("history");
         let locale = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("locale");
         let mut history_card = None;
@@ -1015,7 +1231,19 @@ mod render_tests {
             );
         }
         let header = card_header(
-            if history {
+            if left {
+                match fixture.as_str() {
+                    "crypto" => "BTC/USD  ·  67,432",
+                    "playerctl" => "Music",
+                    _ => "Workspace 7",
+                }
+            } else if system {
+                match fixture.as_str() {
+                    "caffeine" => "Idle & Sleep",
+                    "nightlight" => "Night light",
+                    _ => "Monitor Setup",
+                }
+            } else if history {
                 "Notifications"
             } else if locale {
                 "Input methods"
@@ -1032,7 +1260,9 @@ mod render_tests {
             } else {
                 "World clock"
             },
-            if history {
+            if system || left {
+                &fixture
+            } else if history {
                 "DND"
             } else if locale {
                 "locale"
@@ -1060,7 +1290,70 @@ mod render_tests {
         }
         let card = card_frame(&header);
         let first;
-        if history {
+        if left {
+            let (send, receive) = async_channel::bounded(128);
+            let (actions, commands) = async_channel::bounded(128);
+            let provider = match fixture.as_str() {
+                "crypto" => "crypto",
+                "playerctl" => "playerctl",
+                _ => "workspaces",
+            };
+            let view = crate::left_card::fixture(provider, send, actions);
+            let content = view.content();
+            if ["playerctl", "workspaces"].contains(&provider) {
+                header.set_visible(false);
+                header.next_sibling().unwrap().set_visible(false);
+                card.add_css_class("panel-edge-content");
+            }
+            if provider == "crypto" {
+                if let Some(old) = header.first_child() {
+                    header.remove(&old);
+                }
+                let path = crate::util::root().join("qml/icons/bitcoin.svg");
+                header.prepend(&crate::icons::artwork(
+                    &json!({"kind":"image","value":path}),
+                    &style,
+                    22,
+                ));
+            }
+            first = content.body.clone();
+            if provider == "workspaces" {
+                let frame = gtk::Overlay::new();
+                frame.set_child(Some(&content.body));
+                let close = gtk::Button::new();
+                close.add_css_class("panel-close");
+                close.add_css_class("workspace-panel-close");
+                close.set_state_flags(gtk::StateFlags::FOCUS_VISIBLE, false);
+                close.set_child(Some(&workspace_close_art(&style, 9, 9)));
+                close.set_halign(gtk::Align::End);
+                close.set_valign(gtk::Align::Start);
+                close.set_margin_top(0);
+                close.set_margin_end(0);
+                frame.add_overlay(&close);
+                card.append(&frame);
+            } else {
+                card.append(&content.body);
+            }
+            left_card = Some((view, receive, commands));
+        } else if system {
+            let (send, receive) = async_channel::bounded(128);
+            let provider = match fixture.as_str() {
+                "caffeine" => "caffeine",
+                "nightlight" => "nightlight",
+                _ => "monitor-layout",
+            };
+            let view = crate::system_card::Card::new(provider, send);
+            let data = crate::system_card::fixture(provider);
+            view.update(
+                data,
+                json!({"barKey":"fixture","module":provider,"monitor":"synthetic"}),
+                style.clone(),
+            );
+            let content = view.content();
+            first = content.body.clone();
+            card.append(&content.body);
+            system_card = Some((view, receive));
+        } else if history {
             let (send, _receive) = async_channel::bounded(32);
             let view = crate::history_card::Card::new(true, send);
             let content = view.content();
@@ -1177,7 +1470,15 @@ mod render_tests {
         let window = gtk::Window::builder()
             .title("Bartjik Panel Fixture")
             .decorated(false)
-            .default_width(if codex { 440 } else { 420 })
+            .default_width(if fixture == "workspaces" {
+                624
+            } else if fixture == "monitor-layout" {
+                520
+            } else if codex || (left && fixture != "playerctl") {
+                440
+            } else {
+                420
+            })
             .resizable(false)
             .child(&card)
             .build();
@@ -1197,14 +1498,40 @@ mod render_tests {
         }
         let bounds = first.compute_bounds(&window).unwrap();
         let card_bounds = card.compute_bounds(&window).unwrap();
-        assert_eq!(card_bounds.width(), if codex { 440. } else { 420. });
-        if !codex && !router && !network && !connectivity && !audio && !history && !locale {
+        assert_eq!(
+            card_bounds.width(),
+            if fixture == "workspaces" {
+                624.
+            } else if fixture == "monitor-layout" {
+                520.
+            } else if codex || (left && fixture != "playerctl") {
+                440.
+            } else {
+                420.
+            }
+        );
+        if !codex
+            && !router
+            && !network
+            && !connectivity
+            && !audio
+            && !history
+            && !locale
+            && !system
+            && !left
+        {
             assert_eq!(first.height(), 56);
         }
-        assert_eq!(header.height(), 32);
-        assert_eq!(bounds.x(), 16.);
-        assert_eq!(bounds.y(), 72.);
-        if !router && !network && !connectivity && !audio && !history && !locale {
+        if ["playerctl", "workspaces"].contains(&fixture.as_str()) {
+            assert_eq!(bounds.x(), 1.);
+            assert_eq!(bounds.y(), 1.);
+        } else {
+            assert_eq!(header.height(), 32);
+            assert_eq!(bounds.x(), 16.);
+            assert_eq!(bounds.y(), 72.);
+        }
+        if !router && !network && !connectivity && !audio && !history && !locale && !system && !left
+        {
             assert_eq!(
                 card_bounds.height(),
                 if codex {
@@ -1223,6 +1550,51 @@ mod render_tests {
         texture
             .save_to_png(std::env::var("BARTJIK_PANEL_ARTIFACT").unwrap())
             .unwrap();
+        if fixture == "workspaces" {
+            crate::thumbnail::comparison(&window.renderer().unwrap());
+            // Capture only this synthetic fixture, never arbitrary user windows.
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let desktop = tjik_desktop::selected();
+                let snapshot = desktop.snapshot().unwrap();
+                let target = snapshot
+                    .windows
+                    .iter()
+                    .find(|w| {
+                        w.pid == Some(std::process::id() as u64)
+                            && w.title.as_deref() == Some("Bartjik Panel Fixture")
+                    })
+                    .expect("fixture window");
+                assert!(matches!(
+                    desktop.capture(&tjik_desktop::WindowId("stale".into())),
+                    Err(tjik_desktop::DesktopError::StaleTarget)
+                ));
+                tx.send(desktop.capture(&target.id)).unwrap();
+            });
+            let deadline = Instant::now() + std::time::Duration::from_secs(4);
+            let frame = loop {
+                while gtk::glib::MainContext::default().pending() {
+                    gtk::glib::MainContext::default().iteration(false);
+                }
+                if let Ok(result) = rx.try_recv() {
+                    break result.expect("real fixture thumbnail");
+                }
+                assert!(Instant::now() < deadline, "capture deadline");
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            };
+            assert!(frame.width > 0 && frame.width <= 3840 && frame.height <= 2160);
+            assert_eq!(frame.rgba.len(), frame.stride * frame.height as usize);
+            assert!(
+                frame.rgba.chunks_exact(4).any(|p| p != &frame.rgba[..4]),
+                "nonblank thumbnail"
+            );
+        }
+        if let Some((view, receive, commands)) = left_card {
+            crate::left_card::exercise(&view, &receive, &commands);
+        }
+        if let Some((view, receive)) = system_card {
+            crate::system_card::exercise_fixture(&view, &receive);
+        }
         if let Some(view) = history_card {
             crate::history_card::exercise_fixture(&view);
         }

@@ -622,6 +622,8 @@ pub struct Ui {
     panel_surface: RefCell<Option<panel_view::Surface>>,
     audio_card: Rc<crate::audio_card::Card>,
     history_card: Rc<crate::history_card::Card>,
+    left_cards: BTreeMap<String, Rc<crate::left_card::Card>>,
+    system_cards: BTreeMap<String, Rc<crate::system_card::Card>>,
     network_card: Rc<crate::network_card::Card>,
     connectivity_card: Rc<crate::connectivity_card::Card>,
     local_pointer: Cell<Option<(f64, f64)>>,
@@ -652,13 +654,29 @@ impl Ui {
             configuration: RefCell::new(configuration),
             comparison: RefCell::new(Value::Null),
             error: RefCell::new(String::new()),
-            actions,
+            actions: actions.clone(),
             demo,
             reserve,
             workspace_scope: std::env::var("BARTJIK_GTK_WORKSPACE")
                 .ok()
                 .filter(|v| !v.is_empty()),
             can_select,
+            left_cards: ["crypto", "playerctl", "workspaces"]
+                .into_iter()
+                .map(|p| {
+                    (p.into(), {
+                        let card = crate::left_card::Card::new(p, sender.clone(), actions.clone());
+                        if p == "workspaces" {
+                            card.capture_with(desktop.clone());
+                        }
+                        card
+                    })
+                })
+                .collect(),
+            system_cards: ["caffeine", "nightlight", "monitor-layout"]
+                .into_iter()
+                .map(|p| (p.into(), crate::system_card::Card::new(p, sender.clone())))
+                .collect(),
             connectivity_card: crate::connectivity_card::Card::new(sender.clone()),
             history_card: crate::history_card::Card::new(demo || runtime.is_none(), sender.clone()),
             audio_card: crate::audio_card::Card::new(demo || runtime.is_none(), sender.clone()),
@@ -1063,7 +1081,8 @@ impl Ui {
                         ))
                         .ends_with(".panel");
                     let enabled = row["enabled"] != false
-                        && row["idle"] != true
+                        && (row["idle"] != true
+                            || (provider == "playerctl" && row["native"].is_object()))
                         && if provider == "workspaces" {
                             options["enabled"] == true
                         } else {
@@ -1148,6 +1167,7 @@ impl Ui {
         }
         self.sync_panel();
     }
+
     fn sync_panel(&self) {
         let (target, pinned) = {
             let deck = self.deck.borrow();
@@ -1168,6 +1188,13 @@ impl Ui {
             self.panel_surface.borrow_mut().take();
             return;
         };
+        if let Some(card) = self.system_cards.get(&target.provider) {
+            card.update(
+                target.row["panel"].clone(),
+                json!({"barKey":target.bar,"module":target.module,"monitor":target.output}),
+                target.style.clone(),
+            );
+        }
         let vpn = ["mullvad", "tailscale"].contains(&target.provider.as_str());
         if vpn {
             let bars = self.bars.borrow();
@@ -1201,7 +1228,12 @@ impl Ui {
                 panel_view::Surface::new(&self.app, &monitor, &target.output, self.sender.clone())
             })
             .show(&target, pinned, || {
-                if target.provider == "DND" {
+                if let Some(card) = self.left_cards.get(&target.provider) {
+            card.update(target.row.clone(), json!({"barKey":target.bar,"module":target.module,"item":target.item,"monitor":target.output,"maxWindows":target.options["maxWindows"],"previewWidth":target.options["width"]}), target.style.clone(), self.snapshot.borrow().clone());
+                    card.content()
+                } else if let Some(card) = self.system_cards.get(&target.provider) {
+                    card.content()
+                } else if target.provider == "DND" {
                     self.history_card.content()
                 } else if target.provider == "locale" {
                     panel_view::locale_content(&target, self.sender.clone())
@@ -1215,7 +1247,11 @@ impl Ui {
                     panel_view::status_content(&target)
                 }
             });
+        if let Some(card) = self.left_cards.get(&target.provider) {
+            card.update(target.row.clone(), json!({"barKey":target.bar,"module":target.module,"item":target.item,"monitor":target.output,"maxWindows":target.options["maxWindows"],"previewWidth":target.options["width"]}), target.style.clone(), self.snapshot.borrow().clone());
+        }
     }
+
     fn tracking_needed(&self) -> bool {
         self.bars.borrow().values().any(|b| {
             b.window.is_visible()
@@ -1486,6 +1522,35 @@ impl Ui {
                 self.sync_panel();
                 self.configure_edges();
             }
+            Event::LeftRequest(request) => {
+                if self.demo
+                    && matches!(s(&request["op"]), "action" | "mediaAction" | "cryptoRetry")
+                {
+                    self.intents
+                        .borrow_mut()
+                        .push(json!({"kind":"intent","request":request}));
+                } else if let Some(runtime) = &self.runtime {
+                    if let Err(error) = runtime.send(request) {
+                        *self.error.borrow_mut() = error;
+                    }
+                }
+            }
+            Event::SystemAction(provider, request) => {
+                if let Some(card) = self.system_cards.get(&provider) {
+                    if self.demo {
+                        self.intents
+                            .borrow_mut()
+                            .push(json!({"kind":"intent","request":request}));
+                        card.finish("Demo action recorded", false);
+                    } else if let Some(runtime) = &self.runtime {
+                        if let Err(error) = runtime.send(request) {
+                            card.finish(&error, true);
+                        }
+                    } else {
+                        card.finish("Backend unavailable", true);
+                    }
+                }
+            }
             Event::ConnectivityAction(context) => {
                 if self.demo {
                     self.intents
@@ -1503,6 +1568,15 @@ impl Ui {
             }
             Event::Input(context) => self.input(context),
             Event::Backend(value) => {
+                if matches!(
+                    s(&value["kind"]),
+                    "crypto" | "artwork" | "lyrics" | "mediaPosition"
+                ) {
+                    for card in self.left_cards.values() {
+                        card.receive(&value);
+                    }
+                    return;
+                }
                 if value["kind"] == "menuChanged" {
                     if let (Some(menu), Some(runtime)) =
                         (self.menu.borrow().as_ref(), self.runtime.as_ref())
@@ -1552,6 +1626,10 @@ impl Ui {
                 }
                 if !value["ready"].is_null() {
                     self.connectivity_card.acknowledge(&value["panelFeedback"]);
+                    for card in self.system_cards.values() {
+                        card.acknowledge(&value["panelFeedback"]);
+                        card.monitor_change(value["monitorChange"].clone());
+                    }
                     if value["config"].is_object() {
                         *self.configuration.borrow_mut() = value["config"].clone();
                     }
@@ -1686,8 +1764,8 @@ impl Ui {
             }
             Event::Desktop(tjik_desktop::DesktopState::Ready(snapshot)) => {
                 self.error.borrow_mut().clear();
+                *self.snapshot.borrow_mut() = Some(snapshot.clone());
                 self.render(&snapshot);
-                *self.snapshot.borrow_mut() = Some(snapshot);
             }
         }
     }

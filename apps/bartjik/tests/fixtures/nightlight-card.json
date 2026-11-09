@@ -1,0 +1,27 @@
+{
+  "title": "Night light",
+  "rows": [],
+  "enabled": true,
+  "running": true,
+  "active": false,
+  "settings": {
+    "temperature": 4500,
+    "gamma": 85,
+    "mode": "solar",
+    "start": "21:00",
+    "end": "07:30",
+    "location": {
+      "name": "Hong Kong",
+      "source": "city"
+    }
+  },
+  "schedule": {
+    "sunrise": "06:32",
+    "sunset": "17:43",
+    "nextTime": "17:43",
+    "timezone": "Asia/Hong_Kong"
+  },
+  "locationAgeHours": 0,
+  "cities": [],
+  "error": ""
+}

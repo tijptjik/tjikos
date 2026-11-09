@@ -1,0 +1,18 @@
+{
+  "title": "Idle & Sleep",
+  "rows": [],
+  "inhibited": true,
+  "running": false,
+  "duration": 3600,
+  "deadline": null,
+  "delays": {
+    "dim": 60,
+    "lock": 180,
+    "screenOff": 600,
+    "suspend": 1800
+  },
+  "revision": "synthetic-idle",
+  "editable": true,
+  "gamePolicy": false,
+  "error": ""
+}

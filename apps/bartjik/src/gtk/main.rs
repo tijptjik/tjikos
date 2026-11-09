@@ -38,6 +38,8 @@ mod history_card;
 mod icons;
 mod input;
 mod layout;
+mod left_card;
+mod monitor_geometry;
 mod motion;
 #[allow(dead_code, unused_imports)]
 #[path = "../network.rs"]
@@ -50,6 +52,8 @@ mod panel_view;
 mod panels;
 mod pointer;
 mod runtime;
+mod system_card;
+mod thumbnail;
 mod tray_menu;
 mod tray_motion;
 mod ui;
@@ -57,12 +61,15 @@ use ui::Ui;
 #[derive(Clone)]
 enum Action {
     Window(WindowId),
+    Close(WindowId),
     Workspace(tjik_desktop::WorkspaceTarget),
 }
 enum Event {
     Hover(String, Option<(f64, f64)>),
     PanelCommand(String),
     ConnectivityAction(Value),
+    SystemAction(String, Value),
+    LeftRequest(Value),
     Backend(Value),
     Activity(String, Value),
     Input(Value),
@@ -237,6 +244,7 @@ fn main() -> Result<()> {
             } else {
                 match id {
                     Action::Window(id) => actor.activate(&id),
+                    Action::Close(id) => actor.close(&id),
                     Action::Workspace(target) => actor.select_workspace(&target),
                 }
             };

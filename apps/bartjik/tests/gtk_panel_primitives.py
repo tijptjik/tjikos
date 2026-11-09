@@ -20,7 +20,9 @@ VPN = '--connectivity' in sys.argv
 HISTORY = '--history' in sys.argv
 LOCALE = '--locale' in sys.argv
 AUDIO = '--audio' in sys.argv
-STEM = 'history' if HISTORY else 'locale' if LOCALE else 'audio' if AUDIO else 'connectivity' if VPN else 'network' if NETWORK else 'openrouter' if ROUTER else 'codex' if CODEX else 'panel'
+SYSTEM = next((p for p in ['caffeine', 'nightlight', 'monitor-layout'] if '--'+p in sys.argv), None)
+LEFT = next((p for p in ['crypto', 'playerctl', 'workspaces'] if '--'+p in sys.argv), None)
+STEM = LEFT if LEFT else SYSTEM if SYSTEM else 'history' if HISTORY else 'locale' if LOCALE else 'audio' if AUDIO else 'connectivity' if VPN else 'network' if NETWORK else 'openrouter' if ROUTER else 'codex' if CODEX else 'panel'
 
 
 def hypr(*args):
@@ -33,7 +35,9 @@ try:
     env = {**os.environ, 'BARTJIK_PANEL_ARTIFACT': f'/tmp/bartjik-{STEM}-primitives.png', 'BARTJIK_HOME': str(APP / 'dist'), 'GTK_A11Y': 'none', 'PKG_CONFIG_PATH': str(APP / '../../packages/tjik-gtk/target/native/lib/pkgconfig')}
     if '--empty' in sys.argv:
         env['BARTJIK_EMPTY_USAGE'] = '1'
-    if CODEX or ROUTER or NETWORK or VPN or AUDIO or HISTORY or LOCALE:
+        if LEFT in ['crypto', 'playerctl']:
+            env['BARTJIK_PANEL_ARTIFACT'] = f'/tmp/bartjik-{LEFT}-loading-primitives.png'
+    if CODEX or ROUTER or NETWORK or VPN or AUDIO or HISTORY or LOCALE or SYSTEM or LEFT:
         env['BARTJIK_CARD_FIXTURE'] = STEM
     process = subprocess.Popen(['cargo', 'test', '--release', '--locked', '--features', 'gtk-ui', '--bin', 'bartjik-gtk', ('panel_reveal_render' if TRANSITION else 'panel_primitives_render'), '--', '--ignored', '--nocapture'], cwd=APP, env=env)
     placed = False
@@ -47,7 +51,7 @@ try:
         time.sleep(.1)
     assert process.returncode == 0, process.returncode
     assert placed, 'Fixture placement was not observed'
-    if HISTORY or LOCALE:
+    if HISTORY or LOCALE or LEFT:
         print(f'PASS: synthetic {STEM} render and interactions on workspace 7')
         sys.exit(0)
     if TRANSITION:
@@ -57,18 +61,26 @@ try:
         root = Path(directory)
         components = root / 'components'
         components.mkdir()
-        for name in ['PanelHeader', 'PanelHandle', 'PanelButton', 'PanelToolTip', 'StatusDetails', 'BatteryDetails', 'CodexDetails', 'OpenRouterDetails', 'NetworkDetails', 'NetworkConnection', 'NetworkTraffic', 'NetworkAddresses', 'MullvadLocations', 'CountryButton', 'AudioDetails', 'AudioGroup']:
+        for name in ['PanelHeader', 'PanelHandle', 'PanelButton', 'PanelToolTip', 'StatusDetails', 'BatteryDetails', 'CodexDetails', 'OpenRouterDetails', 'NetworkDetails', 'NetworkConnection', 'NetworkTraffic', 'NetworkAddresses', 'MullvadLocations', 'CountryButton', 'AudioDetails', 'AudioGroup', 'IdleDetails', 'NightlightDetails', 'MonitorDetails', 'PowerConfirmation']:
             shutil.copy2(APP / 'qml' / (name + '.qml'), components)
         shutil.copy2(APP / 'qml/CodexTimeline.js', components)
+        shutil.copy2(APP / 'qml/MonitorGeometry.js', components)
+        if SYSTEM:
+            # The offscreen reference never opens the separate power dialog.
+            (components / 'PowerConfirmation.qml').write_text('import QtQuick\nItem { property var theme; property var screen; signal cancelled(); signal accepted() }\n')
         (components / 'icons').mkdir()
         shutil.copy2(APP / ('qml/icons/' + ('openrouter' if ROUTER else 'codex') + '.svg'), components / 'icons')
-        source = (APP / 'tests' / ('AudioCard.qml' if AUDIO else 'ConnectivityCard.qml' if VPN else 'NetworkCard.qml' if NETWORK else 'OpenRouterCard.qml' if ROUTER else 'CodexCard.qml' if CODEX else 'PanelPrimitives.qml')).read_text().replace('../qml', 'components')
-        row = json.loads((APP / ('tests/fixtures/' + ('audio' if AUDIO else 'connectivity' if VPN else 'network' if NETWORK else 'openrouter' if ROUTER else 'codex') + '-card.json')).read_text())
+        source = (APP / 'tests' / ('PolicyCard.qml' if SYSTEM else 'AudioCard.qml' if AUDIO else 'ConnectivityCard.qml' if VPN else 'NetworkCard.qml' if NETWORK else 'OpenRouterCard.qml' if ROUTER else 'CodexCard.qml' if CODEX else 'PanelPrimitives.qml')).read_text().replace('../qml', 'components')
+        row = json.loads((APP / ('tests/fixtures/' + (SYSTEM if SYSTEM else 'audio' if AUDIO else 'connectivity' if VPN else 'network' if NETWORK else 'openrouter' if ROUTER else 'codex') + '-card.json')).read_text())
         if ROUTER and '--empty' in sys.argv:
             row['panel']['rows'] = []
             row['state']['stale'] = False
             row['panel']['activityNote'] = 'Daily usage isn’t available for this key.'
         source = source.replace('FIXTURE_ROW', json.dumps(row))
+        if SYSTEM:
+            source = source.replace('FIXTURE_PROVIDER', SYSTEM)
+            (components / 'icons/proicons').mkdir(parents=True, exist_ok=True)
+            shutil.copy2(APP / 'qml/icons/proicons/moon.svg', components / 'icons/proicons')
         if VPN:
             shutil.copytree(APP / 'qml/icons/flags', components / 'icons/flags')
             (components / 'icons/tray').mkdir()

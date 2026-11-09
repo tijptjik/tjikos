@@ -1,0 +1,82 @@
+{
+  "title": "Displays",
+  "rows": [],
+  "revision": "synthetic-monitors",
+  "pending": null,
+  "tv": "HDMI-A-1",
+  "mirrorOutput": "DP-2",
+  "monitors": [
+    {
+      "name": "DP-1",
+      "label": "Main display",
+      "connected": true,
+      "configured": true,
+      "settings": {
+        "enabled": true,
+        "mode": "3440x1440@120",
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "transform": 0,
+        "vrr": -1,
+        "cm": "auto",
+        "mirror": ""
+      },
+      "availableModes": [
+        "3440x1440@120"
+      ],
+      "hardwareDetails": {
+        "hdr": true,
+        "vrrCapable": true
+      }
+    },
+    {
+      "name": "DP-2",
+      "label": "Side display",
+      "connected": true,
+      "configured": true,
+      "settings": {
+        "enabled": true,
+        "mode": "1920x1080@60",
+        "x": 3440,
+        "y": 720,
+        "scale": 1,
+        "transform": 0,
+        "vrr": -1,
+        "cm": "auto",
+        "mirror": ""
+      },
+      "availableModes": [
+        "1920x1080@60"
+      ],
+      "hardwareDetails": {
+        "hdr": false,
+        "vrrCapable": false
+      }
+    },
+    {
+      "name": "HDMI-A-1",
+      "label": "Living room TV",
+      "connected": true,
+      "configured": true,
+      "settings": {
+        "enabled": false,
+        "mode": "3840x2160@60",
+        "x": -3840,
+        "y": -360,
+        "scale": 1,
+        "transform": 0,
+        "vrr": -1,
+        "cm": "auto",
+        "mirror": ""
+      },
+      "availableModes": [
+        "3840x2160@60"
+      ],
+      "hardwareDetails": {
+        "hdr": true,
+        "vrrCapable": true
+      }
+    }
+  ]
+}

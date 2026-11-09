@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-gtk-ui = ["dep:tjik-gtk", "dep:gtk4-layer-shell", "dep:async-channel", "dep:notjik-core"]
+gtk-ui = ["tjik-desktop/capture", "dep:tjik-gtk", "dep:gtk4-layer-shell", "dep:async-channel", "dep:notjik-core"]
 
 [[bin]]
 name = "bartjik-gtk"

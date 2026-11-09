@@ -354,7 +354,7 @@ impl DefaultColor for str {
         }
     }
 }
-fn artwork(part: &Value, style: &Value, size: i32) -> gtk::Widget {
+pub(crate) fn artwork(part: &Value, style: &Value, size: i32) -> gtk::Widget {
     if part["overlay"].is_array() || part["overlayName"].as_str().is_some_and(|s| !s.is_empty()) {
         let mut base = part.clone();
         base.as_object_mut().unwrap().remove("overlay");

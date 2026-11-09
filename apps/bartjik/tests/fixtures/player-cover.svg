@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+ <rect width="640" height="640" fill="#26233a"/>
+ <circle cx="320" cy="290" r="190" fill="#ff53a6"/>
+ <path d="M0 350 Q160 290 320 350 T640 350 V640 H0Z" fill="#413b63"/>
+ <path d="M0 400 Q160 340 320 400 T640 400 V640 H0Z" fill="#1f1d2e"/>
+ <text x="320" y="530" text-anchor="middle" fill="#e5e5e5" font-family="monospace" font-size="28">NIGHT CROSSINGS</text>
+</svg>
