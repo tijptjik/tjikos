@@ -32,6 +32,21 @@ pub fn keyboard(window: &gtk::ApplicationWindow, active: bool) {
         }
     }
 }
+/// Clear drag placement so the compositor centers the layer at its current size.
+pub fn center(window: &gtk::ApplicationWindow) {
+    if !window.is_layer_window() {
+        return;
+    }
+    for edge in [
+        gtk4_layer_shell::Edge::Left,
+        gtk4_layer_shell::Edge::Right,
+        gtk4_layer_shell::Edge::Top,
+        gtk4_layer_shell::Edge::Bottom,
+    ] {
+        window.set_anchor(edge, false);
+        window.set_margin(edge, 0);
+    }
+}
 pub fn monitor(window: &gtk::ApplicationWindow, name: &str) {
     if !window.is_layer_window() {
         return;

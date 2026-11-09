@@ -353,6 +353,8 @@ impl Ui {
     fn show(self: &Rc<Self>) {
         self.completion.borrow_mut().clear();
         if !self.opened.replace(true) {
+            surface::center(&self.window);
+            self.configured_size(&self.settings.borrow());
             self.set_text("");
             self.next_generation();
             self.append.set(false);
@@ -587,6 +589,18 @@ impl Ui {
         *self.rows.borrow_mut() = rows;
         self.selection.set_selected(at as u32);
     }
+    fn configured_size(&self, settings: &Value) {
+        self.window.set_default_size(
+            settings["ui"]["width"]
+                .as_i64()
+                .unwrap_or(720)
+                .clamp(360, 1600) as i32,
+            settings["ui"]["height"]
+                .as_i64()
+                .unwrap_or(600)
+                .clamp(300, 1200) as i32,
+        );
+    }
     fn configure(self: &Rc<Self>, settings: &Value, reset: bool) {
         if !settings.is_object() {
             return;
@@ -612,16 +626,7 @@ impl Ui {
         let font = settings["ui"]["font"].as_str().unwrap_or("tijpset");
         let size = settings["ui"]["font_size"].as_i64().unwrap_or(14) as i32;
         theme::apply(&self.css, &colors, font, size);
-        self.window.set_default_size(
-            settings["ui"]["width"]
-                .as_i64()
-                .unwrap_or(720)
-                .clamp(360, 1600) as i32,
-            settings["ui"]["height"]
-                .as_i64()
-                .unwrap_or(600)
-                .clamp(300, 1200) as i32,
-        );
+        self.configured_size(settings);
         let columns = settings["ui"]["columns"].as_u64().unwrap_or(5).clamp(1, 12) as u32;
         self.columns.set(columns);
         self.grid.set_min_columns(1);

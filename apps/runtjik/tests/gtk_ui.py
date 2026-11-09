@@ -264,6 +264,13 @@ def main():
                 pointer_event("m 50 50")
                 pointer_event("b 1"); pointer_event("b 0")
                 wait_for(lambda: not status()["visible"])
+                # Warm reopen must discard both dragged position and resized dimensions,
+                # even when the configuration has not changed.
+                run("show"); settled("", 15)
+                restored = wait_for(lambda: layer() if all(layer()[k] == before[k] for k in ("x", "y", "w", "h")) else None)
+                assert restored["x"] == (1000 - restored["w"]) // 2, restored
+                assert restored["y"] == (680 - restored["h"]) // 2, restored
+                run("close")
                 policy_config = root / "runtjik.conf"
                 policy_original = policy_config.read_text()
                 policy_config.write_text(policy_original.replace("[ui]", "[ui]\nclose_on_outside_click=false"))
