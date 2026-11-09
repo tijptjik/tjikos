@@ -132,6 +132,9 @@ pub fn run_cancelled(
     Ok(out)
 }
 pub fn ipc(root: &Path, request: &Value) -> Result<Value> {
+    if let Some(response) = crate::ipc::request(request)? {
+        return Ok(response);
+    }
     let bytes = serde_json::to_vec(request)?;
     if bytes.len() > 131072 {
         bail!("Request exceeds 128 KiB")

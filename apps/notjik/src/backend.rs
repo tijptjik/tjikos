@@ -78,12 +78,18 @@ pub fn run(root: &Path, transport: &mut impl Transport) -> Result<()> {
     let mut previous = String::new();
     let mut observer = Observer::new();
     let mut lock = "";
+    let mut idle_seconds = u64::MAX;
     let mut dirty = true;
     let mut next_config = Instant::now();
     let mut next_prune = Instant::now();
     let mut next_history = Instant::now();
     loop {
         observer.poll();
+        let idle = observer.idle_seconds();
+        if idle != idle_seconds {
+            idle_seconds = idle;
+            transport.publish(&json!({"idle":idle >= 120,"idleSeconds":idle}))?;
+        }
         if lock != observer.state {
             lock = observer.state;
             transport.publish(&json!({"lockState":lock}))?;

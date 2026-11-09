@@ -12,6 +12,18 @@ pub struct Observer {
     buffer: Vec<u8>,
     bound: bool,
     retry: Instant,
+    seat: bool,
+    next_id: u32,
+    seat_id: u32,
+    idle_manager_id: u32,
+    idle_id: u32,
+    idle_sync: u32,
+    lock_id: u32,
+    lock_sync: u32,
+    idle_version: u32,
+    idle_bound: bool,
+    idle_ready: bool,
+    idle_since: Option<Instant>,
 }
 fn word(bytes: &[u8], offset: usize) -> Result<u32> {
     Ok(u32::from_ne_bytes(
@@ -29,6 +41,18 @@ impl Observer {
             buffer: vec![],
             bound: false,
             retry: Instant::now(),
+            seat: false,
+            next_id: 4,
+            seat_id: 0,
+            idle_manager_id: 0,
+            idle_id: 0,
+            idle_sync: 0,
+            lock_id: 0,
+            lock_sync: 0,
+            idle_version: 0,
+            idle_bound: false,
+            idle_ready: false,
+            idle_since: None,
         }
     }
     fn close(&mut self) {
@@ -36,7 +60,24 @@ impl Observer {
         self.state = "unknown";
         self.buffer.clear();
         self.bound = false;
+        self.seat = false;
+        self.next_id = 4;
+        self.seat_id = 0;
+        self.idle_manager_id = 0;
+        self.idle_id = 0;
+        self.idle_sync = 0;
+        self.lock_id = 0;
+        self.lock_sync = 0;
+        self.idle_version = 0;
+        self.idle_bound = false;
+        self.idle_ready = false;
+        self.idle_since = None;
         self.retry = Instant::now() + Duration::from_secs(2);
+    }
+    fn allocate(&mut self) -> u32 {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
     }
     fn send(&mut self, id: u32, opcode: u32, payload: &[u8]) -> Result<()> {
         let mut b = id.to_ne_bytes().to_vec();
@@ -85,6 +126,48 @@ impl Observer {
                 let interface = p
                     .get(8..8 + length)
                     .ok_or_else(|| anyhow::anyhow!("Truncated global"))?;
+                if (interface == b"wl_seat\0" && !self.seat)
+                    || (interface == b"ext_idle_notifier_v1\0" && self.idle_version == 0)
+                {
+                    let seat = interface == b"wl_seat\0";
+                    let padded = (length + 3) & !3;
+                    let version = if seat {
+                        1
+                    } else {
+                        word(&p, 8 + padded)?.min(2)
+                    };
+                    let mut payload = name.to_ne_bytes().to_vec();
+                    payload.extend((length as u32).to_ne_bytes());
+                    payload.extend(interface);
+                    while payload.len() % 4 != 0 {
+                        payload.push(0);
+                    }
+                    payload.extend(version.to_ne_bytes());
+                    let object = self.allocate();
+                    payload.extend(object.to_ne_bytes());
+                    self.send(2, 0, &payload)?;
+                    if seat {
+                        self.seat = true;
+                        self.seat_id = object;
+                    } else {
+                        self.idle_version = version;
+                        self.idle_manager_id = object;
+                    }
+                    if self.seat && self.idle_version > 0 && !self.idle_bound {
+                        self.idle_id = self.allocate();
+                        let mut args = self.idle_id.to_ne_bytes().to_vec();
+                        args.extend(1000u32.to_ne_bytes());
+                        args.extend(self.seat_id.to_ne_bytes());
+                        self.send(
+                            self.idle_manager_id,
+                            if self.idle_version >= 2 { 2 } else { 1 },
+                            &args,
+                        )?;
+                        self.idle_sync = self.allocate();
+                        self.send(1, 0, &self.idle_sync.to_ne_bytes())?;
+                        self.idle_bound = true;
+                    }
+                }
                 if interface == b"hyprland_lock_notifier_v1\0" && !self.bound {
                     let mut payload = name.to_ne_bytes().to_vec();
                     payload.extend((length as u32).to_ne_bytes());
@@ -93,19 +176,38 @@ impl Observer {
                         payload.push(0)
                     }
                     payload.extend(1u32.to_ne_bytes());
-                    payload.extend(4u32.to_ne_bytes());
+                    let manager = self.allocate();
+                    payload.extend(manager.to_ne_bytes());
                     self.send(2, 0, &payload)?;
-                    self.send(4, 1, &5u32.to_ne_bytes())?;
-                    self.send(1, 0, &6u32.to_ne_bytes())?;
+                    self.lock_id = self.allocate();
+                    self.send(manager, 1, &self.lock_id.to_ne_bytes())?;
+                    self.lock_sync = self.allocate();
+                    self.send(1, 0, &self.lock_sync.to_ne_bytes())?;
                     self.bound = true;
                 }
-            } else if id == 5 && opcode <= 1 {
+            } else if id == self.idle_id && opcode <= 1 && self.idle_bound {
+                self.idle_since = if opcode == 0 {
+                    Some(Instant::now() - Duration::from_secs(1))
+                } else {
+                    None
+                };
+            } else if id == self.idle_sync && opcode == 0 && self.idle_bound {
+                self.idle_ready = true;
+            } else if id == self.lock_id && opcode <= 1 && self.bound {
                 self.state = if opcode == 0 { "locked" } else { "unlocked" };
-            } else if id == 6 && opcode == 0 && self.state == "unknown" && self.bound {
+            } else if id == self.lock_sync && opcode == 0 && self.state == "unknown" && self.bound {
                 self.state = "unlocked";
             }
         }
         Ok(())
+    }
+    /// Unknown idle state must not advertise this machine as an active sync target.
+    pub fn idle_seconds(&self) -> u64 {
+        if !self.idle_ready {
+            120
+        } else {
+            self.idle_since.map(|t| t.elapsed().as_secs()).unwrap_or(0)
+        }
     }
     pub fn poll(&mut self) {
         if self.socket.is_none() && Instant::now() >= self.retry && self.connect().is_err() {
@@ -131,6 +233,29 @@ impl Observer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn event(id: u32, opcode: u32) -> Vec<u8> {
+        let mut bytes = id.to_ne_bytes().to_vec();
+        bytes.extend(((8u32 << 16) | opcode).to_ne_bytes());
+        bytes
+    }
+    #[test]
+    fn idle_requires_subscription_and_resets_on_disconnect() {
+        let mut o = Observer::new();
+        assert_eq!(o.idle_seconds(), 120);
+        o.feed(&event(10, 0)).unwrap();
+        assert_eq!(o.idle_seconds(), 120);
+        o.idle_bound = true;
+        o.idle_id = 9;
+        o.idle_sync = 10;
+        o.feed(&event(9, 0)).unwrap();
+        assert_eq!(o.idle_seconds(), 120);
+        o.feed(&event(10, 0)).unwrap();
+        assert!(o.idle_seconds() >= 1);
+        o.feed(&event(9, 1)).unwrap();
+        assert_eq!(o.idle_seconds(), 0);
+        o.close();
+        assert_eq!(o.idle_seconds(), 120);
+    }
     #[test]
     fn malformed_fails() {
         let mut o = Observer::new();
