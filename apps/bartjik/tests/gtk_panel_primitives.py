@@ -14,7 +14,8 @@ import sys
 APP = Path(__file__).resolve().parents[1]
 TRANSITION = '--transition' in sys.argv
 CODEX = '--codex' in sys.argv
-STEM = 'codex' if CODEX else 'panel'
+NETWORK = '--network' in sys.argv
+STEM = 'network' if NETWORK else 'codex' if CODEX else 'panel'
 
 
 def hypr(*args):
@@ -25,8 +26,8 @@ result = hypr('eval', f'_G.{rule}=hl.window_rule({{name="{rule}",workspace="7 si
 assert 'error' not in result.lower(), result
 try:
     env = {**os.environ, 'BARTJIK_PANEL_ARTIFACT': f'/tmp/bartjik-{STEM}-primitives.png', 'BARTJIK_HOME': str(APP / 'dist'), 'GTK_A11Y': 'none', 'PKG_CONFIG_PATH': str(APP / '../../packages/tjik-gtk/target/native/lib/pkgconfig')}
-    if CODEX:
-        env['BARTJIK_CARD_FIXTURE'] = 'codex'
+    if CODEX or NETWORK:
+        env['BARTJIK_CARD_FIXTURE'] = STEM
     process = subprocess.Popen(['cargo', 'test', '--release', '--locked', '--features', 'gtk-ui', '--bin', 'bartjik-gtk', ('panel_reveal_render' if TRANSITION else 'panel_primitives_render'), '--', '--ignored', '--nocapture'], cwd=APP, env=env)
     placed = False
     while process.poll() is None:
@@ -46,13 +47,16 @@ try:
         root = Path(directory)
         components = root / 'components'
         components.mkdir()
-        for name in ['PanelHeader', 'PanelHandle', 'PanelButton', 'PanelToolTip', 'StatusDetails', 'BatteryDetails', 'CodexDetails']:
+        for name in ['PanelHeader', 'PanelHandle', 'PanelButton', 'PanelToolTip', 'StatusDetails', 'BatteryDetails', 'CodexDetails', 'NetworkDetails', 'NetworkConnection', 'NetworkTraffic', 'NetworkAddresses']:
             shutil.copy2(APP / 'qml' / (name + '.qml'), components)
         shutil.copy2(APP / 'qml/CodexTimeline.js', components)
         (components / 'icons').mkdir()
         shutil.copy2(APP / 'qml/icons/codex.svg', components / 'icons')
-        source = (APP / 'tests' / ('CodexCard.qml' if CODEX else 'PanelPrimitives.qml')).read_text().replace('../qml', 'components')
-        source = source.replace('FIXTURE_ROW', (APP / 'tests/fixtures/codex-card.json').read_text())
+        source = (APP / 'tests' / ('NetworkCard.qml' if NETWORK else 'CodexCard.qml' if CODEX else 'PanelPrimitives.qml')).read_text().replace('../qml', 'components')
+        source = source.replace('FIXTURE_ROW', (APP / ('tests/fixtures/network-card.json' if NETWORK else 'tests/fixtures/codex-card.json')).read_text())
+        if NETWORK:
+            (components / 'icons/proicons').mkdir(parents=True)
+            shutil.copy2(APP / 'qml/icons/proicons/wi-fi.svg', components / 'icons/proicons')
         (root / 'shell.qml').write_text(source)
         artifact = Path(f'/tmp/bartjik-{STEM}-reference.png')
         artifact.unlink(missing_ok=True)

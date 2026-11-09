@@ -620,6 +620,7 @@ pub struct Ui {
     pointer: pointer::Pointer,
     deck: RefCell<panels::Deck>,
     panel_surface: RefCell<Option<panel_view::Surface>>,
+    network_card: Rc<crate::network_card::Card>,
     local_pointer: Cell<Option<(f64, f64)>>,
     local_updated: RefCell<Instant>,
     fixture_pointer: Cell<Option<(f64, f64)>>,
@@ -655,6 +656,14 @@ impl Ui {
                 .ok()
                 .filter(|v| !v.is_empty()),
             can_select,
+            network_card: crate::network_card::Card::new(
+                if demo || runtime.is_none() {
+                    Arc::new(crate::network::Fake::demo())
+                } else {
+                    crate::network::selected()
+                },
+                sender.clone(),
+            ),
             runtime,
             sender,
             backend: RefCell::new(Value::Null),
@@ -1084,7 +1093,7 @@ impl Ui {
     }
     fn panel_status(&self) -> Value {
         let deck = self.deck.borrow();
-        json!({"active":deck.active.as_ref().map(|t|&t.key),"pinned":deck.pinned,"pending":deck.pending_key(),"surface":self.panel_surface.borrow().as_ref().map(|p|p.status()),"targets":self.panel_targets().iter().map(|t|json!({"key":t.key,"bar":t.bar,"module":t.module,"item":t.item,"output":t.output,"side":t.side,"bounds":t.bounds,"source":t.source,"screen":t.screen,"enabled":t.enabled,"delay":t.options["delay"]})).collect::<Vec<_>>()})
+        json!({"network":self.network_card.diagnostics(),"active":deck.active.as_ref().map(|t|&t.key),"pinned":deck.pinned,"pending":deck.pending_key(),"surface":self.panel_surface.borrow().as_ref().map(|p|p.status()),"targets":self.panel_targets().iter().map(|t|json!({"key":t.key,"bar":t.bar,"module":t.module,"item":t.item,"output":t.output,"side":t.side,"bounds":t.bounds,"source":t.source,"screen":t.screen,"enabled":t.enabled,"delay":t.options["delay"]})).collect::<Vec<_>>()})
     }
     fn update_panels(&self) {
         // Mirror comparison is presentation-only; it never opens native panels.
@@ -1161,7 +1170,13 @@ impl Ui {
             .get_or_insert_with(|| {
                 panel_view::Surface::new(&self.app, &monitor, &target.output, self.sender.clone())
             })
-            .show(&target, pinned, || panel_view::status_content(&target));
+            .show(&target, pinned, || {
+                if target.provider == "network" {
+                    self.network_card.content()
+                } else {
+                    panel_view::status_content(&target)
+                }
+            });
     }
     fn tracking_needed(&self) -> bool {
         self.bars.borrow().values().any(|b| {
@@ -1419,7 +1434,10 @@ impl Ui {
                 self.configure_edges();
             }
             Event::PanelCommand(command) => {
-                if command == "pin" {
+                if command == "resize" {
+                    self.sync_panel();
+                    return;
+                } else if command == "pin" {
                     let mut deck = self.deck.borrow_mut();
                     deck.pinned = !deck.pinned;
                 } else {

@@ -1,0 +1,73 @@
+{
+  "enabled": true,
+  "defaultDns": [
+    "192.0.2.1"
+  ],
+  "devices": [
+    {
+      "interface": "wlan-demo",
+      "kind": "wifi",
+      "state": "connected",
+      "connection": "Demo Wi-Fi",
+      "addresses": {
+        "ip": [
+          "192.0.2.20/24"
+        ],
+        "gateway": "192.0.2.1",
+        "dhcp": "192.0.2.1",
+        "dns": [
+          "192.0.2.1"
+        ]
+      }
+    },
+    {
+      "interface": "eth-demo",
+      "kind": "ethernet",
+      "state": "disconnected",
+      "connection": "",
+      "addresses": {}
+    }
+  ],
+  "networks": [
+    {
+      "ssid": "Demo Wi-Fi",
+      "bssid": "02:00:00:00:00:01",
+      "interface": "wlan-demo",
+      "signal": 94,
+      "security": "WPA2",
+      "active": true
+    },
+    {
+      "ssid": "Guest Wi-Fi",
+      "bssid": "02:00:00:00:00:02",
+      "interface": "wlan-demo",
+      "signal": 82,
+      "security": "WPA2",
+      "active": false
+    },
+    {
+      "ssid": "Open network",
+      "bssid": "02:00:00:00:00:03",
+      "interface": "wlan-demo",
+      "signal": 70,
+      "security": "",
+      "active": false
+    },
+    {
+      "ssid": "Studio",
+      "bssid": "02:00:00:00:00:04",
+      "interface": "wlan-demo",
+      "signal": 58,
+      "security": "WPA2",
+      "active": false
+    },
+    {
+      "ssid": "Another network",
+      "bssid": "02:00:00:00:00:05",
+      "interface": "wlan-demo",
+      "signal": 46,
+      "security": "WPA2",
+      "active": false
+    }
+  ]
+}

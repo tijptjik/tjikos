@@ -35,6 +35,11 @@ mod icons;
 mod input;
 mod layout;
 mod motion;
+#[allow(dead_code, unused_imports)]
+#[path = "../network.rs"]
+mod network;
+mod network_card;
+mod network_controller;
 mod panel_reveal;
 mod panel_view;
 mod panels;

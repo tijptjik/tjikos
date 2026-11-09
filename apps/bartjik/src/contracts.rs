@@ -12,7 +12,7 @@ fn frozen_reference_contracts() {
         let actual = match s(&case["op"]) {
             "crypto_items" => json!(providers::crypto_items(&a[0], &a[1]).unwrap()),
             "untrusted" => json!(providers::untrusted(a[0].clone()).unwrap()),
-            "nm_fields" => json!(providers::fields(s(&a[0]))),
+            "nm_fields" => json!(network::fields(s(&a[0]))),
             "battery_row" => battery::row(num(&a[0]), truth(&a[1])),
             "battery_panel" => battery::panel_data(&a[0], &a[1], &a[2]),
             "relays" => connectivity::parse_relays(s(&a[0])).unwrap(),

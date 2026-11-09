@@ -81,23 +81,6 @@ pub fn untrusted(mut payload: Value) -> Result<Vec<Value>> {
     }
     Ok(rows)
 }
-pub fn fields(line: &str) -> Vec<String> {
-    let (mut values, mut v, mut escaped) = (vec![], String::new(), false);
-    for c in line.chars() {
-        if escaped {
-            v.push(c);
-            escaped = false;
-        } else if c == '\\' {
-            escaped = true;
-        } else if c == ':' {
-            values.push(std::mem::take(&mut v));
-        } else {
-            v.push(c)
-        }
-    }
-    values.push(v);
-    values
-}
 pub async fn audio_state() -> Result<(Value, Value)> {
     let sinks = jc(&["pactl", "-f", "json", "list", "sinks"]).await?;
     let default = cmd(&["pactl", "get-default-sink"]).await?;
@@ -272,74 +255,42 @@ pub async fn poll(m: &Value) -> Result<Vec<Value>> {
             );
         }
         "network" => {
-            let raw = cmd(&[
-                "nmcli",
-                "-t",
-                "-f",
-                "DEVICE,TYPE,STATE,CONNECTION",
-                "device",
-                "status",
-            ])
-            .await?;
-            let rows: Vec<_> = raw
-                .lines()
-                .map(fields)
-                .filter(|r| {
-                    r.len() == 4
-                        && (!truth(&m["interface"]) || r[0] == s(&m["interface"]))
-                        && ["wifi", "ethernet"].contains(&r[1].as_str())
-                })
-                .collect();
-            let r = rows
+            let snapshot = crate::network::selected().snapshot().await?;
+            let devices: Vec<_> = snapshot
+                .devices
                 .iter()
-                .find(|r| r[2].starts_with("connected"))
-                .or(rows.first())
+                .filter(|d| !truth(&m["interface"]) || d.interface == s(&m["interface"]))
+                .collect();
+            let device = devices
+                .iter()
+                .find(|d| d.connected())
+                .or(devices.first())
                 .context("No matching network interface")?;
-            let connected = r[2].starts_with("connected");
-            let mut ssid = r[3].clone();
-            let mut signal = String::new();
-            if connected && r[1] == "wifi" {
-                if let Ok(wifi) = cmd(&[
-                    "nmcli",
-                    "-t",
-                    "-f",
-                    "ACTIVE,SSID,SIGNAL",
-                    "device",
-                    "wifi",
-                    "list",
-                    "ifname",
-                    &r[0],
-                    "--rescan",
-                    "no",
-                ])
-                .await
-                {
-                    if let Some(a) = wifi
-                        .lines()
-                        .map(fields)
-                        .find(|r| r.len() == 3 && r[0] == "yes")
-                    {
-                        ssid = a[1].clone();
-                        signal = format!(" · {}%", a[2]);
-                    }
-                }
-            }
+            let connected = device.connected();
+            let wifi = device.kind == crate::network::Kind::Wifi;
+            let ap = snapshot
+                .networks
+                .iter()
+                .find(|n| n.active && n.interface == device.interface);
+            let name = ap.map(|n| n.ssid.as_str()).unwrap_or(&device.connection);
+            let signal = ap.map(|n| format!(" · {}%", n.signal)).unwrap_or_default();
             item(
                 "connection",
-                Some(if r[1] == "wifi" && connected {
-                    &ssid
-                } else if connected {
-                    &r[0]
-                } else {
+                Some(if !connected {
                     "Offline"
+                } else if wifi {
+                    name
+                } else {
+                    &device.interface
                 }),
-                Some(if r[1] == "wifi" { "wifi" } else { "lan" }),
+                Some(if wifi { "wifi" } else { "lan" }),
                 "symbol",
                 json!({"disconnected":!connected}),
-                &format!("{} · {}\n{ssid}{signal}", r[0], r[2]),
+                &format!("{} · {}\n{name}{signal}", device.interface, device.state),
                 json!({"leftClick":"network.panel"}),
             )
         }
+
         "mullvad" => {
             let data = jc(&["mullvad", "status", "--json"]).await?;
             let state = s(&data["state"]);

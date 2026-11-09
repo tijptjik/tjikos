@@ -103,6 +103,22 @@ fn stylesheet(style: &Value) -> String {
 .panel-card {{background:{background};color:{text};border:1px solid {border};border-radius:12px;padding:15px;font-family:"{font}";font-size:13px;}}
 .panel-card.panel-reveal-content {{background:transparent;border-color:transparent;}}
 .panel-card .panel-symbol {{font-family:"Material Symbols Rounded";}}
+.panel-card .network-label {{font-size:13px;}}
+.panel-card .network-title {{font-size:14px;font-weight:600;}}
+.panel-card .network-muted {{font-size:11px;color:{muted};}}
+.panel-card .network-address-name {{font-size:13px;color:{muted};min-height:16px;}}
+.panel-card .network-symbol {{font-size:20px;}}
+.panel-card .network-accent-symbol {{color:{accent};}}
+.panel-card .network-connection {{padding:12px;background:{surface};border-radius:10px;}}
+.panel-card .network-connection separator {{background:alpha({border},0.45);}}
+.panel-card .network-form {{padding:12px;background:{surface};border-radius:8px;}}
+.panel-card .network-selected {{color:{accent};font-size:13px;}}
+.panel-card button.network-row {{padding:12px;min-height:0px;border:0;border-radius:8px;background:transparent;box-shadow:none;color:{text};}}
+.panel-card button.network-row:hover {{background:{surface};}}
+.panel-card button.network-row:focus-visible {{outline:1px solid {accent};outline-offset:-1px;}}
+.panel-card button.panel-control.network-accent {{color:{accent};}}
+.panel-card passwordentry {{padding:10px;background:{background};color:{text};border:1px solid {border};border-radius:8px;font-size:12px;}}
+.panel-card passwordentry:focus-within {{border-color:{accent};}}
 .panel-card .codex-caption {{font-family:sans-serif;font-size:11px;color:{muted};}}
 .panel-card .codex-muted {{font-family:sans-serif;font-size:11px;color:{muted};}}
 .panel-card .codex-account {{font-size:15px;font-weight:600;}}
@@ -759,6 +775,9 @@ mod render_tests {
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 2,
         );
         let codex = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("codex");
+        let network = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("network");
+        let fake_network = std::sync::Arc::new(crate::network::Fake::demo());
+        let mut network_card = None;
         if codex {
             let (send, _receive) = async_channel::bounded(8);
             let module = json!({"provider":"codex","panel":{"hover":true},"comparisonItems":[{"id":"quota","type":"text","text":{"value":"23%"},"tooltip":"raw account table"}]});
@@ -776,8 +795,20 @@ mod render_tests {
             );
         }
         let header = card_header(
-            if codex { "Codex" } else { "World clock" },
-            if codex { "codex" } else { "datetime" },
+            if network {
+                "Networking"
+            } else if codex {
+                "Codex"
+            } else {
+                "World clock"
+            },
+            if network {
+                "network"
+            } else if codex {
+                "codex"
+            } else {
+                "datetime"
+            },
         );
         let card = card_frame(&header);
         let first;
@@ -787,6 +818,13 @@ mod render_tests {
             let content = crate::codex_card::content_at(&row, &style, 1000000., false);
             first = content.body.clone();
             card.append(&content.body);
+        } else if network {
+            let (send, _receive) = async_channel::bounded(32);
+            let view = crate::network_card::Card::new(fake_network.clone(), send);
+            let content = view.content();
+            first = content.body.clone();
+            card.append(&content.body);
+            network_card = Some(view);
         } else {
             let rows = gtk::Box::new(gtk::Orientation::Vertical, 6);
             let clock = clock_row("Hong Kong", "18:42", "Monday, 9 November");
@@ -812,34 +850,40 @@ mod render_tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        if let Some(view) = &network_card {
+            crate::network_card::wide_values_fixture(view);
+            card.allocate(420, window.height(), -1, None);
+            crate::network_card::assert_controls_fit(view);
+        }
         let bounds = first.compute_bounds(&window).unwrap();
         let card_bounds = card.compute_bounds(&window).unwrap();
         assert_eq!(card_bounds.width(), if codex { 440. } else { 420. });
-        if !codex {
+        if !codex && !network {
             assert_eq!(first.height(), 56);
         }
         assert_eq!(header.height(), 32);
         assert_eq!(bounds.x(), 16.);
         assert_eq!(bounds.y(), 72.);
-        assert_eq!(
-            card_bounds.height(),
-            if codex {
-                529.
-            } else {
-                (88 + 3 * 56 + 2 * 6) as f32
-            }
-        );
+        if !network {
+            assert_eq!(
+                card_bounds.height(),
+                if codex {
+                    529.
+                } else {
+                    (88 + 3 * 56 + 2 * 6) as f32
+                }
+            );
+        }
         let snap = gtk::Snapshot::new();
-        gtk::WidgetPaintable::new(Some(&window)).snapshot(
-            &snap,
-            window.width() as f64,
-            window.height() as f64,
-        );
+        window.snapshot_child(&card, &snap);
         let node = snap.to_node().expect("rendered card");
         let texture = window.renderer().unwrap().render_texture(&node, None);
         texture
             .save_to_png(std::env::var("BARTJIK_PANEL_ARTIFACT").unwrap())
             .unwrap();
+        if let Some(card) = network_card {
+            crate::network_card::exercise_fixture(&card, &fake_network);
+        }
         window.close();
     }
 }
