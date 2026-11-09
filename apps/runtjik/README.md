@@ -11,25 +11,26 @@ surfaces and Rose Punk accents match Bartjik and Notjik.
 
 `runtjik --gtk` opens the GTK4 implementation; `show`, `close`, `quit`, and `status`
 control that instance. `runtjik --gtk --demo` uses synthetic fixtures in its own
-instance. GTK is the default; `runtjik --quickshell` selects the legacy frontend while migration parity is reviewed.
+instance. GTK is the default; `runtjik --quickshell` selects the legacy frontend while
+migration parity is reviewed.
 
-GTK now provides the themed grid/list launcher, window picker, paging, command
-history, rich dictionary cards, statistics, capture menus/galleries and a native
-countdown. Enter switches to an existing application; Shift+Enter launches a new
-instance; Ctrl+Enter closes the selection. Escape leaves command views or hides
-ordinary app search. The layer supports monitor placement, pinning, outside-click
-dismissal, dragging by the command symbol and resizing by the bottom grip.
+GTK now provides the themed grid/list launcher, window picker, paging, command history,
+rich dictionary cards, statistics, capture menus/galleries and a native countdown. Enter
+switches to an existing application; Shift+Enter launches a new instance; Ctrl+Enter
+closes the selection. Escape leaves command views or hides ordinary app search. The
+layer supports monitor placement, pinning, outside-click dismissal, dragging by the
+command symbol and resizing by the bottom grip.
 
 The shared Tasktjik view provides task/reading/project/template collections,
 revision-checked editing, completion, group changes, drag ordering, snooze,
-verification, workflow editing and templates, image attachments and viewing.
-Ctrl+N opens an editor and Ctrl+Enter saves it. Backend operations run off the GTK
-thread. Unchanged task snapshots and launcher results preserve existing widgets.
+verification, workflow editing and templates, image attachments and viewing. Ctrl+N
+opens an editor and Ctrl+Enter saves it. Backend operations run off the GTK thread.
+Unchanged task snapshots and launcher results preserve existing widgets.
 
-Reusable crates live in `packages/tjik-gtk` (theme, result widgets and surfaces)
-and `packages/tasktjik-gtk` (task presentation and editor). Neither duplicates the
-backend's persistence, recurrence or workflow rules. Physical CJK composition,
-mixed-DPI transfer and full visual/interaction parity still require verification.
+Reusable crates live in `packages/tjik-gtk` (theme, result widgets and surfaces) and
+`packages/tasktjik-gtk` (task presentation and editor). Neither duplicates the backend's
+persistence, recurrence or workflow rules. Physical CJK composition, mixed-DPI transfer
+and full visual/interaction parity still require verification.
 
 The GTK executable uses the existing warm Rust backend over its versioned JSON protocol.
 This is a transitional boundary: the backend icon resolver links GTK3, which cannot
@@ -896,40 +897,46 @@ canonical HTTPS URL when using a redirect alias.
 ### Compare the frontends before switching
 
 `runtjik compare` opens GTK on the left and Quickshell on the right, silently on
-workspace 7. Both use synthetic data with the same private configuration and
-history disabled. Your normal launcher and default frontend remain unchanged.
-Use `runtjik compare status` to inspect them and `runtjik compare close` to close
-the comparison. Switch to workspace 7 yourself when ready to review.
+workspace 7. Both use synthetic data with the same private configuration and history
+disabled. Your normal launcher and default frontend remain unchanged. Use
+`runtjik compare status` to inspect them and `runtjik compare close` to close the
+comparison. Switch to workspace 7 yourself when ready to review.
 
 See [GTK migration](docs/gtk-migration.md) for input-method, scale and gesture
 verification, animation behavior and the remaining physical-device review boundary.
 
 To keep the launcher visible when clicking another window, enter
-`/config ui.close_on_outside_click false` and confirm it. This persistent setting
-works in both frontends. Outside clicks still release keyboard focus; click the
-search field to resume typing. Set it to `true` to restore dismissal. Escape,
-explicit close/toggle, and action-specific dismissal continue to work normally.
+`/config ui.close_on_outside_click false` and confirm it. This persistent setting works
+in both frontends. Outside clicks still release keyboard focus; click the search field
+to resume typing. Set it to `true` to restore dismissal. Escape, explicit close/toggle,
+and action-specific dismissal continue to work normally.
 
 ### Desktop adapters
 
-The Rust core and GTK frontend share [the desktop adapter boundary](docs/desktop-adapter.md). Use `runtjik desktop-status` for capabilities and `TJIK_COMPOSITOR=hyprland|fake` for explicit selection before opening the launcher. Legacy Quickshell remains available.
+The Rust core and GTK frontend share
+[the desktop adapter boundary](docs/desktop-adapter.md). Use `runtjik desktop-status`
+for capabilities and `TJIK_COMPOSITOR=hyprland|fake` for explicit selection before
+opening the launcher. Legacy Quickshell remains available.
 
-Desktop events now update visible window counts and pickers. Runtjik automatically reconnects on the same runtime/Wayland display and restores launcher state after a compositor restart; hidden launchers remain hidden. See the [event and recovery contract](docs/desktop-adapter.md) for boundaries and checks.
+Desktop events now update visible window counts and pickers. Runtjik automatically
+reconnects on the same runtime/Wayland display and restores launcher state after a
+compositor restart; hidden launchers remain hidden. See the
+[event and recovery contract](docs/desktop-adapter.md) for boundaries and checks.
 
-Command-Q uses `runtjik close-active`: a visible GTK applet consumes the shortcut
-when it has keyboard focus or contains the pointer, including when pinned.
-Otherwise it closes the active desktop window. Control errors stop the action
-without closing another window.
+Command-Q uses `runtjik close-active`: a visible GTK applet consumes the shortcut when
+it has keyboard focus or contains the pointer, including when pinned. Otherwise it
+closes the active desktop window. Control errors stop the action without closing another
+window.
 
-After a unique command opens automatically, matching letters from the rest of
-its name are consumed while typing continues. A 500 ms pause, a different
-character, or an edit ends this guard and lets argument input continue normally.
+After a unique command opens automatically, matching letters from the rest of its name
+are consumed while typing continues. A 500 ms pause, a different character, or an edit
+ends this guard and lets argument input continue normally.
 
 The empty definition/synonym view shows up to 100 recent successful word lookups.
-Existing definition/synonym command history is imported once, behind newer lookups.
-Tab and Shift-Tab select a word; Enter or a click looks it up in the current mode.
-Successful source responses are reused across restarts, keyed by the word, mode,
-sources and word settings. The private `words.sqlite3` in Runtjik’s XDG state
-directory retains at most 256 source responses / 32 MiB; old responses are evicted
-first. Failed requests are not cached. Disabling `history.enabled` hides history
-and uses only an in-memory cache. Demo fixtures never persist word data.
+Existing definition/synonym command history is imported once, behind newer lookups. Tab
+and Shift-Tab select a word; Enter or a click looks it up in the current mode.
+Successful source responses are reused across restarts, keyed by the word, mode, sources
+and word settings. The private `words.sqlite3` in Runtjik’s XDG state directory retains
+at most 256 source responses / 32 MiB; old responses are evicted first. Failed requests
+are not cached. Disabling `history.enabled` hides history and uses only an in-memory
+cache. Demo fixtures never persist word data.
