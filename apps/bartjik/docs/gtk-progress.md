@@ -569,3 +569,13 @@ handoffs and snapshot release. Midpoint artifact:
 because inactive workspaces need not receive compositor frames; it does not move the
 host pointer or switch focus/workspaces. Existing placement/hover policy is unchanged.
 Install/rollback receipt: `/tmp/bartjik-gtk-transition-install.json`.
+
+### Pointer-following flicker correction
+
+Card opacity now has a separate clock from shell geometry. Previously each pointer
+movement retargeted placement and restarted the shared clock, briefly restoring the
+outgoing card. Only a new card identity starts a content fade; position/size retargets
+cannot rewind it. The reveal widget also enforces monotonic fade progress within a
+handoff. Regression coverage repeatedly resets geometry during one content transition
+and injects a late low-progress frame into the rendered fixture. Both must preserve
+forward content progress and release the old snapshot after completion.

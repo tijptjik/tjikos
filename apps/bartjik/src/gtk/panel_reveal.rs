@@ -164,11 +164,19 @@ impl Reveal {
         if self.imp().extent.replace(size) != size {
             self.queue_resize();
         }
-        self.imp().progress.set(progress.clamp(0., 1.));
+        // Only freeze() starts a new handoff. Geometry retargets and delayed frame
+        // callbacks cannot increase the visibility of an outgoing card.
+        self.imp()
+            .progress
+            .set(progress.clamp(0., 1.).max(self.imp().progress.get()));
         if progress >= 1. {
             self.imp().outgoing.borrow_mut().take();
         }
         self.queue_draw();
+    }
+    #[cfg(test)]
+    pub fn fade_progress(&self) -> f64 {
+        self.imp().progress.get()
     }
     pub fn layout_size(&self) -> (i32, i32) {
         self.imp().destination.get()

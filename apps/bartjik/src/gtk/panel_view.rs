@@ -275,6 +275,7 @@ pub struct Surface {
     screen: Rc<Cell<Rect>>,
     from: Rc<Cell<Rect>>,
     since: Rc<RefCell<Instant>>,
+    fade_since: Rc<RefCell<Instant>>,
     ticking: Rc<Cell<bool>>,
 }
 impl Drop for Surface {
@@ -392,6 +393,7 @@ impl Surface {
             screen: Rc::new(Cell::new(zero)),
             from: Rc::new(Cell::new(zero)),
             since: Rc::new(RefCell::new(Instant::now())),
+            fade_since: Rc::new(RefCell::new(Instant::now())),
             ticking: Rc::new(Cell::new(false)),
         }
     }
@@ -408,6 +410,7 @@ impl Surface {
         let changed = self.last != data;
         let switching = self.last["key"] != data["key"];
         if switching {
+            *self.fade_since.borrow_mut() = Instant::now();
             self.reveal.freeze();
         }
         self.pin.set_active(pinned);
@@ -512,11 +515,15 @@ impl Surface {
             self.since.clone(),
             self.ticking.clone(),
         );
+        let fade_since = self.fade_since.clone();
         let fixed = self.fixed.clone();
         let reveal = self.reveal.clone();
         self.window.add_tick_callback(move |window, _| {
             let t = (since.borrow().elapsed().as_secs_f64() / 0.14).min(1.);
-            let f = 1. - (1. - t).powi(3);
+            // Pointer-following can retarget geometry every few milliseconds. It
+            // must never restart the outgoing/incoming content handoff.
+            let fade = (fade_since.borrow().elapsed().as_secs_f64() / 0.14).min(1.);
+            let (f, opacity) = transition_progress(t, fade);
             let a = from.get();
             let b = target.get();
             let r = Rect {
@@ -526,14 +533,36 @@ impl Surface {
                 height: a.height + (b.height - a.height) * f,
             };
             actual.set(r);
-            apply(window, &fixed, &reveal, r, screen.get(), f);
-            if t >= 1. {
+            apply(window, &fixed, &reveal, r, screen.get(), opacity);
+            if t >= 1. && fade >= 1. {
                 ticking.set(false);
                 glib::ControlFlow::Break
             } else {
                 glib::ControlFlow::Continue
             }
         });
+    }
+}
+fn transition_progress(geometry: f64, content: f64) -> (f64, f64) {
+    let ease = |t: f64| 1. - (1. - t.clamp(0., 1.)).powi(3);
+    (ease(geometry), ease(content))
+}
+#[cfg(test)]
+mod transition_tests {
+    use super::*;
+    #[test]
+    fn pointer_retargets_never_rewind_content_fade() {
+        let mut previous = 0.;
+        // Every pointer sample restarts shell movement; the card switch happened once.
+        for elapsed_ms in (0..=200).step_by(10) {
+            let (position, opacity) = transition_progress(0., elapsed_ms as f64 / 140.);
+            assert_eq!(position, 0.);
+            assert!(opacity >= previous);
+            if elapsed_ms >= 140 {
+                assert_eq!(opacity, 1.);
+            }
+            previous = opacity;
+        }
     }
 }
 fn apply(
@@ -664,6 +693,9 @@ mod render_tests {
                 "Clipped content accepted input"
             );
             if index == 2 {
+                // A geometry-only restart used to make the outgoing card reappear.
+                reveal.frame(w, h, 0.05);
+                assert_eq!(reveal.fade_progress(), progress);
                 let snap = gtk::Snapshot::new();
                 fixed.snapshot_child(&reveal, &snap);
                 window
