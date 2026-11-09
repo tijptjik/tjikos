@@ -750,3 +750,318 @@ stored notifications are not deleted. Empty app labels fall back to their deskto
 identity or “Notification”. Synthetic checks include Signal exclusion, hidden search,
 compact search sizing and actual shared renderer instantiation. Expanded-card evidence:
 `/tmp/bartjik-history-detail.png`.
+
+### Caffeine, Nightlight and Monitor Setup
+
+The GTK policy cards reuse the existing backend actions and revision guards. Caffeine
+provides timed inhibition, idle-delay drafts, lock/sleep and explicit power-off
+confirmation. Nightlight provides temperature/brightness, solar/fixed scheduling and
+location selection; scheduled enablement remains distinct from active warm filtering.
+Slider mutations coalesce for 350ms and stop when hidden.
+
+Monitor Setup stages mode, scale, rotation, position, mirror, VRR and colour changes,
+with a draggable scaled arrangement and existing desktop/game/mirror presets. Apply pins
+the panel and shows inline Keep/Revert with the backend deadline. The independent
+rollback guard remains authoritative if the frontend or output disappears. Confirmation
+is currently in this panel, not replicated across all outputs. Position fields commit
+with Enter. Physical mixed-DPI/display switching is not covered by synthetic fixtures.
+
+Validation commands (all heavy work under `dev-check`):
+
+- `bash apps/bartjik/scripts/check.sh`
+- `python3 apps/bartjik/tests/test_idle.py`
+- `python3 apps/bartjik/tests/test_nightlight.py`
+- `python3 apps/bartjik/tests/test_monitors.py`
+- GTK binary unit-test filter `monitor_geometry`, with bundled native pkg-config path.
+- `python3 apps/bartjik/tests/gtk_panel_primitives.py --caffeine`, `--nightlight`, and
+  `--monitor-layout`: rendered fixture controls and action contracts, using workspace 7
+  silently. QML references render offscreen; their unused power dialog is stubbed.
+- `bun run build --filter=@tjikos/bartjik`
+
+Artifacts:
+`/tmp/bartjik-{caffeine,nightlight,monitor-layout}-{primitives,reference}.png`. Fixtures
+exercise revision-tagged edits, stale acknowledgements, debounced sliders, power
+confirmation, last-screen protection, and display confirmation intents. They do not
+change host power, location, colour or display state. GTK-only installation preserves
+the Quickshell service and refreshes only the workspace-7 native GTK comparison.
+
+Results: static/assets checks, 12 idle tests, 5 nightlight tests, 9 monitor tests,
+geometry unit test and all three rendered control fixtures passed. The final build
+passed; GTK emits a nonfatal slider highlight minimum-width warning in the synthetic
+Nightlight fixture. GTK-only installation verified 169 files and preserved legacy
+files/service identity. Receipt: `/tmp/bartjik-gtk-policy-panels-install.json`; rollback
+files: `/tmp/bartjik-before-policy-panels-5esw45uz`. The refreshed native preview
+reports backend ready, workspace scope `7`, no additional reservation and no error; its
+running executable matches the build (SHA-256
+`ca3fc894c272cbf749e2f6a7c729a02f75b3072b9429143d5d19d99c75a9a4ce`).
+
+### Policy panel corrections
+
+Policy dropdown rows use equal 200px control widths and concise duration labels.
+Successful acknowledgements clear feedback instead of adding a persistent Saved or
+second confirmation message; errors and the actionable Keep/Revert prompt remain.
+
+Lock and Sleep use a backend locker-service adapter reading the active Hypridle policy's
+`lock_cmd`. This invokes the configured locker even when keep-awake has stopped
+Hypridle. Startup is acknowledged as a request, not proof of a locked session. No real
+lock or suspend is used in validation: the fixture replaces the command and checks
+startup failure and locking with the idle daemon stopped.
+
+Display recovery resolves the installed executable path after atomic replacement, rather
+than passing Linux's ` (deleted)` suffix to systemd. The supported replacement path also
+remains usable for guard restarts after the requesting process exits. A synthetic
+regression replaces a running helper's executable before applying a fake layout, then
+verifies confirmation and timeout rollback. Recovery startup failures still prevent
+changes and now include the underlying launch error. Existing processes must be reopened
+to use this fix.
+
+### Remove footer status and guard mirror-arrival workspace restoration
+
+Policy panels no longer append feedback or state captions at the bottom, including
+Applying, Saved, unsaved/current-layout labels and backend errors. Pending controls
+still disable and the dedicated Keep/Revert confirmation remains actionable.
+
+The reported Lua errors originated in Dotjik's scrolling-width arrival hook. It now
+captures workspace selectors before borrowing focus, ignores expired handles, and
+restores only selectors still present in the live workspace roster. The authoritative
+Dotjik source and its Lua fixtures were updated. A one-file Tjikup apply recorded a
+rollback receipt under `/tmp/bartjik-scrolling-fix/state`; live activation replaced only
+the refresh function, retaining existing rules and subscriptions. Output layout,
+workspace selection and active-window identity were verified unchanged.
+
+Bartjik static/assets checks, release build, Caffeine/Monitor rendered fixtures and 10
+isolated monitor tests passed. Dotjik's full validation rendered Fi/Li/Si and ran 404
+tests: the scrolling tests passed, but three unrelated desktop-shortcut assertions still
+expected old `code:9` bindings. A direct diagnostic rerun without the validation
+script's runner environment additionally produced installer/shortcut harness errors; it
+is not the canonical validation result. Physical mirror toggling was not performed.
+
+### Crypto, workspace and music panels
+
+The left-side panels now use the shared hover, fixed-layout transition and drag-to-pin
+surfaces. Crypto shows quote deltas, an on-demand 24-hour chart and retry/empty states
+through the existing core history cache. Music uses native MPRIS metadata/capabilities,
+local or core-cached artwork, previous/play-pause/next, middle-click toggle and the
+existing lyrics lookup. Paused players remain inspectable. Artwork uses a fixed viewing
+area; position-only provider updates do not reset the lyrics scroll view.
+
+The workspace overview uses adapter snapshots, logical geometry and opaque window IDs
+for activation and close, including windows outside the visible output bounds in the
+window list. Hidden/unmapped windows are omitted. It is explicitly a geometry overview:
+the current adapter has no per-window capture transport, so live thumbnails are not
+implemented. Lyrics text is available, but synchronized highlighting/auto-follow is also
+outstanding. These are migration gaps, not full parity claims.
+
+Requests are token-scoped, bounded by the core queue and a 30-second UI deadline; hiding
+or switching items invalidates late responses. No hidden polling loop is added. Core
+service/device policies and compositor IPC stay outside the widgets. Outgoing card
+snapshots are frozen before a different left-side item mutates the shared body.
+
+Synthetic rendered checks:
+`dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py --crypto`, `--playerctl`,
+and `--workspaces`. They check playback intent routing, lyrics toggling, fake
+non-Hyprland window IDs, activation/close, stale chart rejection and hidden-response
+invalidation. Artifacts: `/tmp/bartjik-{crypto,playerctl,workspaces}-primitives.png`. No
+real playback, window activation or close is performed by these fixtures. Static/assets
+checks and the supported build/install flow are also required before refreshing the
+workspace-7 preview.
+
+Validation results: all three left-side rendered/action fixtures passed on workspace 7;
+static/assets checks and the release build passed. Installation receipt:
+`/tmp/bartjik-gtk-left-panels-install.json`. The supported GTK-only installer verifies
+binary/resource hashes and preserves the running legacy bar; only the native workspace-7
+preview is refreshed. Physical mixed-DPI and live-thumbnail checks remain outstanding.
+
+### Left-panel fidelity, live thumbnails, and timed lyrics (2026-11-10)
+
+This supersedes the earlier left-panel capture/lyrics gaps above. Crypto headers use
+provider-supplied coin artwork (including the original BTC/SOL/AR assets), and the
+initial chart keeps its geometry without presenting Retry while a request is loading.
+Music uses the original headerless 420-pixel card, cropped artwork, 64-pixel control
+strip, and lyrics/previous/play-pause/next/shuffle glyph controls. Detached Close is an
+overlay; attached cards have no Close button or tooltips.
+
+Workspace filtering resolves a connector name to the normalized output ID before
+comparing window membership. Fixtures now deliberately use different IDs and connector
+names. The headerless spatial preview shows application icons, with offscreen/hidden
+mapped windows and windows beyond the preview limit in the overflow icon strip.
+Activation and close retain opaque adapter IDs. Application icons resolve desktop-entry
+IDs and StartupWMClass before falling back to the icon theme.
+
+`tjik-desktop` has an optional `capture` feature and bounded `WindowActions::capture`
+contract returning RGBA buffers. Hyprland binds the selected Wayland endpoint,
+negotiates its toplevel-export/shm globals, captures one window, and revalidates the
+target. The transport has a 700ms deadline, a 128MiB shm limit, and returns at most
+640×360 pixels. There is no host-endpoint fallback and no image written to disk. GTK
+uses a dedicated worker, single-slot queues, generation-scoped IDs, and retained
+textures; capture and clock timers stop when the panel unmaps. Other adapters return
+explicit Unsupported.
+
+Timed lyric lines follow an owner- and track-validated MPRIS position read once per
+second, with monotonic interpolation and highlighting at 100ms intervals while lyrics
+are shown. Manual scrolling suspends follow for four seconds. Plain lyrics remain a
+fallback when timed data is unavailable. All mutations retain the existing core MPRIS
+capability checks; fixtures never change the user's real playback.
+
+Validation uses the adapter tests plus the three workspace-7 panel fixtures and normal
+Bartjik build/static checks. The workspace fixture additionally captures only its own
+synthetic window through the live compositor, verifies a nonblank bounded frame, and
+rejects a stale ID. This is actual protocol evidence, separate from the synthetic
+thumbnail artwork in the rendered layout fixture. Physical mixed-DPI and a broad range
+of real player/window implementations remain manual acceptance checks.
+
+Commands/results for this slice:
+
+- `dev-check cargo test --manifest-path packages/tjik-desktop/Cargo.toml --features capture`:
+  14 tests passed, including explicit-endpoint isolation and capture timeout.
+- `dev-check bun run build --filter=@tjikos/bartjik`: release build passed.
+- `dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py --crypto`,
+  `--crypto --empty`, `--playerctl`, and `--workspaces`: rendered/interactions passed;
+  real fixture capture and stale-target rejection passed.
+- `dev-check bun run check --filter=@tjikos/bartjik`: static/assets checks passed.
+- Rendered evidence: `/tmp/bartjik-crypto-primitives.png`,
+  `/tmp/bartjik-crypto-loading-primitives.png`, `/tmp/bartjik-playerctl-primitives.png`,
+  `/tmp/bartjik-playerctl-lyrics-primitives.png`, and
+  `/tmp/bartjik-workspaces-primitives.png`.
+
+The GTK-only installer receipt remains `/tmp/bartjik-gtk-left-panels-install.json`,
+including resource hashes and rollback location. Refresh only the native workspace-7
+preview through `gtk_compare.py`; leave the legacy service as default. Next acceptance
+work: real-player lyric/seek checks and physical mixed-DPI thumbnail/layout review.
+
+Follow-up: the user requested square album art. Music now uses a 418×418 artwork area
+inside the 420-pixel card, with the existing 64-pixel controls strip below (484 pixels
+total including borders). Lyrics keep the same area when toggled, avoiding a resize.
+
+Workspace layout fidelity follow-up: derive width from the selected output aspect ratio
+and preview height, matching the original 10-pixel desktop inset rather than a fixed
+preview width with letterboxing. The panel remains headerless. Detached Close uses the
+original 32×28 glyph region and concave frame joins; only the glyph takes the accent
+hover colour. Left/right overflow strips use the original curved bottom insets and
+24-pixel application controls (middle-click closes). Captured windows have no added
+border or persistent application badge. A clipped, unmeasured window layer prevents
+oversized/offscreen windows from expanding the desktop viewport.
+
+Validation: supported release build and `gtk_panel_primitives.py --workspaces` on
+workspace 7, including rendered custom Close, overflow activation/middle-click close,
+stale-target rejection, and real capture of the synthetic fixture window.
+
+Workspace quality/overflow correction: captures now retain up to 1920×1080 pixels and
+average source-pixel buckets instead of nearest-neighbor decimation at 640×360. Tests
+cover thin-stroke averaging, padded strides and vertical inversion. GTK now uses the
+original eight-logical-pixel overflow threshold: read-only live geometry confirmed
+scrolling windows with two pixels still onscreen were incorrectly treated as visible.
+The fixture reproduces that exact case. Custom workspace Close suppresses the generic
+focus outline and highlights only its glyph, including keyboard focus.
+
+Further workspace fidelity: overflow-notch sizing now uses explicit 24-pixel button and
+4-pixel gap metrics. Measuring unparented buttons had used GTK's default theme padding
+rather than the eventual panel CSS, shifting icons within the notch. Overflow buttons
+now have isolated padding rules and centered content. Workspace Close no longer inherits
+generic control classes, and its border, background image, shadow and outline are
+cleared in every interaction state.
+
+Thumbnail captures retain native pixels up to 3840×2160 and use an explicit trilinear,
+mipmapped paintable for final scaling, instead of pre-blurring ordinary desktop windows
+and then scaling them again. Hidden panels release cached textures as well as stopping
+capture. Larger captures remain subject to the existing 128MiB shm limit.
+
+Music interaction/loading follow-up: chart loading is blank; lyrics loading uses a
+centered muted lyrics glyph. Music controls no longer inherit policy-button styles: they
+use the original 42×40 transport and 32×32 side controls, neutral rounded hover fills,
+no outlines, and vertically centered allocation within the 64-pixel strip.
+
+Fixed a real dispatch gap: explicit panel actions were sent through mouse-binding
+resolution with no event, resolving to a successful no-op. The new `mediaAction`
+operation accepts only toggle/previous/next/shuffle for GTK player modules and retains
+native-owner and capability validation. Private-bus tests exercise each panel action
+through the core and reject stale owners; real user playback is not mutated by tests.
+
+Removed application-icon placeholders from pending window captures. Only the dedicated
+overflow strip contains application icons, so switching workspaces no longer shows stray
+fallback icons across the preview.
+
+Workspace inset/overflow follow-up: the detached Close backdrop now paints continuously
+through the top and right frame gutters rather than meeting them at a separate inset
+edge. Overflow controls restore the original rounded 6% hover / 12% pressed tint and
+show the window title in a tooltip. These tooltips are scoped to overflow applications;
+other panel controls remain without tooltips. The workspace fixture checks title text
+and renders the hovered icon with the joined Close background.
+
+Overflow window-title tooltips now use a top-anchored, non-grabbing GTK popover with the
+original 650ms hover delay. Leaving the icon or hiding its panel cancels the delay and
+removes the popup, keeping titles above the overflow strip instead of over the bar.
+
+Workspace thumbnail sharpness: capture requests now carry the allocated picture size in
+physical display pixels (including fractional surface scale). The capture worker
+integrates exact source-pixel coverage at that size, then GTK uses linear sampling
+without blending coarser mip levels. Positive area weights preserve thin strokes without
+overshoot; premultiplied filtering avoids transparent-edge color fringes. The bounded
+capture queue and hidden-panel teardown are unchanged. This adds CPU work on the capture
+worker while reducing uploaded texture sizes; no sharpening pass runs. Synthetic tests
+cover fractional footprints, constant colors, transparent pixels and padded strides. The
+workspace fixture writes identical-source old/new comparisons (top: old; bottom: new) to
+`/tmp/bartjik-thumbnail-{1,1.5,2}x.png`. The three focused resampling tests and
+workspace render/interaction fixture passed. Inspected all three comparison images: 1x
+and 2x are visibly crisper without halos; 1.5x (an exact 2:1 source reduction) is
+effectively unchanged. The synthetic 1920x900 worker resample plus texture construction
+took approximately 8–18ms; these are fixture timings, not a full live-preview
+performance benchmark.
+
+Follow-up: verified the running preview used the new resampler (installed/running hash
+matched). The viewport and window tiles still used fractional logical origins. Round
+those fixed-container positions to GTK's logical layout grid to avoid another bilinear
+blend at scale 1, as on the current outputs. Fractional output scales can still require
+sampling; this is not a claim that every scale yields one-to-one texture placement.
+
+Detached workspace lifecycle: dragging binds a panel to the adapter session generation
+and workspace ID. Removing the workspace-scoped preview bar no longer destroys its
+pinned panel. Other workspaces hide the content and clear keyboard/pointer ownership
+while retaining the mapped shell, content and position. Returning restores the same
+panel without an entrance transition. Explicit close and compositor invalidation still
+release it. Notjik uses the same content-only hiding approach for its detached cards,
+preventing layer remapping from replaying Hyprland's fade-in animation.
+
+Detached visibility follow-up: a live off-workspace panel reported hidden content but
+still had a mapped layer. Workspace concealment now also sets the window opacity to zero
+and queues a draw, matching bar concealment, rather than depending solely on child
+visibility to clear the last compositor buffer. Returning restores opacity to one
+without remapping. Status exposes opacity and the captured workspace binding.
+
+Detached-window correction (supersedes the content/opacity concealment attempts):
+Bartjik now transfers the existing panel widget to an ordinary GTK xdg-toplevel after
+drag release. A focused compositor-adapter operation prepares an exact-title rule before
+mapping, validating session/workspace/output identity and setting floating,
+workspace-silent, no initial focus, size and position. The rule is released after the
+handoff. The old fullscreen layer is unmapped. Subsequent moves, workspace membership
+and workspace transitions belong to the compositor, not manual visibility polling.
+Unsupported adapters report an error rather than silently mapping on another workspace.
+Escape, explicit close and native body dragging remain wired; interactive controls keep
+their gestures. Off-workspace workspace captures and lyric polling are suspended.
+
+Sharpness: the final attached-panel translation is rounded to logical pixels; the old
+fractional dragged offsets (observed in live status) resampled the whole thumbnail
+again. Detached content now starts at its native window origin. No extra sharpening
+filter was added. Overflow tooltips explicitly use the original 12px theme font, 8px
+corners, theme background/border and effective 8px/10px padding, overriding GTK's
+additional popover padding. Artifact: `/tmp/bartjik-workspace-tooltip.png`.
+
+The `detached_toplevel_render` test prepares workspace 7 before mapping in the current
+session, checks compositor-reported workspace, floating state, drop coordinates, no
+focus, original layer unmapping and retained window identity. It also renders/measures
+the compact tooltip. No nested compositor or active workspace switch is used.
+
+Independent detached panels: completed native handoffs move into a separate window
+registry and release the active hover deck immediately. Detached provider updates and
+workspace capture visibility are maintained independently. Close/Escape actions carry
+the originating window identity, so they cannot dismiss another open panel. A provider
+already detached is excluded from hover candidates; clicking its bar control activates
+its existing window. This preserves one live widget/provider instance (including the
+combined VPN view) rather than reparenting it out of an existing detached window.
+
+The handoff retains a rendered face at the original layer position while reparenting the
+live widget. The source layer is removed after the native window's first paint; a
+bounded fallback handles frame throttling on hidden workspaces. The snapshot is
+released, and any old layer animation callback stops after reparenting. The native
+fixture tests a rendered synthetic source/destination on workspace 7, snapshot retention
+and cleanup, hover-slot release, opening another panel, and scoped close behavior.
