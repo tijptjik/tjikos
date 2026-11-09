@@ -7,7 +7,7 @@ import tempfile
 from rust_parity import APP, Backend, fixture
 
 contract = json.loads((APP / 'src/contract.json').read_text())
-commands = ['/config', '/bindings', '/shortcuts', '/stats', '/run', '/gui', '?',
+commands = ['/expand', '/config', '/bindings', '/shortcuts', '/stats', '/run', '/gui', '?',
             '/timer', '/file', '/dir', '/emoji', '/note', '/monitor', '/bw']
 for provider in contract['providers']:
     if provider['commands']:

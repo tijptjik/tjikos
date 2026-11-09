@@ -307,6 +307,18 @@ the Bitwarden desktop URI when available, then opens the matching web-vault item
 
 ### Text expansion
 
+`/expand` edits Espanso's text expansion dictionary: **New** stays first, followed by
+triggers in alphabetical order. Filter with `/expand {text}` to search both triggers and
+expansions. Enter opens the selected entry; Ctrl+Enter deletes it. The inline editor
+provides Trigger, multiline Expansion, Save and Cancel; Escape cancels. Edits preserve
+other match fields (including dynamic variables) and refuse stale writes. Espanso
+watches the files and reloads changes automatically.
+
+The editor reads `~/.config/espanso/match` (honoring `XDG_CONFIG_HOME`), or
+`RUNTJIK_EXPANSIONS_DIR`. It requires Python 3 and PyYAML. New matches are written to
+individual `runtjik-*.yml` files. Entries with a single `trigger` and text `replace` are
+supported; flow-style and aliased YAML must be edited with a YAML editor.
+
 Espanso can provide system-wide text expansion. The sample match file in
 [`examples/espanso/match/runtjik.yml`](examples/espanso/match/runtjik.yml) uses `;` as its
 trigger prefix and defines `;gca` for the atomic-commit request. Install it under

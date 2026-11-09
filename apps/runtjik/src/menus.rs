@@ -35,6 +35,7 @@ pub fn commands(settings: &Value) -> Vec<Command> {
             "Jump to familiar directories with zoxide",
             "runtjik-dir",
         ),
+        ("/expand", "Edit text expansions", "insert-text"),
         ("/emoji", "Search and copy emoji", "runtjik-emoji"),
         ("/note", "Create and browse scratch notes", "runtjik-note"),
         (

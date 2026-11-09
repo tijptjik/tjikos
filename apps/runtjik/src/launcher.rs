@@ -320,6 +320,16 @@ impl Launcher {
             value["header"] = json!({"title":"EMOJI","actions":[]});
             return Ok(value);
         }
+        if command == "/expand" {
+            let rows = match crate::expansions::query(q, self.demo) {
+                Ok(rows) => rows,
+                Err(error) => return Ok(self.provider_error("Expand", display, error)),
+            };
+            let mut value = self.provider_payload(rows, display, offset, limit, false, false);
+            value["header"] =
+                json!({"title":"EXPANSIONS · Enter to edit · Ctrl+Enter to delete","actions":[]});
+            return Ok(value);
+        }
         if command == "/note" {
             let rows = match self.notes.query(q, self.demo) {
                 Ok(rows) => rows,
@@ -597,6 +607,42 @@ impl Launcher {
     fn activate(&mut self, req: Value) -> Result<Value> {
         let id = s(&req["id"]);
         let mode = req["mode"].as_str().unwrap_or("launch");
+        if id.starts_with("Expand:") {
+            let entry = self
+                .current
+                .get(id)
+                .context("Expansion is no longer selected")?
+                .clone();
+            anyhow::ensure!(
+                mode != "save-expansion" || req["original"] == entry.data["original"],
+                "Expansion changed; cancel and reopen the editor"
+            );
+            let original = if mode == "save-expansion" {
+                req["original"].clone()
+            } else {
+                entry.data["original"].clone()
+            };
+            if mode == "close" || mode == "save-expansion" {
+                if id == "Expand:new" && mode == "close" {
+                    return Ok(json!({"kind":"message","message":"Select an expansion to delete"}));
+                }
+                if self.demo {
+                    return Ok(
+                        json!({"kind":"message","message":"Demo mode does not change expansions"}),
+                    );
+                }
+                crate::expansions::request(
+                    json!({"action":if mode == "close" {"delete"} else {"save"},"original":original,"trigger":req["trigger"],"expansion":req["expansion"]}),
+                )?;
+                let query = s(&req["query"]);
+                return self.open_query(if query.starts_with("/expand") {
+                    query
+                } else {
+                    "/expand"
+                });
+            }
+            return Ok(json!({"kind":"expansion-editor","id":id,"original":original}));
+        }
         if mode == "set-root" {
             let raw = s(&req["path"]);
             let path = if raw.starts_with("file:") {
@@ -724,7 +770,7 @@ impl Launcher {
                 v["message"] = json!(format!("Saved {key} in runtjik.conf"));
                 return Ok(v);
             }
-            if ["/voice", "/stats", "/run", "/gui", "/timer"].contains(&id) {
+            if ["/expand", "/voice", "/stats", "/run", "/gui", "/timer"].contains(&id) {
                 let query = if id == "/stats" {
                     id.to_owned()
                 } else {

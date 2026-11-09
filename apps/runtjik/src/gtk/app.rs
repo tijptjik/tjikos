@@ -38,6 +38,7 @@ struct Ui {
     word_key: RefCell<String>,
     hidden_sources: Rc<RefCell<std::collections::HashSet<String>>>,
     message: gtk::Label,
+    expansion_error: RefCell<Option<gtk::Label>>,
     startup: gtk::Picture,
     effects: gtk::Overlay,
     composing: Cell<bool>,
@@ -82,6 +83,94 @@ struct Ui {
     app: gtk::Application,
 }
 impl Ui {
+    fn expansion_editor(self: &Rc<Self>, value: &Value) {
+        if let Some(old) = self.stack.child_by_name("expansion-editor") {
+            self.stack.remove(&old);
+        }
+        let pane = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        for set in [
+            gtk::Widget::set_margin_top,
+            gtk::Widget::set_margin_bottom,
+            gtk::Widget::set_margin_start,
+            gtk::Widget::set_margin_end,
+        ] {
+            set(pane.upcast_ref(), 16);
+        }
+        let heading = gtk::Label::new(Some(if value["original"].is_null() {
+            "New expansion"
+        } else {
+            "Edit expansion"
+        }));
+        heading.set_xalign(0.0);
+        heading.add_css_class("title-2");
+        pane.append(&heading);
+        let trigger_label = gtk::Label::new(Some("Trigger"));
+        trigger_label.set_xalign(0.0);
+        pane.append(&trigger_label);
+        let trigger = gtk::Entry::builder()
+            .placeholder_text("Trigger (e.g. ;hello)")
+            .text(s(&value["original"], "trigger"))
+            .build();
+        pane.append(&trigger);
+        let expansion_label = gtk::Label::new(Some("Expansion"));
+        expansion_label.set_xalign(0.0);
+        pane.append(&expansion_label);
+        let expansion = gtk::TextView::new();
+        expansion.set_wrap_mode(gtk::WrapMode::WordChar);
+        expansion
+            .buffer()
+            .set_text(s(&value["original"], "expansion"));
+        let scroll = gtk::ScrolledWindow::builder()
+            .vexpand(true)
+            .min_content_height(160)
+            .child(&expansion)
+            .build();
+        pane.append(&scroll);
+        let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let save = gtk::Button::with_label("Save");
+        save.add_css_class("suggested-action");
+        let cancel = gtk::Button::with_label("Cancel");
+        buttons.append(&save);
+        buttons.append(&cancel);
+        pane.remove(&heading);
+        heading.set_hexpand(true);
+        let header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        header.append(&heading);
+        header.append(&buttons);
+        pane.prepend(&header);
+        let error = gtk::Label::new(None);
+        error.set_wrap(true);
+        error.set_xalign(0.0);
+        error.add_css_class("error");
+        error.set_visible(false);
+        pane.insert_child_after(&error, Some(&header));
+        *self.expansion_error.borrow_mut() = Some(error);
+        let weak = Rc::downgrade(self);
+        let original = value["original"].clone();
+        let id = value["id"].clone();
+        let trigger_value = trigger.clone();
+        save.connect_clicked(move |_| {
+            if let Some(ui) = weak.upgrade() {
+                if ui.busy.get() { return; }
+                let buffer = expansion.buffer();
+                ui.next_generation();
+                ui.send(json!({"op":"activate","id":id,"mode":"save-expansion","original":original,"trigger":trigger_value.text().as_str(),"expansion":buffer.text(&buffer.start_iter(), &buffer.end_iter(), false).as_str(),"query":ui.query.borrow().clone()}));
+            }
+        });
+        let weak = Rc::downgrade(self);
+        cancel.connect_clicked(move |_| {
+            if let Some(ui) = weak.upgrade() {
+                let query = ui.query.borrow().clone();
+                ui.lookup(&query);
+            }
+        });
+        self.stack.add_named(&pane, Some("expansion-editor"));
+        self.stack.set_visible_child_name("expansion-editor");
+        self.topbar.set_visible(false);
+        self.provider_header.set_visible(false);
+        trigger.grab_focus();
+    }
+
     fn choose_folder(self: &Rc<Self>, mode: &str) {
         if self.demo {
             self.message("Demo mode does not change folder settings");
@@ -227,9 +316,13 @@ impl Ui {
         } else {
             vec![]
         };
-        json!({"lastActivation":self.last_activation.borrow().as_str(),"selectedBounds":selected_bounds,"desktop_sequence":self.desktop_sequence.get(),"pinAngle":self.mark.angle(),"captureUi":if self.demo {views::inspect(&self.word_header,&self.results,&self.window)}else{Value::Null},"resultGeometry":result_geometry,"wordUi": if self.demo { views::inspect(&self.word_header, &self.rich, &self.window) } else { Value::Null }, "scrollY":scroll_y,"rowPitch":row_pitch,"input":self.search.text().as_str(),"composing":self.composing.get(),"startup":self.startup.is_visible(),"renderer":"gtk4","surface":if self.layer{"layer"}else{"window"},"running":true,"pid":std::process::id(),"ready":self.ready.get(),"visible":self.window.is_visible(),"focused":self.window.is_active(),"hovered":self.pointer.contains_pointer(),"busy":self.busy.get(),"demo":self.demo,"query":self.query.borrow().as_str(),"resultQuery":self.display_query.borrow().as_str(),"total":self.total.get(),"indexed":self.indexed.get(),"view":self.view.borrow().as_str(),"columns":self.columns.get(),"pinned":self.pinned.get(),"app_state":self.tasks.state(),"rows":self.rows.borrow().clone(),"selected":self.selection.selected(),"backend_error":self.error.borrow().as_str(),"message":self.message.text().as_str()})
+        json!({"lastActivation":self.last_activation.borrow().as_str(),"selectedBounds":selected_bounds,"desktop_sequence":self.desktop_sequence.get(),"pinAngle":self.mark.angle(),"captureUi":if self.demo {views::inspect(&self.word_header,&self.results,&self.window)}else{Value::Null},"resultGeometry":result_geometry,"wordUi": if self.demo { views::inspect(&self.word_header, &self.rich, &self.window) } else { Value::Null }, "scrollY":scroll_y,"rowPitch":row_pitch,"input":self.search.text().as_str(),"composing":self.composing.get(),"startup":self.startup.is_visible(),"renderer":"gtk4","content_view":self.stack.visible_child_name().map(|s|s.to_string()),"surface":if self.layer{"layer"}else{"window"},"running":true,"pid":std::process::id(),"ready":self.ready.get(),"visible":self.window.is_visible(),"focused":self.window.is_active(),"hovered":self.pointer.contains_pointer(),"busy":self.busy.get(),"demo":self.demo,"query":self.query.borrow().as_str(),"resultQuery":self.display_query.borrow().as_str(),"total":self.total.get(),"indexed":self.indexed.get(),"view":self.view.borrow().as_str(),"columns":self.columns.get(),"pinned":self.pinned.get(),"app_state":self.tasks.state(),"rows":self.rows.borrow().clone(),"selected":self.selection.selected(),"backend_error":self.error.borrow().as_str(),"message":self.message.text().as_str()})
     }
     fn message(&self, text: &str) {
+        if let Some(label) = self.expansion_error.borrow().as_ref() {
+            label.set_text(text);
+            label.set_visible(!text.is_empty());
+        }
         self.message.set_text(text);
         self.message.set_visible(!text.is_empty());
     }
@@ -488,7 +581,7 @@ impl Ui {
         };
         let prepare = app && parent.is_empty() && mode == "switch";
         let request = if parent.is_empty() {
-            json!({"op":"activate","id":row["id"],"mode":mode,"prepare":prepare})
+            json!({"op":"activate","id":row["id"],"mode":mode,"prepare":prepare,"query":self.query.borrow().clone()})
         } else {
             json!({"op":"activate","id":parent,"address":row["id"],"mode":if mode=="close"{"close"}else{"switch"}})
         };
@@ -644,10 +737,14 @@ impl Ui {
     fn layout(self: &Rc<Self>, value: &Value) {
         self.word_header.set_visible(false);
         self.update_provider_header(value);
+        let was_editor = self.stack.visible_child_name().as_deref() == Some("expansion-editor");
         let app_mode = s(value, "app_mode") == "Todo";
         self.topbar.set_visible(!app_mode);
         self.stack
             .set_visible_child_name(if app_mode { "tasks" } else { "launcher" });
+        if was_editor {
+            self.search.grab_focus();
+        }
         if app_mode {
             self.tasks.update(&value["app_state"]);
             return;
@@ -871,6 +968,7 @@ impl Ui {
             self.set_text(query);
         }
         match s(&value, "kind") {
+            "expansion-editor" => self.expansion_editor(&value),
             "results" | "windows" => {
                 self.ready.set(true);
                 self.configure(&value["config"], value["apply_config"] == true);
@@ -1264,6 +1362,7 @@ fn build(
         word_key: RefCell::new(String::new()),
         hidden_sources: Rc::new(RefCell::new(std::collections::HashSet::new())),
         message,
+        expansion_error: RefCell::new(None),
         startup,
         effects: overlay,
         composing: Cell::new(false),
@@ -1417,6 +1516,14 @@ fn build(
         if ui.composing.get() || ui.composition_commit.get() {
             return glib::Propagation::Proceed;
         }
+        if ui.stack.visible_child_name().as_deref() == Some("expansion-editor") {
+            if key == gdk::Key::Escape {
+                let query = ui.query.borrow().clone();
+                ui.lookup(&query);
+                return glib::Propagation::Stop;
+            }
+            return glib::Propagation::Proceed;
+        }
         if ui.stack.visible_child_name().as_deref() == Some("tasks") {
             return glib::Propagation::Proceed;
         }
@@ -1510,6 +1617,14 @@ fn build(
             return glib::Propagation::Proceed;
         };
         if ui.composing.get() || ui.composition_commit.get() {
+            return glib::Propagation::Proceed;
+        }
+        if ui.stack.visible_child_name().as_deref() == Some("expansion-editor") {
+            if key == gdk::Key::Escape {
+                let query = ui.query.borrow().clone();
+                ui.lookup(&query);
+                return glib::Propagation::Stop;
+            }
             return glib::Propagation::Proceed;
         }
         if ui.stack.visible_child_name().as_deref() == Some("tasks") {

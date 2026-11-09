@@ -10,6 +10,7 @@ mod content_identity;
 mod controller;
 mod discovery;
 mod emoji;
+mod expansions;
 mod file_search;
 mod icons;
 mod image_viewer;
