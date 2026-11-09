@@ -66,12 +66,17 @@ impl Showcase {
         }
     }
     pub fn tick(&mut self) {
-        let dt = self.last.elapsed().as_millis() as u64;
+        let elapsed = self.last.elapsed();
+        let dt = elapsed.as_millis() as u64;
         self.last = Instant::now();
         for state in self.states.values_mut() {
             if state.playback.playing {
-                state.playback.position_ms =
-                    (state.playback.position_ms + dt).min(state.playback.duration_ms);
+                state.playback.position_ms = playback_position(
+                    state.playback.position_ms,
+                    state.playback.duration_ms,
+                    elapsed,
+                    state.playback.rate,
+                );
                 if state.playback.position_ms == state.playback.duration_ms {
                     state.playback.playing = false;
                 }
@@ -307,4 +312,23 @@ fn stage_label(text: &str, class: &str) -> gtk::Label {
     label.set_wrap(false);
     label.set_max_width_chars(-1);
     label
+}
+
+fn playback_position(position: u64, duration: u64, elapsed: std::time::Duration, rate: f64) -> u64 {
+    let advance = (elapsed.as_secs_f64() * 1000. * rate.max(0.)).round() as u64;
+    position.saturating_add(advance).min(duration)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn simulated_playback_honours_rate_changes_and_end() {
+        let tick = std::time::Duration::from_millis(200);
+        let normal = playback_position(0, 2000, tick, 1.);
+        let fast = playback_position(normal, 2000, tick, 2.);
+        assert_eq!(normal, 200);
+        assert_eq!(fast, 600);
+        assert_eq!(playback_position(fast, 2000, tick, 0.5), 700);
+        assert_eq!(playback_position(1900, 2000, tick, 2.), 2000);
+    }
 }
