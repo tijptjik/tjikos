@@ -1,5 +1,4 @@
-//! Read-only presentation of the existing bar's items for same-session comparison.
-//! This is a renderer comparison bridge, not a replacement provider or action host.
+//! Shared bar presentation for native providers and the read-only comparison bridge.
 use crate::{
     config,
     util::{arr, num, s},
@@ -13,46 +12,41 @@ fn rows(
     orientation: gtk::Orientation,
     cache: &mut BTreeMap<String, super::motion::Visual>,
     icons: &mut BTreeMap<String, super::icons::Icon>,
-) -> gtk::Box {
+    bindings: &mut BTreeMap<String, crate::input::Binding>,
+    sender: &async_channel::Sender<crate::Event>,
+    group: &gtk::Box,
+) {
     let mut previous = std::mem::take(cache);
     let mut previous_icons = std::mem::take(icons);
     let style = config::merge(base, &module["style"]);
-    let group = gtk::Box::new(orientation, num(&style["itemGap"]) as i32);
-    let activity = &module["comparisonActivity"];
-    if module["provider"] == "icontray"
-        && (activity["screenRecording"] == true
-            || ["recording", "processing"].contains(&s(&activity["hyprvoice"])))
-    {
-        let icon = previous_icons
-            .remove("__recording")
-            .unwrap_or_else(super::icons::Icon::new);
-        detach_icon(&icon);
-        icon.update(
-            &Value::Null,
-            &style,
-            false,
-            false,
-            true,
-            activity["screenRecording"] != true && activity["hyprvoice"] == "processing",
-        );
-        let label = if activity["screenRecording"] == true {
-            "Screen recording"
-        } else if activity["hyprvoice"] == "processing" {
-            "Hyprvoice processing"
-        } else {
-            "Hyprvoice recording"
-        };
-        icon.root.set_tooltip_text(Some(label));
-        icon.root
-            .update_property(&[gtk::accessible::Property::Label(label)]);
-        group.append(&icon.root);
-        icons.insert("__recording".into(), icon);
-    }
+    group.set_spacing(num(&style["itemGap"]) as i32);
+    let mut live_rows = vec![];
+    let mut live_keys = vec![];
+    let mut prior_row: Option<gtk::Widget> = None;
     for row in arr(&module["comparisonItems"])
         .iter()
         .filter(|r| r["visible"] != false)
     {
-        let item = gtk::Box::new(orientation, num(&style["iconTextGap"]) as i32);
+        let id = s(&row["id"]);
+        let mut existing = group.first_child();
+        let mut found = None;
+        while let Some(child) = existing {
+            existing = child.next_sibling();
+            if child.widget_name() == id {
+                found = child.downcast::<gtk::Box>().ok();
+                break;
+            }
+        }
+        let item = found.unwrap_or_else(|| {
+            let b = gtk::Box::new(orientation, 0);
+            b.set_widget_name(id);
+            group.append(&b);
+            b
+        });
+        group.reorder_child_after(&item, prior_row.as_ref());
+        prior_row = Some(item.clone().upcast());
+        live_rows.push(item.clone().upcast::<gtk::Widget>());
+        item.set_spacing(num(&style["iconTextGap"]) as i32);
         item.set_tooltip_text(row["tooltip"].as_str());
         let media =
             module["provider"] == "playerctl" && row["idle"] != true && row["artist"].is_object();
@@ -61,6 +55,8 @@ fn rows(
         } else {
             vec!["icon", "text"]
         };
+        let mut live_parts = vec![];
+        let mut prior_part: Option<gtk::Widget> = None;
         for kind in kinds {
             if !media && row["type"] != kind && row["type"] != "icon_text" {
                 continue;
@@ -77,76 +73,137 @@ fn rows(
                 row,
                 if kind == "separator" { "artist" } else { kind },
             );
-            let size = if kind == "icon" {
-                num(&style["iconSize"])
+            let size = num(&style[if kind == "icon" {
+                "iconSize"
             } else {
-                num(&style["fontSize"])
-            }
-            .max(1.) as i32;
+                "fontSize"
+            }])
+            .max(1.);
             let value = s(&part["value"]);
-            let widget: gtk::Widget =
-                if kind == "icon" && ["image", "theme", "symbol"].contains(&s(&part["kind"])) {
-                    let key = s(&row["id"]).to_owned();
-                    let icon = previous_icons
-                        .remove(&key)
-                        .unwrap_or_else(super::icons::Icon::new);
-                    detach_icon(&icon);
-                    icon.update(
-                        part,
-                        &style,
-                        module["provider"] == "icontray" && row["state"]["urgent"] == true,
-                        module["comparisonTailnet"] == true,
-                        false,
-                        false,
-                    );
-                    let widget = icon.root.clone().upcast();
-                    icons.insert(key, icon);
-                    widget
-                } else {
-                    let key = serde_json::json!([row["id"], kind, value, style]).to_string();
-                    let visual = if let Some(visual) = previous.remove(&key) {
-                        if let Some(parent) = visual.parent().and_downcast::<gtk::Box>() {
-                            parent.remove(&visual);
-                        }
-                        visual
-                    } else {
-                        let visual = super::motion::Visual::new();
-                        visual.set_text(
-                            value,
-                            s(&style["font"]),
-                            size as f64,
-                            gtk::gdk::RGBA::parse(s(&style["color"]))
-                                .or_else(|_| gtk::gdk::RGBA::parse(s(&style["text"])))
-                                .unwrap_or(gtk::gdk::RGBA::WHITE),
-                            style["maxTextWidth"].as_f64().unwrap_or(10000.),
-                            if kind == "separator" {
-                                0.
-                            } else {
-                                num(&style["minItemSize"])
-                            },
-                            20.,
-                            style["marquee"] == true,
-                        );
-                        visual
-                    };
-                    cache.insert(key, visual.clone());
-                    visual.upcast()
-                };
-            widget.set_valign(gtk::Align::Center);
-            if kind == "icon" {
-                widget.set_size_request(
-                    size.max(num(&style["minItemSize"]) as i32),
-                    size.max(num(&style["minItemSize"]) as i32),
+            let key = format!("{id}/{kind}");
+            let widget: gtk::Widget = if kind == "icon"
+                && ["image", "theme", "symbol", "pixmap"].contains(&s(&part["kind"]))
+            {
+                let icon = previous_icons
+                    .remove(id)
+                    .unwrap_or_else(super::icons::Icon::new);
+                icon.update(
+                    part,
+                    &style,
+                    false,
+                    module["comparisonTailnet"] == true,
+                    false,
+                    false,
                 );
+                let w = icon.root.clone().upcast();
+                icons.insert(id.into(), icon);
+                w
+            } else {
+                let visual = previous
+                    .remove(&key)
+                    .unwrap_or_else(super::motion::Visual::new);
+                visual.set_text(
+                    value,
+                    s(&style["font"]),
+                    size,
+                    gtk::gdk::RGBA::parse(s(&style["color"]))
+                        .or_else(|_| gtk::gdk::RGBA::parse(s(&style["text"])))
+                        .unwrap_or(gtk::gdk::RGBA::WHITE),
+                    style["maxTextWidth"].as_f64().unwrap_or(10000.),
+                    if kind == "separator" {
+                        0.
+                    } else {
+                        num(&style["minItemSize"])
+                    },
+                    20.,
+                    style["marquee"] == true,
+                );
+                cache.insert(key.clone(), visual.clone());
+                visual.upcast()
+            };
+            widget.set_valign(gtk::Align::Center);
+            widget.set_opacity(if row["enabled"] == false { 0.5 } else { 1. });
+            if widget.parent().as_ref() != Some(item.upcast_ref()) {
+                if let Some(parent) = widget.parent().and_downcast::<gtk::Box>() {
+                    parent.remove(&widget);
+                }
+                item.append(&widget);
             }
-            if row["enabled"] == false {
-                widget.set_opacity(0.5);
+            item.reorder_child_after(&widget, prior_part.as_ref());
+            prior_part = Some(widget.clone());
+            live_parts.push(widget.clone());
+            if kind != "separator" {
+                bind(
+                    bindings,
+                    &key,
+                    &widget,
+                    crate::input::payload(module, row, kind),
+                    sender,
+                );
+                if let Some(binding) = bindings.get(&key) {
+                    let mut hovered = row.clone();
+                    hovered["state"]["hover"] = serde_json::json!(true);
+                    let hover_style = part_style(module, base, &hovered, kind);
+                    let normal = style.clone();
+                    if let Some(icon) = icons.get(id).filter(|_| kind == "icon").cloned() {
+                        let part = part.clone();
+                        let tailnet = module["comparisonTailnet"] == true;
+                        binding.appearance(std::rc::Rc::new(move |hover| {
+                            icon.update(
+                                &part,
+                                if hover { &hover_style } else { &normal },
+                                false,
+                                tailnet,
+                                false,
+                                false,
+                            )
+                        }));
+                    } else if let Some(visual) = cache.get(&key).cloned() {
+                        let text = value.to_owned();
+                        binding.appearance(std::rc::Rc::new(move |hover| {
+                            let style = if hover { &hover_style } else { &normal };
+                            visual.set_text(
+                                &text,
+                                s(&style["font"]),
+                                num(&style["fontSize"]).max(1.),
+                                gtk::gdk::RGBA::parse(s(&style["color"]))
+                                    .or_else(|_| gtk::gdk::RGBA::parse(s(&style["text"])))
+                                    .unwrap_or(gtk::gdk::RGBA::WHITE),
+                                style["maxTextWidth"].as_f64().unwrap_or(10000.),
+                                num(&style["minItemSize"]),
+                                20.,
+                                style["marquee"] == true,
+                            );
+                        }));
+                    }
+                }
+                widget.update_property(&[gtk::accessible::Property::Label(if kind == "icon" {
+                    row["tooltip"]
+                        .as_str()
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or(value)
+                } else {
+                    value
+                })]);
+                live_keys.push(key);
             }
-            item.append(&widget);
         }
-        group.append(&item);
+        let mut child = item.first_child();
+        while let Some(w) = child {
+            child = w.next_sibling();
+            if !live_parts.contains(&w) {
+                item.remove(&w);
+            }
+        }
     }
-    group
+    let mut child = group.first_child();
+    while let Some(w) = child {
+        child = w.next_sibling();
+        if !live_rows.contains(&w) {
+            group.remove(&w);
+        }
+    }
+    bindings.retain(|key, _| live_keys.contains(key));
 }
 
 fn part_style(module: &Value, base: &Value, row: &Value, kind: &str) -> Value {
@@ -177,9 +234,16 @@ pub struct Module {
     text_cache: BTreeMap<String, super::motion::Visual>,
     icons: BTreeMap<String, super::icons::Icon>,
     tray: Option<super::tray_motion::Tray>,
+    bindings: BTreeMap<String, crate::input::Binding>,
+    sender: async_channel::Sender<crate::Event>,
 }
 impl Module {
-    pub fn new(module: &Value, base: &Value, orientation: gtk::Orientation) -> Self {
+    pub fn new(
+        module: &Value,
+        base: &Value,
+        orientation: gtk::Orientation,
+        sender: async_channel::Sender<crate::Event>,
+    ) -> Self {
         let root = gtk::Box::new(orientation, 0);
         let ring = (module["provider"] == "workspaces" && module["appearance"] == "ring")
             .then(super::motion::Visual::new);
@@ -200,6 +264,8 @@ impl Module {
             text_cache: BTreeMap::new(),
             icons: BTreeMap::new(),
             tray,
+            bindings: Default::default(),
+            sender,
         };
         result.update(module);
         result
@@ -252,6 +318,26 @@ impl Module {
                 num(&style["itemGap"]),
                 style["animateIcons"] != false,
             );
+            for (id, widget) in tray.widgets() {
+                if let Some(row) = arr(&module["comparisonItems"])
+                    .iter()
+                    .find(|r| r["id"] == id)
+                {
+                    widget.set_tooltip_text(row["tooltip"].as_str());
+                    bind(
+                        &mut self.bindings,
+                        &format!("{id}/icon"),
+                        &widget,
+                        crate::input::payload(module, row, "icon"),
+                        &self.sender,
+                    );
+                }
+            }
+            self.bindings.retain(|key, _| {
+                arr(&module["comparisonItems"])
+                    .iter()
+                    .any(|r| key == &format!("{}/icon", s(&r["id"])))
+            });
         } else if let Some(v) = &self.ring {
             let entries = arr(&module["comparisonItems"])
                 .iter()
@@ -282,17 +368,45 @@ impl Module {
                 self.orientation == gtk::Orientation::Vertical,
                 gtk::gdk::RGBA::parse(s(&style["accent"])).unwrap_or(gtk::gdk::RGBA::WHITE),
             );
-        } else {
-            while let Some(child) = self.root.first_child() {
-                self.root.remove(&child);
+            let module = module.clone();
+            let visual = v.clone();
+            let resolve: crate::input::Resolve = std::rc::Rc::new(move |x, y| {
+                let id = visual.hit(x, y);
+                let row = arr(&module["comparisonItems"])
+                    .iter()
+                    .find(|r| r["id"] == id)
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                crate::input::payload(&module, &row, "text")
+            });
+            if let Some(binding) = self.bindings.get("__workspaces") {
+                binding.update(resolve);
+            } else {
+                self.bindings.insert(
+                    "__workspaces".into(),
+                    crate::input::Binding::new(v.upcast_ref(), resolve, self.sender.clone()),
+                );
             }
-            self.root.append(&rows(
+        } else {
+            let group = self
+                .root
+                .first_child()
+                .and_downcast::<gtk::Box>()
+                .unwrap_or_else(|| {
+                    let g = gtk::Box::new(self.orientation, 0);
+                    self.root.append(&g);
+                    g
+                });
+            rows(
                 module,
                 &self.base,
                 self.orientation,
                 &mut self.text_cache,
                 &mut self.icons,
-            ));
+                &mut self.bindings,
+                &self.sender,
+                &group,
+            );
         }
     }
     pub fn resize_frame(&self) {
@@ -345,8 +459,30 @@ impl Module {
     }
 }
 
-fn detach_icon(icon: &super::icons::Icon) {
-    if let Some(parent) = icon.root.parent().and_downcast::<gtk::Box>() {
-        parent.remove(&icon.root);
+fn bind(
+    bindings: &mut BTreeMap<String, crate::input::Binding>,
+    key: &str,
+    widget: &gtk::Widget,
+    payload: Value,
+    sender: &async_channel::Sender<crate::Event>,
+) {
+    let weak = widget.downgrade();
+    let resolve: crate::input::Resolve = std::rc::Rc::new(move |_, y| {
+        if payload["context"]["part"] == "icon"
+            && payload["module"]["comparisonTailnetInput"].is_object()
+            && weak.upgrade().is_some_and(|w| y >= (w.height() - 7) as f64)
+        {
+            payload["module"]["comparisonTailnetInput"].clone()
+        } else {
+            payload.clone()
+        }
+    });
+    if let Some(binding) = bindings.get(key).filter(|b| b.same(widget)) {
+        binding.update(resolve);
+    } else {
+        bindings.insert(
+            key.into(),
+            crate::input::Binding::new(widget, resolve, sender.clone()),
+        );
     }
 }

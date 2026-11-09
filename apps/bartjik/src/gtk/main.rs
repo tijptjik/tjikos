@@ -24,14 +24,19 @@ use std::{
 use tjik_desktop::{Desktop, DesktopState, WindowId};
 use tjik_gtk::gtk::{self, gdk, glib, prelude::*};
 
+#[path = "../action_choice.rs"]
+mod action_choice;
 mod clock_card;
 mod clocks;
 mod comparison;
 mod edges;
 mod icons;
+mod input;
 mod layout;
 mod motion;
 mod pointer;
+mod runtime;
+mod tray_menu;
 mod tray_motion;
 mod ui;
 use ui::Ui;
@@ -41,6 +46,9 @@ enum Action {
     Workspace(tjik_desktop::WorkspaceTarget),
 }
 enum Event {
+    Backend(Value),
+    Activity(String, Value),
+    Input(Value),
     Quit,
     Desktop(DesktopState),
     Control(Value, std::sync::mpsc::SyncSender<Value>),
@@ -163,6 +171,12 @@ fn main() -> Result<()> {
             }
         });
     }
+    let runtime = if std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_none() {
+        Some(runtime::Runtime::start(tx.clone(), demo, true))
+    } else {
+        None
+    };
+    let input_events = tx.clone();
     let controls = tx.clone();
     std::thread::spawn(move || {
         for stream in listener.incoming() {
@@ -268,6 +282,8 @@ fn main() -> Result<()> {
             reserve,
             desktop.diagnostics().capabilities.workspace_select,
             desktop.clone(),
+            runtime.clone(),
+            input_events.clone(),
         ));
         let clock = Rc::downgrade(&ui);
         glib::timeout_add_local(Duration::from_secs(1), move || {

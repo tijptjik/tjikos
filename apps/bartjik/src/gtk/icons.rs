@@ -353,6 +353,55 @@ impl DefaultColor for str {
     }
 }
 fn artwork(part: &Value, style: &Value, size: i32) -> gtk::Widget {
+    if part["overlay"].is_array() || part["overlayName"].as_str().is_some_and(|s| !s.is_empty()) {
+        let mut base = part.clone();
+        base.as_object_mut().unwrap().remove("overlay");
+        base.as_object_mut().unwrap().remove("overlayName");
+        let container = gtk::Overlay::new();
+        container.set_child(Some(&artwork(&base, style, size)));
+        let overlay = if part["overlay"].is_array() {
+            serde_json::json!({"kind":"pixmap", "pixmap":part["overlay"]})
+        } else {
+            serde_json::json!({"kind":"theme", "value":part["overlayName"]})
+        };
+        let image = artwork(&overlay, style, (size / 2).max(1));
+        image.set_halign(gtk::Align::End);
+        image.set_valign(gtk::Align::End);
+        image.set_can_target(false);
+        container.add_overlay(&image);
+        return container.upcast();
+    }
+    if part["kind"] == "pixmap" {
+        let pix = &part["pixmap"];
+        let w = pix[0].as_i64().unwrap_or(0) as i32;
+        let h = pix[1].as_i64().unwrap_or(0) as i32;
+        if w > 0 && h > 0 && w <= 256 && h <= 256 {
+            if let Some(bytes) = pix[2]
+                .as_array()
+                .filter(|v| v.len() == w as usize * h as usize * 4)
+            {
+                let mut rgba = Vec::with_capacity(bytes.len());
+                for p in bytes.chunks_exact(4) {
+                    rgba.extend([
+                        p[1].as_u64().unwrap_or(0) as u8,
+                        p[2].as_u64().unwrap_or(0) as u8,
+                        p[3].as_u64().unwrap_or(0) as u8,
+                        p[0].as_u64().unwrap_or(0) as u8,
+                    ]);
+                }
+                let texture = gdk::MemoryTexture::new(
+                    w,
+                    h,
+                    gdk::MemoryFormat::R8g8b8a8,
+                    &glib::Bytes::from_owned(rgba),
+                    w as usize * 4,
+                );
+                let image = gtk::Image::from_paintable(Some(&texture));
+                image.set_pixel_size(size);
+                return image.upcast();
+            }
+        }
+    }
     let value = s(&part["value"]);
     let mut path = value.trim_start_matches("file://").to_owned();
     if part["kind"] == "symbol" && style["iconSet"] != "material" {

@@ -276,6 +276,20 @@ impl Visual {
             layout.set_width((viewport * pango::SCALE as f64) as i32);
             layout.set_ellipsize(pango::EllipsizeMode::End);
         }
+        {
+            let m = self.imp().model.borrow();
+            if m.entries.first().is_some_and(|e| {
+                e.text == text
+                    && e.color == color
+                    && e.layout.font_description().as_ref() == Some(&desc)
+            }) && m.viewport == viewport
+                && m.natural == natural
+                && m.marquee == marquee
+                && m.height == height
+            {
+                return;
+            }
+        }
         *self.imp().model.borrow_mut() = Model {
             entries: vec![Entry {
                 id: String::new(),
@@ -358,9 +372,22 @@ impl Visual {
             self.animate();
         }
     }
+    pub fn hit(&self, x: f64, y: f64) -> String {
+        let m = self.imp().model.borrow();
+        let at = if m.vertical { y } else { x };
+        let mut edge = 0.;
+        for e in &m.entries {
+            edge += if m.vertical { m.height } else { e.width };
+            if at <= edge {
+                return e.id.clone();
+            }
+            edge += m.gap;
+        }
+        String::new()
+    }
     pub fn status(&self) -> serde_json::Value {
         let m = self.imp().model.borrow();
-        serde_json::json!({"ring":m.ring,"position":m.current(),"target":m.target,"offset":self.imp().offset.get(),"natural":m.natural,"viewport":m.viewport,"ticking":self.imp().ticking.get()})
+        serde_json::json!({"texts":m.entries.iter().map(|e|e.text.clone()).collect::<Vec<_>>(),"ring":m.ring,"position":m.current(),"target":m.target,"offset":self.imp().offset.get(),"natural":m.natural,"viewport":m.viewport,"ticking":self.imp().ticking.get()})
     }
 }
 #[cfg(test)]

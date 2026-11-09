@@ -11,6 +11,8 @@ test -f "$source_dir/qml/IconFonts.qml"
 test -f "$source_dir/qml/fonts/MaterialSymbolsRounded.ttf"
 install_gtk() {
     install -d -m 755 "$target_dir/bin" "$target_dir/lib"
+    install -m 755 "$source_dir/bin/bartjik-gtk-core" "$target_dir/bin/.bartjik-gtk-core.pending"
+    mv -f "$target_dir/bin/.bartjik-gtk-core.pending" "$target_dir/bin/bartjik-gtk-core"
     install -m 755 "$source_dir/lib/libgtk4-layer-shell.so.0" "$target_dir/lib/.layer-shell.pending"
     mv -f "$target_dir/lib/.layer-shell.pending" "$target_dir/lib/libgtk4-layer-shell.so.0"
     install -m 644 "$source_dir/lib/gtk4-layer-shell.LICENSE" "$target_dir/lib/"

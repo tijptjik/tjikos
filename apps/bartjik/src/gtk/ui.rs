@@ -259,6 +259,7 @@ impl Bar {
         actions: &async_channel::Sender<Action>,
         _demo: bool,
         can_select: bool,
+        sender: &async_channel::Sender<Event>,
     ) {
         self.topology = Some(output.clone());
         // Focus-only push events must not replace a button during its press/release.
@@ -322,7 +323,7 @@ impl Bar {
             for id in arr(&definition["modules"]) {
                 let module = &self.definition["moduleConfigs"][s(id)];
                 if module["comparisonItems"].is_array() {
-                    let view = comparison::Module::new(module, &style, orientation);
+                    let view = comparison::Module::new(module, &style, orientation, sender.clone());
                     island.append(&view.root);
                     self.comparisons.push((s(id).into(), view));
                     continue;
@@ -586,6 +587,13 @@ pub struct Ui {
     demo: bool,
     reserve: bool,
     can_select: bool,
+    runtime: Option<crate::runtime::Runtime>,
+    sender: async_channel::Sender<Event>,
+    backend: RefCell<Value>,
+    activity: RefCell<Value>,
+    alternate: RefCell<std::collections::HashSet<String>>,
+    intents: RefCell<Vec<Value>>,
+    menu: RefCell<Option<crate::tray_menu::Menu>>,
     pointer: pointer::Pointer,
     clocks: clocks::Service,
     edge_states: RefCell<BTreeMap<String, edges::State>>,
@@ -601,6 +609,8 @@ impl Ui {
         reserve: bool,
         can_select: bool,
         desktop: Arc<dyn tjik_desktop::Desktop>,
+        runtime: Option<crate::runtime::Runtime>,
+        sender: async_channel::Sender<Event>,
     ) -> Self {
         Self {
             app,
@@ -614,6 +624,13 @@ impl Ui {
             demo,
             reserve,
             can_select,
+            runtime,
+            sender,
+            backend: RefCell::new(Value::Null),
+            activity: RefCell::new(json!({"hyprvoice":"unavailable","screenRecording":false})),
+            alternate: RefCell::new(Default::default()),
+            intents: RefCell::new(vec![]),
+            menu: RefCell::new(None),
             pointer: pointer::Pointer::new(desktop),
             clocks: clocks::Service::new(demo),
             edge_states: RefCell::new(BTreeMap::new()),
@@ -634,7 +651,7 @@ impl Ui {
         widgets.filter_map(|w|{let r=w.compute_bounds(window)?;let label=w.downcast_ref::<gtk::Button>().and_then(|b|b.label()).map(|s|s.to_string());Some(json!({"label":label,"x":r.x(),"y":r.y(),"width":r.width(),"height":r.height()}))}).collect()
     }
     fn status(&self) -> Value {
-        json!({"ok":true,"pid":std::process::id(),"demo":self.demo,"reserve":self.reserve,"autoHideError":self.pointer.latest().1,"pointerSampling":self.edge_timer.borrow().is_some(),"clockProviders":self.clocks.count(),"comparison":std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some(),"error":self.error.borrow().as_str(),"revision":self.snapshot.borrow().as_ref().map(|s|s.revision),"bars":self.bars.borrow().iter().map(|(key,b)|{
+        json!({"ok":true,"pid":std::process::id(),"nativeRuntime":self.runtime.is_some(),"backendReady":self.backend.borrow()["ready"],"intents":*self.intents.borrow(),"demo":self.demo,"reserve":self.reserve,"autoHideError":self.pointer.latest().1,"pointerSampling":self.edge_timer.borrow().is_some(),"clockProviders":self.clocks.count(),"comparison":std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some(),"error":self.error.borrow().as_str(),"revision":self.snapshot.borrow().as_ref().map(|s|s.revision),"bars":self.bars.borrow().iter().map(|(key,b)|{
             let mut children=vec![];let mut child=b.rows.first_child();while let Some(w)=child {child=w.next_sibling();if w.is::<gtk::Button>(){children.push(w);}}
             json!({"key":key,"output":b.output,"side":b.definition["side"],"visible":b.window.is_visible(),"concealed":self.edge_states.borrow().get(key).is_some_and(|s|s.concealed),"opacity":b.opacity,"inputActive":b.input_active,"geometry":b.geometry,"width":b.window.width(),"height":b.window.height(),"unsupported":b.unsupported,"panel":b.panel.is_visible(),"items":Self::inspect(children.into_iter(),&b.panel),"clocks":b.clocks.iter().map(|c|{let mut v=c.status();v["bounds"]=Self::inspect(std::iter::once(c.button.clone().upcast()),&b.window).first().cloned().unwrap_or(Value::Null);v}).collect::<Vec<_>>(),"workspaces":Self::inspect(b.workspace_buttons.iter().map(|w|w.clone().upcast()),&b.window),"motion":b.comparisons.iter().map(|(id,v)|json!({"id":id,"visible":v.root.is_visible(),"icons":v.icon_status(),"tray":v.tray_status(),"visuals":v.visuals().iter().map(|v|v.status()).collect::<Vec<_>>()})).collect::<Vec<_>>(),"islands":Self::inspect(b.islands.iter().map(|w|w.clone().upcast()),&b.window)})
         }).collect::<Vec<_>>()})
@@ -666,6 +683,9 @@ impl Ui {
             })
             .collect();
         let screens=json!(outputs.iter().map(|o|json!({"name":o.name,"width":o.logical.width,"height":o.logical.height,"scale":o.scale})).collect::<Vec<_>>());
+        if let Some(runtime) = &self.runtime {
+            runtime.screens(screens.clone());
+        }
         let definitions = match config::resolve_all(&self.configuration.borrow(), &screens) {
             Ok(v) => v,
             Err(e) => {
@@ -676,10 +696,38 @@ impl Ui {
         let mut live = vec![];
         let mut depths = BTreeMap::<(String, String), i32>::new();
         for mut definition in definitions {
-            if std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some() {
-                let rows = self.comparison.borrow();
+            {
+                let mut live_rows = vec![];
+                if self.runtime.is_some() {
+                    let backend = self.backend.borrow();
+                    let resolved = arr(&backend["bars"])
+                        .iter()
+                        .find(|b| b["key"] == definition["key"]);
+                    if let Some(modules) = definition["moduleConfigs"].as_object() {
+                        for (name, module) in modules {
+                            let items = if module["provider"] == "workspaces" {
+                                outputs.iter().find(|o|o.name==s(&definition["screen"])).map(|o|json!(layout::workspaces(snapshot,o,&o.name,module).iter().map(|r|json!({"id":r.target.name,"text":{"value":r.label},"type":"text","target":r.target,"special":r.target.name.starts_with("special:"),"state":{"active":r.active},"actions":{"leftClick":"workspace.activate","scrollUp":"workspace.previous","scrollDown":"workspace.next"}})).collect::<Vec<_>>())).unwrap_or(json!([]))
+                            } else {
+                                resolved
+                                    .map(|b| {
+                                        backend["providers"][s(&b["sources"][name])]["items"]
+                                            .clone()
+                                    })
+                                    .filter(Value::is_array)
+                                    .unwrap_or(json!([]))
+                            };
+                            live_rows.push(json!({"id":name,"bar":definition["id"],"monitor":definition["screen"],"items":items,"activity":*self.activity.borrow()}));
+                        }
+                    }
+                }
+                let rows = if self.runtime.is_some() {
+                    json!(live_rows)
+                } else {
+                    self.comparison.borrow().clone()
+                };
                 let id = s(&definition["id"]).to_owned();
                 let output = s(&definition["screen"]).to_owned();
+                let context_key = definition["key"].clone();
                 let islands = definition["islands"].clone();
                 let configured = definition["moduleConfigs"].clone();
                 if let Some(modules) = definition["moduleConfigs"].as_object_mut() {
@@ -702,6 +750,8 @@ impl Ui {
                                 })
                             })
                         };
+                        module["inputContext"] =
+                            json!({"barKey":context_key,"bar":id,"monitor":output,"module":name});
                         module["comparisonActivity"] = mirrored(name)
                             .map(|r| r["activity"].clone())
                             .unwrap_or(Value::Null);
@@ -711,8 +761,21 @@ impl Ui {
                             module["provider"] == "mullvad"
                                 && peer("tailscale")
                                     .and_then(|p| mirrored(&p))
-                                    .is_some_and(|r| r["items"][0]["connection"] == "Running")
+                                    .is_some_and(|r| r["items"][0]["connection"] == "Running"
+                                        || r["items"][0]["panel"]["connection"] == "Running")
                         );
+                        if module["provider"] == "mullvad" {
+                            if let Some(peer_name) = peer("tailscale") {
+                                let mut peer_module = configured[&peer_name].clone();
+                                peer_module["inputContext"] = json!({"barKey":context_key,"bar":id,"monitor":output,"module":peer_name});
+                                if let Some(peer_row) =
+                                    mirrored(&peer_name).and_then(|r| arr(&r["items"]).first())
+                                {
+                                    module["comparisonTailnetInput"] =
+                                        crate::input::payload(&peer_module, peer_row, "icon");
+                                }
+                            }
+                        }
                         module["comparisonItems"] = rows
                             .as_array()
                             .and_then(|rs| {
@@ -722,6 +785,16 @@ impl Ui {
                             })
                             .map(|r| r["items"].clone())
                             .unwrap_or_else(|| json!([]));
+                        if let Some(items) = module["comparisonItems"].as_array_mut() {
+                            for row in items {
+                                let key = format!("{}/{}/{}", s(&context_key), name, s(&row["id"]));
+                                if self.alternate.borrow().contains(&key)
+                                    && row["alternate"].is_string()
+                                {
+                                    row["text"]["value"] = row["alternate"].clone();
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -742,7 +815,9 @@ impl Ui {
                 if let Some(modules) = value["moduleConfigs"].as_object_mut() {
                     for module in modules.values_mut() {
                         if let Some(m) = module.as_object_mut() {
-                            m.retain(|key, _| !key.starts_with("comparison"));
+                            m.retain(|key, _| {
+                                !key.starts_with("comparison") && key != "inputContext"
+                            });
                         }
                     }
                 }
@@ -758,7 +833,14 @@ impl Ui {
                 .entry(key.clone())
                 .or_insert_with(|| Bar::new(&self.app, monitor, &definition));
             bar.definition = definition.clone();
-            bar.refresh(snapshot, output, &self.actions, self.demo, self.can_select);
+            bar.refresh(
+                snapshot,
+                output,
+                &self.actions,
+                self.demo,
+                self.can_select,
+                &self.sender,
+            );
             if !bar.resizing && bar.comparisons.iter().any(|(_, v)| v.resizing()) {
                 bar.resizing = true;
                 let weak = Rc::downgrade(self);
@@ -923,8 +1005,223 @@ impl Ui {
         }
         *self.edge_states.borrow_mut() = states;
     }
+    fn input(self: &Rc<Self>, mut context: Value) {
+        let selected = {
+            let bars = self.bars.borrow();
+            let Some(bar) = bars.get(s(&context["barKey"])) else {
+                return;
+            };
+            let module = &bar.definition["moduleConfigs"][s(&context["module"])];
+            let Some(row) = arr(&module["comparisonItems"])
+                .iter()
+                .find(|r| r["id"] == context["item"])
+            else {
+                return;
+            };
+            if row["enabled"] == false {
+                return;
+            }
+            let action = crate::action_choice::choose(
+                module,
+                row,
+                s(&context["part"]),
+                s(&context["event"]),
+            );
+            let local = &context["localAnchor"];
+            context["anchor"] = json!({"x":bar.geometry.x + local["x"].as_f64().unwrap_or(0.),"y":bar.geometry.y + local["y"].as_f64().unwrap_or(0.),"width":local["width"].as_f64().unwrap_or(bar.geometry.width),"height":local["height"].as_f64().unwrap_or(bar.geometry.height)});
+            (module.clone(), row.clone(), action)
+        };
+        let (module, row, action) = selected;
+        if action.is_null() {
+            return;
+        }
+        if action == "datetime.toggle" {
+            let key = format!(
+                "{}/{}/{}",
+                s(&context["barKey"]),
+                s(&context["module"]),
+                s(&context["item"])
+            );
+            let mut alt = self.alternate.borrow_mut();
+            if !alt.remove(&key) {
+                alt.insert(key);
+            }
+            drop(alt);
+            if let Some(snapshot) = self.snapshot.borrow().as_ref() {
+                self.render(snapshot);
+            }
+            return;
+        }
+        let menu_path = s(&row["native"]["props"]["Menu"]);
+        if (action == "tray.menu"
+            || (action == "tray.activate" && row["native"]["props"]["ItemIsMenu"] == true))
+            && menu_path.starts_with('/')
+            && menu_path != "/NO_DBUSMENU"
+            && menu_path != "/"
+        {
+            if let Some(runtime) = &self.runtime {
+                let _ = runtime.send(json!({"op":"nativeMenu","context":context,"menuId":0}));
+            }
+            return;
+        }
+        if action == "tray.activate" {
+            let app = s(&row["native"]["props"]["Id"]).to_lowercase();
+            let classes: Vec<&str> = match app.as_str() {
+                "telegramdesktop" => vec![
+                    "org.telegram.desktop",
+                    "telegramdesktop",
+                    "telegram-desktop",
+                ],
+                "zapzap" => vec!["com.rtosta.zapzap", "zapzap"],
+                "chatgpt" => vec!["chatgpt"],
+                "codex" => vec!["codex", "com.openai.codex"],
+                _ => vec![],
+            };
+            if let Some(window) = self.snapshot.borrow().as_ref().and_then(|snap| {
+                snap.windows
+                    .iter()
+                    .find(|w| {
+                        w.mapped != Some(false)
+                            && w.app_id
+                                .as_ref()
+                                .is_some_and(|a| classes.iter().any(|c| a.eq_ignore_ascii_case(c)))
+                    })
+                    .cloned()
+            }) {
+                let _ = self.actions.try_send(Action::Window(window.id));
+                return;
+            }
+        }
+        if s(&action).ends_with(".panel") {
+            *self.error.borrow_mut() = "Panel migration is outside this bar-only milestone".into();
+            return;
+        }
+        if self.runtime.is_none() {
+            *self.error.borrow_mut() =
+                "Read-only comparison; use native GTK mode for actions".into();
+            return;
+        }
+        if s(&action).starts_with("workspace.") {
+            let rows: Vec<_> = arr(&module["comparisonItems"])
+                .iter()
+                .filter(|r| r["special"] != true || module["scrollSpecial"] == true)
+                .collect();
+            let target = if action == "workspace.activate" {
+                &row
+            } else {
+                let Some(index) = rows.iter().position(|r| r["state"]["active"] == true) else {
+                    return;
+                };
+                let offset = if action == "workspace.next" {
+                    1
+                } else {
+                    rows.len() - 1
+                };
+                rows[(index + offset) % rows.len()]
+            };
+            if let Ok(target) = serde_json::from_value(target["target"].clone()) {
+                let _ = self.actions.try_send(Action::Workspace(target));
+            }
+            return;
+        }
+        if let Some(runtime) = &self.runtime {
+            if let Err(e) = runtime.send(json!({"op":"action","context":context})) {
+                *self.error.borrow_mut() = e;
+            }
+        }
+    }
     pub fn event(self: &Rc<Self>, event: Event) {
         match event {
+            Event::Input(context) => self.input(context),
+            Event::Backend(value) => {
+                if value["kind"] == "menuChanged" {
+                    if let (Some(menu), Some(runtime)) =
+                        (self.menu.borrow().as_ref(), self.runtime.as_ref())
+                    {
+                        if menu.popover.is_visible()
+                            && value["owner"] == menu.owner
+                            && value["path"] == menu.path
+                        {
+                            let _ = runtime.send(
+                                json!({"op":"nativeMenu","context":menu.context,"menuId":menu.id}),
+                            );
+                        }
+                    }
+                    return;
+                }
+                if value["kind"] == "menu" {
+                    if let Some(error) = value["error"].as_str() {
+                        *self.error.borrow_mut() = error.into();
+                        self.menu.borrow_mut().take();
+                        return;
+                    }
+                    if value["activated"] == true {
+                        self.menu.borrow_mut().take();
+                        return;
+                    }
+                    if let (Some(bar), Some(runtime)) = (
+                        self.bars.borrow().get(s(&value["context"]["barKey"])),
+                        self.runtime.as_ref(),
+                    ) {
+                        self.menu.borrow_mut().take();
+                        let menu = crate::tray_menu::Menu::new(
+                            bar.body.upcast_ref(),
+                            &value,
+                            runtime.clone(),
+                        );
+                        *self.menu.borrow_mut() = Some(menu);
+                    }
+                    return;
+                }
+                if value["kind"] == "intent" {
+                    let mut log = self.intents.borrow_mut();
+                    log.push(value);
+                    if log.len() > 64 {
+                        log.remove(0);
+                    }
+                    return;
+                }
+                if !value["ready"].is_null() {
+                    if value["config"].is_object() {
+                        *self.configuration.borrow_mut() = value["config"].clone();
+                    }
+                    if let Some(error) = value["actionError"].as_str().filter(|e| !e.is_empty()) {
+                        *self.error.borrow_mut() = error.into();
+                    }
+                    let menu_removed = self.menu.borrow().as_ref().is_some_and(|menu| {
+                        !value["providers"].as_object().is_some_and(|providers| {
+                            providers.values().any(|provider| {
+                                arr(&provider["items"]).iter().any(|row| {
+                                    row["native"]["owner"] == menu.owner
+                                        && row["native"]["props"]["Menu"] == menu.path
+                                })
+                            })
+                        })
+                    });
+                    if menu_removed {
+                        self.menu.borrow_mut().take();
+                    }
+                    *self.backend.borrow_mut() = value;
+                    if let Some(snapshot) = self.snapshot.borrow().as_ref() {
+                        self.render(snapshot);
+                    }
+                }
+            }
+            Event::Activity(kind, value) => {
+                if kind == "hyprvoice-status" {
+                    self.activity.borrow_mut()["hyprvoice"] = if value["available"] == true {
+                        value["state"].clone()
+                    } else {
+                        json!("unavailable")
+                    };
+                } else {
+                    self.activity.borrow_mut()["screenRecording"] =
+                        json!(value["available"] == true && value["recording"] == true);
+                }
+                if let Some(snapshot) = self.snapshot.borrow().as_ref() {
+                    self.render(snapshot);
+                }
+            }
             Event::Quit => {
                 self.clocks.stop();
                 self.app.quit();
@@ -954,6 +1251,9 @@ impl Ui {
                             return;
                         }
                     },
+                    "input" if self.demo => {
+                        self.input(value["context"].clone());
+                    }
                     "status" => (),
                     _ => {
                         let _ = reply.send(json!({"ok":false,"error":"Unknown action"}));

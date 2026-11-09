@@ -16,6 +16,7 @@ struct Slot {
     from: f64,
     target: f64,
     start: Instant,
+    record: bool,
 }
 impl Slot {
     fn amount(&self) -> f64 {
@@ -122,7 +123,11 @@ mod imp {
                         )
                     };
                     snapshot.push_clip(&rect);
-                    snapshot.push_opacity(slot.amount());
+                    snapshot.push_opacity(if slot.record && slot.target > 0. {
+                        1.
+                    } else {
+                        slot.amount()
+                    });
                     obj.snapshot_child(&slot.icon.root, snapshot);
                     snapshot.pop();
                     snapshot.pop();
@@ -175,6 +180,7 @@ impl Tray {
                         from: initial,
                         target: 1.,
                         start: Instant::now(),
+                        record,
                     },
                 );
                 let i = m.slots.iter().position(|v| v.id == id).unwrap();
@@ -185,6 +191,7 @@ impl Tray {
                 slot.target = 1.;
                 slot.start = Instant::now();
             }
+            slot.record = record;
             slot.icon.root.set_can_target(true);
             slot.icon
                 .update(&part, &style, urgent, false, record, pulse);
@@ -229,6 +236,16 @@ impl Tray {
                 glib::ControlFlow::Break
             }
         });
+    }
+    pub fn widgets(&self) -> Vec<(String, gtk::Widget)> {
+        self.imp()
+            .model
+            .borrow()
+            .slots
+            .iter()
+            .filter(|s| s.target > 0.)
+            .map(|s| (s.id.clone(), s.icon.root.clone().upcast()))
+            .collect()
     }
     pub fn wake(&self) {
         for slot in &self.imp().model.borrow().slots {
