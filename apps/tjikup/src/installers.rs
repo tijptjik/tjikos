@@ -34,6 +34,10 @@ struct Policy {
     #[serde(default)]
     steps: Vec<Vec<String>>,
     #[serde(default)]
+    patches: Vec<String>,
+    #[serde(default)]
+    file_capability: Option<String>,
+    #[serde(default)]
     packages: Vec<String>,
     #[serde(default)]
     privileged: bool,
@@ -307,6 +311,30 @@ fn installed_binary_matches(prefix: &Path, target: &Path) -> bool {
             .zip(fs::read_to_string(prefix.join(".installed-binary")).ok())
             .is_some_and(|(actual, recorded)| actual == recorded.trim())
 }
+fn ensure_capability(target: &Path, capability: &str) -> Result<bool> {
+    anyhow::ensure!(
+        !capability.is_empty() && !capability.chars().any(char::is_whitespace),
+        "invalid executable capability policy"
+    );
+    let expected = format!("{} {capability}", target.display());
+    let read = || -> Result<String> {
+        let output = Command::new("getcap").arg(target).output()?;
+        anyhow::ensure!(
+            output.status.success(),
+            "could not inspect executable capability"
+        );
+        Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+    };
+    if read()? == expected {
+        return Ok(false);
+    }
+    run(Command::new("sudo")
+        .args(["-n", "--", "setcap", capability])
+        .arg(target))?;
+    anyhow::ensure!(read()? == expected, "executable capability readback failed");
+    Ok(true)
+}
+
 fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
     let specs: BTreeMap<String, Policy> =
         serde_json::from_slice(&fs::read(repo.join("native/installers.json"))?)?;
@@ -361,6 +389,16 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
         flatpak.installed()?.is_some()
     } else {
         declared_links.first().is_some_and(|p| p.is_file())
+    };
+    let _patch_lock = if !metadata_only && !policy.patches.is_empty() {
+        let directory = home.join(".local/state/tjikup/installers");
+        fs::create_dir_all(&directory)?;
+        let identity = format!("{:x}", Sha256::digest(name.as_bytes()));
+        Some(crate::process::Lock::acquire(
+            &directory.join(format!("{identity}.lock")),
+        )?)
+    } else {
+        None
     };
     let operation = std::env::var("TJIKUP_OPERATION").unwrap_or_default();
     if !metadata_only
@@ -444,6 +482,28 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
         }
         return Ok(changed);
     }
+    anyhow::ensure!(
+        policy.patches.is_empty() || policy.kind == "git-build",
+        "source patches require git-build"
+    );
+    let patches: Vec<_> = policy
+        .patches
+        .iter()
+        .map(|path| {
+            let path = PathBuf::from(expand(path, &vars));
+            Ok((
+                path.clone(),
+                fs::read(&path).with_context(|| format!("read patch {}", path.display()))?,
+            ))
+        })
+        .collect::<Result<_>>()?;
+    let mut patch_hash = Sha256::new();
+    for (_, bytes) in &patches {
+        patch_hash.update((bytes.len() as u64).to_le_bytes());
+        patch_hash.update(bytes);
+    }
+    let patch_digest = format!("{:x}", patch_hash.finalize());
+    vars.insert("patch_digest", patch_digest.clone());
     let mut prefix = PathBuf::from(expand(&policy.prefix, &vars));
     let mut old_version = None;
     if let Some(link) = declared_links.first() {
@@ -484,11 +544,15 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
             if revision.len() != 40 || !revision.bytes().all(|b| b.is_ascii_hexdigit()) {
                 bail!("invalid source revision");
             }
-            marker = revision.clone();
+            marker = if patches.is_empty() {
+                revision.clone()
+            } else {
+                format!("{revision}:{patch_digest}")
+            };
             if fs::read_to_string(prefix.join(".installed"))
                 .unwrap_or_default()
                 .trim()
-                != revision
+                != marker
                 || !installed_binary_matches(&prefix, &target)
             {
                 let missing: Vec<_> = policy
@@ -529,6 +593,36 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
                 if !actual.status.success() || String::from_utf8(actual.stdout)?.trim() != revision
                 {
                     bail!("release tag changed during download");
+                }
+                // Use the bytes whose digest identifies this build, even if policy
+                // files change while cloning. Incompatibility leaves the live link alone.
+                for (index, (_, bytes)) in patches.iter().enumerate() {
+                    let patch = temp.path().join(format!("source-{index}.patch"));
+                    fs::write(&patch, bytes)?;
+                    let already_applied = Command::new("git")
+                        .arg("-C")
+                        .arg(&source)
+                        .args(["apply", "--reverse", "--check"])
+                        .arg(&patch)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()?
+                        .success();
+                    if !already_applied {
+                        run(Command::new("git")
+                            .arg("-C")
+                            .arg(&source)
+                            .args(["apply", "--check"])
+                            .arg(&patch))
+                        .context(
+                            "required source patch no longer applies; installed version preserved",
+                        )?;
+                        run(Command::new("git")
+                            .arg("-C")
+                            .arg(&source)
+                            .arg("apply")
+                            .arg(&patch))?;
+                    }
                 }
                 for step in &policy.steps {
                     if step.is_empty() {
@@ -609,6 +703,9 @@ fn install(repo: &Path, name: &str, metadata_only: bool) -> Result<bool> {
                 .arg(file)
                 .arg(prefix.join(".installed")))?;
         }
+    }
+    if let Some(capability) = &policy.file_capability {
+        changed |= ensure_capability(&prefix.join(expand(&policy.binary, &vars)), capability)?;
     }
     for (link, target) in &policy.links {
         let link = PathBuf::from(expand(link, &vars));
