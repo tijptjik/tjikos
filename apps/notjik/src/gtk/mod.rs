@@ -8,6 +8,7 @@ mod executor;
 pub mod fixtures;
 pub mod host;
 mod icons;
+mod keyboard;
 mod media;
 pub mod model;
 pub mod primitives;

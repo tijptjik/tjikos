@@ -917,6 +917,8 @@ capture and retains the draft for review after unlocking. Recording survives det
 and native window moves. The card stays visible and does not expire while it holds a
 draft. Closing the card, removing its Telegram notification or exiting Notjik discards
 the draft. The detached window fits the current card height as controls open or close.
+While recording or waiting to send, tap Right Control or Right Alt by itself to discard
+the voice reply. Using either key as part of a shortcut does not cancel it.
 
 Drafts are private Ogg/Opus files under `$XDG_RUNTIME_DIR/notjik-voice` and are removed
 after send acceptance or discard. Before sending, the bridge makes a private copy in

@@ -56,6 +56,7 @@ struct Host {
     pending: VecDeque<Value>,
     events: mpsc::Receiver<(String, CardEvent)>,
     event_tx: mpsc::Sender<(String, CardEvent)>,
+    recording_id: Rc<RefCell<Option<String>>>,
     executor: Executor,
     windows: HashMap<String, Surface>,
     detached: HashMap<String, Detached>,
@@ -93,6 +94,7 @@ impl Host {
             }
         });
         let (event_tx, events) = mpsc::channel();
+        let recording_id = Rc::new(RefCell::new(None));
         let (desktop_tx, desktop) = mpsc::sync_channel(2);
         std::thread::spawn(move || loop {
             let v = crate::util::run(
@@ -117,6 +119,7 @@ impl Host {
             pending: VecDeque::new(),
             events,
             event_tx,
+            recording_id,
             executor: Executor::new(),
             windows: HashMap::new(),
             detached: HashMap::new(),
@@ -528,6 +531,7 @@ impl Host {
                                 &self.event_tx,
                                 self.controller.clone(),
                                 &preview,
+                                self.recording_id.clone(),
                             ),
                         );
                     }
@@ -624,6 +628,7 @@ impl Host {
                         &self.event_tx,
                         self.controller.clone(),
                         &name,
+                        self.recording_id.clone(),
                     ),
                 );
             }
@@ -654,6 +659,14 @@ impl Host {
             .collect();
     }
     fn render(&mut self) {
+        *self.recording_id.borrow_mut() = self
+            .executor
+            .capture
+            .as_ref()
+            .filter(|capture| {
+                !["sending", "discarding", "sent"].contains(&capture.state.phase.as_str())
+            })
+            .map(|capture| capture.id.clone());
         let c = self.controller.borrow();
         let style = &c.config["style"];
         if self.style != *style {
@@ -902,6 +915,7 @@ fn popup(
     event_tx: &mpsc::Sender<(String, CardEvent)>,
     controller: Rc<RefCell<Controller>>,
     surface_name: &str,
+    recording_id: Rc<RefCell<Option<String>>>,
 ) -> Surface {
     let geometry = monitor.geometry();
     let window = gtk::ApplicationWindow::builder()
@@ -1061,6 +1075,32 @@ fn popup(
     target.set_propagation_phase(gtk::PropagationPhase::Target);
     target.connect_event(move |_, event| handler(event));
     window.add_controller(target);
+    let cancel_key = Rc::new(RefCell::new(super::keyboard::CancelKeyTap::default()));
+    let cancel_keys = gtk::EventControllerKey::new();
+    cancel_keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let key_state = cancel_key.clone();
+    cancel_keys.connect_key_pressed(move |_, key, _, _| {
+        key_state.borrow_mut().press(key);
+        glib::Propagation::Proceed
+    });
+    let key_state = cancel_key;
+    let recording = recording_id;
+    let tx = event_tx.clone();
+    let source = surface_name.to_string();
+    cancel_keys.connect_key_released(move |_, key, _, _| {
+        if key_state.borrow_mut().release(key) {
+            if let Some(id) = recording.borrow().clone() {
+                let _ = tx.send((
+                    source.clone(),
+                    CardEvent {
+                        id,
+                        intent: Intent::RecordDiscard,
+                    },
+                ));
+            }
+        }
+    });
+    window.add_controller(cancel_keys);
     let keys = gtk::EventControllerKey::new();
     let weak_window = window.downgrade();
     keys.connect_key_pressed(move |_, key, _, _| {
