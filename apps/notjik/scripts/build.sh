@@ -12,7 +12,7 @@ install -m 755 "${CARGO_TARGET_DIR:-target}/release/notjik-gtk" dist/bin/notjik-
 install -m755 ../../packages/notjik-sync/target/release/notjik-sync dist/bin/
 cp ../notjik-service/systemd/notjik-sync.service systemd/
 cp -uRL --reflink=auto qml dist/
-cp -uR --reflink=auto themes examples systemd dist/
+cp -uR --reflink=auto assets themes examples systemd dist/
 cp bin/notjik bin/notjikctl dist/bin/
 install -m 755 "${CARGO_TARGET_DIR:-target}/release/notjik-core" dist/bin/notjik-core
 mkdir -p dist/docs

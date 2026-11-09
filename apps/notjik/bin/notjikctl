@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
-if [[ ! -f "$root/qml/shell.qml" ]]; then
+if [[ ! -f "$root/assets/artwork.json" ]]; then
     root="${NOTJIK_HOME:-$HOME/.local/lib/notjik}"
 fi
 export NOTJIK_HOME="$root"

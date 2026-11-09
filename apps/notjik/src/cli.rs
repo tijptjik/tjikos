@@ -148,11 +148,11 @@ fn root() -> Result<PathBuf> {
     }
     let exe = std::env::current_exe()?;
     let p = exe.parent().unwrap().parent().unwrap();
-    if p.join("qml/shell.qml").is_file() {
+    if p.join("assets/artwork.json").is_file() {
         return Ok(p.into());
     }
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    if source.join("qml/shell.qml").is_file() {
+    if source.join("assets/artwork.json").is_file() {
         return Ok(source);
     }
     Ok(home().join(".local/lib/notjik"))

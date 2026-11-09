@@ -2,15 +2,15 @@
 use gtk::{cairo, gdk_pixbuf, prelude::*};
 pub fn glyph(name: &str, size: i32) -> gtk::DrawingArea {
     let svg: &[u8] = match name {
-        "read" => include_bytes!("../../qml/icons/actions/read.svg"),
-        "record" => include_bytes!("../../qml/icons/actions/record.svg"),
-        "quote" => include_bytes!("../../qml/icons/actions/quote.svg"),
-        "reply" => include_bytes!("../../qml/icons/actions/reply.svg"),
-        "open" => include_bytes!("../../qml/icons/actions/open.svg"),
-        "reset" => include_bytes!("../../qml/icons/actions/reset.svg"),
-        "send" => include_bytes!("../../qml/icons/actions/send.svg"),
-        "transcribe" => include_bytes!("../../qml/icons/actions/transcribe.svg"),
-        _ => include_bytes!("../../qml/icons/actions/play.svg"),
+        "read" => include_bytes!("../../assets/icons/actions/read.svg"),
+        "record" => include_bytes!("../../assets/icons/actions/record.svg"),
+        "quote" => include_bytes!("../../assets/icons/actions/quote.svg"),
+        "reply" => include_bytes!("../../assets/icons/actions/reply.svg"),
+        "open" => include_bytes!("../../assets/icons/actions/open.svg"),
+        "reset" => include_bytes!("../../assets/icons/actions/reset.svg"),
+        "send" => include_bytes!("../../assets/icons/actions/send.svg"),
+        "transcribe" => include_bytes!("../../assets/icons/actions/transcribe.svg"),
+        _ => include_bytes!("../../assets/icons/actions/play.svg"),
     };
     let loader = gdk_pixbuf::PixbufLoader::with_type("svg").expect("SVG loader");
     loader.set_size(size, size);

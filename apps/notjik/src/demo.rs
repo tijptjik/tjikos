@@ -47,7 +47,7 @@ pub fn names() -> Vec<String> {
 pub fn robots(root: &Path) -> Result<Vec<PathBuf>> {
     let mut result = vec![];
     let re = regex::Regex::new(r"^robot-[0-9][0-9]-.*\.png$")?;
-    for dir in [root.join("qml/icons"), root.join("qml/icons/robots")] {
+    for dir in [root.join("assets/icons"), root.join("assets/icons/robots")] {
         let mut group = fs::read_dir(dir)?
             .filter_map(|e| e.ok())
             .map(|e| e.path())

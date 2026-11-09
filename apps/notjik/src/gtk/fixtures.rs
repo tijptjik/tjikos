@@ -3,7 +3,7 @@ use super::model::Notice;
 use serde_json::json;
 use std::path::Path;
 pub fn notices(root: &Path, now: f64, media_root: Option<&Path>) -> Vec<Notice> {
-    let photo = url::Url::from_file_path(root.join("qml/icons/wifi-cover.png"))
+    let photo = url::Url::from_file_path(root.join("assets/icons/wifi-cover.png"))
         .unwrap()
         .to_string();
     let media = |file: &str| {

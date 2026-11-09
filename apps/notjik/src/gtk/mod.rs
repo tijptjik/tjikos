@@ -645,35 +645,29 @@ impl Card {
 }
 fn artwork_path(root: &Path, n: &Notice) -> PathBuf {
     // Read the shared manifest so existing notification history keeps its artwork.
-    let logic = include_str!("../../qml/Logic.js");
+    static MANIFEST: std::sync::OnceLock<serde_json::Value> = std::sync::OnceLock::new();
+    let manifest = MANIFEST.get_or_init(|| {
+        serde_json::from_str(include_str!("../../assets/artwork.json")).expect("artwork manifest")
+    });
     let array = |key: &str| -> Vec<&str> {
-        logic
-            .split(key)
-            .nth(1)
-            .unwrap_or("")
-            .split(']')
-            .next()
-            .unwrap_or("")
-            .split('"')
-            .enumerate()
-            .filter_map(|(i, s)| if i % 2 == 1 { Some(s) } else { None })
+        manifest[key]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
             .collect()
     };
     let fish = ["app", "desktopEntry"]
         .iter()
         .any(|key| ["fish", "fish.desktop"].contains(&text(&n.0[key]).to_lowercase().as_str()));
-    let files = array(if fish {
-        "var fishFiles = ["
-    } else {
-        "var robotFiles = ["
-    });
+    let files = array(if fish { "fishFiles" } else { "robotFiles" });
     let seed = format!("{}:{}", n.id(), n.0["received"].as_f64().unwrap_or(0.));
     let hash = seed
         .encode_utf16()
         .fold(2166136261u32, |h, c| (h ^ c as u32).wrapping_mul(16777619)) as usize;
     let index = if fish {
-        let names = array("var fishNames = [");
-        let legacy = array("var legacyFishNames = [");
+        let names = array("fishNames");
+        let legacy = array("legacyFishNames");
         let name = n.0["fishName"].as_str().or_else(|| {
             n.0["fishIndex"]
                 .as_u64()
@@ -693,7 +687,7 @@ fn artwork_path(root: &Path, n: &Notice) -> PathBuf {
             .filter(|i| *i >= start && *i < start + count)
             .unwrap_or(start + hash % count)
     };
-    root.join("qml/icons")
+    root.join("assets/icons")
         .join(if fish { "fish" } else { "robots" })
         .join(files.get(index).copied().unwrap_or(""))
 }
@@ -702,6 +696,25 @@ fn artwork_path(root: &Path, n: &Notice) -> PathBuf {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn standalone_artwork_manifest_resolves_all_assets() {
+        let manifest: serde_json::Value =
+            serde_json::from_str(include_str!("../../assets/artwork.json")).unwrap();
+        assert_eq!(manifest["robotFiles"].as_array().unwrap().len(), 88);
+        assert_eq!(
+            manifest["fishFiles"].as_array().unwrap().len(),
+            manifest["fishNames"].as_array().unwrap().len()
+        );
+        for (key, folder) in [("robotFiles", "robots"), ("fishFiles", "fish")] {
+            for file in manifest[key].as_array().unwrap() {
+                assert!(Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("assets/icons")
+                    .join(folder)
+                    .join(file.as_str().unwrap())
+                    .is_file());
+            }
+        }
+    }
     #[test]
     fn historical_artwork_keeps_names_and_urgency_pools() {
         let root = Path::new("/synthetic");

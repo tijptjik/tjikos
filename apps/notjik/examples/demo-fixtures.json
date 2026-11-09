@@ -408,7 +408,7 @@
         "body": "Meet me on deck 7. The stars are doing it again.",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "text",
           "demo": true,
@@ -428,7 +428,7 @@
         "body": "First light on Kepler-186f. No filter. Two suns.",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "photo",
           "demo": true,
@@ -448,7 +448,7 @@
         "body": "",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "voice",
           "demo": true,
@@ -571,7 +571,7 @@
         "body": "",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "sticker",
           "demo": true,
@@ -594,7 +594,7 @@
         "body": "",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "sticker",
           "demo": true,
@@ -617,7 +617,7 @@
         "body": "",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "animation",
           "demo": true,
@@ -640,7 +640,7 @@
         "body": "",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "emoji",
           "demo": true,
@@ -663,7 +663,7 @@
         "body": "Hello 🙂 from Telegram",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "text",
           "demo": true,
@@ -699,7 +699,7 @@
         "body": "Meet me on deck 7. The stars are doing it again.",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "text",
           "demo": true,
@@ -714,7 +714,7 @@
         "body": "First light on Kepler-186f. No filter. Two suns.",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "photo",
           "demo": true,
@@ -729,7 +729,7 @@
         "body": "",
         "type": "telegram",
         "icon": "org.telegram.desktop",
-        "image": "file:///NOTJIK_ROOT/qml/icons/robots/robot-84-dream-translucent.png",
+        "image": "file:///NOTJIK_ROOT/assets/icons/robots/robot-84-dream-translucent.png",
         "data": {
           "kind": "voice",
           "demo": true,

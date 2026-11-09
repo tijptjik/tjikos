@@ -54,7 +54,7 @@ for app in "$@"; do
             source_dir="$root_dir/apps/notjik/dist"
             target_dir="$HOME/.local/lib/notjik"
             install -d -m 755 "$HOME/.local/bin" "$target_dir" "$HOME/.config/systemd/user"
-            cp -R "$source_dir"/qml "$source_dir"/themes "$source_dir"/examples "$target_dir/"
+            cp -R "$source_dir"/qml "$source_dir"/assets "$source_dir"/themes "$source_dir"/examples "$target_dir/"
             install -d -m 755 "$target_dir/bin" "$target_dir/lib"
             install -m 755 "$source_dir/bin/notjik-gtk" "$target_dir/bin/.notjik-gtk.pending"
             mv -f "$target_dir/bin/.notjik-gtk.pending" "$target_dir/bin/notjik-gtk"
