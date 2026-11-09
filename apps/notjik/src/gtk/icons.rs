@@ -1,4 +1,4 @@
-//! The same SVG paths as QML, rendered as alpha masks in the current theme ink.
+//! Shared SVG paths rendered as alpha masks in the current theme ink.
 use gtk::{cairo, gdk_pixbuf, prelude::*};
 pub fn glyph(name: &str, size: i32) -> gtk::DrawingArea {
     let svg: &[u8] = match name {

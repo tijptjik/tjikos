@@ -411,10 +411,7 @@ pub fn serve(root: &Path, dunst: &Path) -> Result<()> {
             let target = dest.join(entry.file_name());
             if p.is_dir() {
                 copy_ui(&p, &target)?;
-            } else if p
-                .extension()
-                .is_some_and(|e| e == "qml" || e == "js" || e == "json")
-            {
+            } else if p.extension().is_some_and(|e| e == "json") {
                 fs::copy(&p, &target)?;
             } else if !target.exists() {
                 std::os::unix::fs::symlink(p.canonicalize()?, target)?;
@@ -468,11 +465,6 @@ pub fn serve(root: &Path, dunst: &Path) -> Result<()> {
     cfg["grouping"]["enabled"] = json!(false);
     cfg["history"]["enabled"] = json!(true);
     cfg["history"]["logTransient"] = json!(false);
-    for v in cfg["components"].as_object_mut().unwrap().values_mut() {
-        *v = json!(url::Url::parse(text(v))?
-            .to_file_path()
-            .map_err(|_| anyhow::anyhow!("Invalid component"))?);
-    }
     let (mut origin, mut offset) = ("bottom-center", "(0, 40)".to_string());
     if cycle {
         cfg["style"]["width"] = json!(420);

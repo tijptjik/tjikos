@@ -57,36 +57,4 @@ with private_compositor():
         finally:
             process.terminate()
             process.wait(timeout=5)
-    # Render the real Notjik component with synthetic data and no server takeover.
-    preview = temp / 'card'
-    preview.mkdir()
-    shutil.copytree(app.parent/'notjik/qml/components', preview/'components')
-    picker = preview/'components/SnoozePicker.qml'
-    picker.write_text(picker.read_text().replace('property bool calendarOpen: false', 'property bool calendarOpen: true'))
-    (preview/'shell.qml').write_text('''import QtQuick
-import Quickshell
-import Quickshell.Io
-import "components"
-ShellRoot {
-    FloatingWindow {
-        visible:true; implicitWidth:460; implicitHeight:620; color:'#191724'
-        Todo {
-            id:card; width:420; anchors.left:parent.left;anchors.top:parent.top;anchors.margins:16
-            notice:({id:'synthetic',data:{group:'Work',due:'2026-10-30',todoCommand:['/bin/true','synthetic'],taskId:'demo',period:'2026-10-30'}})
-            theme:({text:'#e0def4',accent:'#ff53a6',background:'#191724',surface:'#26233a'})
-            now:Date.now();controller:({locked:false,close:function(id,expired){}});choosing:true
-        }
-        IpcHandler {target:'preview';function capture(path:string):void {card.grabToImage(image=>image.saveToFile(path));}}
-    }
-}''')
-    with (temp/'card.log').open('w') as log:
-        process = subprocess.Popen(['quickshell','--path',str(preview),'--no-duplicate'],stdout=log,stderr=log)
-        try:
-            def capture():
-                return subprocess.run(['quickshell','ipc','--path',str(preview),'call','preview','capture',str(temp/'card.png')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
-            wait_for(capture)
-            wait_for(lambda:(temp/'card.png').exists())
-            print('PASS Notjik todo card renderer:',temp/'card.png')
-        finally:
-            process.terminate()
-            process.wait(timeout=5)
+    # Notjik todo cards are covered by its native GTK gallery.

@@ -1,4 +1,4 @@
-//! QML-compatible paged action footer: sender indexes survive visual pagination.
+//! Paged native action footer: sender indexes survive visual pagination.
 use super::{model::*, primitives::*, Context};
 use gtk::{glib, prelude::*};
 use std::{cell::Cell, rc::Rc};

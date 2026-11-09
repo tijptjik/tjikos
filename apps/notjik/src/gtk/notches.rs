@@ -1,4 +1,4 @@
-//! Informational edge marks, matching GroupNotches.qml's persistent split/merge slices.
+//! Informational group marks with persistent animated split/merge slices.
 use gtk::{glib, prelude::*};
 use std::{cell::RefCell, rc::Rc, time::Instant};
 

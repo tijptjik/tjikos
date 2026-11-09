@@ -1,9 +1,9 @@
 use crate::util::*;
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 use std::{collections::HashSet, path::Path};
 pub fn defaults() -> Value {
-    json!({"theme":"monochrome","style":{},"placement":{"monitors":"primary","primaryMonitor":"","edge":"b","position":"c","offsetX":0,"offsetY":-24,"margin":16,"perMonitor":{}},"timeouts":{"low":5,"normal":8,"critical":0},"pauseOnHover":true,"maxVisible":4,"maxQueued":100,"history":{"enabled":true,"maxEvents":10000,"maxAgeDays":0,"logTransient":false,"drawerLimit":100},"grouping":{"enabled":true,"windowSeconds":120},"privacy":{"lockScreen":"hide"},"stack":{"animationMs":220,"heightPercent":75},"actions":{"blacklist":[]},"telegram":{"dismissIsRead":[],"dismissReadMode":"safe"},"components":{},"handlers":[]})
+    json!({"theme":"monochrome","style":{},"placement":{"monitors":"primary","primaryMonitor":"","edge":"b","position":"c","offsetX":0,"offsetY":-24,"margin":16,"perMonitor":{}},"timeouts":{"low":5,"normal":8,"critical":0},"pauseOnHover":true,"maxVisible":4,"maxQueued":100,"history":{"enabled":true,"maxEvents":10000,"maxAgeDays":0,"logTransient":false,"drawerLimit":100},"grouping":{"enabled":true,"windowSeconds":120},"privacy":{"lockScreen":"hide"},"stack":{"animationMs":220,"heightPercent":75},"actions":{"blacklist":[]},"telegram":{"dismissIsRead":[],"dismissReadMode":"safe"},"handlers":[]})
 }
 fn number(v: &Value, name: &str, min: f64, max: f64) -> Result<()> {
     ensure!(
@@ -59,7 +59,6 @@ pub fn load(root: &Path) -> Result<Value> {
         "placement",
         "timeouts",
         "history",
-        "components",
         "grouping",
         "privacy",
         "stack",
@@ -231,10 +230,7 @@ pub fn load(root: &Path) -> Result<Value> {
         );
         let re = fancy_regex::Regex::new(pattern).context("invalid handlers.pattern")?;
         let card = rule["card"].as_str().context("handler needs card")?;
-        ensure!(
-            card == "key-value" || cfg["components"].get(card).is_some(),
-            "Invalid handler card"
-        );
+        ensure!(card == "key-value", "Invalid handler card");
         let captures = rule["captures"]
             .as_object()
             .context("handler needs captures")?;
@@ -309,20 +305,9 @@ pub fn load(root: &Path) -> Result<Value> {
     }
     ensure!(style["font"].is_string(), "font must be a string");
     cfg["style"] = style;
-    let names = regex::Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$")?;
-    for (k, v) in cfg["components"].as_object_mut().unwrap() {
-        ensure!(names.is_match(k), "Invalid component name");
-        let p = path
-            .parent()
-            .unwrap()
-            .join(expand(
-                v.as_str().context("Component path must be a string")?,
-            ))
-            .canonicalize()?;
-        if p.extension().and_then(|s| s.to_str()) != Some("qml") || !p.is_file() {
-            bail!("Component must point to a local QML file")
-        }
-        *v = json!(uri(&p)?);
+    if let Some(components) = cfg.as_object_mut().unwrap().remove("components") {
+        ensure!(components.as_object().is_some_and(|v| v.is_empty()),
+            "Custom component files are no longer supported; use built-in cards and structured handlers");
     }
     Ok(cfg)
 }

@@ -34,7 +34,7 @@ def main():
             for name in ["lib", "assets", "themes"]:
                 (app / name).symlink_to(ROOT / "dist" / name)
             shutil.copytree(ROOT/'dist/bin',app/'bin')
-            shutil.copytree(ROOT/'dist/examples',app/'examples',ignore=shutil.ignore_patterns('*.qml','demo-patches.json','reference-artwork.js'))
+            shutil.copytree(ROOT/'dist/examples',app/'examples')
             assert not (app / "qml").exists()
             config = work / "config.json"
             config.write_text(json.dumps({"theme":"rose-punk", "placement":{"primaryMonitor":"NOTJIK"}}))

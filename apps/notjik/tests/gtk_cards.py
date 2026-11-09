@@ -48,8 +48,6 @@ def main():
                 assert "Gtk-CRITICAL" not in result.stderr and "Gtk-WARNING" not in result.stderr, result.stderr
                 assert len(list(folder.glob("card-*.png"))) == 19
                 print(result.stdout.strip())
-            from gtk_card_reference import capture_reference
-            capture_reference(ROOT, artifacts, env)
             print(f"GTK artifacts: {artifacts}")
     finally:
         result = hypr("eval", f'if _G.{rule} then _G.{rule}:set_enabled(false); _G.{rule}=nil end')

@@ -131,55 +131,10 @@ pub fn run_cancelled(
     }
     Ok(out)
 }
-pub fn ipc(root: &Path, request: &Value) -> Result<Value> {
-    if let Some(response) = crate::ipc::request(request)? {
-        return Ok(response);
-    }
-    let bytes = serde_json::to_vec(request)?;
-    if bytes.len() > 131072 {
-        bail!("Request exceeds 128 KiB")
-    }
-    let dir = if let Some(d) = env::var_os("XDG_RUNTIME_DIR") {
-        tempfile::Builder::new()
-            .prefix("notjik-ipc-")
-            .tempdir_in(d)?
-    } else {
-        tempfile::Builder::new().prefix("notjik-ipc-").tempdir()?
-    };
-    let p = dir.path().join("request.json");
-    private_write(&p, &bytes)?;
-    let response_path = dir.path().join("response.json");
-    let file_response = request["op"] == "history-data";
-    if file_response {
-        private_write(&response_path, b"")?;
-    }
-    let out = run(
-        Command::new("quickshell")
-            .args(["ipc", "--path"])
-            .arg(root.join("qml"))
-            .args([
-                "call",
-                "notjik",
-                if file_response {
-                    "requestFileResponse"
-                } else {
-                    "requestFile"
-                },
-            ])
-            .arg(&p),
-        Duration::from_secs(5),
-    )?;
-    let mut response: Value =
-        serde_json::from_slice(&out).context("Unexpected Quickshell IPC response")?;
-    if file_response && response["ok"] == true {
-        response = serde_json::from_slice(&fs::read(&response_path)?)
-            .context("Invalid private IPC response")?;
-    }
-    if response["ok"] != true {
-        bail!("{}", response["error"].as_str().unwrap_or("request failed"))
-    }
-    Ok(response)
+pub fn ipc(_root: &Path, request: &Value) -> Result<Value> {
+    crate::ipc::request(request)?.context("Notjik is not running; start notjik.service")
 }
+
 pub fn merge(base: &mut Value, patch: &Value) {
     if let (Some(b), Some(p)) = (base.as_object_mut(), patch.as_object()) {
         for (k, v) in p {
@@ -193,7 +148,7 @@ pub fn merge(base: &mut Value, patch: &Value) {
         *base = patch.clone();
     }
 }
-/// JSON truthiness at the QML/TDLib boundary, matching the previous worker.
+/// JSON truthiness at the notification/TDLib boundary.
 pub fn truthy(v: &Value) -> bool {
     match v {
         Value::Null => false,

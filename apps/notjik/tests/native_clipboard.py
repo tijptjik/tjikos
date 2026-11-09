@@ -25,10 +25,25 @@ class NativeClipboardTests(unittest.TestCase):
                          "with (p / 'reads').open('a') as f: f.write('read\\n')\n"
                          "sys.stdout.buffer.write((p / ('types' if '--list-types' in sys.argv else 'data')).read_bytes())\n")
         paste.chmod(0o755)
-        ipc = root / "bin/quickshell"
-        ipc.write_text("#!/usr/bin/python3\nimport os, pathlib, sys\np = pathlib.Path(os.environ['FIXTURE'])\n"
-                       "(p / 'notice').write_bytes(pathlib.Path(sys.argv[-1]).read_bytes())\nprint('{\"ok\":true}')\n")
-        ipc.chmod(0o755)
+        notification = socket.socket(socket.AF_UNIX)
+        notification.bind(str(root / "notjik.sock"))
+        notification.listen()
+        notification.settimeout(.1)
+        stop = threading.Event()
+        def notices():
+            while not stop.is_set():
+                try:
+                    conn, _ = notification.accept()
+                except socket.timeout:
+                    continue
+                with conn, conn.makefile("rb") as stream:
+                    (root / "notice").write_bytes(stream.readline())
+                    conn.sendall(b'{"ok":true}\n')
+        notifier = threading.Thread(target=notices)
+        notifier.start()
+        def close_notifier():
+            stop.set(); notifier.join(timeout=2); notification.close()
+        self.addCleanup(close_notifier)
         server = socket.socket(socket.AF_UNIX)
         server.bind(str(root / "control.sock"))
         server.listen()
@@ -53,7 +68,7 @@ class NativeClipboardTests(unittest.TestCase):
         env = {**os.environ, "PATH": str(root / "bin") + ":" + os.environ["PATH"],
                "FIXTURE": str(root), "NOTJIK_HOME": str(APP), "NOTJIK_TELEGRAM_DIR": str(root / "telegram"),
                "NOTJIK_STATE_DIR": str(root / "state"), "XDG_RUNTIME_DIR": str(root),
-               "NOTJIK_TELEGRAM_SOCKET": str(root / "control.sock")}
+               "NOTJIK_TELEGRAM_SOCKET": str(root / "control.sock"), "NOTJIK_SOCKET":str(root / "notjik.sock")}
         result = subprocess.run([str(BINARY), "telegram", "save-clipboard"], env=env,
                                 capture_output=True, timeout=15)
         thread.join(timeout=11)

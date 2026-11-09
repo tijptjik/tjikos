@@ -1,6 +1,6 @@
 //! Renderer-independent configuration, history, sync, and lock-state runtime.
 //!
-//! The JSON messages deliberately retain the existing QML worker protocol.
+//! JSON messages share one contract across in-process and diagnostic transports.
 //! This does not yet own the notification queue or the desktop D-Bus name.
 
 /// One bounded input message, including a transport decoding error.
@@ -49,7 +49,7 @@ pub fn dismiss_request(cfg: &Value, e: &Value) -> Result<Option<Value>> {
 }
 /// Run native services on a dedicated worker thread until the transport closes.
 /// The caller owns process policy (including umask) and transport lifetime.
-/// No GTK/Qt objects may be accessed by a transport on this thread.
+/// No GTK objects may be accessed by a transport on this thread.
 pub fn run(root: &Path, transport: &mut impl Transport) -> Result<()> {
     transport.publish(&json!({"paused":history::paused()?}))?;
     let sync_enabled = notjik_sync::client::configured()

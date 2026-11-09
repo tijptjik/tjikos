@@ -1,4 +1,4 @@
-//! Quickshell subprocess adapter. Native frontends can use backend::run directly.
+//! Stdio backend adapter for diagnostics and isolated persistence tests.
 use crate::backend::{self, Request, Transport};
 use anyhow::Result;
 use serde_json::Value;

@@ -5,8 +5,7 @@
   "tasks": {
     "build": {
       "inputs": [
-        "$TURBO_DEFAULT$",
-        "../../packages/notification-history/**"
+        "$TURBO_DEFAULT$"
       ]
     }
   }

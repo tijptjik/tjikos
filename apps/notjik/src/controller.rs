@@ -170,7 +170,6 @@ impl Controller {
     pub fn send(&mut self, input: Value, now: u64) -> Result<String> {
         validate(&input)?;
         let kind = input["type"].as_str().unwrap_or("standard");
-        // Native custom types have an explicit standard-card fallback.
         ensure!(
             [
                 "standard",
@@ -183,9 +182,8 @@ impl Controller {
                 "auth-code",
                 "key-value"
             ]
-            .contains(&kind)
-                || self.config["components"][kind].is_string(),
-            "Unknown component: {kind}"
+            .contains(&kind),
+            "Unknown card type: {kind}"
         );
         let app = input["app"].as_str().unwrap_or("notjikctl");
         let sender = s(&input["id"]);

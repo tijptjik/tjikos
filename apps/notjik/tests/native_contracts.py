@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import select
 import sqlite3
+import socket
+import threading
 import subprocess
 import tempfile
 import time
@@ -38,7 +40,7 @@ class NativeContracts(unittest.TestCase):
                   {"style":{"text":"red"}}, {"style":{"width":2400}},
                   {"actions":{"nativeHooks":[{"caller":"a","identifier":"b","command":["x\u0000"]}]}},
                   {"telegram":{"dismissIsRead":["9007199254740992"]}},
-                  {"telegram":{"dismissReadMode":"unsafe"}}, {"components":{"bad":"remote.qml"}}]
+                  {"telegram":{"dismissReadMode":"unsafe"}}, {"components":{"bad":"retired-component"}}]
         for value in values:
             with self.subTest(value=value):
                 result = self.config(value)
@@ -46,16 +48,14 @@ class NativeContracts(unittest.TestCase):
                 self.assertNotIn("panicked", result.stderr)
 
     def test_defaults_theme_components_and_read_only_config(self):
-        component = self.path / "Task.qml"
-        component.write_text("import QtQuick\nItem {}\n")
         data = {"theme":"rose-punk","style":{"width":500},"history":{"maxEvents":0,"maxAgeDays":7,"drawerLimit":0},
-                "placement":{"offsetX":"-20%","monitors":["DP-1",2]},"components":{"task":"Task.qml"}}
+                "placement":{"offsetX":"-20%","monitors":["DP-1",2]},"components":{}}
         result = self.config(data)
         self.assertEqual(result.returncode, 0, result.stderr)
         effective = json.loads(result.stdout)
         self.assertEqual(effective["style"]["accent"], "#ff53a6")
         self.assertEqual(effective["style"]["width"], 500)
-        self.assertEqual(effective["components"]["task"], component.as_uri())
+        self.assertNotIn("components", effective)
         self.assertEqual((self.path / "config.json").read_text(), json.dumps(data))
         self.assertNotEqual(self.run_cli("init", check=False).returncode, 0)
 
@@ -111,19 +111,29 @@ class NativeContracts(unittest.TestCase):
         result=self.run_cli("worker",input="")
         self.assertEqual(json.loads(result.stdout.splitlines()[0]),{"paused":True})
 
-    def test_ipc_arguments_never_contain_notification_payload(self):
-        bindir=self.path/"bin";bindir.mkdir()
-        fake=bindir/"quickshell"
-        fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$XDG_RUNTIME_DIR/args"\nfor file do :; done\nstat -c %a "$file" > "$XDG_RUNTIME_DIR/mode"\ncat "$file" > "$XDG_RUNTIME_DIR/payload"\nprintf \'{"ok":true,"id":"synthetic"}\\n\'\n')
-        fake.chmod(0o755)
-        self.env["PATH"]=str(bindir)+":"+self.env["PATH"]
-        result=self.run_cli("send","PRIVATE-TITLE","PRIVATE-BODY","--timeout","2m")
-        self.assertEqual(result.stdout.strip(),"synthetic")
-        argv=(self.path/"args").read_text()
-        self.assertNotIn("PRIVATE",argv)
-        self.assertEqual((self.path/"mode").read_text().strip(),"600")
-        self.assertEqual(json.loads((self.path/"payload").read_text())["notice"]["timeout"],120000)
-        self.assertFalse(Path(argv.splitlines()[-1]).exists())
+    def test_ipc_uses_private_socket_without_external_helpers(self):
+        endpoint = self.path / "notjik.sock"
+        self.env["NOTJIK_SOCKET"] = str(endpoint)
+        self.env["PATH"] = ""
+        received = []
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(endpoint)); server.listen(); server.settimeout(3)
+            def serve():
+                conn, _ = server.accept()
+                with conn, conn.makefile("rb") as stream:
+                    received.append(json.loads(stream.readline()))
+                    conn.sendall(b'{"ok":true,"id":"synthetic"}\n')
+            thread = threading.Thread(target=serve)
+            thread.start()
+            result = self.run_cli("send","PRIVATE-TITLE","PRIVATE-BODY","--timeout","2m")
+            thread.join(timeout=3)
+            self.assertFalse(thread.is_alive())
+        self.assertEqual(result.stdout.strip(), "synthetic")
+        self.assertEqual(received[0]["notice"]["timeout"], 120000)
+        endpoint.unlink()
+        result = self.run_cli("status",check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not running", result.stderr)
 
     def test_native_sticker_conversion_and_external_asset_rejection(self):
         import gzip

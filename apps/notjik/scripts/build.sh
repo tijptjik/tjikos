@@ -11,7 +11,8 @@ cp ../../packages/tjik-gtk/target/layer-shell-source/LICENSE dist/lib/gtk4-layer
 install -m 755 "${CARGO_TARGET_DIR:-target}/release/notjik-gtk" dist/bin/notjik-gtk
 install -m755 ../../packages/notjik-sync/target/release/notjik-sync dist/bin/
 cp ../notjik-service/systemd/notjik-sync.service systemd/
-cp -uRL --reflink=auto qml dist/
+rm -rf dist/qml
+rm -f dist/examples/DemoStage.qml dist/examples/Issue.qml dist/examples/demo-patches.json dist/examples/reference-artwork.js
 cp -uR --reflink=auto assets themes examples systemd dist/
 cp bin/notjik bin/notjikctl dist/bin/
 install -m 755 "${CARGO_TARGET_DIR:-target}/release/notjik-core" dist/bin/notjik-core
