@@ -157,6 +157,32 @@ impl Ui {
                 ui.send(json!({"op":"activate","id":id,"mode":"save-expansion","original":original,"trigger":trigger_value.text().as_str(),"expansion":buffer.text(&buffer.start_iter(), &buffer.end_iter(), false).as_str(),"query":ui.query.borrow().clone()}));
             }
         });
+        save.set_tooltip_text(Some("Save (Ctrl+S or Ctrl+Enter)"));
+        let shortcuts = gtk::EventControllerKey::new();
+        shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let save_button = save.downgrade();
+        let weak = Rc::downgrade(self);
+        shortcuts.connect_key_pressed(move |_, key, _, mods| {
+            let Some(ui) = weak.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
+            if !ui.composing.get()
+                && !ui.composition_commit.get()
+                && mods.contains(gdk::ModifierType::CONTROL_MASK)
+                && !mods.intersects(gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK)
+                && matches!(
+                    key,
+                    gdk::Key::s | gdk::Key::S | gdk::Key::Return | gdk::Key::KP_Enter
+                )
+            {
+                if let Some(button) = save_button.upgrade() {
+                    button.emit_clicked();
+                }
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        pane.add_controller(shortcuts);
         let weak = Rc::downgrade(self);
         cancel.connect_clicked(move |_| {
             if let Some(ui) = weak.upgrade() {

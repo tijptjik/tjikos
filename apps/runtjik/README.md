@@ -310,8 +310,9 @@ the Bitwarden desktop URI when available, then opens the matching web-vault item
 `/expand` edits Espanso's text expansion dictionary: **New** stays first, followed by
 triggers in alphabetical order. Filter with `/expand {text}` to search both triggers and
 expansions. Enter opens the selected entry; Ctrl+Enter deletes it. The inline editor
-provides Trigger, multiline Expansion, Save and Cancel; Escape cancels. Edits preserve
-other match fields (including dynamic variables) and refuse stale writes. Espanso
+provides Trigger, multiline Expansion, Save and Cancel. Ctrl+S or Ctrl+Enter saves from
+either field; Escape cancels. Edits preserve other match fields (including dynamic
+variables) and refuse stale writes. Espanso
 watches the files and reloads changes automatically.
 
 The editor reads `~/.config/espanso/match` (honoring `XDG_CONFIG_HOME`), or

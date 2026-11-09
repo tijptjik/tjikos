@@ -38,7 +38,17 @@ with silent_compositor():
         subprocess.run(['grim', '-o', 'EXPAND', '/tmp/runtjik-expand-list.png'], check=True)
         key('-k', 'Up', '-k', 'Up', '-k', 'Return')
         wait_for(lambda: status()['content_view'] == 'expansion-editor')
-        key(';test', '-k', 'Tab', 'Synthetic multiline expansion', '-k', 'Return', 'Second line')
+        # Both editor fields route both shortcuts to Save, never row deletion.
+        for field in ('trigger', 'expansion'):
+            if field == 'expansion':
+                key('-k', 'Tab')
+            for shortcut in ('s', 'Return'):
+                run('test-response', json.dumps({'kind': 'message', 'message': ''}))
+                wait_for(lambda: status()['message'] == '')
+                key('-M', 'ctrl', '-k', shortcut, '-m', 'ctrl')
+                wait_for(lambda: 'Demo mode' in status()['message'])
+                assert status()['content_view'] == 'expansion-editor'
+        key('Synthetic multiline expansion', '-k', 'Return', 'Second line')
         subprocess.run(['grim', '-o', 'EXPAND', '/tmp/runtjik-expand-editor.png'], check=True)
         # Click the visible Save action with a pointer bound to the private output.
         subprocess.run(['wayland-scanner', 'client-header', str(APP / 'tests/virtual_pointer.xml'), str(root / 'pointer.h')], check=True)
