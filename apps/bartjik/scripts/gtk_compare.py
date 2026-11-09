@@ -1,4 +1,4 @@
-"""Same-session, read-only GTK comparison above the running Quickshell bar.
+"""Workspace-scoped live GTK preview above the normal Quickshell bar.
 
 Build through dev-check first. This interactive viewer must not hold its lock.
 """
@@ -97,12 +97,16 @@ def prepare(gutter):
     mirror()
 
 
-def run(gutter, binary, native=False):
+def run(gutter, binary, native=False, workspace="7"):
     old = legacy('bars')['bars']
     prepare(gutter)
     env = {**os.environ, 'BARTJIK_HOME': str(INSTALL), 'BARTJIK_CONFIG': str(ROOT / 'config.json'),
            'BARTJIK_GTK_SOCKET': str(SOCKET), 'BARTJIK_GTK_COMPARE_FILE': str(ROOT / 'items.json'),
            'TJIK_COMPOSITOR': 'hyprland', 'GTK_A11Y': 'none'}
+    if workspace != "all":
+        env["BARTJIK_GTK_WORKSPACE"] = workspace
+    else:
+        env.pop("BARTJIK_GTK_WORKSPACE", None)
     if native:
         env.pop("BARTJIK_GTK_COMPARE_FILE", None)
     child = None
@@ -113,23 +117,32 @@ def run(gutter, binary, native=False):
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
-        legacy('show-reveal')
+        if workspace == 'all':
+            legacy('show-reveal')
         with (ROOT / 'gtk.log').open('w') as log:
-            child = subprocess.Popen(([str(binary), 'serve'] if native else ['dbus-run-session', '--', str(binary), 'serve']), env=env,
-                                     stdout=log, stderr=log, start_new_session=True)
-            state = {'pid': os.getpid(), 'start': identity(os.getpid()), 'child': child.pid,
-                     'native': native, 'gutter': gutter, 'socket': str(SOCKET), 'binary': str(binary)}
-            write(STATE, state)
-            reveal_at = 0.0
-            while not stopping and child.poll() is None:
-                if not native:
-                    mirror()
-                # Keep the reference visible without modifying managed configuration.
-                if time.monotonic() >= reveal_at:
-                    legacy('show-reveal')
-                    reveal_at = time.monotonic() + 1
-                for _ in range(2):
-                    if stopping or child.poll() is not None:
+            restarts = 0
+            while not stopping:
+                child = subprocess.Popen(([str(binary), 'serve'] if native else ['dbus-run-session', '--', str(binary), 'serve']), env=env,
+                                         stdout=log, stderr=log, start_new_session=True)
+                state = {'pid': os.getpid(), 'start': identity(os.getpid()), 'child': child.pid,
+                         'native': native, 'workspace': workspace, 'restarts': restarts,
+                         'gutter': gutter, 'socket': str(SOCKET), 'binary': str(binary)}
+                write(STATE, state)
+                reveal_at = 0.0
+                while not stopping and child.poll() is None:
+                    if not native:
+                        mirror()
+                    if workspace == 'all' and time.monotonic() >= reveal_at:
+                        legacy('show-reveal')
+                        reveal_at = time.monotonic() + 1
+                    time.sleep(.2)
+                if stopping or child.returncode == 0:
+                    break
+                restarts += 1
+                print(f'GTK exited with {child.returncode}; restarting workspace {workspace} preview ({restarts})', file=log, flush=True)
+                # Bounded restart backoff; stopping stays responsive.
+                for _ in range(min(50, restarts * 5)):
+                    if stopping:
                         break
                     time.sleep(.1)
     finally:
@@ -140,10 +153,11 @@ def run(gutter, binary, native=False):
             except (subprocess.SubprocessError, OSError):
                 os.killpg(child.pid, signal.SIGTERM)
                 child.wait(timeout=5)
-        for bar_id in {b['key'].split('/', 1)[1] for b in old}:
-            previous = [b for b in old if b['key'].endswith('/' + bar_id)]
-            action = 'hide-reveal' if all(b['concealed'] for b in previous) else 'show'
-            subprocess.run([str(CTL), action, bar_id], timeout=8, stdout=subprocess.DEVNULL, check=False)
+        if workspace == 'all':
+            for bar_id in {b['key'].split('/', 1)[1] for b in old}:
+                previous = [b for b in old if b['key'].endswith('/' + bar_id)]
+                action = 'hide-reveal' if all(b['concealed'] for b in previous) else 'show'
+                subprocess.run([str(CTL), action, bar_id], timeout=8, stdout=subprocess.DEVNULL, check=False)
         STATE.unlink(missing_ok=True)
         SOCKET.unlink(missing_ok=True)
 
@@ -153,6 +167,7 @@ def main():
     parser.add_argument('action', choices=['start', 'status', 'stop', 'run'], nargs='?', default='start')
     parser.add_argument('--gutter', type=int, default=8)
     parser.add_argument('--binary', type=Path, default=INSTALL / 'bin/bartjik-gtk')
+    parser.add_argument('--workspace', default='7', help='Show only on this workspace (default: 7); all restores the old all-workspace comparison')
     parser.add_argument('--native', action='store_true', help='Independent GTK providers and real configured actions on the session bus')
     args = parser.parse_args()
     ROOT.mkdir(mode=0o700, exist_ok=True)
@@ -170,20 +185,27 @@ def main():
                 raise RuntimeError('Comparison did not close')
         print('Comparison closed; the existing bar remains running.')
     elif args.action == 'run':
-        run(args.gutter, args.binary, args.native)
+        run(args.gutter, args.binary, args.native, args.workspace)
     elif active:
+        if active.get('workspace', 'all') != args.workspace or active.get('native') != args.native:
+            raise RuntimeError('A different preview mode is active; stop it before starting the requested mode')
         print(json.dumps(active))
     else:
         with (ROOT / 'supervisor.log').open('w') as log:
             subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'run', '--gutter', str(args.gutter),
-                              '--binary', str(args.binary)] + (['--native'] if args.native else []), stdout=log, stderr=log, start_new_session=True)
+                              '--binary', str(args.binary), '--workspace', args.workspace] + (['--native'] if args.native else []), stdout=log, stderr=log, start_new_session=True)
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             active = session()
             if active and SOCKET.exists():
                 env = {**os.environ, 'BARTJIK_GTK_SOCKET': str(SOCKET)}
-                state = command(args.binary, 'status', env=env)
-                if state['bars'] and all(b['width'] > 1 for b in state['bars']):
+                try:
+                    state = command(args.binary, 'status', env=env)
+                except (subprocess.SubprocessError, OSError, ValueError):
+                    time.sleep(.1)
+                    continue
+                ready = state.get('backendReady') if args.native else state.get('revision') is not None
+                if ready and (args.workspace != 'all' or (state['bars'] and all(b['width'] > 1 for b in state['bars']))):
                     print(json.dumps(active))
                     return
             time.sleep(.2)

@@ -6,6 +6,35 @@ use crate::{
 use serde_json::Value;
 use std::collections::BTreeMap;
 use tjik_gtk::gtk::{self, prelude::*};
+/// Match Part.qml: hover cards/previews replace the raw provider tooltip.
+fn tooltip<'a>(module: &Value, row: &'a Value) -> Option<&'a str> {
+    let hover_action = ["item", "icon", "text", "artist", "track"]
+        .iter()
+        .any(|part| {
+            [
+                "audio.panel",
+                "network.panel",
+                "nightlight.panel",
+                "monitor.panel",
+                "idle.panel",
+            ]
+            .contains(&s(&crate::action_choice::choose(
+                module,
+                row,
+                part,
+                "hoverEnter",
+            )))
+        });
+    if module["provider"] == "crypto"
+        || module["panel"]["hover"] == true
+        || (module["provider"] == "workspaces" && module["preview"]["enabled"] == true)
+        || hover_action
+    {
+        None
+    } else {
+        row["tooltip"].as_str()
+    }
+}
 fn rows(
     module: &Value,
     base: &Value,
@@ -47,7 +76,7 @@ fn rows(
         prior_row = Some(item.clone().upcast());
         live_rows.push(item.clone().upcast::<gtk::Widget>());
         item.set_spacing(num(&style["iconTextGap"]) as i32);
-        item.set_tooltip_text(row["tooltip"].as_str());
+        item.set_tooltip_text(tooltip(module, row));
         let media =
             module["provider"] == "playerctl" && row["idle"] != true && row["artist"].is_object();
         let kinds = if media {
@@ -323,7 +352,7 @@ impl Module {
                     .iter()
                     .find(|r| r["id"] == id)
                 {
-                    widget.set_tooltip_text(row["tooltip"].as_str());
+                    widget.set_tooltip_text(tooltip(module, row));
                     bind(
                         &mut self.bindings,
                         &format!("{id}/icon"),
@@ -409,6 +438,51 @@ impl Module {
             );
         }
     }
+    pub fn hit_regions(&self, window: &gtk::Widget) -> Vec<(String, tjik_desktop::Rect)> {
+        let bounds = |w: &gtk::Widget| {
+            w.compute_bounds(window).map(|r| tjik_desktop::Rect {
+                x: r.x() as f64,
+                y: r.y() as f64,
+                width: r.width() as f64,
+                height: r.height() as f64,
+            })
+        };
+        if !self.root.is_visible() {
+            return vec![];
+        }
+        if let Some(ring) = &self.ring {
+            let Some(origin) = bounds(ring.upcast_ref()) else {
+                return vec![];
+            };
+            return ring
+                .regions()
+                .into_iter()
+                .map(|(id, mut r)| {
+                    r.x += origin.x;
+                    r.y += origin.y;
+                    (id, r)
+                })
+                .collect();
+        }
+        if let Some(tray) = &self.tray {
+            return tray
+                .widgets()
+                .into_iter()
+                .filter_map(|(id, w)| Some((id, bounds(&w)?)))
+                .collect();
+        }
+        let mut result = vec![];
+        if let Some(group) = self.root.first_child() {
+            let mut child = group.first_child();
+            while let Some(w) = child {
+                child = w.next_sibling();
+                if let Some(r) = bounds(&w) {
+                    result.push((w.widget_name().to_string(), r));
+                }
+            }
+        }
+        result
+    }
     pub fn resize_frame(&self) {
         if let Some(t) = &self.tray {
             t.queue_resize();
@@ -483,6 +557,38 @@ fn bind(
         bindings.insert(
             key.into(),
             crate::input::Binding::new(widget, resolve, sender.clone()),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tooltip_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn panels_replace_tooltips_but_plain_tray_items_keep_them() {
+        let row = json!({"tooltip":"account table"});
+        assert_eq!(
+            tooltip(&json!({"provider":"codex","panel":{"hover":true}}), &row),
+            None
+        );
+        assert_eq!(
+            tooltip(
+                &json!({"provider":"workspaces","preview":{"enabled":true}}),
+                &row
+            ),
+            None
+        );
+        assert_eq!(
+            tooltip(
+                &json!({"provider":"audio","actions":{"hoverEnter":"audio.panel"}}),
+                &row
+            ),
+            None
+        );
+        assert_eq!(
+            tooltip(&json!({"provider":"tray"}), &row),
+            Some("account table")
         );
     }
 }

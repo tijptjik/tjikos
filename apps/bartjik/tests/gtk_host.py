@@ -17,16 +17,30 @@ end = time.monotonic() + 12
 while True:
     upper = read(session['binary'], 'status', env=env)
     lower = {b['key']: b for b in read(ctl, 'bars')['bars']}
-    if upper['bars'] and all(b['width'] > 10 for b in upper['bars']):
+    if (upper.get('backendReady') or not session.get('native')) and (session.get('workspace', 'all') != 'all' or upper['bars']) and all(b['width'] > 10 for b in upper['bars']):
         break
     assert time.monotonic() < end, upper
     time.sleep(.2)
 assert upper['comparison'] == (not session.get('native', False)) and not upper['reserve']
 if session.get('native'):
     assert upper['nativeRuntime'] and upper['backendReady']
-assert upper['clockProviders'] == 0 and not upper['pointerSampling']
-assert len(upper['bars']) == len(lower)
+assert upper['clockProviders'] == 0
+if upper['comparison']:
+    assert not upper['pointerSampling']  # Native hover panels wake the shared sampler on demand.
+scope = session.get('workspace', 'all')
+if scope == 'all':
+    assert len(upper['bars']) == len(lower)
+else:
+    assert upper['workspaceScope'] == scope
+    assert all(b['output'] in upper['workspaceOutputs'] for b in upper['bars'])
 monitors = {m['name']: m for m in read('hyprctl', '-j', 'monitors')}
+if scope != 'all':
+    expected_outputs = {m['name'] for m in monitors.values() if str(m['activeWorkspace']['name']) == scope}
+    assert set(upper['workspaceOutputs']) == expected_outputs
+    assert {b['output'] for b in upper['bars']} == expected_outputs
+    if not expected_outputs:
+        assert not upper['bars']
+        print('PASS: ready native preview has no bar surfaces outside workspace ' + scope)
 for bar in upper['bars']:
     reference = lower[bar['key']]
     actual = bar['geometry']
@@ -41,8 +55,9 @@ for bar in upper['bars']:
     assert len(bar['islands']) == len(expected_islands), (bar['key'], 'island count')
     for island, original in zip(bar['islands'], expected_islands):
         assert abs(island['height'] - original['height']) <= 1, (bar['key'], original['id'], island['height'], original['height'])
-    assert bar['visible'] and reference['visible']
-    assert not bar['concealed'] and not reference['concealed']
+    assert bar['visible'] and not bar['concealed']
+    if scope == 'all':
+        assert reference['visible'] and not reference['concealed']
     assert actual['y'] >= 0
     output = monitors[bar['output']]
     x = int(output['x'] + min(actual['x'], expected['x']))

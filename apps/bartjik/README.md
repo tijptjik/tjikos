@@ -1132,15 +1132,18 @@ only for development scripts, test drivers and the test-only migration oracle un
 
 `bartjik --gtk serve` runs the GTK bar with an independent Rust provider engine, native
 MPRIS/SNI subscriptions and the shared `tjik-desktop` compositor adapter. The default
-launcher and service remain Quickshell. Panels, notification history, workspace
-thumbnails and their detachment flows are a separate migration milestone.
+launcher and service remain Quickshell. The shared attached-panel framework renders
+existing status rows. Specialized provider controls, notification history, workspace
+thumbnails and detachment remain separate migration slices.
 
 Bar input uses the same module/item/part action precedence and explicit null overrides
 as Quickshell: left/middle/right/double click, hover dwell and wheel/touchpad scroll.
 Time toggles to the configured date; media scroll selects previous/next (previous
 restarts a seekable track after one second). The merged VPN flag and lower Tailscale
-dots retain separate configured actions. Panel actions report that the panel is not
-ported rather than opening a duplicate legacy panel.
+dots retain separate configured actions. Panel actions use the shared GTK surface and
+pin the requested card. Hover uses configured dwell, nearest-item island gaps, and a
+bar-to-card retention corridor; `hide-panel` dismisses it. Provider-specific controls
+are still being ported.
 
 GTK owns one `bartjik-gtk-core` plus read-only activity helpers. Native tray state
 reuses the current watcher, or owns the watcher when none exists; it never claims
@@ -1160,20 +1163,23 @@ Build with `dev-check bun run build --filter=@tjikos/bartjik`. The supported
 bundled library and launcher without replacing the production core, QML or service
 policy.
 
-For the requested same-session stacked comparison:
+For the live workspace-7 GTK preview:
 
 ```sh
-python3 apps/bartjik/scripts/gtk_compare.py start --native
+python3 apps/bartjik/scripts/gtk_compare.py start --native --workspace 7
 python3 apps/bartjik/scripts/gtk_compare.py status
 python3 apps/bartjik/scripts/gtk_compare.py stop
 ```
 
-The GTK bar sits above Quickshell with an 8px gutter and no extra reservation. Native
-mode uses real provider state and configured actions; only the bar you interact with
-executes that action. No automated real-device mutations are performed. Omit `--native`
-for the original read-only mirror and synthetic renderer tests. Stop before changing
-modes. Neither mode changes the default service or switches workspace/focus. Do not hold
-`dev-check` for this persistent viewer.
+GTK stays visible on outputs displaying workspace 7 and disappears when they leave it.
+Quickshell retains its normal auto-hide behavior. The GTK bar sits above its position
+with an 8px gutter and no extra reservation. The supervisor restarts a crashed GTK
+process; stop it with the command above. Native mode uses real provider state and
+configured actions; only the bar you interact with executes that action. No automated
+real-device mutations are performed. Omit `--native` for the original read-only mirror
+and synthetic renderer tests. Stop before changing modes. Neither mode changes the
+default service or switches workspace/focus. Do not hold `dev-check` for this persistent
+viewer.
 
 `tests/native_services.py` uses a private bus for service actions and lifecycle tests.
 `tests/gtk_native.py` uses synthetic providers, fake compositor actions and a private
@@ -1181,3 +1187,10 @@ bus in the prepared stacked geometry (close the comparison first). Its IPC inten
 do not substitute for physical pointer/keyboard acceptance. Run finite tests through
 `dev-check`. See [GTK progress and parity](docs/gtk-progress.md) for evidence and
 remaining acceptance work.
+
+The panel foundation is documented in [GTK progress](docs/gtk-progress.md).
+`tests/gtk_panels.py` exercises synthetic pointer paths and actual card allocation in
+the prepared stacked comparison layout. These synthetic visible fixtures require
+workspace-7 placement before launch; do not run them on another active workspace. Close
+the comparison first and run them through `dev-check`. It neither moves the host pointer
+nor launches a nested compositor.

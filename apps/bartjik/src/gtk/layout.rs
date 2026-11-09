@@ -242,3 +242,31 @@ mod tests {
             .any(|r| r.label == "Vacant" && r.target.id.as_deref() == Some("desk-empty")));
     }
 }
+
+/// Workspace-scoped previews use the selected adapter's normalized output state.
+/// Unknown workspace state fails closed; no host IPC or compositor-name checks here.
+pub fn workspace_visible(output: &Output, workspace: Option<&str>) -> bool {
+    workspace.is_none_or(|wanted| {
+        output
+            .workspace
+            .as_ref()
+            .is_some_and(|w| w.name.as_deref().unwrap_or(&w.id) == wanted)
+    })
+}
+#[cfg(test)]
+mod visibility_tests {
+    use super::*;
+    use tjik_desktop::DesktopSession;
+    #[test]
+    fn scoped_preview_follows_only_matching_output_workspace() {
+        let fake = tjik_desktop::fake::Fake::default();
+        let mut output = fake.snapshot().unwrap().outputs[0].clone();
+        assert!(workspace_visible(&output, None));
+        assert!(!workspace_visible(&output, Some("7")));
+        output.workspace.as_mut().unwrap().name = Some("7".into());
+        assert!(workspace_visible(&output, Some("7")));
+        output.workspace = None;
+        assert!(!workspace_visible(&output, Some("7")));
+        assert!(workspace_visible(&output, None));
+    }
+}

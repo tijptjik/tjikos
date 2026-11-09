@@ -1,0 +1,57 @@
+{
+  "state": {},
+  "panel": {
+    "rows": [
+      {
+        "id": "requests",
+        "amount": 8853,
+        "failures": 36.0
+      },
+      {
+        "id": "tokens",
+        "input": 808798795,
+        "output": 2447906
+      },
+      {
+        "id": "cached",
+        "amount": 767962880
+      },
+      {
+        "id": "cost",
+        "value": "$7.98"
+      },
+      {
+        "id": "latency",
+        "value": "10.6s"
+      },
+      {
+        "label": "SZN",
+        "plan": "pro",
+        "group": "account",
+        "progress": 0.27,
+        "resetAt": 1158400
+      },
+      {
+        "label": "SZS",
+        "plan": "pro",
+        "group": "account",
+        "progress": 0.25,
+        "resetAt": 1158400
+      },
+      {
+        "label": "TPK",
+        "plan": "pro",
+        "group": "account",
+        "progress": 0.2,
+        "resetAt": 1158400
+      },
+      {
+        "label": "ZEN",
+        "plan": "pro",
+        "group": "account",
+        "progress": 0.2,
+        "resetAt": 1154800
+      }
+    ]
+  }
+}

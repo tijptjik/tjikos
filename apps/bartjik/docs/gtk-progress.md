@@ -414,3 +414,158 @@ Unrelated concurrent changes are excluded. No push or default switch is performe
 Earlier renderer-only performance numbers are not comparable to this independent
 provider runtime. Next: physical gesture/menu-focus review and remaining tooltip polish,
 then the separate provider-panel migration; do not claim those as verified.
+
+## Shared panel framework and hover tracking (2026-11-09)
+
+The attached-panel foundation now lives in two focused modules:
+
+- `src/gtk/panels.rs`: toolkit-independent target selection, edge-aware placement,
+  configured dwell, gap grace, source/card/corridor retention, pinning and dismissal.
+- `src/gtk/panel_view.rs`: stable layer surface, header, grouped status rows, scrollable
+  body, optional footer and a `Content` boundary. Providers supply widgets, preferred
+  width and keyboard requirements; the surface owns geometry, transitions and input.
+
+One attached card is shared across providers. Existing backend `panel.rows` render as
+read-only status content (including world clocks). This is the framework slice, not a
+claim that specialized audio/network/notification controls or live thumbnails are
+ported. Those bodies can now be implemented without duplicating surface behavior.
+Detachment/dragging is still a later slice.
+
+Hover behavior matches the reference rules: nearest-item partitioning covers island
+padding and internal gaps; disabled targets do not acquire a panel. Initial dwell uses
+`panel.delay` / `preview.delay`; moving within an open bar switches content without a
+new dwell. Pointer-following placement and body changes use 140ms transitions.
+Inter-island travel gets `max(250ms, closeDelay)` grace. The source island, current card
+and narrow travel corridor retain the panel. Other desktop space remains outside the
+surface's input region. Output offsets and all four edges are explicit logical
+coordinates. Missing/stale global pointer data never becomes a fabricated exit.
+
+Bar-local hover events wake the existing shared adapter pointer worker. No second
+sampler or compositor commands were added to widgets. Sampling stops when neither hover
+panels nor auto-hide need it. Open/pinned panels retain their source bar; explicit close
+suppresses immediate reopening under a stationary pointer. Removal of the source target
+or compositor invalidation destroys the attached surface. Pinned or editable content
+requests on-demand keyboard ownership; ordinary hover previews do not take keyboard
+focus. `bartjik --gtk hide-panel` also dismisses the shared card.
+
+Validation: release build and static checks; 22 core + 19 GTK tests, including new
+pure-controller cases for four-edge/clamped placement, offset displays, dwell/cancel,
+nearest-target partitioning, gap/corridor retention, pinning and stale coordinates.
+`tests/gtk_panels.py` runs synthetic providers and injected pointer samples in the
+prepared current-session comparison layout. It verifies real GTK card allocation,
+initial/cancelled dwell, pointer-following placement, corridor retention, immediate
+handoff, disabled hover, sustained exit, close suppression and idle sampler teardown.
+`tests/gtk_native.py` still passes bar input, recording-state delivery and backend crash
+recovery. Test commands run through `dev-check`; no host pointer, focus, recording or
+device action is changed. Physical pointer travel remains a separate acceptance check.
+
+Rendered synthetic world-clock card:
+`/run/user/1000/bartjik-gtk-comparison/panel-framework.png`. The private test config
+shortens dwell only in its temporary copy; managed/live delays are unchanged. Install
+with the supported `--gtk-only` path, verify GTK/core hashes, and reopen only the GTK
+comparison. Keep Quickshell as default. Next: provider-specific bodies and editable
+control/focus tests on this framework, followed by drag/detach behavior.
+
+The panel-framework install receipt and pre-update rollback backup are recorded in
+`/tmp/bartjik-gtk-panels-install.json`. The opt-in GTK preview is reopened after
+install; legacy core/QML bytes and the production service identity are checked
+unchanged. No managed configuration, user data, or unrelated concurrent repository work
+is replaced.
+
+## Workspace-7 live preview and crash recovery
+
+The comparison supervisor now defaults to workspace 7. `start --native --workspace 7`
+uses real providers and configured bar actions, with auto-hide disabled in its private
+configuration. Adapter output/workspace events create and remove surfaces on the
+matching output; unknown workspace state fails closed. Menus and attached panels are
+removed with their source bar. No workspace or focus dispatch is performed. Legacy
+Quickshell remains unchanged because its visibility IPC is bar-wide across monitors.
+
+The disappeared preview had a GTK crossing-event SIGSEGV. Hover appearance updates are
+now deferred until after event dispatch, and replaceable icon artwork cannot become an
+input target. This addresses the suspected mutation-during-crossing cause; sustained
+physical hover remains a live acceptance check. The supervisor restarts abnormal exits
+with bounded backoff. Owned core/status children receive a parent-death signal to avoid
+orphan provider instances; recording workers and launched applications are not scoped to
+the preview process group.
+
+Validation includes the normalized workspace gate unit test and the read-only installed
+host check, which accepts a ready backend with zero surfaces outside workspace 7.
+Specialized panel controls, thumbnails, and detachment remain subsequent slices.
+
+Verified for this slice: `dev-check bun run build --filter=@tjikos/bartjik`,
+`dev-check bash scripts/check.sh`, and locked release Cargo tests with `gtk-ui` passed
+(22 core + 20 GTK tests). `dev-check python3 apps/bartjik/tests/gtk_host.py` passed
+against the installed native preview while outputs displayed workspaces 1/11. A
+hidden-preview SIGKILL recovery test verified supervisor restart, removal of all three
+owned helpers, no out-of-scope surfaces, unchanged workspace/focus, and the running
+executable hash. Receipts: `/tmp/bartjik-gtk-workspace-validation.json` and
+`/tmp/bartjik-gtk-workspace-install.json` (includes rollback directory). Interactive
+rendering and physical pointer review on workspace 7 remain for the user; validation
+never switched there. Next: specialized provider panel contents on the existing deck.
+
+## Shared card fidelity: header, controls, and world clock
+
+The attached GTK deck now uses the reference `PanelHeader`, `PanelButton`, and
+`StatusDetails` metrics: 16px outer inset, 32px icon/title header, divider at y=58, body
+at y=72, 12px card radius, and the configured font and panel-border fallback. Header
+artwork follows the original provider mapping; pin/close retain their existing behavior
+as accessible 32px icon controls with hover, pressed, checked and focus states. The
+generic subtitle no longer expands the shared header beyond the reference geometry.
+World clocks use 56px surface rows separated by 6px, 13px location labels, 10px date
+labels and 23px time values. Ordinary provider updates no longer replay the crossfade
+used when switching to a different card.
+
+`dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py` exercises the actual GTK
+primitives with synthetic data in an ordinary window placed silently on workspace 7
+before launch. It asserts measured border-box width/height, header height, row height,
+and content origin, and exports `/tmp/bartjik-panel-primitives.png`. The paired
+`PanelPrimitives.qml` fixture loads the original QML header/status components and
+renders offscreen to `/tmp/bartjik-panel-reference.png`; no production providers are
+started. This is the first card fidelity slice, not specialized audio/network/media or
+notification-panel parity. Next: provider-specific card bodies using these primitives.
+
+## Codex card and tooltip replacement
+
+Codex now has a dedicated read-only GTK body instead of the generic backend field list:
+weekly accounts first, raised plan labels, right-aligned remaining quota and reset
+countdown, seven day segments, then the two-column 24-hour summary. The shared header
+uses `Codex`, 440px width, and no persistent buttons while attached/unpinned. The
+segment calculation follows `CodexTimeline.js`: rose overlap, blue reset-time surplus,
+teal credit surplus, black known-empty slots, and surface-colored unknown slots.
+Unknown/expired reset times, stale state, no accounts, and unavailable totals remain
+explicit. Countdown refresh runs only while the card is mapped.
+
+Bar tooltip eligibility now follows `Part.qml`: configured hover panels, workspace
+previews, crypto, and implicit system-panel hover actions suppress provider tooltips.
+Plain tray items retain their descriptive tooltips; accessible labels remain present.
+
+`dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py --codex` renders identical
+seeded data through GTK and the original `CodexDetails.qml`/`CodexTimeline.js`. It
+checks the 440×529 card geometry and exports `/tmp/bartjik-codex-primitives.png` and
+`/tmp/bartjik-codex-reference.png`. GTK fixtures are pre-placed silently on workspace 7;
+QML reference capture is offscreen. Timeline/formatting and tooltip-policy unit tests
+cover the semantic edge cases. Install/rollback receipt:
+`/tmp/bartjik-gtk-codex-install.json`. Other specialized panels remain separate work.
+
+## Fixed-layout card transitions
+
+The shared attached surface now separates destination layout from animated shell
+geometry. `panel_reveal.rs` allocates the entire incoming card at its final width and
+height; animation changes only the rounded clip, shell border/background, placement, and
+input region. Text wrapping, quota tracks, headings, and scroll viewport dimensions stay
+fixed during growth and shrink. The outgoing card is the last painted content snapshot,
+including the header, rather than a live GtkStack page being resized. Same-size switches
+still crossfade; rapid interrupted handoffs preserve the displayed composite.
+Interrupted snapshot history is flattened at output scale, and the outgoing snapshot is
+released at completion. Old provider widgets unmap immediately.
+
+Validation: `dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py --transition`
+uses a synthetic ordinary window pre-placed silently on workspace 7. It samples growth
+frames and asserts identical destination label bounds, tests stable wrapping during
+shrink, rejects picking outside the visible clip, and covers interrupted/same-size
+handoffs and snapshot release. Midpoint artifact:
+`/tmp/bartjik-panel-transition-mid.png`. The test allocates sampled frames explicitly
+because inactive workspaces need not receive compositor frames; it does not move the
+host pointer or switch focus/workspaces. Existing placement/hover policy is unchanged.
+Install/rollback receipt: `/tmp/bartjik-gtk-transition-install.json`.

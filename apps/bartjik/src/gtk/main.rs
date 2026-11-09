@@ -28,12 +28,16 @@ use tjik_gtk::gtk::{self, gdk, glib, prelude::*};
 mod action_choice;
 mod clock_card;
 mod clocks;
+mod codex_card;
 mod comparison;
 mod edges;
 mod icons;
 mod input;
 mod layout;
 mod motion;
+mod panel_reveal;
+mod panel_view;
+mod panels;
 mod pointer;
 mod runtime;
 mod tray_menu;
@@ -46,6 +50,8 @@ enum Action {
     Workspace(tjik_desktop::WorkspaceTarget),
 }
 enum Event {
+    Hover(String, Option<(f64, f64)>),
+    PanelCommand(String),
     Backend(Value),
     Activity(String, Value),
     Input(Value),

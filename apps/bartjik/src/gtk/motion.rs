@@ -255,6 +255,36 @@ impl Visual {
     pub fn new() -> Self {
         glib::Object::new()
     }
+    pub fn regions(&self) -> Vec<(String, tjik_desktop::Rect)> {
+        let m = self.imp().model.borrow();
+        let mut offset = 0.;
+        m.entries
+            .iter()
+            .map(|e| {
+                let r = if m.vertical {
+                    tjik_desktop::Rect {
+                        x: 0.,
+                        y: offset,
+                        width: self.width() as f64,
+                        height: 24.,
+                    }
+                } else {
+                    tjik_desktop::Rect {
+                        x: offset,
+                        y: 0.,
+                        width: e.width,
+                        height: 24.,
+                    }
+                };
+                offset += if m.vertical {
+                    24. + m.gap
+                } else {
+                    e.width + m.gap
+                };
+                (e.id.clone(), r)
+            })
+            .collect()
+    }
     pub fn set_text(
         &self,
         text: &str,

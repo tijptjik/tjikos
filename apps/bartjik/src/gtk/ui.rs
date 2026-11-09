@@ -1,5 +1,5 @@
 use crate::{
-    clock_card, clocks, comparison, config, edges, layout, pointer,
+    clock_card, clocks, comparison, config, edges, layout, panel_view, panels, pointer,
     util::{arr, num, s},
     Action, Event,
 };
@@ -152,7 +152,12 @@ impl Drop for Bar {
     }
 }
 impl Bar {
-    fn new(app: &gtk::Application, monitor: &gdk::Monitor, definition: &Value) -> Self {
+    fn new(
+        app: &gtk::Application,
+        monitor: &gdk::Monitor,
+        definition: &Value,
+        send: &async_channel::Sender<Event>,
+    ) -> Self {
         let layer = match s(&definition["layer"]) {
             "overlay" => Layer::Overlay,
             "bottom" => Layer::Bottom,
@@ -160,6 +165,23 @@ impl Bar {
             _ => Layer::Top,
         };
         let window = surface(app, monitor, "bartjik-gtk-bar", layer);
+        let tracking = gtk::EventControllerMotion::new();
+        let key = s(&definition["key"]).to_owned();
+        let tx = send.clone();
+        let k = key.clone();
+        tracking.connect_enter(move |_, x, y| {
+            let _ = tx.try_send(Event::Hover(k.clone(), Some((x, y))));
+        });
+        let tx = send.clone();
+        let k = key.clone();
+        tracking.connect_motion(move |_, x, y| {
+            let _ = tx.try_send(Event::Hover(k.clone(), Some((x, y))));
+        });
+        let tx = send.clone();
+        tracking.connect_leave(move |_| {
+            let _ = tx.try_send(Event::Hover(key.clone(), None));
+        });
+        window.add_controller(tracking);
         let panel = surface(app, monitor, "bartjik-gtk-panel", Layer::Overlay);
         panel.set_keyboard_mode(KeyboardMode::OnDemand);
         panel.set_default_size(360, 240);
@@ -586,6 +608,7 @@ pub struct Ui {
     actions: async_channel::Sender<Action>,
     demo: bool,
     reserve: bool,
+    workspace_scope: Option<String>,
     can_select: bool,
     runtime: Option<crate::runtime::Runtime>,
     sender: async_channel::Sender<Event>,
@@ -595,6 +618,11 @@ pub struct Ui {
     intents: RefCell<Vec<Value>>,
     menu: RefCell<Option<crate::tray_menu::Menu>>,
     pointer: pointer::Pointer,
+    deck: RefCell<panels::Deck>,
+    panel_surface: RefCell<Option<panel_view::Surface>>,
+    local_pointer: Cell<Option<(f64, f64)>>,
+    local_updated: RefCell<Instant>,
+    fixture_pointer: Cell<Option<(f64, f64)>>,
     clocks: clocks::Service,
     edge_states: RefCell<BTreeMap<String, edges::State>>,
     edge_timer: RefCell<Option<glib::SourceId>>,
@@ -623,6 +651,9 @@ impl Ui {
             actions,
             demo,
             reserve,
+            workspace_scope: std::env::var("BARTJIK_GTK_WORKSPACE")
+                .ok()
+                .filter(|v| !v.is_empty()),
             can_select,
             runtime,
             sender,
@@ -632,6 +663,11 @@ impl Ui {
             intents: RefCell::new(vec![]),
             menu: RefCell::new(None),
             pointer: pointer::Pointer::new(desktop),
+            deck: RefCell::new(Default::default()),
+            panel_surface: RefCell::new(None),
+            local_pointer: Cell::new(None),
+            local_updated: RefCell::new(Instant::now()),
+            fixture_pointer: Cell::new(None),
             clocks: clocks::Service::new(demo),
             edge_states: RefCell::new(BTreeMap::new()),
             edge_timer: RefCell::new(None),
@@ -651,7 +687,7 @@ impl Ui {
         widgets.filter_map(|w|{let r=w.compute_bounds(window)?;let label=w.downcast_ref::<gtk::Button>().and_then(|b|b.label()).map(|s|s.to_string());Some(json!({"label":label,"x":r.x(),"y":r.y(),"width":r.width(),"height":r.height()}))}).collect()
     }
     fn status(&self) -> Value {
-        json!({"ok":true,"pid":std::process::id(),"nativeRuntime":self.runtime.is_some(),"backendReady":self.backend.borrow()["ready"],"intents":*self.intents.borrow(),"demo":self.demo,"reserve":self.reserve,"autoHideError":self.pointer.latest().1,"pointerSampling":self.edge_timer.borrow().is_some(),"clockProviders":self.clocks.count(),"comparison":std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some(),"error":self.error.borrow().as_str(),"revision":self.snapshot.borrow().as_ref().map(|s|s.revision),"bars":self.bars.borrow().iter().map(|(key,b)|{
+        json!({"workspaceScope":self.workspace_scope,"workspaceOutputs":self.snapshot.borrow().as_ref().map(|s|s.outputs.iter().filter(|o|layout::workspace_visible(o,self.workspace_scope.as_deref())).map(|o|o.name.clone()).collect::<Vec<_>>()),"panelDeck":self.panel_status(),"ok":true,"pid":std::process::id(),"nativeRuntime":self.runtime.is_some(),"backendReady":self.backend.borrow()["ready"],"intents":*self.intents.borrow(),"demo":self.demo,"reserve":self.reserve,"autoHideError":self.pointer.latest().1,"pointerSampling":self.edge_timer.borrow().is_some(),"clockProviders":self.clocks.count(),"comparison":std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some(),"error":self.error.borrow().as_str(),"revision":self.snapshot.borrow().as_ref().map(|s|s.revision),"bars":self.bars.borrow().iter().map(|(key,b)|{
             let mut children=vec![];let mut child=b.rows.first_child();while let Some(w)=child {child=w.next_sibling();if w.is::<gtk::Button>(){children.push(w);}}
             json!({"key":key,"output":b.output,"side":b.definition["side"],"visible":b.window.is_visible(),"concealed":self.edge_states.borrow().get(key).is_some_and(|s|s.concealed),"opacity":b.opacity,"inputActive":b.input_active,"geometry":b.geometry,"width":b.window.width(),"height":b.window.height(),"unsupported":b.unsupported,"panel":b.panel.is_visible(),"items":Self::inspect(children.into_iter(),&b.panel),"clocks":b.clocks.iter().map(|c|{let mut v=c.status();v["bounds"]=Self::inspect(std::iter::once(c.button.clone().upcast()),&b.window).first().cloned().unwrap_or(Value::Null);v}).collect::<Vec<_>>(),"workspaces":Self::inspect(b.workspace_buttons.iter().map(|w|w.clone().upcast()),&b.window),"motion":b.comparisons.iter().map(|(id,v)|json!({"id":id,"visible":v.root.is_visible(),"icons":v.icon_status(),"tray":v.tray_status(),"visuals":v.visuals().iter().map(|v|v.status()).collect::<Vec<_>>()})).collect::<Vec<_>>(),"islands":Self::inspect(b.islands.iter().map(|w|w.clone().upcast()),&b.window)})
         }).collect::<Vec<_>>()})
@@ -675,6 +711,8 @@ impl Ui {
                 if self.demo {
                     let g = m.geometry();
                     output.name = name;
+                    output.logical.x = g.x() as f64;
+                    output.logical.y = g.y() as f64;
                     output.logical.width = g.width() as f64;
                     output.logical.height = g.height() as f64;
                     output.scale = m.scale_factor() as f64;
@@ -801,6 +839,9 @@ impl Ui {
             let Some(output) = outputs.iter().find(|o| o.name == s(&definition["screen"])) else {
                 continue;
             };
+            if !layout::workspace_visible(output, self.workspace_scope.as_deref()) {
+                continue;
+            }
             let Some(monitor) = monitors
                 .iter()
                 .find(|m| m.connector().as_deref() == Some(&output.name))
@@ -827,11 +868,19 @@ impl Ui {
                 .get(&key)
                 .is_some_and(|b| structural(&b.definition) != structural(&definition))
             {
+                if self
+                    .menu
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|m| m.context["barKey"] == key)
+                {
+                    self.menu.borrow_mut().take();
+                }
                 bars.remove(&key);
             }
             let bar = bars
                 .entry(key.clone())
-                .or_insert_with(|| Bar::new(&self.app, monitor, &definition));
+                .or_insert_with(|| Bar::new(&self.app, monitor, &definition, &self.sender));
             bar.definition = definition.clone();
             bar.refresh(
                 snapshot,
@@ -879,7 +928,18 @@ impl Ui {
                 *d = (*d).max(depth);
             }
         }
+        if self
+            .menu
+            .borrow()
+            .as_ref()
+            .is_some_and(|m| !live.iter().any(|key| m.context["barKey"] == *key))
+        {
+            self.menu.borrow_mut().take();
+        }
         self.bars.borrow_mut().retain(|k, _| live.contains(k));
+        if self.bars.borrow().is_empty() {
+            self.local_pointer.set(None);
+        }
         let mut reservations = self.reservations.borrow_mut();
         let mut live = vec![];
         for ((name, side), depth) in depths {
@@ -924,14 +984,196 @@ impl Ui {
                 .flat_map(|b| b.clocks.iter().map(|c| c.module.clone())),
         );
         self.clock();
+        self.update_panels();
         self.configure_edges();
     }
-    fn configure_edges(self: &Rc<Self>) {
-        let enabled = self
+    fn panel_targets(&self) -> Vec<panels::Target> {
+        let mut targets = vec![];
+        for (key, bar) in self
             .bars
             .borrow()
-            .values()
-            .any(|b| b.window.is_visible() && b.definition["autoHide"] == true);
+            .iter()
+            .filter(|(_, b)| b.window.is_visible() && b.input_active)
+        {
+            let Some(output) = &bar.topology else {
+                continue;
+            };
+            let offset = (
+                output.logical.x + bar.geometry.x,
+                output.logical.y + bar.geometry.y,
+            );
+            for (id, view) in &bar.comparisons {
+                let module = &bar.definition["moduleConfigs"][id];
+                let provider = s(&module["provider"]);
+                let Some(island) = view
+                    .root
+                    .parent()
+                    .and_then(|w| w.compute_bounds(&bar.window))
+                else {
+                    continue;
+                };
+                let source = Rect {
+                    x: offset.0 + island.x() as f64,
+                    y: offset.1 + island.y() as f64,
+                    width: island.width() as f64,
+                    height: island.height() as f64,
+                };
+                for (item, mut bounds) in view.hit_regions(bar.window.upcast_ref()) {
+                    let Some(row) = arr(&module["comparisonItems"])
+                        .iter()
+                        .find(|r| r["id"] == item)
+                    else {
+                        continue;
+                    };
+                    bounds.x += offset.0;
+                    bounds.y += offset.1;
+                    let options = if provider == "workspaces" {
+                        &module["preview"]
+                    } else {
+                        &module["panel"]
+                    };
+                    let implicit = [
+                        "audio",
+                        "network",
+                        "nightlight",
+                        "monitor-layout",
+                        "caffeine",
+                    ]
+                    .contains(&provider)
+                        && s(&crate::action_choice::choose(
+                            module,
+                            row,
+                            "item",
+                            "hoverEnter",
+                        ))
+                        .ends_with(".panel");
+                    let enabled = row["enabled"] != false
+                        && row["idle"] != true
+                        && if provider == "workspaces" {
+                            options["enabled"] == true
+                        } else {
+                            options["hover"] == true || (implicit && options["hover"] != false)
+                        };
+                    targets.push(panels::Target {
+                        key: format!("{key}/{id}/{item}"),
+                        bar: key.clone(),
+                        module: id.clone(),
+                        item,
+                        output: bar.output.clone(),
+                        side: s(&bar.definition["side"]).into(),
+                        bounds,
+                        anchor: None,
+                        source,
+                        bar_bounds: Rect {
+                            x: offset.0,
+                            y: offset.1,
+                            width: bar.geometry.width,
+                            height: bar.geometry.height,
+                        },
+                        screen: output.logical,
+                        options: options.clone(),
+                        row: row.clone(),
+                        provider: provider.into(),
+                        style: config::merge(&bar.definition["style"], &module["style"]),
+                        enabled,
+                    });
+                }
+            }
+        }
+        targets
+    }
+    fn panel_status(&self) -> Value {
+        let deck = self.deck.borrow();
+        json!({"active":deck.active.as_ref().map(|t|&t.key),"pinned":deck.pinned,"pending":deck.pending_key(),"surface":self.panel_surface.borrow().as_ref().map(|p|p.status()),"targets":self.panel_targets().iter().map(|t|json!({"key":t.key,"bar":t.bar,"module":t.module,"item":t.item,"output":t.output,"side":t.side,"bounds":t.bounds,"source":t.source,"screen":t.screen,"enabled":t.enabled,"delay":t.options["delay"]})).collect::<Vec<_>>()})
+    }
+    fn update_panels(&self) {
+        // Mirror comparison is presentation-only; it never opens native panels.
+        if self.runtime.is_none() {
+            return;
+        }
+        let targets = self.panel_targets();
+        let recent = self.local_updated.borrow().elapsed() < Duration::from_millis(100);
+        let point = self.fixture_pointer.get().or(if recent {
+            self.local_pointer.get().or(self.pointer.latest().0)
+        } else {
+            self.pointer.latest().0.or_else(|| {
+                self.bars
+                    .borrow()
+                    .values()
+                    .any(|b| b.hovered.get())
+                    .then(|| self.local_pointer.get())
+                    .flatten()
+            })
+        });
+        let hit = point.and_then(|p| panels::nearest(&targets, p));
+        let (rect, inside) = self
+            .panel_surface
+            .borrow()
+            .as_ref()
+            .map(|p| (Some(p.rect()), p.inside.get()))
+            .unwrap_or((None, false));
+        {
+            let mut deck = self.deck.borrow_mut();
+            if let Some(active) = deck.active.as_ref() {
+                if let Some(current) = targets.iter().find(|t| t.key == active.key) {
+                    let mut current = current.clone();
+                    current.anchor = active.anchor;
+                    deck.active = Some(current);
+                } else {
+                    deck.close();
+                }
+            }
+            deck.step(
+                hit,
+                point,
+                rect,
+                inside,
+                self.started.elapsed().as_millis() as u64,
+            );
+        }
+        self.sync_panel();
+    }
+    fn sync_panel(&self) {
+        let (target, pinned) = {
+            let deck = self.deck.borrow();
+            (deck.active.clone(), deck.pinned)
+        };
+        let Some(target) = target else {
+            self.panel_surface.borrow_mut().take();
+            return;
+        };
+        let monitor = gdk::Display::default()
+            .unwrap()
+            .monitors()
+            .iter::<gdk::Monitor>()
+            .flatten()
+            .find(|m| m.connector().as_deref() == Some(&target.output));
+        let Some(monitor) = monitor else {
+            self.deck.borrow_mut().close();
+            self.panel_surface.borrow_mut().take();
+            return;
+        };
+        let mut panel = self.panel_surface.borrow_mut();
+        if panel.as_ref().is_some_and(|p| p.output != target.output) {
+            panel.take();
+        }
+        panel
+            .get_or_insert_with(|| {
+                panel_view::Surface::new(&self.app, &monitor, &target.output, self.sender.clone())
+            })
+            .show(&target, pinned, || panel_view::status_content(&target));
+    }
+    fn tracking_needed(&self) -> bool {
+        self.bars.borrow().values().any(|b| {
+            b.window.is_visible()
+                && (b.definition["autoHide"] == true || (self.runtime.is_some() && b.hovered.get()))
+        }) || (self.local_pointer.get().is_some()
+            && self.local_updated.borrow().elapsed() < Duration::from_millis(100))
+            || (self.deck.borrow().busy() && !self.deck.borrow().pinned)
+            || self.fixture_pointer.get().is_some()
+    }
+    fn configure_edges(self: &Rc<Self>) {
+        let enabled = self.tracking_needed();
         self.pointer.enable(enabled);
         if enabled && self.edge_timer.borrow().is_none() {
             let weak = Rc::downgrade(self);
@@ -941,8 +1183,15 @@ impl Ui {
                     let Some(ui) = weak.upgrade() else {
                         return glib::ControlFlow::Break;
                     };
+                    ui.update_panels();
                     ui.update_edges();
-                    glib::ControlFlow::Continue
+                    if !ui.tracking_needed() {
+                        ui.pointer.enable(false);
+                        ui.edge_timer.borrow_mut().take();
+                        glib::ControlFlow::Break
+                    } else {
+                        glib::ControlFlow::Continue
+                    }
                 },
             ));
         } else if !enabled {
@@ -963,7 +1212,13 @@ impl Ui {
                     key,
                     definition: &b.definition,
                     output: b.topology.as_ref()?,
-                    hovered: b.hovered.get()
+                    hovered: self
+                        .deck
+                        .borrow()
+                        .active
+                        .as_ref()
+                        .is_some_and(|t| t.bar == *key)
+                        || b.hovered.get()
                         || b.panel.is_visible()
                         || b.clocks.iter().any(|c| c.panel.is_visible()),
                     fading: b.opacity > 0.01,
@@ -1093,7 +1348,18 @@ impl Ui {
             }
         }
         if s(&action).ends_with(".panel") {
-            *self.error.borrow_mut() = "Panel migration is outside this bar-only milestone".into();
+            if s(&context["event"]).starts_with("hover") {
+                return;
+            }
+            if let Some(target) = self.panel_targets().into_iter().find(|t| {
+                t.bar == s(&context["barKey"])
+                    && t.module == s(&context["module"])
+                    && t.item == s(&context["item"])
+            }) {
+                self.deck.borrow_mut().open(target);
+                self.update_panels();
+                self.configure_edges();
+            }
             return;
         }
         if self.runtime.is_none() {
@@ -1132,6 +1398,36 @@ impl Ui {
     }
     pub fn event(self: &Rc<Self>, event: Event) {
         match event {
+            Event::Hover(key, point) => {
+                *self.local_updated.borrow_mut() = Instant::now();
+                if self.runtime.is_none() {
+                    return;
+                }
+                if let Some(point) = point {
+                    if let Some(bar) = self.bars.borrow().get(&key) {
+                        if let Some(output) = &bar.topology {
+                            self.local_pointer.set(Some((
+                                output.logical.x + bar.geometry.x + point.0,
+                                output.logical.y + bar.geometry.y + point.1,
+                            )));
+                        }
+                    }
+                } else {
+                    self.local_pointer.set(None);
+                }
+                self.update_panels();
+                self.configure_edges();
+            }
+            Event::PanelCommand(command) => {
+                if command == "pin" {
+                    let mut deck = self.deck.borrow_mut();
+                    deck.pinned = !deck.pinned;
+                } else {
+                    self.deck.borrow_mut().close();
+                }
+                self.sync_panel();
+                self.configure_edges();
+            }
             Event::Input(context) => self.input(context),
             Event::Backend(value) => {
                 if value["kind"] == "menuChanged" {
@@ -1223,12 +1519,20 @@ impl Ui {
                 }
             }
             Event::Quit => {
+                self.menu.borrow_mut().take();
+                self.deck.borrow_mut().close();
+                self.panel_surface.borrow_mut().take();
                 self.clocks.stop();
                 self.app.quit();
             }
             Event::Control(value, reply) => {
                 match value["action"].as_str().unwrap_or("") {
                     "panel" | "hide-panel" => {
+                        if value["action"] == "hide-panel" {
+                            self.deck.borrow_mut().close();
+                            self.sync_panel();
+                            self.configure_edges();
+                        }
                         for b in self.bars.borrow().values() {
                             b.panel
                                 .set_visible(value["action"] == "panel" && b.window.is_visible());
@@ -1253,6 +1557,23 @@ impl Ui {
                     },
                     "input" if self.demo => {
                         self.input(value["context"].clone());
+                    }
+                    "panel-command" if self.demo => {
+                        self.event(Event::PanelCommand(s(&value["command"]).into()));
+                    }
+                    "pointer" if self.demo => {
+                        self.fixture_pointer.set(
+                            value["point"]
+                                .as_array()
+                                .and_then(|v| Some((v.first()?.as_f64()?, v.get(1)?.as_f64()?))),
+                        );
+                        self.update_panels();
+                        self.configure_edges();
+                    }
+                    "panel-close" => {
+                        self.deck.borrow_mut().close();
+                        self.sync_panel();
+                        self.configure_edges();
                     }
                     "status" => (),
                     _ => {
@@ -1280,6 +1601,9 @@ impl Ui {
             }
             Event::Desktop(tjik_desktop::DesktopState::Unavailable(error)) => {
                 *self.error.borrow_mut() = error.to_string();
+                self.menu.borrow_mut().take();
+                self.deck.borrow_mut().close();
+                self.panel_surface.borrow_mut().take();
                 self.bars.borrow_mut().clear();
                 self.reservations.borrow_mut().clear();
                 self.snapshot.borrow_mut().take();
