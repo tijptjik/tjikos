@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-gtk-ui = ["dep:tjik-gtk", "dep:gtk4-layer-shell", "dep:async-channel"]
+gtk-ui = ["dep:tjik-gtk", "dep:gtk4-layer-shell", "dep:async-channel", "dep:notjik-core"]
 
 [[bin]]
 name = "bartjik-gtk"
@@ -12,6 +12,7 @@ path = "src/gtk/main.rs"
 required-features = ["gtk-ui"]
 
 [dependencies]
+notjik-core = { path = "../notjik", features = ["gtk-ui"], optional = true }
 tjik-desktop = { path = "../../packages/tjik-desktop" }
 tjik-gtk = { path = "../../packages/tjik-gtk", optional = true }
 gtk4-layer-shell = { version = "0.7", optional = true }

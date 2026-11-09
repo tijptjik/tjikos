@@ -17,8 +17,8 @@ CODEX = '--codex' in sys.argv
 ROUTER = '--openrouter' in sys.argv
 NETWORK = '--network' in sys.argv
 VPN = '--connectivity' in sys.argv
-HISTORY = False
-LOCALE = False
+HISTORY = '--history' in sys.argv
+LOCALE = '--locale' in sys.argv
 AUDIO = '--audio' in sys.argv
 STEM = 'history' if HISTORY else 'locale' if LOCALE else 'audio' if AUDIO else 'connectivity' if VPN else 'network' if NETWORK else 'openrouter' if ROUTER else 'codex' if CODEX else 'panel'
 

@@ -621,6 +621,7 @@ pub struct Ui {
     deck: RefCell<panels::Deck>,
     panel_surface: RefCell<Option<panel_view::Surface>>,
     audio_card: Rc<crate::audio_card::Card>,
+    history_card: Rc<crate::history_card::Card>,
     network_card: Rc<crate::network_card::Card>,
     connectivity_card: Rc<crate::connectivity_card::Card>,
     local_pointer: Cell<Option<(f64, f64)>>,
@@ -659,6 +660,7 @@ impl Ui {
                 .filter(|v| !v.is_empty()),
             can_select,
             connectivity_card: crate::connectivity_card::Card::new(sender.clone()),
+            history_card: crate::history_card::Card::new(demo || runtime.is_none(), sender.clone()),
             audio_card: crate::audio_card::Card::new(demo || runtime.is_none(), sender.clone()),
             network_card: crate::network_card::Card::new(
                 if demo || runtime.is_none() {
@@ -1199,7 +1201,11 @@ impl Ui {
                 panel_view::Surface::new(&self.app, &monitor, &target.output, self.sender.clone())
             })
             .show(&target, pinned, || {
-                if target.provider == "audio" {
+                if target.provider == "DND" {
+                    self.history_card.content()
+                } else if target.provider == "locale" {
+                    panel_view::locale_content(&target, self.sender.clone())
+                } else if target.provider == "audio" {
                     self.audio_card.content(&target.style)
                 } else if target.provider == "network" {
                     self.network_card.content()

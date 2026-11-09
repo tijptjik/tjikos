@@ -709,3 +709,44 @@ pactl/helper executables for volume/mute, stale-target and routing contract chec
 Artifacts: `/tmp/bartjik-audio-primitives.png` and `/tmp/bartjik-audio-reference.png`.
 Real device mutation, microphone/stream meter responsiveness and IME/accessibility
 acceptance still require user-driven checks; fixtures do not change host audio.
+
+### Input methods, Close hover, and notification history
+
+Close uses the primary accent for its hover glyph, retaining its quiet surface and
+transparent border. Input methods now use the original 34px badge slot, 54px row, active
+subtitle/checkmark, and existing validated Fcitx selection action.
+
+The GTK history panel reads Notjik's `history-data` while mapped and submits only
+`history-action` keyed requests and pause/resume commands. It does not own notification
+admission, storage, or a bus name. A bounded worker polls once per second, cancels on
+hide, and clears content on lock or failed reads. Archived notifications have no action
+controls. Search, app/conversation grouping, expansion, timestamps, selected message
+text, local images, and local voice playback are available. Playback stops when its view
+closes or changes; no recorder is introduced. Keyboard browsing supports arrows, slash
+to search, Enter to invoke, Delete to dismiss, and Escape to clear filtering.
+
+Synthetic checks:
+`dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py --history` and `--locale`;
+artifacts are `/tmp/bartjik-history-primitives.png` and
+`/tmp/bartjik-locale-primitives.png`. Private worker tests cover pause, dismissal,
+filtering/identity, and cancellation; the rendered fixture covers selection, locked
+privacy and teardown. No real notifications are dismissed by these tests.
+
+Remaining history fidelity work: specialized Notjik structured card layouts, Telegram
+waveform/seek/speed controls, and rich attachment layouts. The current panel provides
+message details and local playback, not full parity with every embedded QML card type.
+
+### Faithful history previews and compact search
+
+Expanded history entries now instantiate Notjik's existing GTK `Card` renderer in
+history mode, including its artwork and structured content. Bartjik statically links
+Notjik's public renderer library; it does not start another daemon. The supported
+build/install path bundles the renderer's artwork under `lib/notification-cards`.
+Notification-side storage, admission and mutation authority remain unchanged.
+
+Search is hidden until `/`, uses a 32px content height, and Escape clears and hides it.
+Signal app/desktop-entry identities are excluded from history groups, search and counts;
+stored notifications are not deleted. Empty app labels fall back to their desktop-entry
+identity or “Notification”. Synthetic checks include Signal exclusion, hidden search,
+compact search sizing and actual shared renderer instantiation. Expanded-card evidence:
+`/tmp/bartjik-history-detail.png`.

@@ -16,6 +16,8 @@ install_gtk() {
     install -m 755 "$source_dir/lib/libgtk4-layer-shell.so.0" "$target_dir/lib/.layer-shell.pending"
     mv -f "$target_dir/lib/.layer-shell.pending" "$target_dir/lib/libgtk4-layer-shell.so.0"
     install -m 644 "$source_dir/lib/gtk4-layer-shell.LICENSE" "$target_dir/lib/"
+    install -d -m 755 "$target_dir/lib/notification-cards/qml"
+    cp -R "$source_dir/lib/notification-cards/qml/icons" "$target_dir/lib/notification-cards/qml/"
     install -m 755 "$source_dir/bin/bartjik-gtk" "$target_dir/bin/.bartjik-gtk.pending"
     mv -f "$target_dir/bin/.bartjik-gtk.pending" "$target_dir/bin/bartjik-gtk"
 }

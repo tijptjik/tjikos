@@ -6,7 +6,8 @@ export TMPDIR="${TMPDIR:-$PWD/target/tmp}"
 bash ../../packages/tjik-gtk/scripts/native.sh
 export PKG_CONFIG_PATH="$PWD/../../packages/tjik-gtk/target/native/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 cargo build --release --locked --features gtk-ui
-mkdir -p dist/bin dist/lib
+mkdir -p dist/bin dist/lib/notification-cards/qml
+cp -uR --reflink=auto ../notjik/qml/icons dist/lib/notification-cards/qml/
 cp -L ../../packages/tjik-gtk/target/native/lib/libgtk4-layer-shell.so.0 dist/lib/
 cp ../../packages/tjik-gtk/target/layer-shell-source/LICENSE dist/lib/gtk4-layer-shell.LICENSE
 install -m 755 "${CARGO_TARGET_DIR:-target}/release/bartjik-gtk" dist/bin/bartjik-gtk

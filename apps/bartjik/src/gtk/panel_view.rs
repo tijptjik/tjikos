@@ -176,6 +176,21 @@ fn stylesheet(style: &Value) -> String {
 .panel-card button.panel-control:checked {{border-color:{accent};}}
 .panel-card button.panel-control:focus-visible {{outline:1px solid {accent};outline-offset:2px;}}
 .panel-card button.panel-close:hover {{color:{accent};border-color:transparent;background:{surface};}}
+.panel-card button.input-method {{padding:10px;min-height:34px;border:0;border-radius:8px;background:transparent;box-shadow:none;}}
+.panel-card button.input-method:hover, .panel-card button.input-method.current {{background:{surface};}}
+.panel-card .input-badge {{min-width:34px;min-height:32px;border-radius:7px;background:{background};font-size:15px;}}
+.panel-card .input-name {{font-size:12px;}}
+.panel-card .input-caption {{font-size:10px;color:{muted};}}
+.panel-card .input-check {{color:{accent};}}
+.panel-card .history-search {{background:{surface};color:{text};border:1px solid {border};border-radius:6px;padding:0 8px;min-height:32px;box-shadow:none;}}
+.panel-card .history-search:focus-within {{border-color:{accent};}}
+.panel-card .history-search text {{background:transparent;color:{text};padding:0;min-height:0;}}
+.panel-card .notjik .card-frame {{border:0;}}
+.panel-card .history-group {{padding:12px;border-radius:8px;background:{surface};border:0;box-shadow:none;}}
+.panel-card .history-notice {{padding:10px;border-radius:8px;background:transparent;border:0;box-shadow:none;}}
+.panel-card .history-notice:hover, .panel-card .history-detail {{background:{surface};border-radius:8px;}}
+.panel-card .history-detail {{padding:10px;}}
+.panel-card .history-title {{font-weight:600;}}
 .panel-card button.panel-control:disabled {{opacity:0.4;}}
 "#,
         background = color("background", "#1f1d2e"),
@@ -258,6 +273,58 @@ pub fn footer(text: &str) -> gtk::Widget {
     label.set_wrap(true);
     label.add_css_class("panel-muted");
     label.upcast()
+}
+pub fn locale_content(target: &Target, send: async_channel::Sender<crate::Event>) -> Content {
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    for row in arr(&target.row["panel"]["rows"]) {
+        let button = gtk::Button::new();
+        button.add_css_class("input-method");
+        let active = row["active"] == true;
+        if active {
+            button.add_css_class("current");
+        }
+        let line = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        let badge = gtk::Label::new(Some(s(&row["label"])));
+        badge.add_css_class("input-badge");
+        badge.set_valign(gtk::Align::Center);
+        line.append(&badge);
+        let names = gtk::Box::new(gtk::Orientation::Vertical, 3);
+        names.set_hexpand(true);
+        names.set_valign(gtk::Align::Center);
+        let name = gtk::Label::new(Some(s(&row["detail"])));
+        name.set_xalign(0.);
+        name.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        name.add_css_class("input-name");
+        names.append(&name);
+        if active {
+            let caption = gtk::Label::new(Some("Current input method"));
+            caption.set_xalign(0.);
+            caption.add_css_class("input-caption");
+            names.append(&caption);
+        }
+        line.append(&names);
+        if active {
+            let check = control_symbol("check");
+            check.add_css_class("input-check");
+            line.append(&check);
+        }
+        button.set_child(Some(&line));
+        button.set_sensitive(!s(&row["id"]).is_empty());
+        button.update_property(&[gtk::accessible::Property::Label(s(&row["detail"]))]);
+        let context = json!({"barKey":target.bar,"module":target.module,"monitor":target.output,"action":"select","selection":row["id"]});
+        let send = send.clone();
+        button.connect_clicked(move |_| {
+            let _ = send.try_send(crate::Event::ConnectivityAction(context.clone()));
+        });
+        body.append(&button);
+    }
+    Content {
+        title: "Input methods".into(),
+        body: body.upcast(),
+        footer: None,
+        preferred_width: 420.,
+        needs_keyboard: true,
+    }
 }
 pub fn status_content(target: &Target) -> Content {
     if target.provider == "codex" {
@@ -919,6 +986,9 @@ mod render_tests {
             &css,
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 2,
         );
+        let history = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("history");
+        let locale = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("locale");
+        let mut history_card = None;
         let audio = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("audio");
         let mut audio_card = None;
         let connectivity = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("connectivity");
@@ -945,7 +1015,11 @@ mod render_tests {
             );
         }
         let header = card_header(
-            if audio {
+            if history {
+                "Notifications"
+            } else if locale {
+                "Input methods"
+            } else if audio {
                 "Audio"
             } else if connectivity {
                 "Mullvad"
@@ -958,7 +1032,11 @@ mod render_tests {
             } else {
                 "World clock"
             },
-            if audio {
+            if history {
+                "DND"
+            } else if locale {
+                "locale"
+            } else if audio {
                 "audio"
             } else if connectivity {
                 "mullvad"
@@ -972,10 +1050,79 @@ mod render_tests {
                 "datetime"
             },
         );
-
+        if history || locale {
+            let close = gtk::Button::new();
+            close.add_css_class("panel-control");
+            close.add_css_class("panel-close");
+            close.set_child(Some(&control_symbol("close")));
+            close.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+            header.append(&close);
+        }
         let card = card_frame(&header);
         let first;
-        if audio {
+        if history {
+            let (send, _receive) = async_channel::bounded(32);
+            let view = crate::history_card::Card::new(true, send);
+            let content = view.content();
+            first = content.body.clone();
+            card.append(&content.body);
+            history_card = Some(view);
+        } else if locale {
+            let (send, receive) = async_channel::bounded(8);
+            let target = Target {
+                key: "locale".into(),
+                bar: "fixture".into(),
+                module: "locale".into(),
+                item: "".into(),
+                output: "fixture".into(),
+                side: "b".into(),
+                bounds: Rect {
+                    x: 0.,
+                    y: 0.,
+                    width: 420.,
+                    height: 800.,
+                },
+                anchor: None,
+                source: Rect {
+                    x: 0.,
+                    y: 0.,
+                    width: 420.,
+                    height: 800.,
+                },
+                bar_bounds: Rect {
+                    x: 0.,
+                    y: 0.,
+                    width: 420.,
+                    height: 800.,
+                },
+                screen: Rect {
+                    x: 0.,
+                    y: 0.,
+                    width: 420.,
+                    height: 800.,
+                },
+                options: json!({}),
+                row: json!({"panel":{"rows":[{"id":"keyboard-us","label":"EN","detail":"English – US","active":true},{"id":"pinyin","label":"拼","detail":"Pinyin – Traditional Chinese"},{"id":"quick","label":"速","detail":"Quick (速成) – Traditional Chinese"}]}}),
+                provider: "locale".into(),
+                style: style.clone(),
+                enabled: true,
+            };
+            let content = locale_content(&target, send);
+            first = content.body.clone();
+            card.append(&content.body);
+            let row = content
+                .body
+                .first_child()
+                .unwrap()
+                .downcast::<gtk::Button>()
+                .unwrap();
+            assert!(row.has_css_class("current"));
+            row.emit_clicked();
+            let crate::Event::ConnectivityAction(action) = receive.try_recv().unwrap() else {
+                panic!("missing locale action")
+            };
+            assert_eq!(action["selection"], "keyboard-us");
+        } else if audio {
             let (send, _receive) = async_channel::bounded(32);
             let view = crate::audio_card::Card::new(true, send);
             let content = view.content(&style);
@@ -1051,13 +1198,13 @@ mod render_tests {
         let bounds = first.compute_bounds(&window).unwrap();
         let card_bounds = card.compute_bounds(&window).unwrap();
         assert_eq!(card_bounds.width(), if codex { 440. } else { 420. });
-        if !codex && !router && !network && !connectivity && !audio {
+        if !codex && !router && !network && !connectivity && !audio && !history && !locale {
             assert_eq!(first.height(), 56);
         }
         assert_eq!(header.height(), 32);
         assert_eq!(bounds.x(), 16.);
         assert_eq!(bounds.y(), 72.);
-        if !router && !network && !connectivity && !audio {
+        if !router && !network && !connectivity && !audio && !history && !locale {
             assert_eq!(
                 card_bounds.height(),
                 if codex {
@@ -1076,7 +1223,9 @@ mod render_tests {
         texture
             .save_to_png(std::env::var("BARTJIK_PANEL_ARTIFACT").unwrap())
             .unwrap();
-
+        if let Some(view) = history_card {
+            crate::history_card::exercise_fixture(&view);
+        }
         if let Some(view) = audio_card {
             crate::audio_card::exercise_fixture(&view);
         }

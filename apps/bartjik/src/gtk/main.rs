@@ -34,6 +34,7 @@ mod codex_card;
 mod comparison;
 mod connectivity_card;
 mod edges;
+mod history_card;
 mod icons;
 mod input;
 mod layout;
