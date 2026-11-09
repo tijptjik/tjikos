@@ -513,6 +513,9 @@ pub fn status_content(target: &Target) -> Content {
 }
 pub struct Surface {
     pub window: gtk::ApplicationWindow,
+    floating: Option<gtk::ApplicationWindow>,
+    pub native_title: Option<String>,
+    close_target: Rc<RefCell<Option<String>>>,
     fixed: gtk::Fixed,
     card: gtk::Box,
     reveal: crate::panel_reveal::Reveal,
@@ -546,6 +549,9 @@ impl Drop for Surface {
         if let Some(d) = gdk::Display::default() {
             gtk::style_context_remove_provider_for_display(&d, &self.css);
         }
+        if let Some(window) = self.floating.take() {
+            window.destroy();
+        }
         self.window.destroy();
     }
 }
@@ -568,9 +574,16 @@ impl Surface {
         close.add_css_class("panel-control");
         close.add_css_class("panel-close");
         close.update_property(&[gtk::accessible::Property::Label("Close panel")]);
+        let close_target = Rc::new(RefCell::new(None::<String>));
+        let close_id = close_target.clone();
         let tx = send.clone();
         close.connect_clicked(move |_| {
-            let _ = tx.try_send(Event::PanelCommand("close".into()));
+            let event = close_id
+                .borrow()
+                .as_ref()
+                .map(|id| Event::CloseDetached(id.clone()))
+                .unwrap_or(Event::PanelCommand("close".into()));
+            let _ = tx.try_send(event);
         });
         buttons.append(&close);
         let top = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -629,6 +642,9 @@ impl Surface {
             height: 0.,
         };
         let surface = Self {
+            floating: None,
+            native_title: None,
+            close_target,
             window,
             fixed,
             card,
@@ -674,7 +690,10 @@ impl Surface {
             // Let controls, text selection and scrolling retain their own gestures.
             let mut picked = widget.pick(x, y, gtk::PickFlags::DEFAULT);
             while let Some(child) = picked {
-                if child.is::<gtk::Button>()
+                if child.has_css_class("panel-interactive")
+                    || child.is::<gtk::Switch>()
+                    || child.is::<gtk::DropDown>()
+                    || child.is::<gtk::Button>()
                     || child.is::<gtk::Range>()
                     || child.is::<gtk::Editable>()
                     || child
@@ -707,6 +726,7 @@ impl Surface {
         let fixed = self.fixed.downgrade();
         let reveal = self.reveal.downgrade();
         let close = self.close.downgrade();
+        let drag_send = send.clone();
         drag.connect_drag_update(move |gesture, dx, dy| {
             let (Some(window), Some(fixed), Some(reveal), Some(close)) = (
                 window.upgrade(),
@@ -733,19 +753,193 @@ impl Surface {
             close.set_visible(true);
             apply(&window, &fixed, &reveal, r, bounds, 1.);
             if first {
-                let _ = send.try_send(Event::PanelCommand("detach".into()));
+                let _ = drag_send.try_send(Event::PanelCommand("detach".into()));
+            }
+        });
+        let tx = send.clone();
+        let detached = self.detached.clone();
+        drag.connect_drag_end(move |_, _, _| {
+            if detached.get().is_some() {
+                let _ = tx.try_send(Event::PanelCommand("float".into()));
             }
         });
         // The fullscreen shell stays stationary while the card moves beneath it.
         self.window.add_controller(drag);
     }
-
+    pub fn is_native(&self) -> bool {
+        self.floating.is_some()
+    }
+    pub fn make_native(&mut self, title: &str, send: async_channel::Sender<Event>) {
+        if self.floating.is_some() {
+            return;
+        }
+        let native = gtk::ApplicationWindow::builder()
+            .application(&self.window.application().unwrap())
+            .title(title)
+            .decorated(false)
+            .resizable(false)
+            .build();
+        native.add_css_class("tjik");
+        let rect = self.actual.get();
+        *self.close_target.borrow_mut() = Some(title.to_owned());
+        // Retain the last rendered face through Wayland configure/map/first paint.
+        // Reparenting the live widget immediately otherwise leaves a blank frame.
+        let snapshot = gtk::Snapshot::new();
+        let scale = self.window.scale_factor().max(1) as f32;
+        snapshot.scale(scale, scale);
+        gtk::WidgetPaintable::new(Some(&self.reveal)).snapshot(&snapshot, rect.width, rect.height);
+        let handoff = snapshot.to_node().and_then(|node| {
+            self.window.renderer().map(|renderer| {
+                let texture = renderer.render_texture(
+                    &node,
+                    Some(&gtk::graphene::Rect::new(
+                        0.,
+                        0.,
+                        rect.width as f32 * scale,
+                        rect.height as f32 * scale,
+                    )),
+                );
+                let picture = gtk::Picture::for_paintable(&texture);
+                picture.set_can_shrink(true);
+                picture.set_content_fit(gtk::ContentFit::Fill);
+                picture.set_size_request(rect.width.ceil() as i32, rect.height.ceil() as i32);
+                self.fixed.put(
+                    &picture,
+                    (rect.x - self.screen.get().x).round(),
+                    (rect.y - self.screen.get().y).round(),
+                );
+                picture
+            })
+        });
+        self.fixed.remove(&self.reveal);
+        self.reveal.set_visible(true);
+        self.reveal
+            .layout(rect.width.ceil() as i32, rect.height.ceil() as i32);
+        self.reveal
+            .frame(rect.width.ceil() as i32, rect.height.ceil() as i32, 1.);
+        native.set_child(Some(&self.reveal));
+        native.set_default_size(rect.width.ceil() as i32, rect.height.ceil() as i32);
+        let tx = send.clone();
+        let close_title = title.to_owned();
+        native.connect_close_request(move |_| {
+            let _ = tx.try_send(Event::CloseDetached(close_title.clone()));
+            glib::Propagation::Stop
+        });
+        let keys = gtk::EventControllerKey::new();
+        let close_title = title.to_owned();
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if key == gdk::Key::Escape {
+                let _ = send.try_send(Event::CloseDetached(close_title.clone()));
+                glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
+            }
+        });
+        native.add_controller(keys);
+        // Use native Wayland move requests after detachment; the compositor owns
+        // subsequent position and workspace changes, exactly like any window.
+        let drag = gtk::GestureDrag::new();
+        drag.set_button(1);
+        let weak = native.downgrade();
+        drag.connect_drag_begin(move |gesture, x, y| {
+            let Some(window) = weak.upgrade() else {
+                return;
+            };
+            let mut picked = window.pick(x, y, gtk::PickFlags::DEFAULT);
+            while let Some(w) = picked {
+                if w.has_css_class("panel-interactive")
+                    || w.is::<gtk::Button>()
+                    || w.is::<gtk::Range>()
+                    || w.is::<gtk::Editable>()
+                    || w.is::<gtk::DropDown>()
+                    || w.is::<gtk::Switch>()
+                    || w.downcast_ref::<gtk::Label>()
+                        .is_some_and(|l| l.is_selectable())
+                    || w.downcast_ref::<gtk::ScrolledWindow>()
+                        .is_some_and(|s| s.vadjustment().upper() > s.vadjustment().page_size())
+                {
+                    gesture.set_state(gtk::EventSequenceState::Denied);
+                    return;
+                }
+                picked = w.parent();
+            }
+            if let (Some(surface), Some(event)) = (
+                window.surface().and_downcast::<gdk::Toplevel>(),
+                gesture.current_event(),
+            ) {
+                if let Some(device) = event.device() {
+                    surface.begin_move(&device, 1, x, y, event.time());
+                }
+            }
+        });
+        native.add_controller(drag);
+        let old = self.window.downgrade();
+        let fixed = self.fixed.downgrade();
+        let face = handoff.map(|p| p.downgrade());
+        let finish: Rc<dyn Fn()> = Rc::new(move || {
+            if let Some(old) = old.upgrade() {
+                old.set_visible(false);
+            }
+            if let (Some(fixed), Some(face)) =
+                (fixed.upgrade(), face.as_ref().and_then(|p| p.upgrade()))
+            {
+                if face.parent().is_some() {
+                    fixed.remove(&face);
+                }
+            }
+        });
+        let painted = finish.clone();
+        native.connect_map(move |window| {
+            if let Some(clock) = window.frame_clock() {
+                let signal = Rc::new(RefCell::new(None));
+                let slot = signal.clone();
+                let done = painted.clone();
+                *signal.borrow_mut() = Some(clock.connect_after_paint(move |clock| {
+                    done();
+                    if let Some(id) = slot.borrow_mut().take() {
+                        clock.disconnect(id);
+                    }
+                }));
+            }
+        });
+        // Hidden workspaces may throttle frame callbacks. Never retain an overlay
+        // indefinitely if the user switches workspace during the handoff.
+        glib::timeout_add_local_once(std::time::Duration::from_millis(250), move || finish());
+        native.set_visible(true);
+        self.floating = Some(native);
+    }
+    // Keep the layer surface mapped so returning to a workspace does not replay
+    // the compositor's layer-open animation. Hidden content owns no desktop input.
+    pub fn set_workspace_visible(&self, visible: bool) {
+        if self.is_native() {
+            return;
+        }
+        // Match bar concealment: hide the whole native surface as well as its
+        // children, so the compositor cannot retain a previously drawn card.
+        self.window.set_opacity(if visible { 1. } else { 0. });
+        self.window.queue_draw();
+        if self.fixed.is_visible() == visible {
+            return;
+        }
+        self.fixed.set_visible(visible);
+        self.inside.set(false);
+        self.window.set_keyboard_mode(KeyboardMode::None);
+        apply(
+            &self.window,
+            &self.fixed,
+            &self.reveal,
+            self.actual.get(),
+            self.screen.get(),
+            1.,
+        );
+    }
     pub fn rect(&self) -> Rect {
         self.actual.get()
     }
     pub fn status(&self) -> Value {
-        let allocated=self.reveal.compute_bounds(&self.window).map(|r|json!({"x":r.x() as f64+self.screen.get().x,"y":r.y() as f64+self.screen.get().y,"width":r.width(),"height":r.height()}));
-        json!({"layoutSize":self.reveal.layout_size(),"allocation":allocated,"surfaceWidth":self.window.width(),"surfaceHeight":self.window.height(),"output":self.output,"rect":self.rect(),"target":self.target.get(),"visible":self.window.is_visible(),"inside":self.inside.get(),"transitioning":self.ticking.get(),"keyboard":format!("{:?}",self.window.keyboard_mode())})
+        let window = self.floating.as_ref().unwrap_or(&self.window);
+        let allocated=self.reveal.compute_bounds(window).map(|r|json!({"x":r.x() as f64+self.screen.get().x,"y":r.y() as f64+self.screen.get().y,"width":r.width(),"height":r.height()}));
+        json!({"native":self.is_native(),"nativeTitle":self.native_title,"layoutSize":self.reveal.layout_size(),"allocation":allocated,"surfaceWidth":window.width(),"surfaceHeight":window.height(),"output":self.output,"rect":self.rect(),"target":self.target.get(),"visible":window.is_visible() && (self.is_native() || self.fixed.is_visible()),"mapped":window.is_mapped(),"opacity":window.opacity(),"inside":self.inside.get(),"transitioning":self.ticking.get(),"keyboard":format!("{:?}",self.window.keyboard_mode())})
     }
     pub fn show(&mut self, target: &Target, pinned: bool, content: impl FnOnce() -> Content) {
         let data =
@@ -861,12 +1055,14 @@ impl Surface {
             }
             self.stack.set_visible_child(&body);
         }
-        self.window
-            .set_keyboard_mode(if self.needs_keyboard || pinned {
-                KeyboardMode::OnDemand
-            } else {
-                KeyboardMode::None
-            });
+        if !self.is_native() {
+            self.window
+                .set_keyboard_mode(if self.needs_keyboard || pinned {
+                    KeyboardMode::OnDemand
+                } else {
+                    KeyboardMode::None
+                });
+        }
         let width = self
             .preferred_width
             .min((target.screen.width - 24.).max(1.));
@@ -879,6 +1075,13 @@ impl Surface {
                 .measure(gtk::Orientation::Vertical, width as i32)
                 .1 as f64)
                 .max(120.);
+        }
+        if let Some(native) = &self.floating {
+            let height = self.natural_height.ceil() as i32;
+            self.reveal.layout(width.ceil() as i32, height);
+            self.reveal.frame(width.ceil() as i32, height, 1.);
+            native.set_default_size(width.ceil() as i32, height);
+            return;
         }
         let mut next = panels::place(target, width, self.natural_height);
         if let Some((x, y)) = self.detached.get() {
@@ -926,6 +1129,10 @@ impl Surface {
         let fixed = self.fixed.clone();
         let reveal = self.reveal.clone();
         self.window.add_tick_callback(move |window, _| {
+            if reveal.parent().as_ref() != Some(fixed.upcast_ref()) {
+                ticking.set(false);
+                return glib::ControlFlow::Break;
+            }
             let t = (since.borrow().elapsed().as_secs_f64() / 0.14).min(1.);
             // Pointer-following can retarget geometry every few milliseconds. It
             // must never restart the outgoing/incoming content handoff.
@@ -1032,7 +1239,195 @@ fn apply(
 mod render_tests {
     use super::*;
     /// The Python runner installs a workspace-7 rule BEFORE starting this test.
-
+    #[test]
+    #[ignore = "maps a synthetic toplevel silently on workspace 7 through the adapter"]
+    fn detached_toplevel_render() {
+        gtk::init().unwrap();
+        let app = gtk::Application::builder()
+            .application_id("org.tjikos.bartjik.detachedfixture")
+            .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
+            .build();
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let desktop = tjik_desktop::selected();
+        let before = desktop.snapshot().unwrap();
+        let workspace = before
+            .workspaces
+            .iter()
+            .find(|w| w.workspace.name.as_deref() == Some("7"))
+            .expect("workspace 7 exists");
+        let output = before
+            .outputs
+            .iter()
+            .find(|o| Some(&o.id) == workspace.output.as_ref())
+            .unwrap();
+        let monitor = gdk::Display::default()
+            .unwrap()
+            .monitors()
+            .iter::<gdk::Monitor>()
+            .flatten()
+            .find(|m| m.connector().as_deref() == Some(&output.name))
+            .unwrap();
+        let title = format!("bartjik-detached:fixture:{}", std::process::id());
+        let rect = Rect {
+            x: output.logical.x + 120.,
+            y: output.logical.y + 140.,
+            width: 420.,
+            height: 280.,
+        };
+        let target = tjik_desktop::WorkspaceTarget {
+            generation: before.generation.clone(),
+            output: output.id.clone(),
+            id: Some(workspace.workspace.id.clone()),
+            name: "7".into(),
+        };
+        desktop.prepare_toplevel(&title, &target, rect).unwrap();
+        struct Rule(std::sync::Arc<dyn tjik_desktop::Desktop>, String);
+        impl Drop for Rule {
+            fn drop(&mut self) {
+                let _ = self.0.release_toplevel(&self.1);
+            }
+        }
+        let _rule = Rule(desktop.clone(), title.clone());
+        let (tx, _rx) = async_channel::bounded(8);
+        let mut panel = Surface::new(&app, &monitor, &output.name, tx.clone());
+        panel.actual.set(rect);
+        panel.screen.set(output.logical);
+        panel.native_title = Some(title.clone());
+        panel
+            .stack
+            .add_child(&gtk::Label::new(Some("Synthetic detached panel")));
+        // Use an ordinary synthetic source window on workspace 7 to exercise
+        // the real rendered-face handoff without mapping a desktop-wide layer.
+        let source_title = format!("bartjik-detached:source:{}", std::process::id());
+        desktop
+            .prepare_toplevel(&source_title, &target, rect)
+            .unwrap();
+        let _source_rule = Rule(desktop.clone(), source_title.clone());
+        panel.window.set_child(None::<&gtk::Widget>);
+        panel.window.destroy();
+        panel.window = gtk::ApplicationWindow::builder()
+            .application(&app)
+            .title(&source_title)
+            .decorated(false)
+            .build();
+        panel.window.set_child(Some(&panel.fixed));
+        panel.window.set_default_size(420, 280);
+        panel.screen.set(rect);
+        panel.reveal.layout(420, 280);
+        panel.reveal.frame(420, 280, 1.);
+        panel.window.set_visible(true);
+        for _ in 0..20 {
+            while glib::MainContext::default().pending() {
+                glib::MainContext::default().iteration(false);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panel.fixed.allocate(420, 280, -1, None);
+        panel.make_native(&title, tx);
+        assert!(
+            panel.window.is_visible(),
+            "source disappeared before native paint"
+        );
+        assert!(
+            panel
+                .fixed
+                .first_child()
+                .is_some_and(|w| w.is::<gtk::Picture>()),
+            "handoff did not retain a rendered face"
+        );
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        let found = loop {
+            while glib::MainContext::default().pending() {
+                glib::MainContext::default().iteration(false);
+            }
+            let snap = desktop.snapshot().unwrap();
+            if let Some(w) = snap
+                .windows
+                .iter()
+                .find(|w| w.title.as_deref() == Some(&title))
+            {
+                break w.clone();
+            }
+            assert!(
+                std::time::Instant::now() < until,
+                "detached window did not map"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        };
+        assert_eq!(found.workspace.as_ref().unwrap().id, workspace.workspace.id);
+        assert_eq!(found.floating, Some(true));
+        assert_ne!(found.focus_order, Some(0), "fixture stole focus");
+        assert!(panel.floating.as_ref().unwrap().is_mapped());
+        for _ in 0..30 {
+            while glib::MainContext::default().pending() {
+                glib::MainContext::default().iteration(false);
+            }
+            if !panel.window.is_visible() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!panel.window.is_visible(), "old overlay stayed visible");
+        assert!(
+            panel.fixed.first_child().is_none(),
+            "handoff snapshot was not released"
+        );
+        let geometry = found.geometry.unwrap();
+        assert!(
+            (geometry.x - rect.x).abs() <= 1. && (geometry.y - rect.y).abs() <= 1.,
+            "drop placement: {geometry:?}"
+        );
+        let identity = found.id;
+        panel.set_workspace_visible(false);
+        assert!(
+            panel.floating.as_ref().unwrap().is_visible(),
+            "application must not remap compositor-owned windows"
+        );
+        assert!(desktop.snapshot().unwrap().windows.iter().any(
+            |w| w.id == identity && w.workspace.as_ref().unwrap().id == workspace.workspace.id
+        ));
+        panel.css.load_from_string(&stylesheet(&json!({"background":"#1f1d2e","surface":"#26233a","text":"#e5e5e5","border":"#393546","font":"tijpset"})));
+        let button = gtk::Button::with_label("Synthetic overflow icon");
+        panel.stack.add_child(&button);
+        panel.stack.set_visible_child(&button);
+        let tip = crate::left_card::overflow_tooltip(&button, "HYPE.HK — Zen Browser");
+        tip.set_parent(&button);
+        tip.popup();
+        for _ in 0..20 {
+            while glib::MainContext::default().pending() {
+                glib::MainContext::default().iteration(false);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let text = tip.child().unwrap();
+        let width = text.measure(gtk::Orientation::Horizontal, -1).1;
+        let height = text.measure(gtk::Orientation::Vertical, width).1;
+        assert!(
+            width <= 200 && height <= 32,
+            "oversized tooltip: {width}x{height}"
+        );
+        let shot = gtk::Snapshot::new();
+        gtk::WidgetPaintable::new(Some(&tip)).snapshot(
+            &shot,
+            tip.width() as f64,
+            tip.height() as f64,
+        );
+        panel
+            .floating
+            .as_ref()
+            .unwrap()
+            .renderer()
+            .unwrap()
+            .render_texture(&shot.to_node().expect("tooltip rendered"), None)
+            .save_to_png("/tmp/bartjik-workspace-tooltip.png")
+            .unwrap();
+        tip.popdown();
+        tip.unparent();
+        eprintln!("PASS: detached native toplevel assigned workspace 7 before mapping, no focus, exact placement, layer unmapped, identity retained");
+        panel.close.emit_clicked();
+        let close = _rx.try_recv().expect("scoped close action");
+        crate::ui::exercise_detached_ownership(&app, panel, title.clone(), close);
+    }
     #[test]
     #[ignore = "requires the workspace-7 fixture runner"]
     fn panel_reveal_render() {

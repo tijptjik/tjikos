@@ -148,6 +148,17 @@ impl Deck {
         self.pinned = true;
         self.suppressed = None;
     }
+    pub fn refresh(&mut self, targets: &[Target], detached: bool) {
+        if let Some(active) = self.active.as_ref() {
+            if let Some(current) = targets.iter().find(|t| t.key == active.key) {
+                let mut current = current.clone();
+                current.anchor = active.anchor;
+                self.active = Some(current);
+            } else if !detached {
+                self.close();
+            }
+        }
+    }
     pub fn step(
         &mut self,
         target: Option<Target>,
@@ -215,10 +226,10 @@ impl Deck {
     }
 }
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use serde_json::json;
-    fn target(key: &str) -> Target {
+    pub(crate) fn target(key: &str) -> Target {
         Target {
             key: key.into(),
             bar: "bar".into(),
@@ -257,6 +268,26 @@ mod tests {
             style: json!({}),
             enabled: true,
         }
+    }
+    #[test]
+    fn detached_panel_survives_workspace_bar_removal() {
+        let original = target("persistent");
+        let mut deck = Deck::default();
+        deck.open(original.clone());
+        deck.refresh(&[], true);
+        deck.step(None, None, None, false, 10_000);
+        assert_eq!(deck.active.as_ref().unwrap().key, original.key);
+        assert!(deck.pinned);
+        deck.refresh(&[original.clone()], true);
+        assert_eq!(deck.active.as_ref().unwrap().anchor, original.anchor);
+        deck.close();
+        assert!(deck.active.is_none());
+        deck.open(original);
+        deck.refresh(&[], false);
+        assert!(
+            deck.active.is_none(),
+            "attached panels still close with their bar"
+        );
     }
     #[test]
     fn island_padding_and_midpoint_do_not_expand_to_desktop() {

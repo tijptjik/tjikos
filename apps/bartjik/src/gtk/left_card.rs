@@ -164,6 +164,7 @@ pub struct Card {
     captures: RefCell<Option<async_channel::Sender<(String, tjik_desktop::WindowId, u32, u32)>>>,
     thumbnails: RefCell<Vec<(tjik_desktop::WindowId, gtk::Picture)>>,
     capture_pending: Cell<bool>,
+    workspace_active: Cell<bool>,
     capture_retry: Cell<std::time::Instant>,
     capture_index: Cell<usize>,
     frames: RefCell<BTreeMap<String, gdk::MemoryTexture>>,
@@ -200,6 +201,7 @@ impl Card {
             captures: RefCell::new(None),
             thumbnails: RefCell::new(Vec::new()),
             capture_pending: Cell::new(false),
+            workspace_active: Cell::new(true),
             capture_retry: Cell::new(std::time::Instant::now()),
             capture_index: Cell::new(0),
             frames: RefCell::new(BTreeMap::new()),
@@ -272,6 +274,9 @@ impl Card {
                 let Some(c) = weak.upgrade() else {
                     return gtk::glib::ControlFlow::Break;
                 };
+                if !c.workspace_active.get() {
+                    return gtk::glib::ControlFlow::Continue;
+                }
                 if c.provider == "workspaces"
                     && c.body.is_mapped()
                     && !c.capture_pending.get()
@@ -317,7 +322,9 @@ impl Card {
             });
         *self.ticker.borrow_mut() = Some(ticker);
     }
-
+    pub fn set_workspace_active(&self, active: bool) {
+        self.workspace_active.set(active);
+    }
     pub fn capture_with(self: &Rc<Self>, desktop: std::sync::Arc<dyn tjik_desktop::Desktop>) {
         let (tx, rx) = async_channel::bounded::<(String, tjik_desktop::WindowId, u32, u32)>(1);
         let (results, incoming) = async_channel::bounded(1);
@@ -339,7 +346,7 @@ impl Card {
                     break;
                 };
                 c.capture_pending.set(false);
-                if !c.body.is_mapped() || *c.key.borrow() != key {
+                if !c.workspace_active.get() || !c.body.is_mapped() || *c.key.borrow() != key {
                     continue;
                 }
                 if result.is_err() {

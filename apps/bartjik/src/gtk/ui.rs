@@ -597,6 +597,17 @@ impl Drop for Reservation {
         self.0.destroy();
     }
 }
+struct DetachedPanel {
+    target: panels::Target,
+    surface: Option<panel_view::Surface>,
+}
+fn panel_owner(provider: &str) -> &str {
+    if matches!(provider, "mullvad" | "tailscale") {
+        "connectivity"
+    } else {
+        provider
+    }
+}
 pub struct Ui {
     pub app: gtk::Application,
     pub snapshot: RefCell<Option<Snapshot>>,
@@ -620,6 +631,8 @@ pub struct Ui {
     pointer: pointer::Pointer,
     deck: RefCell<panels::Deck>,
     panel_surface: RefCell<Option<panel_view::Surface>>,
+    detached_panels: RefCell<BTreeMap<String, DetachedPanel>>,
+    detached_workspace: RefCell<Option<(String, String)>>,
     audio_card: Rc<crate::audio_card::Card>,
     history_card: Rc<crate::history_card::Card>,
     left_cards: BTreeMap<String, Rc<crate::left_card::Card>>,
@@ -698,6 +711,8 @@ impl Ui {
             pointer: pointer::Pointer::new(desktop),
             deck: RefCell::new(Default::default()),
             panel_surface: RefCell::new(None),
+            detached_panels: RefCell::new(BTreeMap::new()),
+            detached_workspace: RefCell::new(None),
             local_pointer: Cell::new(None),
             local_updated: RefCell::new(Instant::now()),
             fixture_pointer: Cell::new(None),
@@ -1118,14 +1133,24 @@ impl Ui {
     }
     fn panel_status(&self) -> Value {
         let deck = self.deck.borrow();
-        json!({"network":self.network_card.diagnostics(),"active":deck.active.as_ref().map(|t|&t.key),"pinned":deck.pinned,"pending":deck.pending_key(),"surface":self.panel_surface.borrow().as_ref().map(|p|p.status()),"targets":self.panel_targets().iter().map(|t|json!({"key":t.key,"bar":t.bar,"module":t.module,"item":t.item,"output":t.output,"side":t.side,"bounds":t.bounds,"source":t.source,"screen":t.screen,"enabled":t.enabled,"delay":t.options["delay"]})).collect::<Vec<_>>()})
+        json!({"detached":self.detached_panels.borrow().iter().map(|(title,d)|json!({"title":title,"provider":d.target.provider,"key":d.target.key,"surface":d.surface.as_ref().map(|s|s.status())})).collect::<Vec<_>>(),"network":self.network_card.diagnostics(),"detachedWorkspace":*self.detached_workspace.borrow(),"active":deck.active.as_ref().map(|t|&t.key),"pinned":deck.pinned,"pending":deck.pending_key(),"surface":self.panel_surface.borrow().as_ref().map(|p|p.status()),"targets":self.panel_targets().iter().map(|t|json!({"key":t.key,"bar":t.bar,"module":t.module,"item":t.item,"output":t.output,"side":t.side,"bounds":t.bounds,"source":t.source,"screen":t.screen,"enabled":t.enabled,"delay":t.options["delay"]})).collect::<Vec<_>>()})
     }
     fn update_panels(&self) {
         // Mirror comparison is presentation-only; it never opens native panels.
         if self.runtime.is_none() {
             return;
         }
-        let targets = self.panel_targets();
+        let targets: Vec<_> = self
+            .panel_targets()
+            .into_iter()
+            .filter(|t| {
+                !self
+                    .detached_panels
+                    .borrow()
+                    .values()
+                    .any(|d| panel_owner(&d.target.provider) == panel_owner(&t.provider))
+            })
+            .collect();
         let recent = self.local_updated.borrow().elapsed() < Duration::from_millis(100);
         let point = self.fixture_pointer.get().or(if recent {
             self.local_pointer.get().or(self.pointer.latest().0)
@@ -1148,15 +1173,7 @@ impl Ui {
             .unwrap_or((None, false));
         {
             let mut deck = self.deck.borrow_mut();
-            if let Some(active) = deck.active.as_ref() {
-                if let Some(current) = targets.iter().find(|t| t.key == active.key) {
-                    let mut current = current.clone();
-                    current.anchor = active.anchor;
-                    deck.active = Some(current);
-                } else {
-                    deck.close();
-                }
-            }
+            deck.refresh(&targets, self.detached_workspace.borrow().is_some());
             deck.step(
                 hit,
                 point,
@@ -1167,13 +1184,50 @@ impl Ui {
         }
         self.sync_panel();
     }
-
+    fn sync_detached(&self) {
+        let targets = self.panel_targets();
+        let snapshot = self.snapshot.borrow().clone();
+        for (title, detached) in self.detached_panels.borrow_mut().iter_mut() {
+            if let Some(target) = targets.iter().find(|t| t.key == detached.target.key) {
+                let anchor = detached.target.anchor;
+                detached.target = target.clone();
+                detached.target.anchor = anchor;
+            }
+            if let Some(card) = self.left_cards.get(&detached.target.provider) {
+                let active = snapshot.as_ref().is_some_and(|s| {
+                    s.windows
+                        .iter()
+                        .find(|w| {
+                            w.title.as_deref() == Some(title)
+                                && w.pid == Some(std::process::id() as u64)
+                        })
+                        .is_some_and(|w| {
+                            s.outputs.iter().any(|o| {
+                                Some(&o.id) == w.output.as_ref() && o.workspace == w.workspace
+                            })
+                        })
+                });
+                card.set_workspace_active(active);
+            }
+            let monitor = gdk::Display::default()
+                .unwrap()
+                .monitors()
+                .iter::<gdk::Monitor>()
+                .flatten()
+                .find(|m| m.connector().as_deref() == Some(&detached.target.output));
+            if let Some(monitor) = monitor {
+                self.render_panel(&detached.target, true, &monitor, &mut detached.surface);
+            }
+        }
+    }
     fn sync_panel(&self) {
+        self.sync_detached();
         let (target, pinned) = {
             let deck = self.deck.borrow();
             (deck.active.clone(), deck.pinned)
         };
         let Some(target) = target else {
+            self.detached_workspace.borrow_mut().take();
             self.panel_surface.borrow_mut().take();
             return;
         };
@@ -1188,6 +1242,67 @@ impl Ui {
             self.panel_surface.borrow_mut().take();
             return;
         };
+        let visible =
+            self.detached_workspace
+                .borrow()
+                .as_ref()
+                .is_none_or(|(generation, workspace)| {
+                    self.snapshot.borrow().as_ref().is_some_and(|s| {
+                        &s.generation == generation
+                            && s.outputs.iter().any(|o| {
+                                o.name == target.output
+                                    && o.workspace.as_ref().is_some_and(|w| &w.id == workspace)
+                            })
+                    })
+                });
+        if let Some(card) = self.left_cards.get(&target.provider) {
+            let panel = self.panel_surface.borrow();
+            let native = panel.as_ref().filter(|p| p.is_native());
+            let active = if let Some(native) = native {
+                self.snapshot.borrow().as_ref().is_some_and(|s| {
+                    s.windows
+                        .iter()
+                        .find(|w| {
+                            w.title.as_deref() == native.native_title.as_deref()
+                                && w.pid == Some(std::process::id() as u64)
+                        })
+                        .is_some_and(|w| {
+                            s.outputs.iter().any(|o| {
+                                Some(&o.id) == w.output.as_ref() && o.workspace == w.workspace
+                            })
+                        })
+                })
+            } else {
+                visible
+            };
+            card.set_workspace_active(active);
+        }
+        if let Some(surface) = self.panel_surface.borrow().as_ref() {
+            surface.set_workspace_visible(visible);
+        }
+        if !visible
+            && !self
+                .panel_surface
+                .borrow()
+                .as_ref()
+                .is_some_and(|p| p.is_native())
+        {
+            return;
+        }
+        self.render_panel(
+            &target,
+            pinned,
+            &monitor,
+            &mut self.panel_surface.borrow_mut(),
+        );
+    }
+    fn render_panel(
+        &self,
+        target: &panels::Target,
+        pinned: bool,
+        monitor: &gdk::Monitor,
+        panel: &mut Option<panel_view::Surface>,
+    ) {
         if let Some(card) = self.system_cards.get(&target.provider) {
             card.update(
                 target.row["panel"].clone(),
@@ -1219,13 +1334,12 @@ impl Ui {
                 self.connectivity_card.update(json!({"sections":sections}));
             }
         }
-        let mut panel = self.panel_surface.borrow_mut();
         if panel.as_ref().is_some_and(|p| p.output != target.output) {
             panel.take();
         }
         panel
             .get_or_insert_with(|| {
-                panel_view::Surface::new(&self.app, &monitor, &target.output, self.sender.clone())
+                panel_view::Surface::new(&self.app, monitor, &target.output, self.sender.clone())
             })
             .show(&target, pinned, || {
                 if let Some(card) = self.left_cards.get(&target.provider) {
@@ -1251,7 +1365,6 @@ impl Ui {
             card.update(target.row.clone(), json!({"barKey":target.bar,"module":target.module,"item":target.item,"monitor":target.output,"maxWindows":target.options["maxWindows"],"previewWidth":target.options["width"]}), target.style.clone(), self.snapshot.borrow().clone());
         }
     }
-
     fn tracking_needed(&self) -> bool {
         self.bars.borrow().values().any(|b| {
             b.window.is_visible()
@@ -1445,6 +1558,24 @@ impl Ui {
                     && t.module == s(&context["module"])
                     && t.item == s(&context["item"])
             }) {
+                let detached_title = self
+                    .detached_panels
+                    .borrow()
+                    .iter()
+                    .find(|(_, d)| panel_owner(&d.target.provider) == panel_owner(&target.provider))
+                    .map(|(title, _)| title.clone());
+                if let Some(title) = detached_title {
+                    if let Some(window) = self.snapshot.borrow().as_ref().and_then(|s| {
+                        s.windows.iter().find(|w| {
+                            w.title.as_deref() == Some(&title)
+                                && w.pid == Some(std::process::id() as u64)
+                        })
+                    }) {
+                        let _ = self.actions.try_send(Action::Window(window.id.clone()));
+                    }
+                    return;
+                }
+                self.detached_workspace.borrow_mut().take();
                 self.deck.borrow_mut().open(target);
                 self.update_panels();
                 self.configure_edges();
@@ -1507,12 +1638,98 @@ impl Ui {
                 self.update_panels();
                 self.configure_edges();
             }
+            Event::CloseDetached(title) => {
+                self.detached_panels.borrow_mut().remove(&title);
+                self.configure_edges();
+            }
+            Event::ToplevelPrepared(title, result) => {
+                if let Err(error) = result {
+                    *self.error.borrow_mut() = error;
+                    if let Some(panel) = self.panel_surface.borrow_mut().as_mut() {
+                        panel.native_title = None;
+                    }
+                    return;
+                }
+                let matches = self
+                    .panel_surface
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|p| p.native_title.as_deref() == Some(&title));
+                if matches {
+                    let mut surface = self.panel_surface.borrow_mut().take().unwrap();
+                    surface.make_native(&title, self.sender.clone());
+                    if let Some(target) = self.deck.borrow().active.clone() {
+                        self.detached_panels.borrow_mut().insert(
+                            title.clone(),
+                            DetachedPanel {
+                                target,
+                                surface: Some(surface),
+                            },
+                        );
+                    }
+                    self.deck.borrow_mut().close();
+                    self.detached_workspace.borrow_mut().take();
+                    self.configure_edges();
+                }
+                let actions = self.actions.clone();
+                glib::timeout_add_local_once(Duration::from_secs(1), move || {
+                    let _ = actions.try_send(Action::ReleaseToplevel(title));
+                });
+            }
             Event::PanelCommand(command) => {
+                if command == "float" {
+                    let mut panel = self.panel_surface.borrow_mut();
+                    let Some(panel) = panel
+                        .as_mut()
+                        .filter(|p| !p.is_native() && p.native_title.is_none())
+                    else {
+                        return;
+                    };
+                    let snapshot = self.snapshot.borrow();
+                    let Some(snapshot) = snapshot.as_ref() else {
+                        return;
+                    };
+                    let Some(output) = snapshot.outputs.iter().find(|o| o.name == panel.output)
+                    else {
+                        return;
+                    };
+                    let Some(workspace) = output.workspace.as_ref() else {
+                        return;
+                    };
+                    let title = format!(
+                        "bartjik-detached:{}:{}",
+                        std::process::id(),
+                        self.started.elapsed().as_nanos()
+                    );
+                    let target = tjik_desktop::WorkspaceTarget {
+                        generation: snapshot.generation.clone(),
+                        output: output.id.clone(),
+                        id: Some(workspace.id.clone()),
+                        name: workspace.name.clone().unwrap_or_default(),
+                    };
+                    if self
+                        .actions
+                        .try_send(Action::PrepareToplevel(title.clone(), target, panel.rect()))
+                        .is_ok()
+                    {
+                        panel.native_title = Some(title);
+                    }
+                    return;
+                }
                 if command == "resize" {
                     self.sync_panel();
                     return;
                 } else if command == "detach" {
                     self.deck.borrow_mut().pinned = true;
+                    let output = self.deck.borrow().active.as_ref().map(|t| t.output.clone());
+                    *self.detached_workspace.borrow_mut() =
+                        self.snapshot.borrow().as_ref().and_then(|s| {
+                            s.outputs
+                                .iter()
+                                .find(|o| Some(&o.name) == output.as_ref())
+                                .and_then(|o| o.workspace.as_ref())
+                                .map(|w| (s.generation.clone(), w.id.clone()))
+                        });
                 } else if command == "pin" {
                     let mut deck = self.deck.borrow_mut();
                     deck.pinned = !deck.pinned;
@@ -1674,6 +1891,7 @@ impl Ui {
                 self.menu.borrow_mut().take();
                 self.deck.borrow_mut().close();
                 self.panel_surface.borrow_mut().take();
+                self.detached_panels.borrow_mut().clear();
                 self.clocks.stop();
                 self.app.quit();
             }
@@ -1758,7 +1976,9 @@ impl Ui {
                 self.panel_surface.borrow_mut().take();
                 self.bars.borrow_mut().clear();
                 self.reservations.borrow_mut().clear();
+                self.detached_panels.borrow_mut().clear();
                 self.snapshot.borrow_mut().take();
+                self.detached_workspace.borrow_mut().take();
                 self.clocks.configure(std::iter::empty());
                 self.configure_edges();
             }
@@ -1769,4 +1989,59 @@ impl Ui {
             }
         }
     }
+}
+
+#[cfg(test)]
+pub(super) fn exercise_detached_ownership(
+    app: &gtk::Application,
+    surface: panel_view::Surface,
+    title: String,
+    close: Event,
+) {
+    let (actions, _commands) = async_channel::bounded(8);
+    let (send, _events) = async_channel::bounded(32);
+    let ui = Rc::new(Ui::new(
+        app.clone(),
+        json!({}),
+        actions,
+        true,
+        false,
+        false,
+        Arc::new(tjik_desktop::fake::Fake::default()),
+        None,
+        send,
+    ));
+    let mut first = panels::tests::target("first");
+    first.provider = "datetime".into();
+    ui.deck.borrow_mut().open(first);
+    *ui.panel_surface.borrow_mut() = Some(surface);
+    ui.event(Event::ToplevelPrepared(title.clone(), Ok(())));
+    assert!(
+        ui.deck.borrow().active.is_none(),
+        "detachment retained the hover slot"
+    );
+    assert!(!ui.deck.borrow().pinned);
+    assert!(ui.panel_surface.borrow().is_none());
+    assert_eq!(ui.detached_panels.borrow().len(), 1);
+    let mut second = panels::tests::target("second");
+    second.provider = "battery".into();
+    ui.deck.borrow_mut().open(second.clone());
+    assert_eq!(ui.deck.borrow().active.as_ref().unwrap().key, "second");
+    assert_eq!(ui.detached_panels.borrow().len(), 1);
+    ui.detached_panels.borrow_mut().insert(
+        "another-window".into(),
+        DetachedPanel {
+            target: second.clone(),
+            surface: None,
+        },
+    );
+    assert!(matches!(&close, Event::CloseDetached(id) if id == &title));
+    ui.event(close);
+    assert!(!ui.detached_panels.borrow().contains_key(&title));
+    assert!(ui.detached_panels.borrow().contains_key("another-window"));
+    assert_eq!(
+        ui.deck.borrow().active.as_ref().unwrap().key,
+        "second",
+        "closing detached window closed the active panel"
+    );
 }

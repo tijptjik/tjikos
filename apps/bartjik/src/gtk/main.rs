@@ -60,11 +60,15 @@ mod ui;
 use ui::Ui;
 #[derive(Clone)]
 enum Action {
+    PrepareToplevel(String, tjik_desktop::WorkspaceTarget, tjik_desktop::Rect),
+    ReleaseToplevel(String),
     Window(WindowId),
     Close(WindowId),
     Workspace(tjik_desktop::WorkspaceTarget),
 }
 enum Event {
+    CloseDetached(String),
+    ToplevelPrepared(String, Result<(), String>),
     Hover(String, Option<(f64, f64)>),
     PanelCommand(String),
     ConnectivityAction(Value),
@@ -239,10 +243,23 @@ fn main() -> Result<()> {
     let replies = tx.clone();
     std::thread::spawn(move || {
         while let Ok(id) = commands.recv_blocking() {
+            if let Action::PrepareToplevel(title, workspace, rect) = &id {
+                let result = if std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some() {
+                    Err("Read-only comparison".into())
+                } else {
+                    actor
+                        .prepare_toplevel(title, workspace, *rect)
+                        .map_err(|e| e.to_string())
+                };
+                let _ = replies.send_blocking(Event::ToplevelPrepared(title.clone(), result));
+                continue;
+            }
             let result = if std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some() {
                 Err(tjik_desktop::DesktopError::Unsupported)
             } else {
                 match id {
+                    Action::PrepareToplevel(..) => unreachable!(),
+                    Action::ReleaseToplevel(title) => actor.release_toplevel(&title),
                     Action::Window(id) => actor.activate(&id),
                     Action::Close(id) => actor.close(&id),
                     Action::Workspace(target) => actor.select_workspace(&target),
