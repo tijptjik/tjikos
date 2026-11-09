@@ -73,6 +73,21 @@ failures; cached metadata is only reused after a successful HTTP 304. `latest: t
 selects GitHub's latest stable release. Versions come from `tag_name`, and assets are
 selected by exact expanded filename with their published SHA-256 digest and size.
 
+Git-build policies can declare `patches` (paths expanded with `{repo}`) and a
+`file_capability` for the main executable. Required patches are checked and applied
+before any build or activation; an already-applied patch is accepted only when its
+reverse check succeeds. An incompatible patch aborts without switching the live command.
+`{patch_digest}` hashes the ordered patch bytes and can be included in the versioned
+prefix to keep patch revisions separate. Source receipts include both the upstream
+commit and patch digest, so changed patch bytes invalidate the build cache. Patched
+installers also take a per-policy lock.
+
+Capabilities are applied with noninteractive sudo and verified before the command
+symlink changes, including repairs when a cached executable lost its capability. Declare
+only the capability required by that application's reviewed policy. The runner
+advertises `patched_source_installers: 1`; fleet runner upgrades must require this
+capability while such policies are active.
+
 Flatpak release bundles use the same verification with a `flatpak-bundle` policy:
 
 ```json

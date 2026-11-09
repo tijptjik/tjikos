@@ -10,8 +10,8 @@ this optional synchronization to 500 ms and handles the sync window closing. If 
 modifier state arrives, startup continues without that initial snapshot. Normal key
 event detection and injection still initialize afterward.
 
-The patch targets Espanso revision `a87d1723f47a59e38d370e2f0c636d66d568b8f6` (version
-2.4.0). In a separate checkout at that revision:
+The patch targets Espanso revision `a87d1723f47a59e38d370e2f0c636d66d568b8f6` (tag
+`v2.4.1`; its executable reports 2.4.0). In a separate checkout at that revision:
 
 ```sh
 git apply /path/to/tjikos/apps/runtjik/examples/espanso/patches/wayland-sync-timeout.patch
@@ -36,3 +36,18 @@ The local repair was built and installed with the existing capability. Both real
 config-change reloads completed in 2.3 seconds while the sync window was denied focus,
 and the temporary match file was removed. The installed binary matched the build.
 Physical typing remains a separate end-to-end check.
+
+## Managed upgrades
+
+Dotjik's `home:espanso:update` recipe is part of the Runtjik subscription and runs with
+normal package updates. It skips hosts where Espanso is absent. The native
+`workflow install espanso` policy fetches the latest release, checks its source
+revision, applies the tracked patch, and builds a versioned executable before switching
+`~/.local/bin/espanso`. An incompatible upstream change leaves the current executable
+selected and reports the patch conflict. Identical upstream adoption of the patch is
+accepted; a different upstream fix requires review before retiring the patch policy.
+
+Patch bytes participate in the installation identity. The companion service recipe
+restarts an active Espanso service only when its executable changes. The fleet Tjikup
+installer retains a compatible local runner until a release advertising
+`patched_source_installers: 1` is available. Private dictionaries remain outside Git.
