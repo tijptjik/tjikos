@@ -7,6 +7,7 @@ use tjik_desktop::Output;
 #[derive(Clone, Debug, Default)]
 pub struct State {
     pub concealed: bool,
+    pub keyboard: Option<bool>,
     pub enter: Option<u64>,
     pub leave: Option<u64>,
     pub source: String,
@@ -80,6 +81,18 @@ pub fn update(
         state.source = source.key.into();
         let (at_edge, held) = input(source, pointer);
         let held = held || group.iter().any(|e| e.hovered);
+        if let Some(reveal) = state.keyboard {
+            if !at_edge {
+                state.concealed = !reveal;
+                state.enter = None;
+                state.leave = None;
+                for e in group {
+                    result.insert(e.key.into(), state.clone());
+                }
+                continue;
+            }
+            state.keyboard = None;
+        }
         if source.definition["autoHide"] != true
             || pointer.is_none()
             || (state.concealed && held && group.iter().any(|e| e.fading))
@@ -125,6 +138,40 @@ mod tests {
     use super::*;
     use serde_json::json;
     use tjik_desktop::DesktopSession;
+    #[test]
+    fn keyboard_reveal_and_hide_release_on_real_edge_contact() {
+        let snapshot = tjik_desktop::fake::Fake::default().snapshot().unwrap();
+        let output = &snapshot.outputs[0];
+        let bar = json!({"autoHide":true,"side":"t","activationEdge":"side","activationDelay":0,"hideDelay":0,"revealSize":3});
+        let entries = [Entry {
+            key: "a",
+            definition: &bar,
+            output,
+            hovered: false,
+            fading: false,
+        }];
+        let center = Some((output.logical.x + 100., output.logical.y + 100.));
+        for reveal in [true, false] {
+            let mut previous = BTreeMap::new();
+            previous.insert(
+                "a".into(),
+                State {
+                    keyboard: Some(reveal),
+                    ..State::default()
+                },
+            );
+            let held = update(&previous, &entries, center, 1000);
+            assert_eq!(held["a"].concealed, !reveal);
+            let released = update(
+                &held,
+                &entries,
+                Some((output.logical.x + 100., output.logical.y + 1.)),
+                1001,
+            );
+            assert_eq!(released["a"].keyboard, None);
+            assert!(!released["a"].concealed);
+        }
+    }
     #[test]
     fn four_edges_percent_distance_and_fade_reversal() {
         let snapshot = tjik_desktop::fake::Fake::default().snapshot().unwrap();

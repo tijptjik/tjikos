@@ -46,6 +46,28 @@ async fn stdin_json(limit: u64) -> Result<Value> {
     Ok(serde_json::from_slice(&raw)?)
 }
 async fn ipc(request: &Value) -> Result<Value> {
+    // An explicit QML path still targets the legacy renderer for rollback/fixtures.
+    let socket = std::env::var_os("BARTJIK_GTK_SOCKET")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| xdg("XDG_RUNTIME_DIR", "/tmp").join("bartjik-gtk.sock"));
+    if std::env::var_os("BARTJIK_QML").is_none() && socket.exists() {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+        let mut stream = tokio::net::UnixStream::connect(&socket)
+            .await
+            .context("GTK bar unavailable")?;
+        let mut payload = request.clone();
+        payload["action"] = request["op"].clone();
+        stream.write_all(format!("{payload}\n").as_bytes()).await?;
+        let mut reply = String::new();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            BufReader::new(stream).read_line(&mut reply),
+        )
+        .await??;
+        let value: Value = serde_json::from_str(&reply)?;
+        ensure!(value["ok"] == true, "{}", value["error"]);
+        return Ok(value);
+    }
     let qml = std::env::var("BARTJIK_QML")
         .unwrap_or_else(|_| root().join("qml").to_string_lossy().into_owned());
     let raw = cmd(&[

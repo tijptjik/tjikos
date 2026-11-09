@@ -613,6 +613,9 @@ pub struct Ui {
     pub snapshot: RefCell<Option<Snapshot>>,
     bars: RefCell<BTreeMap<String, Bar>>,
     reservations: RefCell<BTreeMap<String, Reservation>>,
+    visibility: RefCell<BTreeMap<String, bool>>,
+    reminders: RefCell<BTreeMap<String, Bar>>,
+    workspace_reminder: Cell<bool>,
     configuration: RefCell<Value>,
     comparison: RefCell<Value>,
     error: RefCell<String>,
@@ -664,6 +667,9 @@ impl Ui {
             snapshot: RefCell::new(None),
             bars: RefCell::new(BTreeMap::new()),
             reservations: RefCell::new(BTreeMap::new()),
+            visibility: RefCell::new(BTreeMap::new()),
+            reminders: RefCell::new(BTreeMap::new()),
+            workspace_reminder: Cell::new(false),
             configuration: RefCell::new(configuration),
             comparison: RefCell::new(Value::Null),
             error: RefCell::new(String::new()),
@@ -735,10 +741,14 @@ impl Ui {
         widgets.filter_map(|w|{let r=w.compute_bounds(window)?;let label=w.downcast_ref::<gtk::Button>().and_then(|b|b.label()).map(|s|s.to_string());Some(json!({"label":label,"x":r.x(),"y":r.y(),"width":r.width(),"height":r.height()}))}).collect()
     }
     fn status(&self) -> Value {
-        json!({"workspaceScope":self.workspace_scope,"workspaceOutputs":self.snapshot.borrow().as_ref().map(|s|s.outputs.iter().filter(|o|layout::workspace_visible(o,self.workspace_scope.as_deref())).map(|o|o.name.clone()).collect::<Vec<_>>()),"panelDeck":self.panel_status(),"ok":true,"pid":std::process::id(),"nativeRuntime":self.runtime.is_some(),"backendReady":self.backend.borrow()["ready"],"intents":*self.intents.borrow(),"demo":self.demo,"reserve":self.reserve,"autoHideError":self.pointer.latest().1,"pointerSampling":self.edge_timer.borrow().is_some(),"clockProviders":self.clocks.count(),"comparison":std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some(),"error":self.error.borrow().as_str(),"revision":self.snapshot.borrow().as_ref().map(|s|s.revision),"bars":self.bars.borrow().iter().map(|(key,b)|{
+        let mut status = json!({"workspaceScope":self.workspace_scope,"workspaceOutputs":self.snapshot.borrow().as_ref().map(|s|s.outputs.iter().filter(|o|layout::workspace_visible(o,self.workspace_scope.as_deref())).map(|o|o.name.clone()).collect::<Vec<_>>()),"panelDeck":self.panel_status(),"ok":true,"pid":std::process::id(),"nativeRuntime":self.runtime.is_some(),"backendReady":self.backend.borrow()["ready"],"intents":*self.intents.borrow(),"demo":self.demo,"reserve":self.reserve,"autoHideError":self.pointer.latest().1,"pointerSampling":self.edge_timer.borrow().is_some(),"clockProviders":self.clocks.count(),"comparison":std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some(),"error":self.error.borrow().as_str(),"revision":self.snapshot.borrow().as_ref().map(|s|s.revision),"bars":self.bars.borrow().iter().map(|(key,b)|{
             let mut children=vec![];let mut child=b.rows.first_child();while let Some(w)=child {child=w.next_sibling();if w.is::<gtk::Button>(){children.push(w);}}
             json!({"key":key,"output":b.output,"side":b.definition["side"],"visible":b.window.is_visible(),"concealed":self.edge_states.borrow().get(key).is_some_and(|s|s.concealed),"opacity":b.opacity,"inputActive":b.input_active,"geometry":b.geometry,"width":b.window.width(),"height":b.window.height(),"unsupported":b.unsupported,"panel":b.panel.is_visible(),"items":Self::inspect(children.into_iter(),&b.panel),"clocks":b.clocks.iter().map(|c|{let mut v=c.status();v["bounds"]=Self::inspect(std::iter::once(c.button.clone().upcast()),&b.window).first().cloned().unwrap_or(Value::Null);v}).collect::<Vec<_>>(),"workspaces":Self::inspect(b.workspace_buttons.iter().map(|w|w.clone().upcast()),&b.window),"motion":b.comparisons.iter().map(|(id,v)|json!({"id":id,"visible":v.root.is_visible(),"icons":v.icon_status(),"tray":v.tray_status(),"visuals":v.visuals().iter().map(|v|v.status()).collect::<Vec<_>>()})).collect::<Vec<_>>(),"islands":Self::inspect(b.islands.iter().map(|w|w.clone().upcast()),&b.window)})
-        }).collect::<Vec<_>>()})
+        }).collect::<Vec<_>>()});
+        status["renderer"] = json!("gtk");
+        status["ready"] = self.backend.borrow()["ready"].clone();
+        status["workspaceReminder"] = json!(self.workspace_reminder.get());
+        status
     }
     pub fn render(self: &Rc<Self>, snapshot: &Snapshot) {
         let display = gdk::Display::default().unwrap();
@@ -896,6 +906,9 @@ impl Ui {
             else {
                 continue;
             };
+            if let Some(visible) = self.visibility.borrow().get(s(&definition["id"])) {
+                definition["visible"] = json!(visible);
+            }
             let key = s(&definition["key"]).to_owned();
             live.push(key.clone());
             let mut bars = self.bars.borrow_mut();
@@ -1032,8 +1045,82 @@ impl Ui {
                 .flat_map(|b| b.clocks.iter().map(|c| c.module.clone())),
         );
         self.clock();
+        self.update_reminders(snapshot);
         self.update_panels();
         self.configure_edges();
+    }
+    fn update_reminders(&self, snapshot: &Snapshot) {
+        let mut reminders = self.reminders.borrow_mut();
+        if !self.workspace_reminder.get() {
+            reminders.clear();
+            return;
+        }
+        let Some(display) = gdk::Display::default() else {
+            return;
+        };
+        let monitors: Vec<_> = display
+            .monitors()
+            .iter::<gdk::Monitor>()
+            .flatten()
+            .collect();
+        let mut live = vec![];
+        for (key, bar) in self.bars.borrow().iter() {
+            let mut definition = bar.definition.clone();
+            let modules = definition["moduleConfigs"].clone();
+            let islands: Vec<_> = arr(&definition["islands"])
+                .iter()
+                .filter_map(|island| {
+                    let mut island = island.clone();
+                    let ids: Vec<_> = arr(&island["modules"])
+                        .iter()
+                        .filter(|id| modules[s(id)]["provider"] == "workspaces")
+                        .cloned()
+                        .collect();
+                    if ids.is_empty() {
+                        return None;
+                    }
+                    island["modules"] = json!(ids);
+                    Some(island)
+                })
+                .collect();
+            if islands.is_empty() {
+                continue;
+            }
+            let Some(output) = snapshot.outputs.iter().find(|o| o.name == bar.output) else {
+                continue;
+            };
+            let Some(monitor) = monitors
+                .iter()
+                .find(|m| m.connector().as_deref() == Some(&bar.output))
+            else {
+                continue;
+            };
+            definition["islands"] = json!(islands);
+            definition["visible"] = json!(true);
+            definition["layer"] = json!("overlay");
+            definition["autoHide"] = json!(false);
+            let reminder = reminders
+                .entry(key.clone())
+                .or_insert_with(|| Bar::new(&self.app, monitor, &definition, &self.sender));
+            reminder.input_active = false;
+            reminder.definition = definition;
+            reminder
+                .window
+                .set_namespace(Some("bartjik-gtk-workspace-reminder"));
+            reminder.refresh(
+                snapshot,
+                output,
+                &self.actions,
+                self.demo,
+                false,
+                &self.sender,
+            );
+            if let Some(surface) = reminder.window.surface() {
+                surface.set_input_region(&gtk::cairo::Region::create());
+            }
+            live.push(key.clone());
+        }
+        reminders.retain(|key, _| live.contains(key));
     }
     fn panel_targets(&self) -> Vec<panels::Target> {
         let mut targets = vec![];
@@ -1897,6 +1984,84 @@ impl Ui {
             }
             Event::Control(value, reply) => {
                 match value["action"].as_str().unwrap_or("") {
+                    "show-workspaces" | "hide-workspaces" => {
+                        self.workspace_reminder
+                            .set(value["action"] == "show-workspaces");
+                        if let Some(snapshot) = self.snapshot.borrow().as_ref() {
+                            self.update_reminders(snapshot);
+                        }
+                    }
+                    "show-reveal" | "hide-reveal" | "toggle-reveal" | "show" | "hide"
+                    | "toggle" => {
+                        let action = s(&value["action"]);
+                        let selected = value["bar"].as_str().unwrap_or("all");
+                        let ids: Vec<_> = self
+                            .bars
+                            .borrow()
+                            .iter()
+                            .filter(|(_, b)| selected == "all" || b.definition["id"] == selected)
+                            .map(|(key, b)| {
+                                (
+                                    key.clone(),
+                                    s(&b.definition["id"]).to_owned(),
+                                    b.window.is_visible(),
+                                )
+                            })
+                            .collect();
+                        if ids.is_empty() {
+                            let _ = reply.send(json!({"ok":false,"error":"Unknown bar"}));
+                            return;
+                        }
+                        let held = ids.iter().any(|(key, _, _)| {
+                            self.edge_states
+                                .borrow()
+                                .get(key)
+                                .is_some_and(|s| s.keyboard == Some(true))
+                        });
+                        for (key, id, visible) in ids {
+                            let reveal = if action.ends_with("reveal") {
+                                action == "show-reveal" || (action == "toggle-reveal" && !held)
+                            } else {
+                                action == "show" || (action == "toggle" && !visible)
+                            };
+                            self.visibility.borrow_mut().insert(
+                                id,
+                                if action.ends_with("reveal") {
+                                    true
+                                } else {
+                                    reveal
+                                },
+                            );
+                            let mut states = self.edge_states.borrow_mut();
+                            let state = states.entry(key).or_default();
+                            state.keyboard = action.ends_with("reveal").then_some(reveal);
+                            state.enter = None;
+                            state.leave = None;
+                            state.concealed = !reveal;
+                        }
+                        if let Some(snapshot) = self.snapshot.borrow().as_ref() {
+                            self.render(snapshot);
+                        }
+                    }
+                    "modules" => {
+                        let modules: Vec<Value> = self.bars.borrow().values().flat_map(|b| {
+                            crate::util::obj(&b.definition["moduleConfigs"]).into_iter().map(|(id, module)|
+                                json!({"bar":b.definition["id"],"monitor":b.output,"id":id,"provider":module["provider"],"items":module["comparisonItems"]})).collect::<Vec<_>>()
+                        }).collect();
+                        let _ = reply.send(
+                            json!({"ok":true,"modules":modules,"native":*self.activity.borrow()}),
+                        );
+                        return;
+                    }
+                    "bars" => (),
+                    "config" => {
+                        let _ = reply.send(json!({"ok":true,"config":*self.configuration.borrow(),"bars":self.bars.borrow().values().map(|b| b.definition.clone()).collect::<Vec<_>>() }));
+                        return;
+                    }
+                    "monitors" => {
+                        let _ = reply.send(json!({"ok":true,"monitors":self.snapshot.borrow().as_ref().map(|s| s.outputs.iter().map(|o| json!({"name":o.name,"x":o.logical.x,"y":o.logical.y,"width":o.logical.width,"height":o.logical.height,"scale":o.scale})).collect::<Vec<_>>()).unwrap_or_default()}));
+                        return;
+                    }
                     "panel" | "hide-panel" => {
                         if value["action"] == "hide-panel" {
                             self.deck.borrow_mut().close();
