@@ -3,7 +3,12 @@ name = "notjik-core"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+gtk-ui = ["dep:gtk", "dep:tjik-gtk"]
+
 [dependencies]
+gtk = { package = "gtk4", version = "0.10", features = ["v4_12"], optional = true }
+tjik-gtk = { path = "../../packages/tjik-gtk", optional = true }
 notjik-sync = { path = "../../packages/notjik-sync" }
 anyhow = "1"
 serde_json = "1"

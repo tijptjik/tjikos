@@ -21,3 +21,6 @@ mod worker;
 
 pub(crate) use cli::duration;
 pub use cli::run_cli;
+
+#[cfg(feature = "gtk-ui")]
+pub mod gtk;
