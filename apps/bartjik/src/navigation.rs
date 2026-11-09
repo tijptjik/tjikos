@@ -22,6 +22,25 @@ pub fn uri(value: &str, kind: &str) -> String {
     }
     String::new()
 }
+/// Normalize the track identity used both by clicks and stale-target validation.
+pub fn track_id(metadata: &Value) -> String {
+    let track = uri(s(&metadata["xesam:url"]), "track");
+    if !track.is_empty() {
+        return track.rsplit(':').next().unwrap().into();
+    }
+    regex::Regex::new(r"^/com/spotify/track/([A-Za-z0-9]{22})$")
+        .unwrap()
+        .captures(s(&metadata["mpris:trackid"]))
+        .map(|c| c[1].to_owned())
+        .unwrap_or_default()
+}
+fn radio_uri(id: &str) -> Result<String> {
+    ensure!(
+        regex::Regex::new(r"^[A-Za-z0-9]{22}$")?.is_match(id),
+        "Invalid Spotify track"
+    );
+    Ok(format!("spotify:station:track:{id}"))
+}
 #[derive(Clone)]
 enum Wire<'a> {
     Number(u64),
@@ -177,7 +196,11 @@ pub fn context(id: &str) -> Result<Value> {
 }
 pub fn navigation_command(uri_: &str, pid: u32) -> Result<Vec<String>> {
     ensure!(
-        !uri(uri_, "artist").is_empty() || !uri(uri_, "playlist").is_empty(),
+        !uri(uri_, "artist").is_empty()
+            || !uri(uri_, "playlist").is_empty()
+            || uri_
+                .strip_prefix("spotify:station:track:")
+                .is_some_and(|id| radio_uri(id).is_ok()),
         "Invalid Spotify navigation destination"
     );
     ensure!(pid > 0, "Spotify process unavailable");
@@ -223,15 +246,9 @@ async fn current(player: &str) -> Result<String> {
         "Metadata",
     )
     .await?;
-    let u = uri(s(&data["xesam:url"]["data"]), "track");
-    if !u.is_empty() {
-        return Ok(u.rsplit(':').next().unwrap().into());
-    }
-    let re = regex::Regex::new(r"^/com/spotify/track/([A-Za-z0-9]{22})$")?;
-    Ok(re
-        .captures(s(&data["mpris:trackid"]["data"]))
-        .map(|c| c[1].to_owned())
-        .unwrap_or_default())
+    Ok(track_id(
+        &json!({"xesam:url":data["xesam:url"]["data"], "mpris:trackid":data["mpris:trackid"]["data"]}),
+    ))
 }
 pub async fn navigate(r: &Value) -> Result<()> {
     let player = s(&r["player"]);
@@ -247,10 +264,14 @@ pub async fn navigate(r: &Value) -> Result<()> {
     );
     let target = s(&r["target"]);
     ensure!(
-        ["artist", "playlist"].contains(&target),
+        ["artist", "playlist", "radio"].contains(&target),
         "Unsupported Spotify navigation action"
     );
-    let mut destination = uri(s(&r["uri"]), target);
+    let mut destination = if target == "radio" {
+        radio_uri(id)?
+    } else {
+        uri(s(&r["uri"]), target)
+    };
     if destination.is_empty() {
         destination = st(&context(id)?[target]);
     }
@@ -331,4 +352,29 @@ pub async fn play() -> Result<()> {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
     anyhow::bail!("Spotify did not become available for playback within 30 seconds")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn spotify_label_navigation_normalizes_exact_track_identity() {
+        let id = "0123456789abcdefghijkl";
+        for value in [
+            format!("spotify:track:{id}"),
+            format!("https://open.spotify.com/track/{id}?si=fixture"),
+        ] {
+            assert_eq!(track_id(&json!({"xesam:url":value})), id);
+        }
+        assert_eq!(
+            track_id(&json!({"mpris:trackid":format!("/com/spotify/track/{id}")})),
+            id
+        );
+        assert_eq!(
+            radio_uri(id).unwrap(),
+            format!("spotify:station:track:{id}")
+        );
+        assert!(radio_uri("bad;command").is_err());
+        assert!(track_id(&json!({"xesam:url":"https://example.com/track/no"})).is_empty());
+    }
 }

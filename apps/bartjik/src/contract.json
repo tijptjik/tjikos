@@ -107,6 +107,7 @@
     "player.artist",
     "player.next",
     "player.playlist",
+    "player.radio",
     "player.previous",
     "player.quit",
     "player.shuffle",

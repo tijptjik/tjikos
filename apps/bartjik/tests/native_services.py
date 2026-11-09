@@ -140,6 +140,8 @@ with tempfile.TemporaryDirectory(prefix='bartjik-services-') as tmp:
         send({'op':'screens','screens':[{'name':'SYNTHETIC','width':1000,'height':700,'scale':1}]})
         state=wait(lambda v:row(v,'music') is not None)
         media=row(state,'music');assert media['track']['value']=='Fixture track'
+        assert media['artist']['actions']['leftClick']=='player.artist'
+        assert media['track']['actions']['leftClick']=='player.radio'
         watcher=dbus.Interface(bus.get_object(WATCHER,'/StatusNotifierWatcher'),WATCHER)
         watcher.RegisterStatusNotifierItem('org.example.TrayFixture')
         state=wait(lambda v:row(v,'tray') is not None)

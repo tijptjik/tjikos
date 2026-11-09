@@ -326,7 +326,7 @@ pub fn items(module: &Value, native: &Value) -> Vec<Value> {
     row["icon"]["actions"] = json!({"leftClick":"player.toggle"});
     row["idle"] = json!(!playing);
     row["artist"] = json!({"value":artist,"actions":{"leftClick":"player.artist"}});
-    row["track"] = json!({"value":title,"actions":{"leftClick":"player.playlist"}});
+    row["track"] = json!({"value":title,"actions":{"leftClick":"player.radio"}});
     row["native"] = (*p).clone();
     vec![row]
 }
@@ -335,11 +335,13 @@ pub async fn action(action: String, row: Value, context: Value) -> Result<()> {
         return crate::navigation::play().await;
     }
     let native = row["native"].clone();
-    if action == "player.artist" || action == "player.playlist" {
+    if ["player.artist", "player.playlist", "player.radio"].contains(&action.as_str()) {
         if s(&native["service"]).starts_with("org.mpris.MediaPlayer2.spotify") {
             let meta = &native["props"]["Metadata"];
             let target = if action == "player.artist" {
                 "artist"
+            } else if action == "player.radio" {
+                "radio"
             } else {
                 "playlist"
             };
@@ -348,9 +350,13 @@ pub async fn action(action: String, row: Value, context: Value) -> Result<()> {
             } else {
                 meta["spotify:contextUrl"].clone()
             };
-            return crate::navigation::navigate(&json!({"target":target,"player":native["service"],"trackId":s(&meta["xesam:url"]).strip_prefix("spotify:track:").unwrap_or(""),"uri":uri})).await;
+            return crate::navigation::navigate(&json!({"target":target,"player":native["service"],"trackId":crate::navigation::track_id(meta),"uri":uri})).await;
         }
     }
+    ensure!(
+        action != "player.radio",
+        "Song radio is currently supported for Spotify"
+    );
     tokio::task::spawn_blocking(move || -> Result<()> {
         let c = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)?;
         let dest = s(&native["owner"]);
