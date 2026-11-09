@@ -117,6 +117,10 @@ impl Ui {
         pane.append(&expansion_label);
         let expansion = gtk::TextView::new();
         expansion.set_wrap_mode(gtk::WrapMode::WordChar);
+        expansion.set_left_margin(10);
+        expansion.set_right_margin(10);
+        expansion.set_top_margin(8);
+        expansion.set_bottom_margin(8);
         expansion
             .buffer()
             .set_text(s(&value["original"], "expansion"));
