@@ -368,6 +368,17 @@ impl Card {
             let Some(root) = weak.upgrade() else {
                 return;
             };
+            if root
+                .root()
+                .and_downcast::<gtk::Window>()
+                .is_some_and(|w| w.has_css_class("notjik-native-detached"))
+                && !gesture
+                    .current_event_state()
+                    .intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK)
+            {
+                gesture.set_state(gtk::EventSequenceState::Denied);
+                return;
+            }
             if gesture
                 .current_event_state()
                 .contains(gdk::ModifierType::SHIFT_MASK)
@@ -407,7 +418,16 @@ impl Card {
         });
         let active = candidate.clone();
         let c = self.context.clone();
+        let weak = self.widget.downgrade();
         drag.connect_drag_update(move |_, dx, dy| {
+            if weak
+                .upgrade()
+                .and_then(|w| w.root())
+                .and_downcast::<gtk::Window>()
+                .is_some_and(|w| w.has_css_class("notjik-native-detached"))
+            {
+                return;
+            }
             if !active.get() || !c.allowed() || (!c.dragging.get() && dx.hypot(dy) < 8.) {
                 return;
             }

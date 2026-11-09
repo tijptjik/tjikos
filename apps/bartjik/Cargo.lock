@@ -1351,6 +1351,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "tjik-desktop",
  "tjik-gtk",
  "url",
 ]

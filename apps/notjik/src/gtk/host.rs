@@ -24,6 +24,7 @@ pub fn now() -> u64 {
         .as_millis() as u64
 }
 struct Surface {
+    native: bool,
     window: gtk::ApplicationWindow,
     list: super::stack::Stack,
     scene: gtk::Fixed,
@@ -35,7 +36,155 @@ struct Surface {
     pointer_keyboard_until: Rc<std::cell::Cell<Option<Instant>>>,
     keyboard_release_until: Rc<std::cell::Cell<Option<Instant>>>,
 }
+impl Surface {
+    fn make_native(
+        &mut self,
+        app: &gtk::Application,
+        title: &str,
+        source: &str,
+        id: &str,
+        events: &mpsc::Sender<(String, CardEvent)>,
+    ) {
+        let native = gtk::ApplicationWindow::builder()
+            .application(app)
+            .title(title)
+            .decorated(false)
+            .resizable(false)
+            .build();
+        native.add_css_class("notjik");
+        native.add_css_class("notjik-popup");
+        native.add_css_class("notjik-native-detached");
+        let width = self.list.measure(gtk::Orientation::Horizontal, -1).1.max(1);
+        let height = self
+            .cards
+            .values()
+            .map(|c| c.widget.measure(gtk::Orientation::Vertical, width).1)
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        // Freeze the already rendered face until the new native surface paints.
+        let snapshot = gtk::Snapshot::new();
+        let scale = self.window.scale_factor().max(1) as f32;
+        snapshot.scale(scale, scale);
+        gtk::WidgetPaintable::new(Some(&self.list)).snapshot(
+            &snapshot,
+            width as f64,
+            self.list.height() as f64,
+        );
+        if let (Some(node), Some(renderer)) = (snapshot.to_node(), self.window.renderer()) {
+            let texture = renderer.render_texture(
+                &node,
+                Some(&gtk::graphene::Rect::new(
+                    0.,
+                    0.,
+                    width as f32 * scale,
+                    height as f32 * scale,
+                )),
+            );
+            let face = gtk::Picture::for_paintable(&texture);
+            face.set_content_fit(gtk::ContentFit::Fill);
+            face.set_size_request(width, height);
+            let position = self.scene.child_position(&self.list);
+            self.scene.put(&face, position.0, position.1);
+        }
+        self.scene.remove(&self.list);
+        self.list.configure(width, height, 0, 0., 0, 0);
+        self.list.position(0, 0, true);
+        self.list.grab(false);
+        native.set_child(Some(&self.list));
+        native.set_default_size(width, height);
+        let send = events.clone();
+        let source = source.to_owned();
+        let id = id.to_owned();
+        native.connect_close_request(move |_| {
+            let _ = send.send((
+                source.clone(),
+                CardEvent {
+                    id: id.clone(),
+                    intent: Intent::Dismiss,
+                },
+            ));
+            glib::Propagation::Proceed
+        });
+        let drag = gtk::GestureDrag::new();
+        drag.set_button(1);
+        let weak = native.downgrade();
+        drag.connect_drag_begin(move |gesture, x, y| {
+            if gesture
+                .current_event_state()
+                .intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK)
+            {
+                gesture.set_state(gtk::EventSequenceState::Denied);
+                return;
+            }
+            let Some(window) = weak.upgrade() else { return };
+            let mut picked = window.pick(x, y, gtk::PickFlags::DEFAULT);
+            while let Some(widget) = picked {
+                if widget.is::<gtk::Button>()
+                    || widget.is::<gtk::Editable>()
+                    || widget.is::<gtk::TextView>()
+                    || widget.is::<gtk::Range>()
+                    || widget.is::<gtk::DropDown>()
+                    || widget
+                        .downcast_ref::<gtk::Label>()
+                        .is_some_and(|l| l.is_selectable())
+                {
+                    gesture.set_state(gtk::EventSequenceState::Denied);
+                    return;
+                }
+                picked = widget.parent();
+            }
+            if let (Some(surface), Some(event)) = (
+                window.surface().and_downcast::<gdk::Toplevel>(),
+                gesture.current_event(),
+            ) {
+                if let Some(device) = event.device() {
+                    surface.begin_move(&device, 1, x, y, event.time());
+                }
+            }
+        });
+        native.add_controller(drag);
+        let old = self.window.clone();
+        let scene = self.scene.clone();
+        let done: Rc<dyn Fn()> = Rc::new(move || {
+            old.close();
+            while let Some(child) = scene.first_child() {
+                scene.remove(&child);
+            }
+        });
+        let painted = done.clone();
+        native.connect_map(move |window| {
+            if let Some(clock) = window.frame_clock() {
+                let signal = Rc::new(RefCell::new(None));
+                let slot = signal.clone();
+                let done = painted.clone();
+                *signal.borrow_mut() = Some(clock.connect_after_paint(move |clock| {
+                    done();
+                    if let Some(id) = slot.borrow_mut().take() {
+                        clock.disconnect(id);
+                    }
+                }));
+            }
+        });
+        glib::timeout_add_local_once(Duration::from_millis(250), move || done());
+        native.set_visible(true);
+        self.window = native;
+        self.native = true;
+    }
+}
+
+// Release temporary placement rules even if a card disappears while the worker runs.
+struct PreparedWindow(String);
+impl Drop for PreparedWindow {
+    fn drop(&mut self) {
+        let title = self.0.clone();
+        std::thread::spawn(move || {
+            let _ = tjik_desktop::selected().release_toplevel(&title);
+        });
+    }
+}
 struct Detached {
+    preparation: Option<mpsc::Receiver<tjik_desktop::Result<PreparedWindow>>>,
     monitor: String,
     workspace: Option<i64>,
     id: String,
@@ -444,12 +593,48 @@ impl Host {
                 // Leaving a deliberately selected card ends keyboard ownership;
                 // later hover or arrivals must not reacquire it.
                 self.controller.borrow_mut().selected.clear();
-                surface.window.set_keyboard_mode(KeyboardMode::None);
+                if surface.window.is_layer_window() {
+                    surface.window.set_keyboard_mode(KeyboardMode::None);
+                }
                 surface.pointer_keyboard_until.set(None);
             }
             surface.keyboard_was_active = active;
         }
+        self.finish_native_windows();
         self.render();
+    }
+    fn finish_native_windows(&mut self) {
+        for (name, detached) in &mut self.detached {
+            let result = detached
+                .preparation
+                .as_ref()
+                .and_then(|rx| match rx.try_recv() {
+                    Ok(result) => Some(result),
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        Some(Err(tjik_desktop::DesktopError::Cancelled))
+                    }
+                    Err(mpsc::TryRecvError::Empty) => None,
+                });
+            let Some(result) = result else { continue };
+            detached.preparation = None;
+            match result {
+                Ok(prepared) => {
+                    if let Some(surface) = self.windows.get_mut(name) {
+                        surface.make_native(
+                            &self.app,
+                            &prepared.0,
+                            name,
+                            &detached.id,
+                            &self.event_tx,
+                        );
+                    }
+                    glib::timeout_add_local_once(Duration::from_secs(1), move || {
+                        drop(prepared);
+                    });
+                }
+                Err(error) => eprintln!("Notjik native detachment unavailable: {error}"),
+            }
+        }
     }
     fn request(&mut self, request: Value) -> Result<Value> {
         if request["op"] == "reference-artwork" {
@@ -680,6 +865,7 @@ impl Host {
                     self.detached.insert(
                         preview.clone(),
                         Detached {
+                            preparation: None,
                             workspace: self.workspaces.get(&monitor_name).copied(),
                             monitor: monitor_name.clone(),
                             id: id.clone(),
@@ -773,6 +959,54 @@ impl Host {
                 if finished {
                     let drag = self.drag.take().unwrap();
                     self.windows[&drag.preview].cards[&id].set_drag_preview(false);
+                    if let Some(detached) = self.detached.get_mut(&drag.preview) {
+                        let monitor = detached.monitor.clone();
+                        let workspace = detached.workspace.map(|w| w.to_string());
+                        let (x, y) = (detached.x, detached.y);
+                        let width = c.config["style"]["width"].as_f64().unwrap_or(420.);
+                        let height = drag.height.max(1) as f64;
+                        let title = format!("notjik-detached:{}:{}", std::process::id(), now());
+                        let (tx, rx) = mpsc::channel();
+                        detached.preparation = Some(rx);
+                        std::thread::spawn(move || {
+                            let desktop = tjik_desktop::selected();
+                            let result = (|| {
+                                let snapshot = desktop.snapshot()?;
+                                let output = snapshot
+                                    .outputs
+                                    .iter()
+                                    .find(|o| o.name == monitor)
+                                    .ok_or(tjik_desktop::DesktopError::StaleTarget)?;
+                                let workspace = snapshot
+                                    .workspaces
+                                    .iter()
+                                    .find(|w| {
+                                        w.output.as_ref() == Some(&output.id)
+                                            && w.workspace.name == workspace
+                                    })
+                                    .ok_or(tjik_desktop::DesktopError::StaleTarget)?;
+                                desktop.prepare_toplevel(
+                                    &title,
+                                    &tjik_desktop::WorkspaceTarget {
+                                        generation: snapshot.generation.clone(),
+                                        output: output.id.clone(),
+                                        id: Some(workspace.workspace.id.clone()),
+                                        name: workspace.workspace.name.clone().unwrap_or_default(),
+                                    },
+                                    tjik_desktop::Rect {
+                                        x: output.logical.x + x as f64,
+                                        y: output.logical.y + y as f64,
+                                        width,
+                                        height,
+                                    },
+                                )?;
+                                Ok(PreparedWindow(title.clone()))
+                            })();
+                            if tx.send(result).is_err() {
+                                let _ = desktop.release_toplevel(&title);
+                            }
+                        });
+                    }
                     c.floating.insert(id.clone());
                     c.hold(&id, false);
                     if self.detached.remove(&drag.source).is_some() {
@@ -841,7 +1075,8 @@ impl Host {
             .windows
             .keys()
             .filter(|name| {
-                !monitors.iter().any(|m| m["name"] == **name)
+                !self.windows.get(*name).is_some_and(|s| s.native)
+                    && !monitors.iter().any(|m| m["name"] == **name)
                     && !self
                         .detached
                         .get(*name)
@@ -952,9 +1187,11 @@ impl Host {
                     || (detached.is_none() && grab_monitor.as_deref() != Some(name.as_str()))
             });
             surface.list.grab(capture);
-            if detached.is_some_and(|d| {
-                d.workspace.is_some() && self.workspaces.get(&d.monitor).copied() != d.workspace
-            }) && !self.drag.as_ref().is_some_and(|d| d.preview == *name)
+            if !surface.native
+                && detached.is_some_and(|d| {
+                    d.workspace.is_some() && self.workspaces.get(&d.monitor).copied() != d.workspace
+                })
+                && !self.drag.as_ref().is_some_and(|d| d.preview == *name)
             {
                 // Preserve the mapped layer surface and card state. Remapping
                 // it on workspace return replays the compositor's entrance fade.
@@ -971,8 +1208,15 @@ impl Host {
             }
             surface.scene.set_visible(true);
             if c.concealed() {
-                surface.list.clear();
-                surface.window.set_visible(false);
+                if surface.native {
+                    surface.list.set_visible(false);
+                    if let Some(native) = surface.window.surface() {
+                        native.set_input_region(&gtk::cairo::Region::create());
+                    }
+                } else {
+                    surface.list.clear();
+                    surface.window.set_visible(false);
+                }
                 for card in surface.cards.values() {
                     let mut state = card.context.state.borrow().clone();
                     state.locked = c.locked();
@@ -983,6 +1227,7 @@ impl Host {
                 surface.states.clear();
                 continue;
             }
+            surface.list.set_visible(true);
             let visible = if let Some(d) = detached {
                 if self.drag.as_ref().is_some_and(|drag| drag.source == *name) {
                     vec![]
@@ -1237,6 +1482,22 @@ impl Host {
                             .as_ref()
                             .is_some_and(|d| d.preview == *name && d.source != *name),
                     );
+                }
+                if surface.native {
+                    let height = surface
+                        .cards
+                        .values()
+                        .map(|card| {
+                            card.widget
+                                .measure(gtk::Orientation::Vertical, card_width)
+                                .1
+                        })
+                        .max()
+                        .unwrap_or(1)
+                        .max(1);
+                    surface.list.configure(card_width, height, 0, 0., 0, 0);
+                    surface.list.position(0, 0, true);
+                    surface.window.set_default_size(card_width, height);
                 }
                 surface.window.set_visible(true);
             }
@@ -1663,6 +1924,7 @@ fn popup(
     });
     window.add_controller(keys);
     Surface {
+        native: false,
         window,
         list,
         scene,
@@ -1756,6 +2018,122 @@ pub fn run() -> glib::ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[ignore = "requires the current compositor; assigns workspace 7 before mapping"]
+    fn native_detached_workspace_window() {
+        gtk::init().unwrap();
+        let app = gtk::Application::builder()
+            .application_id("org.tjikos.notjik.nativefixture")
+            .flags(gio::ApplicationFlags::NON_UNIQUE)
+            .build();
+        app.register(None::<&gio::Cancellable>).unwrap();
+        let desktop = tjik_desktop::selected();
+        let before = desktop.snapshot().unwrap();
+        let workspace = before
+            .workspaces
+            .iter()
+            .find(|w| w.workspace.name.as_deref() == Some("7"))
+            .expect("workspace 7 exists");
+        let output = before
+            .outputs
+            .iter()
+            .find(|o| Some(&o.id) == workspace.output.as_ref())
+            .unwrap();
+        let monitor = gdk::Display::default()
+            .unwrap()
+            .monitors()
+            .iter::<gdk::Monitor>()
+            .flatten()
+            .find(|m| m.connector().as_deref() == Some(&output.name))
+            .unwrap();
+        let title = format!("notjik-detached:fixture:{}", std::process::id());
+        desktop
+            .prepare_toplevel(
+                &title,
+                &tjik_desktop::WorkspaceTarget {
+                    generation: before.generation.clone(),
+                    output: output.id.clone(),
+                    id: Some(workspace.workspace.id.clone()),
+                    name: "7".into(),
+                },
+                tjik_desktop::Rect {
+                    x: output.logical.x + 100.,
+                    y: output.logical.y + 100.,
+                    width: 420.,
+                    height: 200.,
+                },
+            )
+            .unwrap();
+        struct Rule(String);
+        impl Drop for Rule {
+            fn drop(&mut self) {
+                let _ = tjik_desktop::selected().release_toplevel(&self.0);
+            }
+        }
+        let _rule = Rule(title.clone());
+        let config = crate::config::defaults();
+        let controller = Rc::new(RefCell::new(Controller::new(
+            config.clone(),
+            "native-fixture".into(),
+        )));
+        let (tx, rx) = mpsc::channel();
+        let mut surface = popup(
+            &app,
+            &monitor,
+            &config,
+            &tx,
+            controller,
+            "fixture",
+            Rc::new(RefCell::new(None)),
+            Rc::new(RefCell::new(None)),
+        );
+        let card = Rc::new(Card::new(
+            Notice(
+                json!({"id":"native-fixture", "type":"telegram", "title":"Synthetic detached card", "body":"Workspace ownership", "data":{"demo":true,"kind":"text"}}),
+            ),
+            ViewState::default(),
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+            now() as f64,
+            |_| {},
+        ));
+        *card.context.draft.borrow_mut() = "Unsent fixture draft".into();
+        surface.list.append(&card.widget);
+        surface.cards.insert("native-fixture".into(), card.clone());
+        surface.make_native(&app, &title, "fixture", "native-fixture", &tx);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mapped = loop {
+            while glib::MainContext::default().pending() {
+                glib::MainContext::default().iteration(false);
+            }
+            if let Some(window) = desktop
+                .snapshot()
+                .unwrap()
+                .windows
+                .into_iter()
+                .find(|w| w.title.as_deref() == Some(&title))
+            {
+                break window;
+            }
+            assert!(Instant::now() < deadline, "Native notification did not map");
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        assert_eq!(
+            mapped.workspace.as_ref().and_then(|w| w.name.as_deref()),
+            Some("7")
+        );
+        assert_eq!(mapped.floating, Some(true));
+        assert!(!surface.window.is_layer_window());
+        assert!(!surface.window.is_active());
+        assert!(Rc::ptr_eq(&surface.cards["native-fixture"], &card));
+        assert_eq!(card.draft(), "Unsent fixture draft");
+        surface.window.close();
+        let (source, event) = rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert_eq!(source, "fixture");
+        assert_eq!(event.id, "native-fixture");
+        assert!(matches!(event.intent, Intent::Dismiss));
+        surface.window.destroy();
+    }
+
     #[test]
     fn placement_offsets_and_bounds() {
         assert_eq!(
