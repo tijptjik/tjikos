@@ -84,6 +84,23 @@ pub fn parse(source: &str) -> Result<Value> {
         3600,
         "refresh_seconds",
     )?;
+    for key in ["preferred_extensions", "deprioritized_extensions"] {
+        let values = settings["file_search"][key]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid file_search.{key}"))?;
+        if values.iter().any(|value| {
+            value.as_str().is_none_or(|extension| {
+                extension.is_empty()
+                    || extension.starts_with('.')
+                    || extension.chars().any(|c| !c.is_ascii_alphanumeric())
+            })
+        }) {
+            bail!("Invalid file_search.{key}: use extension names without dots");
+        }
+    }
+    if !settings["file_search"]["root"].is_string() {
+        bail!("Invalid file_search.root");
+    }
     argv(&settings["launch"]["terminal"])?;
     for (_, v) in settings["overrides"].as_object().unwrap() {
         let fields = v

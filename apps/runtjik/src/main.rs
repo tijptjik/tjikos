@@ -1,3 +1,4 @@
+mod bitwarden;
 mod browser;
 mod browser_host;
 mod capture;
@@ -8,16 +9,21 @@ mod config;
 mod content_identity;
 mod controller;
 mod discovery;
+mod emoji;
+mod file_search;
 mod icons;
 mod image_viewer;
 mod launcher;
 mod menus;
+mod monitor;
+mod note;
 mod offline_history;
 mod paths;
 mod reading;
 mod settings;
 mod stats;
 mod store;
+mod timer;
 mod todo;
 mod trash;
 mod util;
@@ -75,6 +81,11 @@ fn execute() -> Result<()> {
             args.get(1)
                 .ok_or_else(|| anyhow::anyhow!("Missing capture specification"))?,
         )?)?,
+        "timer-fire" => crate::timer::fire(
+            &store::Store::open()?,
+            args.get(1)
+                .ok_or_else(|| anyhow::anyhow!("Missing timer ID"))?,
+        )?,
         "register-browser-host" => crate::browser_host::register(&args[1..])?,
         "browser-host" => crate::browser_host::serve()?,
         "version" | "--version" => println!("0.8.3"),

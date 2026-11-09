@@ -30,6 +30,69 @@
       "path_commands": true,
       "refresh_seconds": 5
     },
+    "file_search": {
+      "root": "",
+      "preferred_extensions": [
+        "md",
+        "markdown",
+        "pdf",
+        "txt",
+        "rst",
+        "org",
+        "epub",
+        "doc",
+        "docx",
+        "odt",
+        "rtf",
+        "ppt",
+        "pptx",
+        "xls",
+        "xlsx",
+        "csv",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "svg",
+        "avif",
+        "heic",
+        "mp4",
+        "mkv",
+        "mov",
+        "webm",
+        "mp3",
+        "flac",
+        "wav"
+      ],
+      "deprioritized_extensions": [
+        "svelte",
+        "rs",
+        "ts",
+        "tsx",
+        "js",
+        "jsx",
+        "vue",
+        "go",
+        "py",
+        "c",
+        "h",
+        "cpp",
+        "java",
+        "kt",
+        "swift",
+        "css",
+        "scss",
+        "html",
+        "json",
+        "yaml",
+        "yml",
+        "toml",
+        "xml",
+        "sh",
+        "fish"
+      ]
+    },
     "launch": {
       "terminal": [
         "kitty",
@@ -2691,6 +2754,18 @@
       "Include previously used commands from Fish history"
     ],
     [
+      "file_search.root",
+      "Root folder for /file and /find; empty uses $HOME"
+    ],
+    [
+      "file_search.preferred_extensions",
+      "File types ranked ahead of other search results"
+    ],
+    [
+      "file_search.deprioritized_extensions",
+      "File types ranked below ordinary search results"
+    ],
+    [
       "history.enabled",
       "Record command history and activity (master switch)"
     ],
@@ -2714,7 +2789,7 @@
     ],
     [
       "Left / Right",
-      "Previous / next result in the grid; Ctrl+Left / Ctrl+Right also works in lists"
+      "Previous / next result in the grid; Ctrl+Left / Ctrl+Right moves the search cursor by word"
     ],
     [
       "Enter / click",

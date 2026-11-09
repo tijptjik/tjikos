@@ -2,9 +2,75 @@ use crate::{
     discovery::{folded, Entry},
     util::*,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde_json::{json, Value};
-use std::{collections::HashMap, fs, sync::Arc, thread::JoinHandle};
+use std::{
+    collections::HashMap,
+    fs,
+    io::Write,
+    process::{Command, Stdio},
+    sync::Arc,
+    thread::JoinHandle,
+};
+
+/// Copy text without placing it in argv or a log. Secret clipboard owners exit
+/// after one paste so a password is not left available indefinitely.
+pub fn copy_text(text: &str, secret: bool) -> Result<()> {
+    if let Some(wl_copy) = which("wl-copy") {
+        if !secret {
+            binary(
+                &[wl_copy.to_string_lossy().into_owned()],
+                text.as_bytes().to_vec(),
+                5,
+                true,
+            )?;
+            return Ok(());
+        }
+        let mut child = Command::new(wl_copy)
+            .arg("--paste-once")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        child
+            .stdin
+            .take()
+            .context("Clipboard input unavailable")?
+            .write_all(text.as_bytes())?;
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        return Ok(());
+    }
+    if let Some(xclip) = which("xclip") {
+        let mut child = Command::new(xclip)
+            .args(["-selection", "clipboard"])
+            .args(if secret { vec!["-loops", "1"] } else { vec![] })
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        child
+            .stdin
+            .take()
+            .context("Clipboard input unavailable")?
+            .write_all(text.as_bytes())?;
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        return Ok(());
+    }
+    if secret {
+        anyhow::bail!("Secure one-paste clipboard clearing is unavailable")
+    }
+    binary(
+        &["xsel".into(), "--clipboard".into(), "--input".into()],
+        text.as_bytes().to_vec(),
+        5,
+        true,
+    )?;
+    Ok(())
+}
 
 #[derive(Default)]
 pub struct Clipboard {

@@ -1,9 +1,17 @@
 use crate::util::*;
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::{collections::HashMap, fs, os::unix::fs::PermissionsExt};
 pub struct Store(pub Connection);
+#[derive(Clone, Debug)]
+pub struct TimerRecord {
+    pub id: String,
+    pub label: String,
+    pub due_at: i64,
+    pub seconds: u64,
+    pub unit: String,
+}
 impl Store {
     pub fn open() -> Result<Self> {
         let path = xdg("state").join("history.sqlite3");
@@ -11,7 +19,7 @@ impl Store {
         let c = Connection::open(&path)?;
         fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
         c.busy_timeout(std::time::Duration::from_secs(5))?;
-        c.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY,time REAL NOT NULL,entry_id TEXT NOT NULL,action TEXT NOT NULL,success INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS counts(key TEXT PRIMARY KEY,value INTEGER NOT NULL,last REAL NOT NULL); CREATE TABLE IF NOT EXISTS command_queries(seq INTEGER PRIMARY KEY AUTOINCREMENT,query TEXT NOT NULL UNIQUE); CREATE TABLE IF NOT EXISTS close_requests(entry_id TEXT NOT NULL,pid INTEGER NOT NULL,identity TEXT NOT NULL,stage INTEGER NOT NULL,PRIMARY KEY(entry_id,pid));")?;
+        c.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY,time REAL NOT NULL,entry_id TEXT NOT NULL,action TEXT NOT NULL,success INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS counts(key TEXT PRIMARY KEY,value INTEGER NOT NULL,last REAL NOT NULL); CREATE TABLE IF NOT EXISTS command_queries(seq INTEGER PRIMARY KEY AUTOINCREMENT,query TEXT NOT NULL UNIQUE); CREATE TABLE IF NOT EXISTS close_requests(entry_id TEXT NOT NULL,pid INTEGER NOT NULL,identity TEXT NOT NULL,stage INTEGER NOT NULL,PRIMARY KEY(entry_id,pid)); CREATE TABLE IF NOT EXISTS timers(id TEXT PRIMARY KEY,label TEXT NOT NULL,due_at INTEGER NOT NULL,seconds INTEGER NOT NULL,unit TEXT NOT NULL);")?;
         c.execute_batch("BEGIN IMMEDIATE")?;
         let exists: bool = c.query_row(
             "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name='frecency')",
@@ -90,6 +98,57 @@ impl Store {
             .prepare("SELECT query FROM command_queries ORDER BY seq")?;
         let v = q.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?;
         Ok(v)
+    }
+    pub fn timers(&self) -> Result<Vec<TimerRecord>> {
+        let mut q = self
+            .0
+            .prepare("SELECT id,label,due_at,seconds,unit FROM timers ORDER BY due_at,id")?;
+        let rows = q
+            .query_map([], |r| {
+                Ok(TimerRecord {
+                    id: r.get(0)?,
+                    label: r.get(1)?,
+                    due_at: r.get(2)?,
+                    seconds: r.get::<_, i64>(3)?.max(0) as u64,
+                    unit: r.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+    pub fn timer(&self, id: &str) -> Result<Option<TimerRecord>> {
+        Ok(self
+            .0
+            .query_row(
+                "SELECT id,label,due_at,seconds,unit FROM timers WHERE id=?",
+                [id],
+                |r| {
+                    Ok(TimerRecord {
+                        id: r.get(0)?,
+                        label: r.get(1)?,
+                        due_at: r.get(2)?,
+                        seconds: r.get::<_, i64>(3)?.max(0) as u64,
+                        unit: r.get(4)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+    pub fn add_timer(&self, timer: &TimerRecord) -> Result<()> {
+        self.0.execute(
+            "INSERT INTO timers(id,label,due_at,seconds,unit) VALUES(?,?,?,?,?)",
+            params![
+                timer.id,
+                timer.label,
+                timer.due_at,
+                timer.seconds as i64,
+                timer.unit
+            ],
+        )?;
+        Ok(())
+    }
+    pub fn remove_timer(&self, id: &str) -> Result<bool> {
+        Ok(self.0.execute("DELETE FROM timers WHERE id=?", [id])? > 0)
     }
     pub fn remember(&self, q: &str) -> Result<()> {
         if q.trim().is_empty() || !q.starts_with(['!', '/', '?']) {
