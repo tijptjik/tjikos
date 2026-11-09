@@ -141,7 +141,7 @@ impl Card {
         connect.add_css_class("network-accent");
         form_top.append(&selected_name);
         form_top.append(&cancel);
-        form_top.append(&connect);
+
         form.append(&form_top);
         let password = gtk::PasswordEntry::new();
         password.set_show_peek_icon(false);
@@ -149,7 +149,16 @@ impl Card {
         password.update_property(&[gtk::accessible::Property::Label(
             "Wi-Fi password; blank uses saved credentials",
         )]);
-        form.append(&password);
+        password.add_css_class("network-password");
+        let field = gtk::Overlay::new();
+        field.set_child(Some(&password));
+        connect.add_css_class("network-password-submit");
+        connect.set_halign(gtk::Align::End);
+        connect.set_valign(gtk::Align::Center);
+        connect.set_margin_end(5);
+        connect.set_visible(false);
+        field.add_overlay(&connect);
+        form.append(&field);
         wifi.append(&form);
         let ethernet = gtk::Box::new(gtk::Orientation::Vertical, 10);
         body.append(&ethernet);
@@ -201,6 +210,12 @@ impl Card {
         card.connect.connect_clicked(move |_| {
             if let Some(c) = weak.upgrade() {
                 c.connect_selected();
+            }
+        });
+        let submit = card.connect.downgrade();
+        card.password.connect_changed(move |entry| {
+            if let Some(submit) = submit.upgrade() {
+                submit.set_visible(!entry.text().is_empty());
             }
         });
         let weak = Rc::downgrade(&card);
@@ -341,7 +356,14 @@ impl Card {
             self.password
                 .set_visible(!ap.security.is_empty() && ap.security != "--");
         }
+        let open = ap
+            .as_ref()
+            .is_some_and(|ap| ap.security.is_empty() || ap.security == "--");
         *self.selected.borrow_mut() = ap;
+        if open {
+            self.connect_selected();
+            return;
+        }
         if self.password.is_visible() && self.form.is_visible() {
             self.password.grab_focus();
         }
@@ -720,6 +742,11 @@ pub fn exercise_fixture(card: &Rc<Card>, fake: &Arc<crate::network::Fake>) {
     assert!(!card.form.is_visible());
     row.emit_clicked();
     assert!(!card.list.is_visible());
+    assert!(!card.connect.is_visible());
+    card.password.set_text("synthetic-secret");
+    assert!(card.connect.is_visible());
+    card.password.set_text("");
+    assert!(!card.connect.is_visible());
     card.password.set_text("synthetic-secret");
     card.connect.emit_clicked();
     assert!(card.password.text().is_empty());

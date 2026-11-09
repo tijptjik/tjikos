@@ -118,6 +118,8 @@ fn stylesheet(style: &Value) -> String {
 .panel-card button.network-row:focus-visible {{outline:1px solid {accent};outline-offset:-1px;}}
 .panel-card button.panel-control.network-accent {{color:{accent};}}
 .panel-card passwordentry {{padding:10px;background:{background};color:{text};border:1px solid {border};border-radius:8px;font-size:12px;}}
+.panel-card passwordentry.network-password {{padding-right:42px;}}
+.panel-card button.panel-control.network-password-submit {{background:transparent;border:0;}}
 .panel-card passwordentry:focus-within {{border-color:{accent};}}
 .panel-card .codex-caption {{font-family:sans-serif;font-size:11px;color:{muted};}}
 .panel-card .codex-muted {{font-family:sans-serif;font-size:11px;color:{muted};}}
