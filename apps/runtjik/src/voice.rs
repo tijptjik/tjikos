@@ -146,7 +146,7 @@ pub fn activate(entry: &Entry, mode: &str, settings: &Value, demo: bool) -> Resu
                 true,
             )?;
         }
-        return Ok(json!({"kind":"message","message":"Copied voice text"}));
+        return Ok(json!({"kind":"activated","message":"Copied voice text","close_launcher":true}));
     }
     ensure!(mode != "close", "Select a history entry to remove");
     if !demo {

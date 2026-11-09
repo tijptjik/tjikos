@@ -39,7 +39,7 @@ def main():
             state = settled('/voice history')
             assert len(state['rows']) == 2, state
             subprocess.run(['wtype', '-k', 'Return'], check=True, timeout=10)
-            wait_for(lambda: status().get('message') == 'Copied voice text')
+            wait_for(lambda: status().get('message') == 'Demo activation completed; no application was launched.')
             subprocess.run(['wtype', '-M', 'ctrl', '-k', 'Return', '-m', 'ctrl'], check=True, timeout=10)
             wait_for(lambda: status().get('message') == 'Removed from voice history')
             subprocess.run(['grim', '-o', 'VOICE', '/tmp/runtjik-voice-history.png'], check=True, timeout=10)
@@ -65,6 +65,41 @@ def main():
             print('Voice GTK layout and keyboard actions passed')
         finally:
             run('quit')
+            process.wait(timeout=10)
+
+        # Demo mode intentionally stays open. Exercise real clipboard ownership
+        # and dismissal on the private display with synthetic history instead.
+        history = root / 'state/hyprvoice/history'
+        history.mkdir(parents=True, exist_ok=True)
+        text = 'Synthetic voice selection regression'
+        (history / 'selection.json').write_text(json.dumps({
+            'created': '2026-11-09T10:00:00Z', 'text': text,
+        }))
+        def live(*args):
+            return subprocess.check_output([str(binary), *args], text=True, timeout=10)
+        def live_status():
+            return json.loads(live('status'))
+        process = subprocess.Popen([str(binary), 'serve'], stdout=subprocess.DEVNULL)
+        try:
+            wait_for(lambda: live_status().get('ready'))
+            for pointer in (False, True):
+                live('show')
+                subprocess.run(['wtype', '-M', 'ctrl', '-k', 'a', '-m', 'ctrl', '/voice history'], check=True, timeout=10)
+                wait_for(lambda: live_status().get('resultQuery') == '/voice history' and not live_status().get('busy'))
+                if pointer:
+                    time.sleep(.5)
+                    layer = next(c for monitor in json.loads(hypr('-j', 'layers')).values()
+                                 for rows in monitor['levels'].values() for c in rows if c['namespace'] == 'runtjik-gtk')
+                    x = int((layer['x'] + 200) / 1200 * 10000)
+                    y = int((layer['y'] + 115) / 900 * 10000)
+                    subprocess.run([str(root / 'pointer'), 'VOICE'], input=f'm {x} {y}\nb 1\nb 0\n', text=True, check=True, timeout=10, stdout=subprocess.DEVNULL)
+                else:
+                    subprocess.run(['wtype', '-k', 'Return'], check=True, timeout=10)
+                wait_for(lambda: not live_status().get('visible'))
+                assert subprocess.check_output(['wl-paste', '--no-newline'], text=True, timeout=10) == text
+            print('Voice selection copies and closes for keyboard and pointer')
+        finally:
+            live('quit')
             process.wait(timeout=10)
 
 
