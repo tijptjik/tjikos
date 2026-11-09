@@ -555,7 +555,7 @@ pub fn reveal_word(scroll: &gtk::ScrolledWindow, selected: u32) {
     }
 }
 
-pub fn capture(rows: &[Value], selected: u32, activate: impl Fn(u32) + 'static) -> gtk::Grid {
+pub fn capture(rows: &[Value], selected: u32, activate: impl Fn(u32, bool) + 'static) -> gtk::Grid {
     let grid = gtk::Grid::new();
     grid.set_row_homogeneous(true);
     grid.set_column_homogeneous(true);
@@ -563,12 +563,13 @@ pub fn capture(rows: &[Value], selected: u32, activate: impl Fn(u32) + 'static) 
     grid.set_column_spacing(6);
     grid.set_vexpand(true);
     let activate = Rc::new(activate);
+    let voice = rows.first().is_some_and(|r| s(r, "provider") == "Voice");
     let choices = rows
         .iter()
         .position(|r| s(r, "id").ends_with(":history"))
         .unwrap_or(rows.len());
     let recording = choices >= 4;
-    let cols = if recording { 2 } else { 3 };
+    let cols = if voice || recording { 2 } else { 3 };
     for (i, row) in rows.iter().enumerate() {
         let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
         card.add_css_class("capture-choice");
@@ -595,12 +596,25 @@ pub fn capture(rows: &[Value], selected: u32, activate: impl Fn(u32) + 'static) 
         subtitle.set_xalign(0.5);
         subtitle.add_css_class("word-caption");
         content.append(&subtitle);
-        card.append(&content);
+        let overlay = gtk::Overlay::new();
+        overlay.set_vexpand(true);
+        overlay.set_child(Some(&content));
+        if voice && i == 0 {
+            let settings = gtk::Button::from_icon_name("preferences-system-symbolic");
+            settings.set_tooltip_text(Some("Voice settings"));
+            settings.set_halign(gtk::Align::End);
+            settings.set_valign(gtk::Align::Start);
+            settings.add_css_class("flat");
+            let action = activate.clone();
+            settings.connect_clicked(move |_| action(0, true));
+            overlay.add_overlay(&settings);
+        }
+        card.append(&overlay);
         let click = gtk::GestureClick::new();
         let activate = activate.clone();
-        click.connect_released(move |_, _, _, _| activate(i as u32));
+        click.connect_released(move |_, _, _, _| activate(i as u32, false));
         card.add_controller(click);
-        if i >= choices {
+        if !voice && i >= choices {
             let wide = rows.len() == choices + 1;
             grid.attach(
                 &card,

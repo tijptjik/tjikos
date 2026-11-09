@@ -21,6 +21,7 @@ mod store;
 mod todo;
 mod trash;
 mod util;
+mod voice;
 mod windows;
 mod word_cache;
 mod word_entry;

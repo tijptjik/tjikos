@@ -14,6 +14,11 @@ pub fn commands(settings: &Value) -> Vec<Command> {
     let mut rows = vec![];
     for (id, description, icon) in [
         (
+            "/voice",
+            "Record voice or browse transcription history",
+            "audio-input-microphone",
+        ),
+        (
             "/processes",
             "Search applications with running windows",
             "runtjik-stats",
@@ -110,6 +115,14 @@ pub fn commands(settings: &Value) -> Vec<Command> {
             .join(format!("{name}.svg"));
         if path.is_file() {
             c.icon = path.to_string_lossy().into();
+        }
+    }
+    for command in &mut rows {
+        if command.id == "/voice" {
+            command.icon = paths::root()
+                .join("qml/icons/voice-record.svg")
+                .to_string_lossy()
+                .into_owned();
         }
     }
     rows

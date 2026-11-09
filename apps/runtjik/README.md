@@ -940,3 +940,17 @@ and word settings. The private `words.sqlite3` in Runtjik’s XDG state director
 at most 256 source responses / 32 MiB; old responses are evicted first. Failed requests
 are not cached. Disabling `history.enabled` hides history and uses only an in-memory
 cache. Demo fixtures never persist word data.
+
+### Voice recording and history
+
+`/voice` shows **Voice Record** and **Voice History**. Record starts Hyprvoice when it
+is idle. The settings icon on Record (or Shift+Enter) opens `hyprvoice configure` in the
+configured terminal.
+
+`/voice history` lists generated text newest first; append text to filter it. Enter
+copies the selected text; Ctrl+Enter permanently removes that entry. The patched
+Hyprvoice build saves non-empty final text before injection, so text remains available
+if pasting fails. History is stored as private JSON files in
+`$XDG_STATE_HOME/hyprvoice/history` (default `~/.local/state/hyprvoice/history`),
+outside the repository. Only new recordings are saved; history is retained until
+deleted. Demo mode uses synthetic entries and never accesses real voice history.

@@ -583,6 +583,7 @@ impl Ui {
         }
         self.word_key.borrow_mut().clear();
         let capture = [
+            "/voice",
             "/grab",
             "/shot",
             "/screenshot",
@@ -598,14 +599,22 @@ impl Ui {
                 self.results.remove(&old);
             }
             let weak = Rc::downgrade(self);
-            let menu = views::capture(&self.rows.borrow(), self.selection.selected(), move |at| {
-                if let Some(ui) = weak.upgrade() {
-                    ui.selection.set_selected(at);
-                    ui.activate("default");
-                }
-            });
+            let menu = views::capture(
+                &self.rows.borrow(),
+                self.selection.selected(),
+                move |at, settings| {
+                    if let Some(ui) = weak.upgrade() {
+                        ui.selection.set_selected(at);
+                        ui.activate(if settings { "alternate" } else { "default" });
+                    }
+                },
+            );
             self.columns
-                .set(if self.rows.borrow().len() >= 5 { 2 } else { 3 });
+                .set(if q.trim() == "/voice" || self.rows.borrow().len() >= 5 {
+                    2
+                } else {
+                    3
+                });
             self.results.add_named(&menu, Some("capture"));
             self.results.set_visible_child_name("capture");
             return;
@@ -984,12 +993,28 @@ fn build(
     let model = gtk::StringList::new(&[]);
     let selection = gtk::SingleSelection::new(Some(model.clone()));
     let select = selection.clone();
-    let list = gtk::ListView::new(
-        Some(selection.clone()),
-        Some(results::factory(Layout::List, 40, move |i| {
-            select.set_selected(i)
-        })),
-    );
+    let list_factory = results::factory(Layout::List, 40, move |i| select.set_selected(i));
+    list_factory.connect_bind(|_, object| {
+        let item = object.downcast_ref::<gtk::ListItem>().unwrap();
+        let string = item
+            .item()
+            .unwrap()
+            .downcast::<gtk::StringObject>()
+            .unwrap();
+        let value: Value = serde_json::from_str(&string.string()).unwrap_or(Value::Null);
+        if let Some(row) = item.child() {
+            let voice = value["provider"] == "Voice";
+            row.set_tooltip_text(if voice { value["name"].as_str() } else { None });
+            if let Some(title) = row
+                .last_child()
+                .and_then(|labels| labels.first_child())
+                .and_downcast::<gtk::Label>()
+            {
+                title.set_lines(if voice { 4 } else { 2 });
+            }
+        }
+    });
+    let list = gtk::ListView::new(Some(selection.clone()), Some(list_factory));
     list.set_single_click_activate(true);
     let select = selection.clone();
     let grid = gtk::GridView::new(

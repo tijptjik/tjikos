@@ -1,0 +1,13 @@
+--- a/internal/pipeline/pipeline.go
++++ b/internal/pipeline/pipeline.go
+@@ -356,6 +356,10 @@
+ 		return
+ 	}
+ 
++	if err := saveVoiceHistory(textToInject); err != nil {
++		log.Printf("Pipeline: Failed to save voice history: %v", err)
++	}
++
+ 	injector := p.injectorFactory(p.config.ToInjectionConfig())
+ 
+ 	if err := injector.Inject(ctx, textToInject); err != nil {

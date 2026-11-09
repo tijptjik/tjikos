@@ -121,7 +121,7 @@ impl Launcher {
     ) -> Value {
         let total = entries.len();
         self.current = entries.iter().map(|e| (e.id.clone(), e.clone())).collect();
-        let rows:Vec<_>=entries.into_iter().skip(offset).take(limit).map(|e| { let mut row = json!({"id":e.id,"name":e.name,"subtitle":e.subtitle,"provider":e.provider,"icon":self.icons.resolve(&e.icon),"favicon":s(&e.data["favicon"]),"hide_launcher":e.data["capture"].as_str().is_some_and(|s|!s.is_empty()),"keep_open":e.data["keep_open"]==true,"thumbnail":s(&e.data["thumbnail"]),"empty_state":e.data["empty_state"]==true,"disabled":e.data["disabled"]==true,"count":0,"windows":0});
+        let rows:Vec<_>=entries.into_iter().skip(offset).take(limit).map(|e| { let mut row = json!({"id":e.id,"name":e.name,"subtitle":e.subtitle,"provider":e.provider,"icon":self.icons.resolve(&e.icon),"favicon":s(&e.data["favicon"]),"hide_launcher":e.data["hide_launcher"]==true || e.data["capture"].as_str().is_some_and(|s|!s.is_empty()),"keep_open":e.data["keep_open"]==true,"thumbnail":s(&e.data["thumbnail"]),"empty_state":e.data["empty_state"]==true,"disabled":e.data["disabled"]==true,"count":0,"windows":0});
             for key in ["recent_word", "lookup_query", "word_source", "part_of_speech", "examples", "url", "language", "section", "group", "etymology", "headword", "sense_number", "sense_depth", "sense_synonyms", "terms", "context"] {
                 if e.provider == "Words" {
                     if let Some(value) = e.data.get(key) { row[key] = value.clone(); }
@@ -240,6 +240,13 @@ impl Launcher {
             self.browser.scope = None;
         }
         let enabled = strings(&self.settings["plugins"]["enabled"]);
+        if command == "/voice" {
+            let rows = match crate::voice::query(q, self.demo) {
+                Ok(rows) => rows,
+                Err(e) => return Ok(self.provider_error("Voice", display, e)),
+            };
+            return Ok(self.provider_payload(rows, display, offset, limit, false, false));
+        }
         let capture_provider =
             if ["/grab", "/shot", "/screenshot", "/ss", "/snap"].contains(&command) {
                 "Screenshots"
@@ -527,7 +534,7 @@ impl Launcher {
                 v["message"] = json!(format!("Saved {key} in runtjik.conf"));
                 return Ok(v);
             }
-            if ["/stats", "/run", "/processes"].contains(&id) {
+            if ["/voice", "/stats", "/run", "/processes"].contains(&id) {
                 let query = if id == "/stats" {
                     id.to_owned()
                 } else {
@@ -552,6 +559,20 @@ impl Launcher {
             .or_else(|| self.entries.iter().find(|e| e.id == id))
             .cloned();
         if let Some(e) = &entry {
+            if e.provider == "Voice" {
+                let action = crate::voice::activate(e, mode, &self.settings, self.demo)?;
+                if let Some(query) = action["open_query"].as_str() {
+                    return self.open_query(query);
+                }
+                if mode == "close" {
+                    let query = self.last_query.clone();
+                    let mut value = self.query(&query, 0, None)?;
+                    value["message"] = action["message"].clone();
+                    value["removed_entry"] = action["removed_entry"].clone();
+                    return Ok(value);
+                }
+                return Ok(action);
+            }
             if ["Screenshots", "Recorder"].contains(&e.provider.as_str()) {
                 if mode == "close"
                     && e.data.get("file").is_none()

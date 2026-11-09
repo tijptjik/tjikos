@@ -95,12 +95,13 @@ ShellRoot {
     readonly property bool browserWindows: /^\/(browser|zen)( |$)/.test(displayQuery)
     readonly property bool galleryMode: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord) history( |$)/.test(displayQuery)
     readonly property bool deletionAnimationMode: galleryMode || /^\/cliphist( |$)/.test(displayQuery)
-    readonly property bool captureMenu: /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord)$/.test(displayQuery.trim())
+    readonly property bool voiceMenu: displayQuery.trim() === "/voice"
+    readonly property bool captureMenu: voiceMenu || /^\/(grab|shot|screenshot|ss|snap|rec|screenrecord)$/.test(displayQuery.trim())
     readonly property bool captureRecording: /^\/(rec|screenrecord)( |$)/.test(displayQuery)
-    readonly property int captureChoices: captureRecording ? 4 : 3
+    readonly property int captureChoices: voiceMenu ? 2 : captureRecording ? 4 : 3
     readonly property bool galleryEmpty: galleryMode && results.length === 1 && !!results[0].empty_state
     readonly property string galleryProvider: /^\/(rec|screenrecord) /.test(displayQuery) ? 'Recorder' : 'Screenshots'
-    readonly property int gridColumns: browserWindows ? (settings.plugin_settings?.Browser?.columns || 3) : captureMenu ? (captureRecording ? 2 : 3) : galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
+    readonly property int gridColumns: browserWindows ? (settings.plugin_settings?.Browser?.columns || 3) : captureMenu ? (voiceMenu || captureRecording ? 2 : 3) : galleryMode ? (settings.plugin_settings?.[galleryProvider]?.gallery_columns || 3) : settings.ui.columns
     readonly property int galleryRows: settings.plugin_settings?.[galleryProvider]?.gallery_rows || 3
     property bool providerPending: false
     property var commandHistory: []
@@ -727,7 +728,7 @@ ShellRoot {
                                 NumberAnimation {properties:'x,y';duration:260;easing.type:Easing.OutCubic}
                             }
                             cellWidth:root.listMode?width:width/root.gridColumns
-                            cellHeight:root.browserWindows?142:root.captureMenu?height/(root.captureRecording?4:2):root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
+                            cellHeight:root.browserWindows?142:root.captureMenu?height/(root.voiceMenu?1:root.captureRecording?4:2):root.galleryMode?height/root.galleryRows:root.wordMode?84:root.listMode?70:122
                             currentIndex:root.selected
                             boundsBehavior:Flickable.StopAtBounds
                             property real previousContentY: 0
@@ -941,9 +942,18 @@ ShellRoot {
                                     color:root.theme.muted;font.family:root.settings.ui.font;font.pixelSize:10
                                     elide:Text.ElideRight
                                 }
+                                Button {
+                                    visible: root.voiceMenu && modelData.id === 'Voice:record'
+                                    anchors.right: parent.right; anchors.top: parent.top
+                                    anchors.margins: 8; z: 3
+                                    text: '⚙'; flat: true
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: 'Voice settings'
+                                    onClicked: {root.selected=index;root.activate(true);}
+                                }
                                 ToolTip {
                                     id: wordTip
-                                    visible: root.wordMode && hover.containsMouse
+                                    visible: (root.wordMode || modelData.provider === 'Voice') && hover.containsMouse
                                     text: modelData.name + "\n\n" + modelData.subtitle
                                     delay: 500
                                     width: Math.min(600, root.settings.ui.width - 60)
