@@ -29,7 +29,7 @@ struct Context {
     notice: RefCell<Notice>,
     state: RefCell<ViewState>,
     now: Cell<f64>,
-    callback: Rc<dyn Fn(CardEvent)>,
+    callback: RefCell<Rc<dyn Fn(CardEvent)>>,
     draft: RefCell<String>,
     cursor: Cell<i32>,
     action_page: Cell<usize>,
@@ -158,7 +158,7 @@ impl Context {
             id: self.notice.borrow().id(),
             intent,
         };
-        (self.callback)(event);
+        (self.callback.borrow())(event);
     }
     fn telegram(&self, action: &str, body: &str, quote: bool, target: Option<&ReplyTarget>) {
         let (chat_id, message_id) = {
@@ -217,7 +217,7 @@ impl Card {
             notice: RefCell::new(notice),
             state: RefCell::new(state),
             now: Cell::new(now),
-            callback: Rc::new(callback),
+            callback: RefCell::new(Rc::new(callback)),
             draft: RefCell::new(String::new()),
             cursor: Cell::new(0),
             action_page: Cell::new(0),
@@ -293,6 +293,10 @@ impl Card {
         self.context.hovered.set(hovered);
         self.context.sync_reveal();
     }
+    /// Retarget events when the original card moves to a detached surface.
+    pub fn set_callback(&self, callback: impl Fn(CardEvent) + 'static) {
+        *self.context.callback.borrow_mut() = Rc::new(callback);
+    }
     pub fn set_drag_preview(&self, dragging: bool) {
         self.context.dragging.set(dragging);
         self.context.sync_reveal();
@@ -307,17 +311,6 @@ impl Card {
         self.context.composing.set(false);
         self.context.quoted.set(false);
         self.context.reply_target.borrow_mut().take();
-    }
-    pub(crate) fn copy_interaction_from(&self, other: &Card) {
-        *self.context.draft.borrow_mut() = other.context.draft.borrow().clone();
-        self.context.cursor.set(other.context.cursor.get());
-        self.context.composing.set(other.context.composing.get());
-        self.context.quoted.set(other.context.quoted.get());
-        *self.context.reply_target.borrow_mut() = other.context.reply_target.borrow().clone();
-        self.context
-            .action_page
-            .set(other.context.action_page.get());
-        self.render();
     }
     pub fn draft(&self) -> String {
         self.context.draft.borrow().clone()
@@ -418,6 +411,7 @@ impl Card {
                 dx,
                 dy,
                 finished: false,
+                pointer: None,
             });
         });
         let c = self.context.clone();
@@ -438,6 +432,7 @@ impl Card {
                     dx,
                     dy,
                     finished: true,
+                    pointer: None,
                 });
                 c.sync_reveal();
             } else if dx.hypot(dy) < 8.

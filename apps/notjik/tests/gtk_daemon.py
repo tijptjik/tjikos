@@ -17,6 +17,7 @@ def motion_acceptance(request, send, config, env, work, daemon):
     """Exercise actual popup allocations, pointer playback and background dismissal."""
     request({"op":"dismiss", "id":"all"})
     time.sleep(.4)
+    subprocess.run(["grim","-o","NOTJIK",str(work/"motion-empty.png")],check=True,capture_output=True)
     config.write_text(json.dumps({"theme":"rose-punk", "placement":{"monitors":"all","edge":"b","position":"r"}, "grouping":{"enabled":False}, "stack":{"animationMs":500}}))
     time.sleep(1.3)
     old=send("Older card stays attached",id="motion-old",body="Moves down after the lower card leaves.",actions=[{"identifier":"default","label":"Open","command":["true"]}],timeout=0)
@@ -90,15 +91,46 @@ def motion_acceptance(request, send, config, env, work, daemon):
         subprocess.run(["grim","-o","NOTJIK",str(work/"motion-settled.png")],check=True,capture_output=True)
         # Drag plain card text; the live preview must move before button release.
         def layers():
-            return [f for f in frames()[-150:] if row(f,old)]
+            result = []
+            for frame in frames()[-150:]:
+                card = row(frame, old)
+                if not card:
+                    continue
+                if card.get('lifted'):
+                    frame = {**frame, 'x': frame['x'] + card['liftX'], 'y': frame['y'] + card['y']}
+                result.append(frame)
+            return result
         move(layer['x']+180,layer['y']+row(final,old)['y']+24)
         event("b 1"); time.sleep(.04); event("r -150 -160")
         try:
             preview=wait_for(lambda: next((c for c in layers() if abs(c['x']-(layer['x']-150))<3),None),timeout=4)
         except ValueError:
             raise AssertionError({"layers":layers(),"status":request({"op":"status"}),"cursor":subprocess.check_output(["hyprctl","-j","cursorpos"],text=True),"log":(work/"daemon.log").read_text()})
+        assert preview['surface'].startswith('floating:'), "Drag did not leave the original surface"
+        source = next(f for f in reversed(frames()) if f.get('surface')=='NOTJIK')
+        assert not row(source, old), "Last dragged card left an original copy"
+        time.sleep(.15)
+        subprocess.run(["grim","-o","NOTJIK",str(work/"drag-single-held.png")],check=True,capture_output=True)
+        from PIL import Image, ImageChops, ImageStat
+        box=(layer['x'],layer['y']+int(row(final,old)['y']),layer['x']+int(final['width']),layer['y']+int(row(final,old)['y']+row(final,old)['height']))
+        delta=ImageChops.difference(Image.open(work/"motion-empty.png").convert('RGB').crop(box),Image.open(work/"drag-single-held.png").convert('RGB').crop(box))
+        assert max(ImageStat.Stat(delta).mean)<3, "Original card is still visible in the empty notification area"
+        assert row(preview, old)['widget'] == row(final, old)['widget'], "Drag cloned the widget"
         assert request({"op":"status"})["queued"]==1, "Drag dismissed the card"
         assert request({"op":"status"})["floating"]==0, "Drop committed before release"
+        # A lifted widget reserves no space for newly arriving neighbours.
+        sibling = send("Neighbour fills the stack", id="drag-neighbour", timeout=0)
+        def reflowed():
+            for frame in reversed(frames()[-150:]):
+                neighbour = row(frame, sibling)
+                if neighbour and frame.get('surface')=='NOTJIK' and neighbour['extent'] == 1:
+                    assert abs(neighbour['y'] + neighbour['height'] - frame['height']) <= 1, frame
+                    assert sum(r['id'] == 'card-' + old for r in frame['rows']) == 0, frame
+                    return True
+            return False
+        wait_for(reflowed)
+        request({"op":"dismiss", "id":sibling})
+        wait_for(lambda: request({"op":"status"})['queued'] == 1)
         event("r -55 -25")
         try:
             moved=wait_for(lambda: next((c for c in layers() if abs(c['x']-(preview['x']-55))<3),None),timeout=4)
@@ -120,6 +152,7 @@ def motion_acceptance(request, send, config, env, work, daemon):
         move(again['x']+280,again['y']+24)
         time.sleep(.2)
         settled=layers()[-1]
+        assert row(settled, old)['widget'] == row(final, old)['widget'], "Drop rebuilt the widget"
         assert abs(settled['x']-again['x'])<3 and abs(settled['y']-again['y'])<3, (again,settled)
         subprocess.run(["grim","-o","NOTJIK",str(work/"drag-dropped.png")],check=True,capture_output=True)
         # Leaving the pinned card collapses its footer; switching workspace hides
@@ -139,6 +172,68 @@ def motion_acceptance(request, send, config, env, work, daemon):
         subprocess.run(["hyprctl", "eval", f'hl.dispatch(hl.dsp.focus({{workspace="{original_workspace}"}}))'], check=True, capture_output=True)
         wait_for(lambda: popup_count() == visible_count)
         subprocess.run(["grim", "-o", "NOTJIK", str(work / "pinned-idle.png")], check=True, capture_output=True)
+        # Cross to a differently scaled output using real relative pointer events.
+        subprocess.run(["hyprctl","output","create","headless","NOTJIK2"],check=True,capture_output=True)
+        subprocess.run(["hyprctl","eval",'hl.monitor({output="NOTJIK2",mode="1600x1200@60",position="1000x0",scale=1.25})'],check=True,capture_output=True)
+        wait_for(lambda: any(m['name']=='NOTJIK2' and m['x']==1000 and m['width']==1280 and m['height']==960 for m in request({"op":"status"})['monitors']))
+        def latest_card():
+            return next(f for f in reversed(frames()) if row(f,old))
+        def global_move(x,y):
+            cursor=json.loads(subprocess.check_output(["hyprctl","-j","cursorpos"],text=True))
+            event(f"r {x-cursor['x']} {y-cursor['y']}")
+            time.sleep(.12)
+        position=latest_card()
+        global_move(position['x']+180,position['y']+24)
+        subprocess.run(['grim','-o','NOTJIK',str(work/'cross-before-pickup.png')],check=True,capture_output=True)
+        event('b 1'); time.sleep(.04); event('r 900 -80')
+        try:
+            crossed=wait_for(lambda: next((f for f in reversed(frames()[-100:]) if row(f,old) and f.get('monitor')=='NOTJIK2' and f['surface']!=position['surface']),None),timeout=5)
+        except ValueError:
+            raise AssertionError({"position":position,"status":request({"op":"status"}),"cursor":json.loads(subprocess.check_output(["hyprctl","-j","cursorpos"],text=True)),"outputs":json.loads(subprocess.check_output(["hyprctl","-j","monitors"],text=True)),"layers":json.loads(subprocess.check_output(["hyprctl","-j","layers"],text=True)),"frames":frames()[-4:]})
+        assert row(crossed,old)['widget']==row(final,old)['widget']
+        assert request({"op":"status"})['queued']==1
+        subprocess.run(["grim","-o","NOTJIK2",str(work/"drag-cross-monitor-held.png")],check=True,capture_output=True)
+        event('b 0'); time.sleep(.3)
+        assert request({"op":"status"})['floating']==1
+        position=latest_card()
+        global_move(1800,100)
+        time.sleep(.2)
+        released=latest_card()
+        assert abs(released['x']-position['x'])<2 and abs(released['y']-position['y'])<2, 'Cross-output drop did not release the card'
+        global_move(1000+position['x']+180,position['y']+24)
+        event('b 1'); time.sleep(.04); event('r -900 80')
+        returned=wait_for(lambda: next((f for f in reversed(frames()[-60:]) if row(f,old) and f.get('monitor')=='NOTJIK' and f['surface']!=position['surface'] and f['time']>crossed['time']+300),None),timeout=5)
+        event('b 0'); time.sleep(.3)
+        assert row(returned,old)['widget']==row(final,old)['widget']
+        # Removing an output during a drag cancels the grab without dropping data.
+        position=latest_card()
+        global_move(position['x']+180,position['y']+24)
+        event('b 1'); time.sleep(.04); event('r 900 -80')
+        wait_for(lambda: latest_card().get('monitor')=='NOTJIK2',timeout=5)
+        subprocess.run(["hyprctl","output","remove","NOTJIK2"],check=True,capture_output=True)
+        wait_for(lambda: len(request({"op":"status"})['monitors'])==1)
+        event('b 0'); time.sleep(.3)
+        assert request({"op":"status"})['queued']==1
+        assert row(latest_card(),old)['widget']==row(final,old)['widget']
+        print("Cross-monitor drag: mixed scale, round trip, same widget and output removal during grab passed")
+        def control_click(x,y):
+            global_move(x,y)
+            keyboard=subprocess.Popen(["wtype","-M","ctrl","-s","600","-m","ctrl"],env=env)
+            time.sleep(.15); click(); keyboard.wait(timeout=3)
+        sibling=send("Ctrl-click dismisses the queue",id="ctrl-sibling",timeout=0)
+        time.sleep(.3)
+        position=latest_card()
+        control_click(position['x']+180,position['y']+24)
+        wait_for(lambda: request({"op":"status"})['queued']==0)
+        plain=send("Keep this ordinary card",id="ctrl-keep",timeout=0)
+        telegram=request({"op":"send","notice":{"id":"ctrl-telegram","app":"notjik demo","title":"Synthetic Ctrl safe read","type":"telegram","timeout":0,"data":{"kind":"text","demo":True,"chatId":"17","messageId":"23"}}})['id']
+        time.sleep(.5)
+        frame=next(f for f in reversed(frames()) if row(f,telegram))
+        control_click(frame['x']+180,frame['y']+row(frame,telegram)['y']+24)
+        wait_for(lambda: request({"op":"status"})['queued']==1)
+        assert request({"op":"list"})['notices'][0]['id']==plain
+        print("Native Ctrl-click: ordinary dismiss-all and Telegram single-card safe-read intent passed")
+
         print("Pinned card: hover footer collapse and workspace hide/restore passed")
         print("Native drag: plain-text pickup, live held movement, release without dismissal and repeated floating drag passed")
         print("Native motion: stable playback footer, frame-synchronous neighbours, background dismissal, recede/fade then collapse passed")
@@ -232,6 +327,10 @@ def main():
                 assert marker.read_text()=="once"
                 cli=subprocess.run([str(ROOT/"dist/bin/notjik-core"),"status"],env=env,capture_output=True,text=True,check=True)
                 assert json.loads(cli.stdout)["renderer"]=="gtk"
+                native_lib=ROOT/"../../packages/tjik-gtk/target/native/lib"
+                lifecycle_env={**env,"PKG_CONFIG_PATH":str(native_lib/"pkgconfig"),"LD_LIBRARY_PATH":str(native_lib)}
+                if not os.environ.get("NOTJIK_SKIP_LIFECYCLE"):
+                    subprocess.run(["cargo","test","--release","--locked","--features","gtk-ui","--lib","gtk::host::tests::host_lifecycle_preserves_drafts_and_identity","--","--exact","--ignored","--nocapture"],cwd=ROOT,env=lifecycle_env,check=True)
                 motion_acceptance(request,send,config,env,work,daemon)
                 config.write_text(json.dumps({"theme":"monochrome","placement":{"monitors":"all"},"actions":{"blacklist":["notjik demo"]}}))
                 wait_for(lambda: request({"op":"status"})["theme"]=="monochrome")

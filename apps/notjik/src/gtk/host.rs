@@ -31,6 +31,7 @@ struct Surface {
     snapshots: HashMap<String, Value>,
     states: HashMap<String, String>,
     keyboard_selected: bool,
+    keyboard_release_until: Rc<std::cell::Cell<Option<Instant>>>,
 }
 struct Detached {
     monitor: String,
@@ -46,6 +47,21 @@ struct Drag {
     origin_x: i32,
     origin_y: i32,
     height: i32,
+    source_monitor: String,
+    monitor_x: i32,
+    monitor_y: i32,
+}
+#[derive(Clone)]
+struct PointerPress {
+    id: String,
+    source: String,
+    x: f64,
+    y: f64,
+    active: bool,
+    control: bool,
+    native: Option<gdk::Drag>,
+    monitor_x: f64,
+    monitor_y: f64,
 }
 struct Host {
     root: PathBuf,
@@ -71,6 +87,9 @@ struct Host {
     monitor_tick: Instant,
     desktop: mpsc::Receiver<Value>,
     workspaces: HashMap<String, i64>,
+    all_monitors: Vec<Value>,
+    retained: HashMap<String, Rc<Card>>,
+    pointer: Rc<RefCell<Option<PointerPress>>>,
     app: gtk::Application,
     hold: Option<gio::ApplicationHoldGuard>,
     stopped: bool,
@@ -143,6 +162,9 @@ impl Host {
             monitor_tick: Instant::now() - Duration::from_secs(2),
             desktop,
             workspaces: HashMap::new(),
+            all_monitors: vec![],
+            retained: HashMap::new(),
+            pointer: Rc::new(RefCell::new(None)),
             app: app.clone(),
             hold: Some(app.hold()),
             stopped: false,
@@ -313,6 +335,18 @@ impl Host {
                 .unwrap_or_else(|e| json!({"ok":false,"error":e.to_string()}));
             let _ = request.reply.send(result);
         }
+        // Independent holds can overlap: a completed playback/send or cancelled
+        // drag must not allow an open reply composer to expire.
+        for card in self
+            .windows
+            .values()
+            .flat_map(|s| s.cards.values())
+            .chain(self.retained.values())
+        {
+            if card.context.composing.get() {
+                self.controller.borrow_mut().hold(&card.notice().id(), true);
+            }
+        }
         self.controller.borrow_mut().tick(elapsed);
         for effect in std::mem::take(&mut self.controller.borrow_mut().effects) {
             match effect {
@@ -375,31 +409,62 @@ impl Host {
                 surface.window.close();
             }
         }
-        if self.drag.as_ref().is_some_and(|d| {
+        if self.pointer.borrow().as_ref().is_some_and(|p| {
+            self.controller.borrow().locked()
+                || self.controller.borrow().concealed()
+                || !active.contains(&p.id)
+                || !self.windows.contains_key(&p.source)
+        }) || self.drag.as_ref().is_some_and(|d| {
             self.controller.borrow().locked()
                 || self.controller.borrow().concealed()
                 || !active.contains(&d.id)
                 || !self.windows.contains_key(&d.source)
         }) {
-            if let Some(d) = self.drag.take() {
-                self.controller.borrow_mut().hold(&d.id, false);
-                if let Some(source) = self.windows.get(&d.source) {
-                    source.list.grab(false);
-                }
-                if d.preview != d.source {
-                    self.detached.remove(&d.preview);
-                    if let Some(surface) = self.windows.remove(&d.preview) {
-                        surface.window.close();
-                    }
-                }
-            }
+            self.cancel_drag();
         }
+        self.retained.retain(|id, _| active.contains(id));
         self.feedback.retain(|id, _| active.contains(id));
         self.busy.retain(|id| active.contains(id));
         self.render();
     }
+    fn cancel_drag(&mut self) {
+        let pressed = self.pointer.borrow_mut().take();
+        if let Some(native) = pressed.and_then(|p| p.native) {
+            native.drop_done(false);
+        }
+        let Some(d) = self.drag.take() else { return };
+        self.controller.borrow_mut().hold(&d.id, false);
+        if let Some(source) = self.windows.get(&d.source) {
+            source.list.grab(false);
+        }
+        if self.windows.contains_key(&d.source) {
+            let _ = transfer_card(
+                &mut self.windows,
+                &self.event_tx,
+                &d.id,
+                &d.preview,
+                &d.source,
+            );
+            if let Some(card) = self.windows[&d.source].cards.get(&d.id) {
+                card.set_drag_preview(false);
+            }
+        }
+        self.detached.remove(&d.preview);
+        if let Some(surface) = self.windows.remove(&d.preview) {
+            surface.window.close();
+        }
+    }
     fn event(&mut self, source: &str, event: CardEvent) -> Result<()> {
         let id = event.id;
+        if matches!(event.intent, Intent::CancelDrag) {
+            self.cancel_drag();
+            return Ok(());
+        }
+        if matches!(event.intent, Intent::Drag { .. }) {
+            // Outputs can be configured immediately after hotplug. Route with the
+            // current GDK geometry rather than the periodic desktop snapshot.
+            self.monitors();
+        }
         let mut c = self.controller.borrow_mut();
         match &event.intent {
             Intent::Hover(on) => {
@@ -507,7 +572,12 @@ impl Host {
                 c.hold(&id, false);
             }
             Intent::RecordSend => self.executor.send_voice()?,
-            Intent::Drag { dx, dy, finished } => {
+            Intent::Drag {
+                dx,
+                dy,
+                finished,
+                pointer,
+            } => {
                 if self.drag.is_none() {
                     if finished || dx.hypot(dy) < 8. {
                         return Ok(());
@@ -521,6 +591,7 @@ impl Host {
                         .window
                         .monitor()
                         .context("Drag monitor disappeared")?;
+                    let bounds = monitor.geometry();
                     let origin = card
                         .widget
                         .compute_point(&surface.window, &gtk::graphene::Point::new(0., 0.))
@@ -530,38 +601,34 @@ impl Host {
                         .get(source)
                         .map(|d| d.monitor.clone())
                         .unwrap_or_else(|| source.to_string());
-                    let preview = if self.detached.contains_key(source) {
-                        source.to_string()
-                    } else {
-                        format!("floating:{id}:{}", now())
-                    };
-                    let x = surface.window.margin(Edge::Left) + origin.x() as i32;
-                    let y = surface.window.margin(Edge::Top) + origin.y() as i32;
+                    let preview = format!("floating:{id}:{}", now());
+                    let (x, y) = (origin.x() as i32, origin.y() as i32);
                     let height = card.widget.height();
                     self.detached.insert(
                         preview.clone(),
                         Detached {
                             workspace: self.workspaces.get(&monitor_name).copied(),
-                            monitor: monitor_name,
+                            monitor: monitor_name.clone(),
                             id: id.clone(),
                             x,
                             y,
                         },
                     );
-                    if preview != source {
-                        self.windows.insert(
-                            preview.clone(),
-                            popup(
-                                &self.app,
-                                &monitor,
-                                &c.config,
-                                &self.event_tx,
-                                self.controller.clone(),
-                                &preview,
-                                self.recording_id.clone(),
-                            ),
-                        );
-                    }
+                    self.windows.insert(
+                        preview.clone(),
+                        popup(
+                            &self.app,
+                            &monitor,
+                            &c.config,
+                            &self.event_tx,
+                            self.controller.clone(),
+                            &preview,
+                            self.recording_id.clone(),
+                            self.pointer.clone(),
+                        ),
+                    );
+                    transfer_card(&mut self.windows, &self.event_tx, &id, source, &preview)?;
+                    self.windows[&preview].cards[&id].set_drag_preview(true);
                     self.drag = Some(Drag {
                         id: id.clone(),
                         source: source.into(),
@@ -569,6 +636,9 @@ impl Host {
                         origin_x: x,
                         origin_y: y,
                         height,
+                        source_monitor: monitor_name,
+                        monitor_x: bounds.x(),
+                        monitor_y: bounds.y(),
                     });
                     c.hold(&id, true);
                 }
@@ -576,44 +646,70 @@ impl Host {
                 if drag.id != id || drag.source != source {
                     return Ok(());
                 }
-                if let Some(d) = self.detached.get_mut(&drag.preview) {
-                    d.x = drag.origin_x + dx.round() as i32;
-                    d.y = drag.origin_y + dy.round() as i32;
+                let (px, py) =
+                    pointer.unwrap_or((drag.origin_x as f64 + dx, drag.origin_y as f64 + dy));
+                let global_pointer = (drag.monitor_x as f64 + px, drag.monitor_y as f64 + py);
+                let destination = self
+                    .all_monitors
+                    .iter()
+                    .find(|m| {
+                        let (x, y, w, h) = (
+                            m["x"].as_f64().unwrap_or(0.),
+                            m["y"].as_f64().unwrap_or(0.),
+                            m["width"].as_f64().unwrap_or(0.),
+                            m["height"].as_f64().unwrap_or(0.),
+                        );
+                        global_pointer.0 >= x
+                            && global_pointer.0 < x + w
+                            && global_pointer.1 >= y
+                            && global_pointer.1 < y + h
+                    })
+                    .or_else(|| {
+                        self.all_monitors
+                            .iter()
+                            .find(|m| m["name"] == drag.source_monitor)
+                    });
+                if let (Some(d), Some(m)) = (self.detached.get_mut(&drag.preview), destination) {
+                    let name = text(&m["name"]);
+                    if d.monitor != name {
+                        if let Some(monitor) = find_monitor(&name) {
+                            self.windows[&drag.preview]
+                                .window
+                                .set_monitor(Some(&monitor));
+                            d.monitor = name;
+                        }
+                    }
+                    d.x = drag.monitor_x + drag.origin_x + dx.round() as i32
+                        - m["x"].as_i64().unwrap_or(0) as i32;
+                    d.y = drag.monitor_y + drag.origin_y + dy.round() as i32
+                        - m["y"].as_i64().unwrap_or(0) as i32;
                     if finished {
                         d.workspace = self.workspaces.get(&d.monitor).copied();
-                        if let Some(m) = c.monitors.iter().find(|m| m["name"] == d.monitor) {
-                            d.x = d.x.clamp(
-                                0,
-                                (m["width"].as_i64().unwrap_or(1920) as i32
-                                    - c.config["style"]["width"].as_i64().unwrap_or(420) as i32)
-                                    .max(0),
-                            );
-                            d.y = d.y.clamp(
-                                0,
-                                (m["height"].as_i64().unwrap_or(1080) as i32 - drag.height).max(0),
-                            );
-                        }
+                        d.x = d.x.clamp(
+                            0,
+                            (m["width"].as_i64().unwrap_or(1920) as i32
+                                - c.config["style"]["width"].as_i64().unwrap_or(420) as i32)
+                                .max(0),
+                        );
+                        d.y = d.y.clamp(
+                            0,
+                            (m["height"].as_i64().unwrap_or(1080) as i32 - drag.height).max(0),
+                        );
                     }
                 }
                 if finished {
                     let drag = self.drag.take().unwrap();
-                    if let Some(card) = self
-                        .windows
-                        .get(&drag.preview)
-                        .and_then(|s| s.cards.get(&id))
-                    {
-                        card.set_drag_preview(false);
-                    }
+                    self.windows[&drag.preview].cards[&id].set_drag_preview(false);
                     c.floating.insert(id.clone());
                     c.hold(&id, false);
-                    if drag.source != drag.preview && self.detached.remove(&drag.source).is_some() {
+                    if self.detached.remove(&drag.source).is_some() {
                         if let Some(surface) = self.windows.remove(&drag.source) {
                             surface.window.close();
                         }
                     }
                 }
             }
-            Intent::Hover(_) | Intent::Hold(_) => {}
+            Intent::Hover(_) | Intent::Hold(_) | Intent::CancelDrag => {}
         }
         Ok(())
     }
@@ -648,11 +744,10 @@ impl Host {
                         .is_some_and(|a| a.contains(&json!(i + 1)) || a.contains(&json!(name)))
             } && p["enabled"] != false;
             let geometry = monitor.geometry();
-            monitors.push(json!({"index":i+1,"name":name,"width":geometry.width(),"height":geometry.height(),"scale":monitor.scale_factor(),"selected":chosen}));
-            if !chosen {
-                continue;
+            monitors.push(json!({"index":i+1,"name":name,"x":geometry.x(),"y":geometry.y(),"width":geometry.width(),"height":geometry.height(),"scale":monitor.scale_factor(),"selected":chosen}));
+            if chosen {
+                selected.insert(name.clone());
             }
-            selected.insert(name.clone());
             if !self.windows.contains_key(&name) {
                 self.windows.insert(
                     name.clone(),
@@ -664,6 +759,7 @@ impl Host {
                         self.controller.clone(),
                         &name,
                         self.recording_id.clone(),
+                        self.pointer.clone(),
                     ),
                 );
             }
@@ -672,26 +768,62 @@ impl Host {
             .windows
             .keys()
             .filter(|name| {
-                !selected.contains(*name)
+                !monitors.iter().any(|m| m["name"] == **name)
                     && !self
                         .detached
                         .get(*name)
-                        .is_some_and(|d| selected.contains(&d.monitor))
+                        .is_some_and(|d| monitors.iter().any(|m| m["name"] == d.monitor))
             })
             .cloned()
             .collect::<Vec<_>>();
+        self.retire_surfaces(removed, &selected);
+        self.all_monitors = monitors.clone();
+        self.controller.borrow_mut().monitors = monitors
+            .into_iter()
+            .filter(|v| v["selected"] == true)
+            .collect();
+    }
+    fn retire_surfaces(&mut self, removed: Vec<String>, selected: &HashSet<String>) {
+        if self
+            .pointer
+            .borrow()
+            .as_ref()
+            .is_some_and(|p| removed.contains(&p.source))
+            || self
+                .drag
+                .as_ref()
+                .is_some_and(|d| removed.contains(&d.source) || removed.contains(&d.preview))
+        {
+            self.cancel_drag();
+        }
         for name in removed {
+            // Rehome the existing widget (including a reply draft) before retiring an output.
+            if let Some(destination) = selected
+                .iter()
+                .find(|n| **n != name && self.windows.contains_key(*n))
+                .cloned()
+            {
+                let ids = self
+                    .windows
+                    .get(&name)
+                    .map(|s| s.cards.keys().cloned().collect::<Vec<_>>())
+                    .unwrap_or_default();
+                for id in ids {
+                    let _ =
+                        transfer_card(&mut self.windows, &self.event_tx, &id, &name, &destination);
+                }
+            }
             if let Some(surface) = self.windows.remove(&name) {
+                for (id, card) in surface.cards {
+                    surface.list.remove(&card.widget, false);
+                    self.retained.insert(id, card);
+                }
                 surface.window.close();
             }
             if let Some(d) = self.detached.remove(&name) {
                 self.controller.borrow_mut().floating.remove(&d.id);
             }
         }
-        self.controller.borrow_mut().monitors = monitors
-            .into_iter()
-            .filter(|v| v["selected"] == true)
-            .collect();
     }
     fn render(&mut self) {
         *self.recording_id.borrow_mut() = self
@@ -703,6 +835,16 @@ impl Host {
             })
             .map(|capture| capture.id.clone());
         let c = self.controller.borrow();
+        if c.concealed() || c.locked() {
+            self.pointer.borrow_mut().take();
+        }
+        let pressed = self.pointer.borrow().clone();
+        let grab_monitor = pressed
+            .as_ref()
+            .and_then(|p| self.windows.get(&p.source))
+            .and_then(|s| s.window.monitor())
+            .and_then(|m| m.connector())
+            .map(|s| s.to_string());
         let style = &c.config["style"];
         if self.style != *style {
             if let (Some(display), Some(provider)) = (gdk::Display::default(), self.provider.take())
@@ -728,15 +870,15 @@ impl Host {
             self.provider = Some(provider);
             self.style = style.clone();
         }
-        let drag_card = self
-            .drag
-            .as_ref()
-            .and_then(|d| self.windows.get(&d.source).and_then(|s| s.cards.get(&d.id)))
-            .cloned();
         let mut stack = c.visible();
         stack.reverse();
         for (name, surface) in &mut self.windows {
             let detached = self.detached.get(name);
+            let capture = pressed.as_ref().is_some_and(|p| {
+                p.source == *name
+                    || (detached.is_none() && grab_monitor.as_deref() != Some(name.as_str()))
+            });
+            surface.list.grab(capture);
             if detached.is_some_and(|d| {
                 d.workspace.is_some() && self.workspaces.get(&d.monitor).copied() != d.workspace
             }) && !self.drag.as_ref().is_some_and(|d| d.preview == *name)
@@ -747,14 +889,32 @@ impl Host {
                 }
                 continue;
             }
+            if c.concealed() {
+                surface.list.clear();
+                surface.window.set_visible(false);
+                for card in surface.cards.values() {
+                    let mut state = card.context.state.borrow().clone();
+                    state.locked = c.locked();
+                    state.paused = c.paused;
+                    card.set_state(state);
+                    card.set_hovered(false);
+                }
+                surface.states.clear();
+                continue;
+            }
             let visible = if let Some(d) = detached {
-                if c.concealed() {
+                if self.drag.as_ref().is_some_and(|drag| drag.source == *name) {
                     vec![]
                 } else {
                     c.find(&d.id).cloned().into_iter().collect()
                 }
             } else {
-                stack.clone()
+                stack
+                    .iter()
+                    .filter(|_| c.monitors.iter().any(|m| m["name"] == *name))
+                    .filter(|n| !self.drag.as_ref().is_some_and(|d| d.id == text(&n["id"])))
+                    .cloned()
+                    .collect()
             };
             if c.concealed() {
                 surface.list.clear();
@@ -824,26 +984,31 @@ impl Host {
                 if !surface.cards.contains_key(&key) {
                     let tx = self.event_tx.clone();
                     let source = name.clone();
-                    let card = Rc::new(Card::new(
-                        Notice(snapshot.clone()),
-                        state.clone(),
-                        &self.root,
-                        now() as f64,
-                        move |event| {
+                    let card = if let Some(card) = self.retained.remove(&key) {
+                        card.set_callback(move |event| {
                             let _ = tx.send((source.clone(), event));
-                        },
-                    ));
-                    if self.drag.as_ref().is_some_and(|d| d.preview == *name) {
-                        if let Some(source) = &drag_card {
-                            card.copy_interaction_from(source);
-                        }
-                    }
+                        });
+                        card
+                    } else {
+                        Rc::new(Card::new(
+                            Notice(snapshot.clone()),
+                            state.clone(),
+                            &self.root,
+                            now() as f64,
+                            move |event| {
+                                let _ = tx.send((source.clone(), event));
+                            },
+                        ))
+                    };
                     surface.list.append(&card.widget);
                     surface.cards.insert(key.clone(), card);
                     surface.snapshots.insert(key.clone(), snapshot.clone());
                     surface.states.insert(key.clone(), state_key.clone());
                 }
                 let card = &surface.cards[&key];
+                if card.widget.parent().is_none() {
+                    surface.list.append(&card.widget);
+                }
                 if surface.snapshots.get(&key) != Some(&snapshot) {
                     card.update(Notice(snapshot.clone()));
                     surface.snapshots.insert(key.clone(), snapshot);
@@ -852,14 +1017,6 @@ impl Host {
                     card.set_state(state);
                     surface.states.insert(key.clone(), state_key);
                 }
-                let drag_source = self
-                    .drag
-                    .as_ref()
-                    .is_some_and(|d| d.source == *name && d.preview != *name && d.id == key);
-                card.widget.set_opacity(if drag_source { 0. } else { 1. });
-                if self.drag.as_ref().is_some_and(|d| d.preview == *name) {
-                    card.set_drag_preview(true);
-                }
                 card.tick(now() as f64);
                 surface
                     .list
@@ -867,31 +1024,39 @@ impl Host {
                 previous = Some(card.widget.clone().upcast());
             }
             let card_width = style["width"].as_i64().unwrap_or(420) as i32;
-            if visible.is_empty() && !surface.list.has_faces() {
+            if visible.is_empty()
+                && !capture
+                && !surface.list.has_faces()
+                && !self.drag.as_ref().is_some_and(|d| d.source == *name)
+            {
                 surface.window.set_visible(false);
             } else {
                 if surface.window.is_layer_window() {
                     let preview = self.drag.as_ref().is_some_and(|d| d.preview == *name);
                     let selected_here = !preview && surface.cards.contains_key(&c.selected);
-                    if preview {
+                    if surface.keyboard_selected && !selected_here {
+                        surface
+                            .keyboard_release_until
+                            .set(Some(Instant::now() + Duration::from_millis(100)));
+                    }
+                    if preview
+                        || surface
+                            .keyboard_release_until
+                            .get()
+                            .is_some_and(|until| until > Instant::now())
+                    {
                         surface.window.set_keyboard_mode(KeyboardMode::None);
                     } else if selected_here && !surface.keyboard_selected {
                         tjik_gtk::surface::keyboard(&surface.window, true);
                     } else if !selected_here {
-                        surface.window.set_keyboard_mode(
-                            if surface.cards.keys().any(|key| {
-                                c.held.contains(key)
-                                    && !self.drag.as_ref().is_some_and(|d| d.id == *key)
-                            }) {
-                                KeyboardMode::OnDemand
-                            } else {
-                                KeyboardMode::None
-                            },
-                        );
+                        // Click focus delivers held keyboard modifiers (notably Ctrl)
+                        // without taking focus merely because a notification appears.
+                        surface.window.set_keyboard_mode(KeyboardMode::OnDemand);
                     }
                     surface.keyboard_selected = selected_here;
                     let monitor_name = detached.map(|d| d.monitor.as_str()).unwrap_or(name);
-                    let Some(m) = c.monitors.iter().find(|m| m["name"] == monitor_name) else {
+                    let Some(m) = self.all_monitors.iter().find(|m| m["name"] == monitor_name)
+                    else {
                         continue;
                     };
                     let p = placement(
@@ -953,6 +1118,70 @@ impl Host {
         }
     }
 }
+fn find_monitor(name: &str) -> Option<gdk::Monitor> {
+    gdk::Display::default()?
+        .monitors()
+        .iter::<gdk::Monitor>()
+        .flatten()
+        .find(|m| m.connector().as_deref() == Some(name))
+}
+fn transfer_card(
+    windows: &mut HashMap<String, Surface>,
+    tx: &mpsc::Sender<(String, CardEvent)>,
+    id: &str,
+    source: &str,
+    destination: &str,
+) -> Result<()> {
+    let from = windows
+        .get_mut(source)
+        .context("Source surface disappeared")?;
+    let card = from.cards.remove(id).context("Source card disappeared")?;
+    from.list.remove(&card.widget, false);
+    from.snapshots.remove(id);
+    from.states.remove(id);
+    let events = tx.clone();
+    let target = destination.to_string();
+    card.set_callback(move |event| {
+        let _ = events.send((target.clone(), event));
+    });
+    let to = windows
+        .get_mut(destination)
+        .context("Destination surface disappeared")?;
+    if let Some(previous) = to.cards.remove(id) {
+        to.list.remove(&previous.widget, false);
+    }
+    to.snapshots.remove(id);
+    to.states.remove(id);
+    to.list.append(&card.widget);
+    to.cards.insert(id.into(), card);
+    Ok(())
+}
+
+/// Hyprland can report stale DnD-local coordinates after a layer/output focus
+/// change. Read its logical cursor position directly, without spawning a process
+/// per motion. Other compositors use the native drop coordinates instead.
+fn compositor_cursor() -> Option<(f64, f64)> {
+    use std::io::{Read, Write};
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
+    let signature = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")?;
+    let path = PathBuf::from(runtime)
+        .join("hypr")
+        .join(signature)
+        .join(".socket.sock");
+    let mut stream = std::os::unix::net::UnixStream::connect(path).ok()?;
+    stream
+        .set_read_timeout(Some(Duration::from_millis(20)))
+        .ok()?;
+    stream
+        .set_write_timeout(Some(Duration::from_millis(20)))
+        .ok()?;
+    stream.write_all(b"j/cursorpos").ok()?;
+    let mut bytes = Vec::new();
+    stream.take(4096).read_to_end(&mut bytes).ok()?;
+    let value: Value = serde_json::from_slice(&bytes).ok()?;
+    Some((value["x"].as_f64()?, value["y"].as_f64()?))
+}
+
 fn popup(
     app: &gtk::Application,
     monitor: &gdk::Monitor,
@@ -961,6 +1190,7 @@ fn popup(
     controller: Rc<RefCell<Controller>>,
     surface_name: &str,
     recording_id: Rc<RefCell<Option<String>>>,
+    press: Rc<RefCell<Option<PointerPress>>>,
 ) -> Surface {
     let geometry = monitor.geometry();
     let window = gtk::ApplicationWindow::builder()
@@ -982,6 +1212,7 @@ fn popup(
         window.set_anchor(Edge::Top, true);
     }
     let list = super::stack::Stack::new();
+    list.set_widget_name(surface_name);
     list.configure(
         config["style"]["width"].as_i64().unwrap_or(420) as i32,
         (geometry.height() as f64 * config["stack"]["heightPercent"].as_f64().unwrap_or(75.) / 100.)
@@ -1003,123 +1234,198 @@ fn popup(
     // Keep pointer ownership on the stable monitor-sized native surface instead.
     let pointer = gtk::EventControllerLegacy::new();
     pointer.set_propagation_phase(gtk::PropagationPhase::Capture);
-    let press = Rc::new(RefCell::new(None::<(String, f64, f64, bool)>));
     let weak = window.downgrade();
     let input = list.clone();
     let tx = event_tx.clone();
     let source = surface_name.to_string();
     let owner = controller.clone();
-    let handler = Rc::new(move |event: &gdk::Event| {
-        let Some((x, y)) = event.position() else {
-            return glib::Propagation::Proceed;
+    // Native Wayland DnD owns the press through output changes. Layer-shell's
+    // ordinary pointer grab is released by some compositors at output boundaries.
+    let formats = gdk::ContentFormats::new(&["application/x-notjik-card"]);
+    let target = gtk::DropTargetAsync::new(Some(formats), gdk::DragAction::MOVE);
+    let current = press.clone();
+    target.connect_accept(move |_, drop| {
+        let accepted = current
+            .borrow()
+            .as_ref()
+            .is_some_and(|p| p.native.as_ref() == drop.drag().as_ref());
+        accepted
+    });
+    let current = press.clone();
+    let target_window = window.downgrade();
+    let target_tx = event_tx.clone();
+    let target_owner = controller.clone();
+    let update = Rc::new(move |x: f64, y: f64, finished: bool| {
+        let Some(window) = target_window.upgrade() else {
+            return;
         };
-        let emit = |id: &str, intent| {
-            let _ = tx.send((
-                source.clone(),
+        let Some(monitor) = window.monitor() else {
+            return;
+        };
+        let bounds = monitor.geometry();
+        let (gx, gy) =
+            compositor_cursor().unwrap_or((x + bounds.x() as f64, y + bounds.y() as f64));
+        let mut state = current.borrow_mut();
+        let Some(p) = state.as_mut() else { return };
+        let (dx, dy) = (gx - p.x, gy - p.y);
+        p.active |= dx.hypot(dy) >= 8.;
+        let intent = if p.active {
+            Some(Intent::Drag {
+                dx,
+                dy,
+                finished,
+                pointer: Some((gx - p.monitor_x, gy - p.monitor_y)),
+            })
+        } else if finished && p.control {
+            Some(Intent::ControlDismiss)
+        } else if finished && !target_owner.borrow().floating.contains(&p.id) {
+            Some(Intent::Dismiss)
+        } else {
+            None
+        };
+        if let Some(intent) = intent {
+            let _ = target_tx.send((
+                p.source.clone(),
                 CardEvent {
-                    id: id.into(),
+                    id: p.id.clone(),
                     intent,
                 },
             ));
-        };
-        match event.event_type() {
-            gdk::EventType::ButtonPress => {
-                if event
-                    .downcast_ref::<gdk::ButtonEvent>()
-                    .is_none_or(|b| b.button() != 1)
-                    || event
-                        .modifier_state()
-                        .contains(gdk::ModifierType::SHIFT_MASK)
-                {
-                    return glib::Propagation::Proceed;
-                }
-                let Some(window) = weak.upgrade() else {
-                    return glib::Propagation::Proceed;
-                };
-                let mut picked = window.pick(x, y, gtk::PickFlags::DEFAULT);
-                let mut id = None;
-                while let Some(widget) = picked {
-                    if widget.is::<gtk::Button>()
-                        || widget.is::<gtk::TextView>()
-                        || widget.is::<gtk::Range>()
-                        || widget.is::<gtk::Entry>()
-                    {
-                        return glib::Propagation::Proceed;
-                    }
-                    if let Some(key) = widget.widget_name().strip_prefix("card-") {
-                        id = Some(key.to_string());
-                        break;
-                    }
-                    picked = widget.parent();
-                }
-                let Some(id) = id else {
-                    return glib::Propagation::Proceed;
-                };
-                if !owner
-                    .borrow()
-                    .find(&id)
-                    .is_some_and(|n| owner.borrow().allowed(n))
-                {
-                    return glib::Propagation::Proceed;
-                }
-                input.grab(true);
-                *press.borrow_mut() = Some((id, x, y, false));
-                glib::Propagation::Stop
-            }
-            gdk::EventType::MotionNotify => {
-                let mut current = press.borrow_mut();
-                let Some((id, ox, oy, active)) = current.as_mut() else {
-                    return glib::Propagation::Proceed;
-                };
-                let (dx, dy) = (x - *ox, y - *oy);
-                if *active || dx.hypot(dy) >= 8. {
-                    *active = true;
-                    emit(
-                        id,
-                        Intent::Drag {
-                            dx,
-                            dy,
-                            finished: false,
-                        },
-                    );
-                }
-                glib::Propagation::Stop
-            }
-            gdk::EventType::ButtonRelease => {
-                if event
-                    .downcast_ref::<gdk::ButtonEvent>()
-                    .is_none_or(|b| b.button() != 1)
-                {
-                    return glib::Propagation::Proceed;
-                }
-                let Some((id, ox, oy, active)) = press.borrow_mut().take() else {
-                    return glib::Propagation::Proceed;
-                };
-                input.grab(false);
-                if active {
-                    emit(
-                        &id,
-                        Intent::Drag {
-                            dx: x - ox,
-                            dy: y - oy,
-                            finished: true,
-                        },
-                    );
-                } else if !owner.borrow().floating.contains(&id) {
-                    emit(&id, Intent::Dismiss);
-                }
-                glib::Propagation::Stop
-            }
-            _ => glib::Propagation::Proceed,
+        }
+        if finished {
+            state.take();
         }
     });
-    let capture = handler.clone();
-    pointer.connect_event(move |_, event| capture(event));
-    window.add_controller(pointer);
-    let target = gtk::EventControllerLegacy::new();
-    target.set_propagation_phase(gtk::PropagationPhase::Target);
-    target.connect_event(move |_, event| handler(event));
+    let enter = update.clone();
+    target.connect_drag_enter(move |_, _, x, y| {
+        enter(x, y, false);
+        gdk::DragAction::MOVE
+    });
+    let motion = update.clone();
+    target.connect_drag_motion(move |_, _, x, y| {
+        motion(x, y, false);
+        gdk::DragAction::MOVE
+    });
+    target.connect_drop(move |_, drop, x, y| {
+        update(x, y, true);
+        drop.finish(gdk::DragAction::MOVE);
+        true
+    });
     window.add_controller(target);
+    pointer.connect_event(move |_, event| {
+        if event.event_type() != gdk::EventType::ButtonPress
+            || event
+                .downcast_ref::<gdk::ButtonEvent>()
+                .is_none_or(|b| b.button() != 1)
+            || event
+                .modifier_state()
+                .contains(gdk::ModifierType::SHIFT_MASK)
+        {
+            return glib::Propagation::Proceed;
+        }
+        let Some((x, y)) = event.position() else {
+            return glib::Propagation::Proceed;
+        };
+        let Some(window) = weak.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
+        if press.borrow().is_some() {
+            return glib::Propagation::Stop;
+        }
+        let mut picked = window.pick(x, y, gtk::PickFlags::DEFAULT);
+        let mut id = None;
+        while let Some(widget) = picked {
+            if widget.is::<gtk::Button>()
+                || widget.is::<gtk::TextView>()
+                || widget.is::<gtk::Range>()
+                || widget.is::<gtk::Entry>()
+            {
+                return glib::Propagation::Proceed;
+            }
+            if let Some(key) = widget.widget_name().strip_prefix("card-") {
+                id = Some(key.to_string());
+                break;
+            }
+            picked = widget.parent();
+        }
+        let Some(id) = id else {
+            return glib::Propagation::Proceed;
+        };
+        if !owner
+            .borrow()
+            .find(&id)
+            .is_some_and(|n| owner.borrow().allowed(n))
+        {
+            return glib::Propagation::Proceed;
+        }
+        let (Some(surface), Some(device), Some(monitor)) =
+            (window.surface(), event.device(), window.monitor())
+        else {
+            return glib::Propagation::Proceed;
+        };
+        let bounds = monitor.geometry();
+        let content = gdk::ContentProvider::for_bytes(
+            "application/x-notjik-card",
+            &glib::Bytes::from_static(b"notjik"),
+        );
+        let Some(drag) =
+            gdk::Drag::begin(&surface, &device, &content, gdk::DragAction::MOVE, 0., 0.)
+        else {
+            return glib::Propagation::Proceed;
+        };
+        input.grab(true);
+        *press.borrow_mut() = Some(PointerPress {
+            id,
+            source: source.clone(),
+            x: x + bounds.x() as f64,
+            y: y + bounds.y() as f64,
+            active: false,
+            control: event
+                .modifier_state()
+                .contains(gdk::ModifierType::CONTROL_MASK),
+            native: Some(drag.clone()),
+            monitor_x: bounds.x() as f64,
+            monitor_y: bounds.y() as f64,
+        });
+        // The original widget is rendered on the host's preview layer. Keep the
+        // compositor drag icon transparent, avoiding a second visible card.
+        let icon = gtk::DragIcon::for_drag(&drag);
+        let blank = gtk::DrawingArea::new();
+        blank.set_size_request(1, 1);
+        icon.set_child(Some(&blank));
+        let current = press.clone();
+        let cancel_tx = tx.clone();
+        let cancel_owner = owner.clone();
+        drag.connect_cancel(move |drag, reason| {
+            if !current
+                .borrow()
+                .as_ref()
+                .is_some_and(|p| p.native.as_ref() == Some(drag))
+            {
+                drag.drop_done(false);
+                return;
+            }
+            if let Some(p) = current.borrow_mut().take() {
+                let intent = if !p.active
+                    && reason == gdk::DragCancelReason::NoTarget
+                    && (p.control || !cancel_owner.borrow().floating.contains(&p.id))
+                {
+                    if p.control {
+                        Intent::ControlDismiss
+                    } else {
+                        Intent::Dismiss
+                    }
+                } else {
+                    Intent::CancelDrag
+                };
+                let _ = cancel_tx.send((p.source, CardEvent { id: p.id, intent }));
+            }
+            drag.drop_done(false);
+        });
+        drag.connect_dnd_finished(|drag| drag.drop_done(true));
+        glib::Propagation::Stop
+    });
+    window.add_controller(pointer);
     let cancel_key = Rc::new(RefCell::new(super::keyboard::CancelKeyTap::default()));
     let cancel_keys = gtk::EventControllerKey::new();
     cancel_keys.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -1146,6 +1452,8 @@ fn popup(
         }
     });
     window.add_controller(cancel_keys);
+    let keyboard_release_until = Rc::new(std::cell::Cell::new(None));
+    let release_until = keyboard_release_until.clone();
     let keys = gtk::EventControllerKey::new();
     let weak_window = window.downgrade();
     keys.connect_key_pressed(move |_, key, _, _| {
@@ -1157,7 +1465,13 @@ fn popup(
                 w.is::<gtk::TextView>() || w.is::<gtk::Text>() || w.is::<gtk::Entry>()
             });
         let request = match key {
-            gdk::Key::Escape => json!({"op":"unfocus"}),
+            gdk::Key::Escape => {
+                release_until.set(Some(Instant::now() + Duration::from_millis(100)));
+                if let Some(window) = weak_window.upgrade() {
+                    window.set_keyboard_mode(KeyboardMode::None);
+                }
+                json!({"op":"unfocus"})
+            }
             _ if editing => return glib::Propagation::Proceed,
             gdk::Key::Up => json!({"op":"navigate","direction":"previous"}),
             gdk::Key::Down => json!({"op":"navigate","direction":"next"}),
@@ -1177,6 +1491,7 @@ fn popup(
         snapshots: HashMap::new(),
         states: HashMap::new(),
         keyboard_selected: false,
+        keyboard_release_until,
     }
 }
 fn placement(config: &Value, name: &str, index: usize) -> Value {
@@ -1273,5 +1588,265 @@ mod tests {
             ),
             (484, 572)
         );
+    }
+    #[test]
+    #[ignore = "requires the private compositor used by gtk_daemon.py"]
+    fn host_lifecycle_preserves_drafts_and_identity() {
+        gtk::init().unwrap();
+        let app = gtk::Application::builder()
+            .application_id("org.tjikos.notjik.lifecycle")
+            .flags(gio::ApplicationFlags::NON_UNIQUE)
+            .build();
+        app.register(None::<&gio::Cancellable>).unwrap();
+        let mut config = crate::config::defaults();
+        config["placement"]["monitors"] = json!("all");
+        config["grouping"]["enabled"] = json!(false);
+        config["stack"]["animationMs"] = json!(0);
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        config["style"] =
+            serde_json::from_slice(&std::fs::read(root.join("themes/rose-punk.json")).unwrap())
+                .unwrap();
+        let mut controller = Controller::new(config, "lifecycle-fixture".into());
+        controller.ready = true;
+        controller.lock = "unlocked".into();
+        let (event_tx, events) = mpsc::channel();
+        let (_requests, requests) = mpsc::channel();
+        let (_desktop, desktop) = mpsc::channel();
+        let mut host = Host {
+            root,
+            app,
+            controller: Rc::new(RefCell::new(controller)),
+            bus: None,
+            socket: None,
+            requests,
+            backend: None,
+            pending: VecDeque::new(),
+            events,
+            event_tx,
+            recording_id: Rc::new(RefCell::new(None)),
+            executor: Executor::new(),
+            windows: HashMap::new(),
+            detached: HashMap::new(),
+            drag: None,
+            feedback: HashMap::new(),
+            busy: HashSet::new(),
+            provider: None,
+            surface_provider: None,
+            style: Value::Null,
+            last: Instant::now(),
+            monitor_tick: Instant::now(),
+            desktop,
+            workspaces: HashMap::new(),
+            all_monitors: vec![],
+            retained: HashMap::new(),
+            pointer: Rc::new(RefCell::new(None)),
+            hold: None,
+            stopped: false,
+        };
+        fn frames() {
+            let until = Instant::now() + Duration::from_millis(100);
+            while Instant::now() < until {
+                while glib::MainContext::default().pending() {
+                    glib::MainContext::default().iteration(false);
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        host.monitors();
+        let source = host.windows.keys().next().unwrap().clone();
+        let notice = json!({"id":"lifecycle", "type":"telegram", "title":"Synthetic lifecycle", "body":"Before replacement", "timeout":200, "data":{"kind":"text","demo":true,"chatId":"17","messageId":"23"}});
+        let id = host
+            .controller
+            .borrow_mut()
+            .send(notice.clone(), now())
+            .unwrap();
+        host.controller.borrow_mut().hold(&id, true);
+        host.render();
+        frames();
+        host.controller.borrow_mut().selected = id.clone();
+        host.render();
+        host.controller
+            .borrow_mut()
+            .handle(json!({"op":"unfocus"}), now())
+            .unwrap();
+        host.render();
+        assert_eq!(
+            host.windows[&source].window.keyboard_mode(),
+            KeyboardMode::None
+        );
+        frames();
+        host.render();
+        assert_eq!(
+            host.windows[&source].window.keyboard_mode(),
+            KeyboardMode::OnDemand
+        );
+        let card = host.windows[&source].cards[&id].clone();
+        *card.context.draft.borrow_mut() = "Unsent synthetic reply".into();
+        card.context.composing.set(true);
+        card.context.quoted.set(true);
+        *card.context.reply_target.borrow_mut() =
+            Some(("17".into(), "23".into(), "Original quote".into()));
+        card.render();
+        frames();
+        let quote = card.context.reply_target.borrow().clone();
+        let check = |host: &Host| {
+            let current = host
+                .windows
+                .values()
+                .find_map(|s| s.cards.get(&id))
+                .or_else(|| host.retained.get(&id))
+                .unwrap();
+            assert!(
+                Rc::ptr_eq(current, &card),
+                "Lifecycle rebuilt the card widget"
+            );
+            assert_eq!(current.draft(), "Unsent synthetic reply");
+            assert_eq!(*current.context.reply_target.borrow(), quote);
+            assert!(host.controller.borrow().find(&id).is_some());
+        };
+        for interruption in ["pause", "lock", "backend"] {
+            let source = host
+                .windows
+                .iter()
+                .find(|(_, s)| s.cards.contains_key(&id))
+                .unwrap()
+                .0
+                .clone();
+            host.event(
+                &source,
+                CardEvent {
+                    id: id.clone(),
+                    intent: Intent::Drag {
+                        dx: -100.,
+                        dy: -100.,
+                        finished: false,
+                        pointer: Some((300., 300.)),
+                    },
+                },
+            )
+            .unwrap();
+            host.render();
+            frames();
+            assert!(host.drag.is_some());
+            assert!(!host.windows[&source].cards.contains_key(&id));
+            let mut replacement = notice.clone();
+            replacement["body"] = json!("Replaced while dragging");
+            host.controller
+                .borrow_mut()
+                .send(replacement, now())
+                .unwrap();
+            host.render();
+            frames();
+            check(&host);
+            match interruption {
+                "pause" => host.controller.borrow_mut().paused = true,
+                "lock" => host.controller.borrow_mut().lock = "locked".into(),
+                _ => {
+                    let (client, service) = backend_channel::channel();
+                    drop(service);
+                    host.backend = Some(client);
+                }
+            }
+            host.tick();
+            frames();
+            assert!(host.drag.is_none());
+            assert!(host.windows.values().all(|s| !s.window.is_visible()));
+            check(&host);
+            host.controller.borrow_mut().tick(1000);
+            assert!(host.controller.borrow().find(&id).is_some());
+            host.backend = None;
+            {
+                let mut c = host.controller.borrow_mut();
+                c.ready = true;
+                c.paused = false;
+                c.lock = "unlocked".into();
+            }
+            host.tick();
+            frames();
+            check(&host);
+            host.controller.borrow_mut().tick(1000);
+            assert!(
+                host.controller.borrow().find(&id).is_some(),
+                "Restored composer lost its expiry hold"
+            );
+        }
+        // Telegram disconnection/uncertain send completion must retain the draft,
+        // clear busy, and never enqueue an automatic retry.
+        use std::io::BufRead;
+        let bridge_dir = tempfile::tempdir().unwrap();
+        let socket = bridge_dir.path().join("control.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let old_socket = std::env::var_os("NOTJIK_TELEGRAM_SOCKET");
+        std::env::set_var("NOTJIK_TELEGRAM_SOCKET", &socket);
+        listener.set_nonblocking(true).unwrap();
+        let fake_bridge = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(3);
+            let stream = loop {
+                if let Ok((stream, _)) = listener.accept() {
+                    break stream;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "Executor did not contact the fake bridge"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            };
+            stream
+                .set_read_timeout(Some(Duration::from_secs(1)))
+                .unwrap();
+            let mut line = String::new();
+            std::io::BufReader::new(&stream)
+                .read_line(&mut line)
+                .unwrap();
+            let request: Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(request["action"], "reply");
+            drop(stream); // Disconnect after receiving the mutation, before acknowledgement.
+            listener
+        });
+        host.busy.insert(id.clone());
+        host.executor.action(id.clone(), "reply".into(), json!({"action":"reply","text":"Synthetic private bridge test","chatId":"17","messageId":"23"}), false);
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while host.busy.contains(&id) && Instant::now() < deadline {
+            host.tick();
+            frames();
+        }
+        let listener = fake_bridge.join().unwrap();
+        if let Some(value) = old_socket {
+            std::env::set_var("NOTJIK_TELEGRAM_SOCKET", value);
+        } else {
+            std::env::remove_var("NOTJIK_TELEGRAM_SOCKET");
+        }
+        check(&host);
+        assert!(!host.busy.contains(&id));
+        assert!(!host.feedback[&id].is_empty());
+        frames();
+        host.tick();
+        listener.set_nonblocking(true).unwrap();
+        assert!(
+            listener.accept().is_err(),
+            "Uncertain send was retried automatically"
+        );
+        host.controller.borrow_mut().tick(1000);
+        assert!(host.controller.borrow().find(&id).is_some());
+        // All outputs disappearing must preserve the same composer for reconnect.
+        let removed = host.windows.keys().cloned().collect();
+        host.retire_surfaces(removed, &HashSet::new());
+        host.controller.borrow_mut().monitors.clear();
+        host.controller.borrow_mut().tick(1000);
+        check(&host);
+        assert!(host.retained.contains_key(&id));
+        host.monitors();
+        host.render();
+        frames();
+        check(&host);
+        assert!(!host.retained.contains_key(&id));
+        host.controller.borrow_mut().close(&id, 2);
+        host.render();
+        assert!(host.windows.values().all(|s| !s.cards.contains_key(&id)));
+        for surface in host.windows.values() {
+            surface.window.close();
+        }
+        host.stop();
+        println!("Lifecycle: replacement during drag, pause/resume, lock/unlock, backend loss/recovery, uncertain Telegram completion, all-output removal/reconnect, draft identity and expiry holds passed");
     }
 }

@@ -1,6 +1,7 @@
 //! Fixed-height popup scene, matching NotificationPanel.qml's measured flow.
 //! Footer allocation, sibling positions and input regions share one GTK frame.
 use gtk::{glib, graphene, gsk, prelude::*, subclass::prelude::*};
+use gtk4_layer_shell::LayerShell;
 use std::{
     cell::{Cell, RefCell},
     time::Instant,
@@ -14,6 +15,7 @@ struct Slot {
     entrance: Option<Instant>,
     retirement: Option<(Instant, f64)>,
     node: Option<gsk::RenderNode>,
+    lifted: Option<(f64, f64)>,
 }
 // Recede early, then accelerate downward along a depth/drop arc. Keep the
 // face visible through the bend; only then collapse its reserved space.
@@ -133,6 +135,7 @@ mod imp {
             if !departing {
                 let remaining: f64 = slots
                     .iter()
+                    .filter(|s| s.lifted.is_none())
                     .map(|s| (s.height + gap) * (1. - s.extent))
                     .sum();
                 let target = (width as f64 * 0.45).max(120.) * 2. / duration.max(0.001);
@@ -142,13 +145,16 @@ mod imp {
                         * (1. - (-dt / (duration.max(0.001) * 0.06)).exp());
                 self.speed.set(speed);
                 let mut distance = speed * dt;
-                let mut admitted = slots.iter().filter(|s| s.entrance.is_some()).count();
+                let mut admitted = slots
+                    .iter()
+                    .filter(|s| s.entrance.is_some() && s.lifted.is_none())
+                    .count();
                 let mut reserved: f64 = slots
                     .iter()
-                    .filter(|s| s.entrance.is_some())
+                    .filter(|s| s.entrance.is_some() && s.lifted.is_none())
                     .map(|s| s.height + gap)
                     .sum();
-                for s in slots.iter_mut() {
+                for s in slots.iter_mut().filter(|s| s.lifted.is_none()) {
                     if s.entrance.is_none() && admitted > 0 && reserved + s.height > height as f64 {
                         continue;
                     }
@@ -175,7 +181,7 @@ mod imp {
             }
             let mut total = 0.;
             let mut previous: f64 = 0.;
-            for s in slots.iter() {
+            for s in slots.iter().filter(|s| s.lifted.is_none()) {
                 total += gap * previous.min(s.extent) + s.height * s.extent;
                 if s.extent > 0. {
                     previous = s.extent;
@@ -184,7 +190,7 @@ mod imp {
             let mut y = (height as f64 - total).max(0.) * self.alignment.get();
             previous = 0.;
             let region = gtk::cairo::Region::create();
-            for s in slots.iter_mut() {
+            for s in slots.iter_mut().filter(|s| s.lifted.is_none()) {
                 y += gap * previous.min(s.extent);
                 if s.retirement.is_none() {
                     s.y = y + s.height * s.extent - s.height;
@@ -216,6 +222,19 @@ mod imp {
                     previous = s.extent;
                 }
             }
+            // Lift the same widget above the reflowed stack, retaining its pointer grab.
+            for s in slots.iter_mut().filter(|s| s.lifted.is_some()) {
+                let (x, y) = s.lifted.unwrap();
+                s.y = y;
+                s.widget.allocate(
+                    width,
+                    s.height.ceil() as i32,
+                    -1,
+                    Some(
+                        gsk::Transform::new().translate(&graphene::Point::new(x as f32, y as f32)),
+                    ),
+                );
+            }
             if let Some(surface) = self.obj().native().and_then(|n| n.surface()) {
                 if !self.input_enabled.get() {
                     surface.set_input_region(&gtk::cairo::Region::create());
@@ -235,11 +254,11 @@ mod imp {
                     .append(true)
                     .open(path)
                 {
-                    let rows = slots.iter().map(|s| serde_json::json!({"id":s.widget.widget_name().as_str(),"y":s.y,"height":s.height,"extent":s.extent,"retiring":s.retirement.is_some(),"departure":s.retirement.map(|(at,_)| departure(at.elapsed().as_secs_f64()/duration.max(0.001)))})).collect::<Vec<_>>();
+                    let rows = slots.iter().map(|s| serde_json::json!({"id":s.widget.widget_name().as_str(),"y":s.y,"height":s.height,"extent":s.extent,"retiring":s.retirement.is_some(),"lifted":s.lifted.is_some(),"widget":format!("{:p}",s.widget.as_ptr()),"liftX":s.lifted.map(|p|p.0),"departure":s.retirement.map(|(at,_)| departure(at.elapsed().as_secs_f64()/duration.max(0.001)))})).collect::<Vec<_>>();
                     let _ = writeln!(
                         file,
                         "{}",
-                        serde_json::json!({"time":super::super::host::now(),"width":width,"height":height,"x":self.offset.get().0,"y":self.offset.get().1,"rows":rows})
+                        serde_json::json!({"surface":self.obj().widget_name().as_str(),"monitor":self.obj().root().and_then(|r| r.downcast::<gtk::Window>().ok()).and_then(|w| w.monitor()).and_then(|m|m.connector()).map(|s|s.to_string()),"time":super::super::host::now(),"width":width,"height":height,"x":self.offset.get().0,"y":self.offset.get().1,"rows":rows})
                     );
                 }
             }
@@ -252,6 +271,18 @@ mod imp {
             }));
         }
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            // An empty render tree may leave the native surface's previous buffer
+            // attached. Submit an explicit transparent node when the last card leaves.
+            let clear = snapshot.append_cairo(&graphene::Rect::new(
+                0.,
+                0.,
+                self.obj().width() as f32,
+                self.obj().height() as f32,
+            ));
+            clear.set_operator(gtk::cairo::Operator::Source);
+            clear.set_source_rgba(0., 0., 0., 0.);
+            let _ = clear.paint();
+            drop(clear);
             let mut slots = self.slots.borrow_mut();
             // Retiring faces are behind the live cards and retain their last allocation.
             for s in slots.iter().filter(|s| s.retirement.is_some()) {
@@ -274,7 +305,7 @@ mod imp {
             }
             for s in slots
                 .iter_mut()
-                .filter(|s| s.retirement.is_none() && s.extent > 0.)
+                .filter(|s| s.retirement.is_none() && s.extent > 0. && s.lifted.is_none())
             {
                 let contents = gtk::Snapshot::new();
                 self.obj().snapshot_child(&s.widget, &contents);
@@ -293,6 +324,9 @@ mod imp {
                     snapshot.pop();
                 }
             }
+            for s in slots.iter().filter(|s| s.lifted.is_some()) {
+                self.obj().snapshot_child(&s.widget, snapshot);
+            }
         }
     }
 }
@@ -309,6 +343,9 @@ impl Stack {
         self.imp().input_enabled.set(input_enabled);
         self.queue_allocate();
     }
+    pub fn grabbed(&self) -> bool {
+        self.imp().grabbed.get()
+    }
     pub fn grab(&self, grabbed: bool) {
         self.imp().grabbed.set(grabbed);
         if grabbed {
@@ -319,6 +356,26 @@ impl Stack {
             }
         }
         self.queue_allocate();
+    }
+    /// Remove a card from flow without reparenting during its active gesture.
+    pub fn lift(&self, child: &gtk::Widget, position: Option<(i32, i32)>) {
+        let offset = self.imp().offset.get();
+        if let Some(slot) = self
+            .imp()
+            .slots
+            .borrow_mut()
+            .iter_mut()
+            .find(|s| s.widget == *child)
+        {
+            slot.lifted = position.map(|(x, y)| ((x - offset.0) as f64, (y - offset.1) as f64));
+        }
+        self.set_overflow(if position.is_some() {
+            gtk::Overflow::Visible
+        } else {
+            gtk::Overflow::Hidden
+        });
+        self.queue_allocate();
+        self.queue_draw();
     }
     pub fn configure(
         &self,
@@ -351,6 +408,7 @@ impl Stack {
             entrance: None,
             retirement: None,
             node: None,
+            lifted: None,
         });
         self.imp().motion.set(true);
         self.queue_allocate();

@@ -142,6 +142,7 @@ pub enum Intent {
     Invoke(usize),
     Dismiss,
     ControlDismiss,
+    CancelDrag,
     OpenGroup,
     Hover(bool),
     Select,
@@ -149,6 +150,7 @@ pub enum Intent {
         dx: f64,
         dy: f64,
         finished: bool,
+        pointer: Option<(f64, f64)>,
     },
     Task {
         action: String,
