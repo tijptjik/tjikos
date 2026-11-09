@@ -23,6 +23,12 @@ Rust `notjikctl` talks to Quickshell IPC. The launcher, Telegram bridge, media/v
 helpers, and synthetic demo/comparison commands are native Rust. Python is used only by
 development test drivers.
 
+The [GTK migration architecture](docs/gtk-architecture.md) describes the shared Rust
+service boundary and the remaining frontend migration. The
+[GTK cards](docs/gtk-cards.md) are available in a synthetic gallery:
+`notjik --gtk-cards --demo`. The Control Center/history panel is deferred to a BarTjik
+panel; Quickshell remains the installed notification frontend.
+
 ## Install and start
 
 Requires **Quickshell 0.3.2+**, Qt 6 Quick/Controls and Qt5Compat GraphicalEffects,
@@ -30,8 +36,10 @@ Requires **Quickshell 0.3.2+**, Qt 6 Quick/Controls and Qt5Compat GraphicalEffec
 unsupported compositors the lock state stays unknown and the default privacy policy
 hides notices; an explicit `privacy.lockScreen: "show"` opts out of hiding. Bun is used
 by the monorepo tooling; Rust/Cargo and SQLite development libraries are needed to
-build. `tijpset` is the rose-punk font; Qt substitutes a font when it is unavailable. No
-Python runtime or separate notification daemon is required.
+build. The GTK card gallery also requires GTK 4 development libraries and uses the
+shared `tjik-gtk` layer-shell build. `tijpset` is the rose-punk font; Qt substitutes a
+font when it is unavailable. No Python runtime or separate notification daemon is
+required.
 
 Clone the repository, then build only Notjik:
 

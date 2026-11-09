@@ -6,10 +6,13 @@
     "build": "bash scripts/build.sh",
     "check": "bash scripts/check.sh",
     "test": "cargo test --release --locked",
+    "test:gtk-unit": "bash scripts/test-gtk.sh",
+    "test:gtk": "python3 -B tests/gtk_cards.py",
     "test:clipboard": "python3 -B tests/native_clipboard.py",
     "demo": "bin/notjikctl demo"
   },
   "dependencies": {
+    "@tjikos/gtk": "workspace:*",
     "@tjikos/tasktjik": "workspace:*",
     "@tjikos/notjik-sync": "workspace:*"
   }

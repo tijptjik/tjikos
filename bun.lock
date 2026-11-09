@@ -33,6 +33,7 @@
       "name": "@tjikos/notjik",
       "version": "0.1.0",
       "dependencies": {
+        "@tjikos/gtk": "workspace:*",
         "@tjikos/notjik-sync": "workspace:*",
         "@tjikos/tasktjik": "workspace:*",
       },

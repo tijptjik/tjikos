@@ -6,6 +6,11 @@ edition = "2021"
 [features]
 gtk-ui = ["dep:gtk", "dep:tjik-gtk"]
 
+[[bin]]
+name = "notjik-gtk"
+path = "src/gtk/main.rs"
+required-features = ["gtk-ui"]
+
 [dependencies]
 gtk = { package = "gtk4", version = "0.10", features = ["v4_12"], optional = true }
 tjik-gtk = { path = "../../packages/tjik-gtk", optional = true }
