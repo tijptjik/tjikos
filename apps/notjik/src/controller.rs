@@ -254,6 +254,7 @@ impl Controller {
         if telegram(&n)
             && n["category"] == "im.received"
             && self.bridge_until > now
+            && !self.floating.contains(id(&n))
             && !self.locked()
             && !self.paused
         {
@@ -273,6 +274,7 @@ impl Controller {
     fn put(&mut self, mut n: Value, _now: u64) -> Result<()> {
         let focused = self.focused_app.to_lowercase();
         if telegram(&n)
+            && !self.floating.contains(id(&n))
             && (focused.starts_with("org.telegram.desktop") || focused.starts_with("telegram"))
         {
             self.log("suppressed", &n);
@@ -296,7 +298,9 @@ impl Controller {
                     .notices
                     .iter()
                     .find(|v| {
-                        v["remaining"].as_f64().unwrap_or(0.) > 0. && !self.held.contains(id(v))
+                        v["remaining"].as_f64().unwrap_or(0.) > 0.
+                            && !self.held.contains(id(v))
+                            && !self.floating.contains(id(v))
                     })
                     .map(|n| id(n).to_string());
                 if let Some(key) = candidate {
@@ -311,6 +315,13 @@ impl Controller {
         }
         self.revision += 1;
         Ok(())
+    }
+    // Detached cards belong to the user until explicitly dismissed. Producers
+    // may withdraw an attached popup, but cannot close a detached window.
+    pub fn withdraw(&mut self, key: &str, reason: u32) {
+        if !self.floating.contains(key) {
+            self.close(key, reason);
+        }
     }
     pub fn close(&mut self, key: &str, reason: u32) {
         if let Some(i) = self.notices.iter().position(|n| id(n) == key) {
@@ -571,7 +582,11 @@ impl Controller {
                         .find(key)
                         .is_some_and(|n| n["app"] == "Telegram via Notjik")
                 {
-                    self.close(key, 3);
+                    if r["op"] == "global-remove" {
+                        self.close(key, 3);
+                    } else {
+                        self.withdraw(key, 3);
+                    }
                 }
             }
             "openTelegramChat" => {
@@ -1026,6 +1041,48 @@ mod tests {
         assert!(c.visible().is_empty());
         c.close(&id, 2);
         assert!(!c.floating.contains(&id));
+    }
+    #[test]
+    fn detached_cards_survive_producer_withdrawal_and_queue_pressure() {
+        let mut c = controller();
+        c.config["maxQueued"] = json!(1);
+        let key = c
+            .send(
+                json!({"title":"Pinned", "app":"Telegram via Notjik", "timeout":200}),
+                0,
+            )
+            .unwrap();
+        c.floating.insert(key.clone());
+        c.handle(json!({"op":"unfocus"}), 1).unwrap();
+        c.handle(json!({"op":"telegramRemove", "id":key}), 2)
+            .unwrap();
+        c.withdraw(&key, 3);
+        c.tick(1000);
+        assert!(c.send(json!({"title":"Overflow"}), 3).is_err());
+        assert!(c.find(&key).is_some());
+        c.handle(json!({"op":"global-remove", "id":key}), 4)
+            .unwrap();
+        assert!(c.find(&key).is_none());
+    }
+    #[test]
+    fn detached_telegram_replacements_survive_focus_and_bridge_suppression() {
+        for bridge in [false, true] {
+            let mut c = controller();
+            let n = json!({"title":"Telegram", "app":"Telegram", "category":"im.received"});
+            let native = c.notify(n.clone(), 0, 1).unwrap();
+            let key = format!("dbus-{native}");
+            c.floating.insert(key.clone());
+            if bridge {
+                c.bridge_until = 100;
+            } else {
+                c.focused_app = "org.telegram.desktop".into();
+            }
+            c.notify(n, native, 2).unwrap();
+            assert!(c.find(&key).is_some());
+            assert!(c.floating.contains(&key));
+            c.close(&key, 2);
+            assert!(c.find(&key).is_none());
+        }
     }
     #[test]
     fn grouped_oldest_and_selected() {

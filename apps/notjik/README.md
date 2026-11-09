@@ -199,8 +199,9 @@ their legacy aliases, and application/desktop-entry icons. Symbolic icons ending
 ### Drag out and keep open
 
 Drag a non-interactive part of a popup to place it anywhere, including another monitor.
-The detached card stays until dismissed with **×**, a normal non-resident action, or the
-sender closes it. Drag its background again to move it. Clicking its background does not
+The detached card stays until you dismiss it with **×**, invoke a normal non-resident
+action, or remove it through `notjikctl`. Focus changes, Telegram read updates and
+sender close requests do not close detached cards. Drag its background again to move it. Clicking its background does not
 dismiss it. This works for ordinary notifications as well as Telegram photos and voice
 notes; pinned cards leave the popup stack and do not expire or get evicted by queue
 pressure. Positions are session-only.

@@ -46,7 +46,7 @@ impl Bus {
  let result=(||->Result<glib::Variant>{match method {
  "GetCapabilities"=>Ok((vec!["actions","body","persistence","icon-static"],).to_variant()),
  "GetServerInformation"=>Ok(("Notjik","TjikOS",env!("CARGO_PKG_VERSION"),"1.2").to_variant()),
- "CloseNotification"=>{let (id,)=params.get::<(u32,)>().ok_or_else(||anyhow::anyhow!("Invalid id"))?;controller.borrow_mut().close(&format!("dbus-{id}"),3);Ok(().to_variant())},
+ "CloseNotification"=>{let (id,)=params.get::<(u32,)>().ok_or_else(||anyhow::anyhow!("Invalid id"))?;controller.borrow_mut().withdraw(&format!("dbus-{id}"),3);Ok(().to_variant())},
  "Notify"=>{
  let app=params.child_get::<String>(0);let replace=params.child_get::<u32>(1);let icon=params.child_get::<String>(2);let title=params.child_get::<String>(3);let body=params.child_get::<String>(4);let actions=params.child_get::<Vec<String>>(5);let hints=params.child_get::<std::collections::HashMap<String,glib::Variant>>(6);let timeout=params.child_get::<i32>(7);
  ensure!(title.len()<=65536&&body.len()<=65536&&actions.len()<=32&&actions.len()%2==0,"Notification exceeds limits");
