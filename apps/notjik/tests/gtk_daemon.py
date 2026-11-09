@@ -13,6 +13,87 @@ sys.path.insert(0, str(ROOT.parent / "runtjik/tests"))
 from private_compositor import private_compositor, wait_for
 
 
+def motion_acceptance(request, send, config, env, work, daemon):
+    """Exercise actual popup allocations, pointer playback and background dismissal."""
+    request({"op":"dismiss", "id":"all"})
+    time.sleep(.4)
+    config.write_text(json.dumps({"theme":"rose-punk", "placement":{"monitors":"all","edge":"b","position":"r"}, "grouping":{"enabled":False}, "stack":{"animationMs":500}}))
+    time.sleep(1.3)
+    old=send("Older card stays attached",id="motion-old",body="Moves down after the lower card leaves.",timeout=0)
+    fixture=json.loads((ROOT/"examples/demo-fixtures.json").read_text())["telegram-voice"]["notices"][0]
+    fixture=json.loads(json.dumps(fixture).replace("NOTJIK_ROOT",str(ROOT/"dist")))
+    fixture.update(app="notjik demo",id="motion-voice",timeout=0,transient=True)
+    voice=request({"op":"send","notice":fixture})["id"]
+    time.sleep(1)
+    trace=work/"layout.jsonl"
+    def frames():
+        values=[]
+        for line in trace.read_text().splitlines():
+            try: values.append(json.loads(line))
+            except ValueError: pass  # The writer may be in its next frame.
+        return values
+    def row(frame,key): return next((r for r in frame['rows'] if r['id']=="card-"+key),None)
+    def last(): return next(f for f in reversed(frames()) if row(f,voice))
+    baseline=last()
+    initial=row(baseline,voice)['height']
+    request({"op":"navigate","direction":"previous"})
+    wait_for(lambda: request({"op":"status"})["selectedId"]==voice)
+    time.sleep(.4)
+    expanded=last()
+    assert row(expanded,voice)['height'] > initial, (baseline,expanded)
+    def check_join(frame):
+        a,b=row(frame,old),row(frame,voice)
+        if a and b and not b['retiring'] and a['extent']==b['extent']==1:
+            assert abs(a['y']+a['height']+10-b['y']) <= 1, frame
+    for frame in frames(): check_join(frame)
+    protocol=ROOT.parent/"runtjik/tests/virtual_pointer.xml"
+    subprocess.run(["wayland-scanner","client-header",str(protocol),str(work/"pointer.h")],check=True)
+    subprocess.run(["wayland-scanner","private-code",str(protocol),str(work/"protocol.c")],check=True)
+    flags=subprocess.check_output(["pkg-config","--cflags","--libs","wayland-client"],text=True).split()
+    subprocess.run(["cc",str(ROOT.parent/"runtjik/tests/pointer.c"),str(work/"protocol.c"),"-I"+str(work),"-o",str(work/"pointer"),*flags],check=True)
+    pointer=subprocess.Popen([str(work/"pointer"),"NOTJIK"],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
+    def event(command):
+        pointer.stdin.write(command+"\n"); pointer.stdin.flush()
+        assert pointer.stdout.readline().strip()=="ok"
+    def move(x,y): event(f"m {round(x*10)} {round(y*10000/900)}")
+    def click():
+        event("b 1"); time.sleep(.03); event("b 0")
+    layer=next(c for m in json.loads(subprocess.check_output(["hyprctl","-j","layers"],text=True)).values() for rows in m['levels'].values() for c in rows if c['namespace']=='notjik')
+    try:
+        move(layer['x']+122, layer['y']+row(expanded,voice)['y']+75)
+        click()
+        wait_for(lambda: subprocess.run(["pgrep","-P",str(daemon.pid),"-x","ffplay"],capture_output=True).returncode==0)
+        start=time.time()*1000
+        time.sleep(1.2)
+        playing=[f for f in frames() if f['time']>=start and row(f,voice)]
+        heights=[row(f,voice)['height'] for f in playing]
+        assert heights and max(heights)-min(heights)<=1, heights
+        for frame in playing: check_join(frame)
+        subprocess.run(["grim","-o","NOTJIK",str(work/"motion-playing.png")],check=True,capture_output=True)
+        # Move to plain title text, then release: this must dismiss, not select.
+        frame=last()
+        before_old=row(frame,old)['y']
+        move(layer['x']+190,layer['y']+row(frame,voice)['y']+24)
+        click()
+        wait_for(lambda: all(n['id']!=voice for n in request({"op":"list"})['notices']))
+        time.sleep(.12)
+        subprocess.run(["grim","-o","NOTJIK",str(work/"motion-departing.png")],check=True,capture_output=True)
+        time.sleep(.6)
+        departures=[f for f in frames() if row(f,voice) and row(f,voice)['retiring']]
+        assert departures, "Missing dismissal animation"
+        assert any(0 < row(f,voice)['departure'][0] < 1 and row(f,voice)['extent']==1 for f in departures)
+        assert any(row(f,voice)['departure'][0]==0 and 0 < row(f,voice)['extent'] < 1 for f in departures)
+        final=next(f for f in reversed(frames()) if row(f,old) and not row(f,voice))
+        assert row(final,old)['y'] > before_old+50, (before_old,final)
+        assert all(f['height']==expanded['height'] for f in departures), "Compositor surface resized during dismissal"
+        subprocess.run(["grim","-o","NOTJIK",str(work/"motion-settled.png")],check=True,capture_output=True)
+        print("Native motion: stable playback footer, frame-synchronous neighbours, background dismissal, recede/fade then collapse passed")
+    finally:
+        pointer.stdin.close(); pointer.wait(timeout=5)
+    request({"op":"dismiss","id":"all"})
+    time.sleep(.6)
+
+
 def main():
     host = dict(os.environ)
     def hypr(*args):
@@ -33,7 +114,7 @@ def main():
             config.write_text(json.dumps({"theme":"rose-punk", "placement":{"monitors":"all","edge":"b","position":"r","offsetY":0}, "grouping":{"enabled":False}, "history":{"logTransient":True}}))
             bus = subprocess.Popen(["dbus-daemon", "--session", "--nofork", "--print-address"], stdout=subprocess.PIPE, text=True)
             address = bus.stdout.readline().strip()
-            env = {**os.environ,"DBUS_SESSION_BUS_ADDRESS":address,"NOTJIK_HOME":str(ROOT / "dist"),"NOTJIK_CONFIG":str(config),"NOTJIK_STATE_DIR":str(work/"state"),"NOTJIK_TELEGRAM_DIR":str(work/"telegram"),"NOTJIK_SOCKET":str(work/"notjik.sock"),"GTK_A11Y":"none","GSK_RENDERER":"cairo"}
+            env = {**os.environ,"DBUS_SESSION_BUS_ADDRESS":address,"NOTJIK_HOME":str(ROOT / "dist"),"NOTJIK_CONFIG":str(config),"NOTJIK_STATE_DIR":str(work/"state"),"NOTJIK_TELEGRAM_DIR":str(work/"telegram"),"NOTJIK_SOCKET":str(work/"notjik.sock"),"GTK_A11Y":"none","GSK_RENDERER":"cairo","SDL_AUDIODRIVER":"dummy","NOTJIK_GTK_LAYOUT_TRACE":str(work/"layout.jsonl")}
             log = (work/"daemon.log").open("w")
             daemon = subprocess.Popen([str(ROOT/"dist/bin/notjik-core"),"launch"],env=env,stdout=log,stderr=log)
             def request(value):
@@ -97,6 +178,7 @@ def main():
                 assert marker.read_text()=="once"
                 cli=subprocess.run([str(ROOT/"dist/bin/notjik-core"),"status"],env=env,capture_output=True,text=True,check=True)
                 assert json.loads(cli.stdout)["renderer"]=="gtk"
+                motion_acceptance(request,send,config,env,work,daemon)
                 config.write_text(json.dumps({"theme":"monochrome","placement":{"monitors":"all"},"actions":{"blacklist":["notjik demo"]}}))
                 wait_for(lambda: request({"op":"status"})["theme"]=="monochrome")
                 history=request({"op":"history-data"})

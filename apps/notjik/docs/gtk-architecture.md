@@ -45,6 +45,19 @@ The executor keeps playback and recording ownership separate from widgets. Conce
 stops audio and stops an active recording. Synthetic notifications never send Telegram
 actions or open the microphone. A pending or uncertain voice send retains its capture.
 
+The popup scene keeps a fixed layer-surface height and measures its cards on GTK's frame
+clock. Footer reveal, neighbouring card positions and the input region therefore update
+together. Live cards are ordered oldest to newest toward the resting edge. Dismissed
+cards keep their slot while their cached face shrinks to 90%, drops up to 28 pixels and
+fades behind the stack (65% of `stack.animationMs`); the remaining 35% collapses their
+slot. Concealment removes faces immediately. Background clicks dismiss cards while
+buttons, text editors and seek controls keep their own interactions.
+
+Voice playback updates the existing play control, waveform, seek bar and timestamp; it
+does not replace the card, reply editor or footer during the progress ticker.
+`NOTJIK_GTK_LAYOUT_TRACE` optionally writes allocation traces for isolated synthetic
+acceptance checks; it is unset in normal use.
+
 ## Compatibility boundaries
 
 All built-in card types use the GTK card library. Registered custom QML components fall

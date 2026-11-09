@@ -11,6 +11,7 @@ mod icons;
 mod media;
 pub mod model;
 pub mod primitives;
+mod stack;
 mod telegram;
 use gtk::{gdk, glib, prelude::*};
 pub use media::MediaStatus;
@@ -350,6 +351,38 @@ impl Card {
             }
         });
         self.widget.add_controller(click);
+        let dismiss = gtk::GestureClick::new();
+        dismiss.set_button(1);
+        let c = self.context.clone();
+        let weak = self.widget.downgrade();
+        dismiss.connect_released(move |gesture, _, x, y| {
+            if gesture
+                .current_event_state()
+                .contains(gdk::ModifierType::SHIFT_MASK)
+                || c.state.borrow().floating
+            {
+                return;
+            }
+            let Some(root) = weak.upgrade() else {
+                return;
+            };
+            let mut target = root.pick(x, y, gtk::PickFlags::DEFAULT);
+            while let Some(w) = target {
+                if w.is::<gtk::Button>()
+                    || w.is::<gtk::TextView>()
+                    || w.is::<gtk::Range>()
+                    || w.is::<gtk::Entry>()
+                {
+                    return;
+                }
+                if w == root {
+                    break;
+                }
+                target = w.parent();
+            }
+            c.emit(Intent::Dismiss);
+        });
+        self.widget.add_controller(dismiss);
         let keys = gtk::EventControllerKey::new();
         let c = self.context.clone();
         keys.connect_key_pressed(move |_, key, _, _| {
@@ -493,10 +526,6 @@ impl Card {
             })
         });
         rail.add_controller(drag);
-        let click = gtk::GestureClick::new();
-        let c = self.context.clone();
-        click.connect_released(move |_, _, _, _| c.emit(Intent::Select));
-        rail.add_controller(click);
         if restore_editor_focus && self.context.allowed() && self.context.composing.get() {
             if let Some(editor) = self.context.editor.borrow().upgrade() {
                 editor.grab_focus();

@@ -25,7 +25,7 @@ pub fn now() -> u64 {
 }
 struct Surface {
     window: gtk::ApplicationWindow,
-    list: gtk::Box,
+    list: super::stack::Stack,
     cards: HashMap<String, Rc<Card>>,
     snapshots: HashMap<String, Value>,
     states: HashMap<String, String>,
@@ -600,7 +600,8 @@ impl Host {
             self.provider = Some(provider);
             self.style = style.clone();
         }
-        let stack = c.visible();
+        let mut stack = c.visible();
+        stack.reverse();
         for (name, surface) in &mut self.windows {
             let detached = self.detached.get(name);
             let visible = if let Some(d) = detached {
@@ -612,6 +613,9 @@ impl Host {
             } else {
                 stack.clone()
             };
+            if c.concealed() {
+                surface.list.clear();
+            }
             let keys = visible
                 .iter()
                 .map(|n| text(&n["id"]))
@@ -624,7 +628,10 @@ impl Host {
                 .collect::<Vec<_>>()
             {
                 if let Some(card) = surface.cards.remove(&key) {
-                    surface.list.remove(&card.widget);
+                    surface.list.remove(
+                        &card.widget,
+                        !c.concealed() && !c.locked() && !c.floating.contains(&key),
+                    );
                 }
                 surface.snapshots.remove(&key);
                 surface.states.remove(&key);
@@ -705,10 +712,7 @@ impl Host {
             surface
                 .window
                 .set_default_size(style["width"].as_i64().unwrap_or(420) as i32, -1);
-            surface
-                .list
-                .set_spacing(style["gap"].as_i64().unwrap_or(10) as i32);
-            if visible.is_empty() {
+            if visible.is_empty() && !surface.list.has_faces() {
                 surface.window.set_visible(false);
             } else {
                 if surface.window.is_layer_window() {
@@ -734,15 +738,37 @@ impl Host {
                         monitor_name,
                         m["index"].as_u64().unwrap_or(1) as usize - 1,
                     );
+                    let scene_height = ((m["height"].as_f64().unwrap_or(1080.)
+                        - 2. * p["margin"].as_f64().unwrap_or(16.))
+                        * c.config["stack"]["heightPercent"].as_f64().unwrap_or(75.)
+                        / 100.) as i32;
+                    let edge = p["edge"].as_str().unwrap_or("b");
+                    let position = p["position"].as_str().unwrap_or("c");
+                    let align = if edge == "t" || (["l", "r"].contains(&edge) && position == "l") {
+                        0.
+                    } else if ["l", "r"].contains(&edge) && position == "c" {
+                        0.5
+                    } else {
+                        1.
+                    };
                     let (x, y) = geometry(
                         &p,
                         m["width"].as_i64().unwrap_or(1920) as i32,
                         m["height"].as_i64().unwrap_or(1080) as i32,
                         surface.window.default_width(),
-                        surface.window.height().max(1),
+                        scene_height.max(1),
                         m["scale"].as_f64().unwrap_or(1.),
                     );
                     let (x, y) = detached.map(|d| (d.x, d.y)).unwrap_or((x, y));
+                    surface.list.configure(
+                        surface.window.default_width(),
+                        scene_height,
+                        style["gap"].as_i64().unwrap_or(10) as i32,
+                        if detached.is_some() { 0. } else { align },
+                        c.config["stack"]["animationMs"].as_u64().unwrap_or(220),
+                        (m["height"].as_i64().unwrap_or(1080) as i32 - y - scene_height)
+                            .clamp(0, 32),
+                    );
                     surface.window.set_margin(Edge::Left, x);
                     surface.window.set_margin(Edge::Top, y);
                 }
@@ -777,16 +803,17 @@ fn popup(
         window.set_anchor(Edge::Left, true);
         window.set_anchor(Edge::Top, true);
     }
-    let list = primitives::column(config["style"]["gap"].as_i64().unwrap_or(10) as i32);
-    let scroll = gtk::ScrolledWindow::new();
-    scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scroll.set_propagate_natural_height(true);
-    scroll.set_max_content_height(
+    let list = super::stack::Stack::new();
+    list.configure(
+        config["style"]["width"].as_i64().unwrap_or(420) as i32,
         (geometry.height() as f64 * config["stack"]["heightPercent"].as_f64().unwrap_or(75.) / 100.)
             as i32,
+        config["style"]["gap"].as_i64().unwrap_or(10) as i32,
+        1.,
+        config["stack"]["animationMs"].as_u64().unwrap_or(220),
+        0,
     );
-    scroll.set_child(Some(&list));
-    window.set_child(Some(&scroll));
+    window.set_child(Some(&list));
     let keys = gtk::EventControllerKey::new();
     let weak_window = window.downgrade();
     keys.connect_key_pressed(move |_, key, _, _| {
