@@ -30,6 +30,7 @@ mod clock_card;
 mod clocks;
 mod codex_card;
 mod comparison;
+mod connectivity_card;
 mod edges;
 mod icons;
 mod input;
@@ -58,6 +59,7 @@ enum Action {
 enum Event {
     Hover(String, Option<(f64, f64)>),
     PanelCommand(String),
+    ConnectivityAction(Value),
     Backend(Value),
     Activity(String, Value),
     Input(Value),

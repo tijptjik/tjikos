@@ -654,3 +654,28 @@ ellipsizing labels allowing constrained allocations instead of widening the card
 Connection subtitles also shrink safely. The rendered network fixture uses 138 GiB
 transferred and multi-digit KiB/s rates, asserts the body minimum fits, and checks that
 the Wi-Fi, disconnect, and Ethernet controls stay within its bounds.
+
+### Mullvad / Tailscale combined panel
+
+The GTK Mullvad card now includes connection controls, current country/city, expandable
+city selection, quick-country flags, and the same-island Tailscale module. Tailscale
+retains its device/address card, online/offline peer list, copy/ping actions, refresh,
+and management link. A standalone Tailscale module uses the same presentation. Existing
+Rust providers and validated `panelAction` commands remain the authority; no VPN,
+clipboard, or browser commands are introduced into GTK widgets.
+
+Controls disable immediately while a request is pending. Core acknowledgements echo a
+request ID, so old feedback cannot finish a later operation. Errors and successful
+copy/ping feedback remain visible; a bounded timeout handles a lost backend reply.
+Country changes and closing the panel reset city expansion. Shared surface primitives
+provide scrolling, clipping, hover retention and drag-to-pin; there are no tooltips.
+
+`dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py --connectivity` compares
+the synthetic combined card with the original QML components on workspace 7. It tests
+city expansion/selection, country and connection actions, module routing, copy/ping,
+refresh/admin intents, stale acknowledgements, denied actions, unavailable controls, and
+bounded minimum width. Actions are recorded in a private fixture channel: no VPN
+changes, host clipboard writes, pings, or browser launches occur during testing.
+Artifacts: `/tmp/bartjik-connectivity-primitives.png` and
+`/tmp/bartjik-connectivity-reference.png`. Real VPN state changes remain a user-driven
+acceptance check.

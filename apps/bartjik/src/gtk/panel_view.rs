@@ -115,6 +115,15 @@ fn stylesheet(style: &Value) -> String {
 .panel-card {{background:{background};color:{text};border:1px solid {border};border-radius:12px;padding:15px;font-family:"{font}";font-size:13px;}}
 .panel-card.panel-reveal-content {{background:transparent;border-color:transparent;}}
 .panel-card .panel-symbol {{font-family:"Material Symbols Rounded";}}
+.panel-card .vpn-country {{font-size:15px;}}
+.panel-card .vpn-city {{font-size:12px;color:{muted};}}
+.panel-card .vpn-peer {{min-height:58px;padding:0 4px 0 8px;border-radius:8px;}}
+.panel-card .vpn-peer:hover {{background:{surface};}}
+.panel-card .vpn-online {{font-size:10px;color:{accent};}}
+.panel-card button.vpn-city-option {{min-height:16px;padding:8px;border:0;border-radius:6px;background:transparent;box-shadow:none;}}
+.panel-card button.vpn-city-option:hover {{background:{background};}}
+.panel-card button.vpn-flag {{min-width:0;min-height:46px;padding:2px;border:1px solid {border};border-radius:3px;background:{surface};box-shadow:none;}}
+.panel-card button.vpn-flag:hover {{border-color:{accent};}}
 .panel-card .network-label {{font-size:13px;}}
 .panel-card .network-title {{font-size:14px;font-weight:600;}}
 .panel-card .network-muted {{font-size:11px;color:{muted};}}
@@ -903,6 +912,8 @@ mod render_tests {
             &css,
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 2,
         );
+        let connectivity = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("connectivity");
+        let mut vpn_card = None;
         let network = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("network");
         let fake_network = std::sync::Arc::new(crate::network::Fake::demo());
         let mut network_card = None;
@@ -925,7 +936,9 @@ mod render_tests {
             );
         }
         let header = card_header(
-            if network {
+            if connectivity {
+                "Mullvad"
+            } else if network {
                 "Networking"
             } else if router {
                 "OpenRouter"
@@ -934,7 +947,9 @@ mod render_tests {
             } else {
                 "World clock"
             },
-            if network {
+            if connectivity {
+                "mullvad"
+            } else if network {
                 "network"
             } else if router {
                 "openrouter"
@@ -947,7 +962,18 @@ mod render_tests {
 
         let card = card_frame(&header);
         let first;
-        if network {
+        if connectivity {
+            let (send, receive) = async_channel::bounded(32);
+            let view = crate::connectivity_card::Card::new(send);
+            view.update(
+                serde_json::from_str(include_str!("../../tests/fixtures/connectivity-card.json"))
+                    .unwrap(),
+            );
+            let content = view.content();
+            first = content.body.clone();
+            card.append(&content.body);
+            vpn_card = Some((view, receive));
+        } else if network {
             let (send, _receive) = async_channel::bounded(8);
             let view = crate::network_card::Card::new(fake_network.clone(), send);
             let content = view.content();
@@ -1005,13 +1031,13 @@ mod render_tests {
         let bounds = first.compute_bounds(&window).unwrap();
         let card_bounds = card.compute_bounds(&window).unwrap();
         assert_eq!(card_bounds.width(), if codex { 440. } else { 420. });
-        if !codex && !router && !network {
+        if !codex && !router && !network && !connectivity {
             assert_eq!(first.height(), 56);
         }
         assert_eq!(header.height(), 32);
         assert_eq!(bounds.x(), 16.);
         assert_eq!(bounds.y(), 72.);
-        if !router && !network {
+        if !router && !network && !connectivity {
             assert_eq!(
                 card_bounds.height(),
                 if codex {
@@ -1031,6 +1057,9 @@ mod render_tests {
             .save_to_png(std::env::var("BARTJIK_PANEL_ARTIFACT").unwrap())
             .unwrap();
 
+        if let Some((view, receive)) = vpn_card {
+            crate::connectivity_card::exercise_fixture(&view, &receive);
+        }
         if let Some(card) = network_card {
             crate::network_card::exercise_fixture(&card, &fake_network);
         }

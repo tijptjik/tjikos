@@ -1,0 +1,81 @@
+{
+  "sections": [
+    {
+      "provider": "mullvad",
+      "context": {
+        "barKey": "fixture",
+        "module": "vpn",
+        "monitor": "fixture"
+      },
+      "row": {
+        "panel": {
+          "connection": "connected",
+          "country": "Japan",
+          "countryCode": "jp",
+          "city": "Tokyo",
+          "cities": [
+            {
+              "id": "tyo",
+              "name": "Tokyo",
+              "active": true
+            },
+            {
+              "id": "osa",
+              "name": "Osaka",
+              "active": false
+            }
+          ],
+          "countries": [
+            {
+              "id": "jp",
+              "name": "Japan",
+              "active": true
+            },
+            {
+              "id": "sg",
+              "name": "Singapore",
+              "active": false
+            },
+            {
+              "id": "de",
+              "name": "Germany",
+              "active": false
+            }
+          ],
+          "locationsAvailable": true
+        }
+      }
+    },
+    {
+      "provider": "tailscale",
+      "context": {
+        "barKey": "fixture",
+        "module": "tailnet",
+        "monitor": "fixture"
+      },
+      "row": {
+        "panel": {
+          "connection": "Running",
+          "device": "Workstation",
+          "address": "100.64.0.2",
+          "online": 1,
+          "total": 2,
+          "peers": [
+            {
+              "id": "peer-online",
+              "name": "Home server",
+              "address": "100.64.0.3",
+              "online": true
+            },
+            {
+              "id": "peer-offline",
+              "name": "Travel laptop",
+              "address": "100.64.0.4",
+              "online": false
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

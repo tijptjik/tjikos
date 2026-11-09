@@ -621,6 +621,7 @@ pub struct Ui {
     deck: RefCell<panels::Deck>,
     panel_surface: RefCell<Option<panel_view::Surface>>,
     network_card: Rc<crate::network_card::Card>,
+    connectivity_card: Rc<crate::connectivity_card::Card>,
     local_pointer: Cell<Option<(f64, f64)>>,
     local_updated: RefCell<Instant>,
     fixture_pointer: Cell<Option<(f64, f64)>>,
@@ -656,6 +657,7 @@ impl Ui {
                 .ok()
                 .filter(|v| !v.is_empty()),
             can_select,
+            connectivity_card: crate::connectivity_card::Card::new(sender.clone()),
             network_card: crate::network_card::Card::new(
                 if demo || runtime.is_none() {
                     Arc::new(crate::network::Fake::demo())
@@ -1162,6 +1164,30 @@ impl Ui {
             self.panel_surface.borrow_mut().take();
             return;
         };
+        let vpn = ["mullvad", "tailscale"].contains(&target.provider.as_str());
+        if vpn {
+            let bars = self.bars.borrow();
+            if let Some(bar) = bars.get(&target.bar) {
+                let mut ids = vec![target.module.clone()];
+                if target.provider == "mullvad" {
+                    if let Some(island) = arr(&bar.definition["islands"])
+                        .iter()
+                        .find(|i| arr(&i["modules"]).iter().any(|id| id == &target.module))
+                    {
+                        if let Some(id) = arr(&island["modules"]).iter().find(|id| {
+                            bar.definition["moduleConfigs"][s(id)]["provider"] == "tailscale"
+                        }) {
+                            ids.push(s(id).into());
+                        }
+                    }
+                }
+                let sections: Vec<_> = ids.iter().map(|id| {
+                    let module = &bar.definition["moduleConfigs"][id];
+                    json!({"provider":module["provider"],"row":arr(&module["comparisonItems"]).first().cloned().unwrap_or(json!({})),"context":{"barKey":target.bar,"module":id,"monitor":target.output}})
+                }).collect();
+                self.connectivity_card.update(json!({"sections":sections}));
+            }
+        }
         let mut panel = self.panel_surface.borrow_mut();
         if panel.as_ref().is_some_and(|p| p.output != target.output) {
             panel.take();
@@ -1173,6 +1199,8 @@ impl Ui {
             .show(&target, pinned, || {
                 if target.provider == "network" {
                     self.network_card.content()
+                } else if vpn {
+                    self.connectivity_card.content()
                 } else {
                     panel_view::status_content(&target)
                 }
@@ -1448,7 +1476,21 @@ impl Ui {
                 self.sync_panel();
                 self.configure_edges();
             }
-
+            Event::ConnectivityAction(context) => {
+                if self.demo {
+                    self.intents
+                        .borrow_mut()
+                        .push(json!({"kind":"intent","context":context}));
+                    self.connectivity_card.finish("Demo action recorded");
+                } else if let Some(runtime) = &self.runtime {
+                    if let Err(error) = runtime.send(json!({"op":"panelAction","context":context}))
+                    {
+                        self.connectivity_card.finish(&error);
+                    }
+                } else {
+                    self.connectivity_card.finish("Backend unavailable");
+                }
+            }
             Event::Input(context) => self.input(context),
             Event::Backend(value) => {
                 if value["kind"] == "menuChanged" {
@@ -1499,6 +1541,7 @@ impl Ui {
                     return;
                 }
                 if !value["ready"].is_null() {
+                    self.connectivity_card.acknowledge(&value["panelFeedback"]);
                     if value["config"].is_object() {
                         *self.configuration.borrow_mut() = value["config"].clone();
                     }

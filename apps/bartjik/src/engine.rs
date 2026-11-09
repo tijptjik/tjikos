@@ -631,7 +631,7 @@ impl Engine {
                         .contains(&s(&m["provider"])),
                         "invalid panel action"
                     );
-                    feedback = json!({"barKey":context["barKey"],"module":context["module"],"busy":true,"message":"","error":false});
+                    feedback = json!({"requestId":context["requestId"],"barKey":context["barKey"],"module":context["module"],"busy":true,"message":"","error":false});
                     self.feedback = feedback.clone();
                 }
                 tokio::spawn(async move {
