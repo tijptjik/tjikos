@@ -147,6 +147,21 @@ with tempfile.TemporaryDirectory(prefix='bartjik-services-') as tmp:
         action('music',media['id'],'scrollDown','track');called('Next')
         action('music',media['id'],'scrollUp','track');called('SetPosition')
         action('music',media['id'],'leftClick');called('PlayPause')
+        # Panel buttons carry explicit intents, not configurable mouse events.
+        panel_context = {'barKey':'SYNTHETIC/fixture','monitor':'SYNTHETIC','module':'music',
+                         'item':media['id'],'nativeOwner':media['native']['owner']}
+        for intent, method in [('player.next','Next'),('player.previous','SetPosition'),
+                               ('player.toggle','PlayPause'),('player.shuffle','Set')]:
+            before = sum(c[0] == method for c in calls)
+            send({'op':'mediaAction','context':{**panel_context,'action':intent}})
+            deadline = time.monotonic() + 5
+            while sum(c[0] == method for c in calls) == before and time.monotonic() < deadline:
+                time.sleep(.01)
+            assert sum(c[0] == method for c in calls) == before + 1, (intent,calls)
+        before = len(calls)
+        send({'op':'mediaAction','context':{**panel_context,'action':'player.next','nativeOwner':':0.stale'}})
+        wait(lambda v: bool(v.get('actionError')))
+        assert len(calls) == before, 'Stale panel owner dispatched a media action'
         action('tray',tray['id'],'leftClick');called('Activate')
         action('tray',tray['id'],'middleClick');called('SecondaryActivate')
         action('tray',tray['id'],'scrollDown');called('Scroll')

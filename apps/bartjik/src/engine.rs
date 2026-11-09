@@ -521,6 +521,20 @@ impl Engine {
                         .await;
                 })
             }
+            "mediaPosition" => tokio::spawn(async move {
+                let clock = if demo {
+                    json!({"position":0,"rate":1,"playing":false})
+                } else {
+                    crate::native::position(msg["native"].clone())
+                        .await
+                        .unwrap_or(Value::Null)
+                };
+                let _ = tx
+                    .send(Event::Emit(
+                        json!({"kind":"mediaPosition","token":token,"clock":clock}),
+                    ))
+                    .await;
+            }),
             "lyrics" => {
                 let cache = self.lyrics.clone();
                 tokio::spawn(async move {
@@ -592,7 +606,7 @@ impl Engine {
                         .await;
                 })
             }
-            "action" | "panelAction" => {
+            "action" | "panelAction" | "mediaAction" => {
                 if demo {
                     crate::emit(&json!({"kind":"intent","context":msg["context"]}));
                     return Ok(op == "panelAction" && demo::control(&msg["context"]));
@@ -616,6 +630,24 @@ impl Engine {
                 let panels = self.panels.clone();
                 let wake = self.workers.get(&key).map(|w| w.wake.clone());
                 let panel_action = op == "panelAction";
+                let media_action = op == "mediaAction";
+                if media_action {
+                    ensure!(
+                        self.gtk && m["provider"] == "playerctl",
+                        "invalid media panel target"
+                    );
+                    ensure!(
+                        [
+                            "player.toggle",
+                            "player.previous",
+                            "player.next",
+                            "player.shuffle"
+                        ]
+                        .contains(&s(&context["action"])),
+                        "invalid media panel action"
+                    );
+                    ensure!(context["nativeOwner"].is_string(), "missing media owner");
+                }
                 let mut feedback = json!({});
                 if panel_action {
                     ensure!(
@@ -704,8 +736,11 @@ impl Engine {
                                 .iter()
                                 .find(|r| r["id"] == context["item"])
                                 .context("item no longer available")?;
-                            let action =
-                                actions::choose(&m, row, s(&context["part"]), s(&context["event"]));
+                            let action = if media_action {
+                                context["action"].clone()
+                            } else {
+                                actions::choose(&m, row, s(&context["part"]), s(&context["event"]))
+                            };
                             if s(&action).ends_with(".panel") {
                                 panels
                                     .open(s(&action).split('.').next().unwrap(), &context, &m)

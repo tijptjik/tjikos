@@ -508,3 +508,15 @@ pub async fn menu(row: Value, id: i32, activate: bool) -> Result<Value> {
     })
     .await?
 }
+
+/// Read the authoritative clock off the GTK thread, pinned to a service owner and track.
+pub async fn position(native: Value) -> Result<Value> {
+    tokio::task::spawn_blocking(move || {
+        let c = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)?;
+        let dest = s(&native["owner"]);
+        ensure!(owner(&c, s(&native["service"]))? == dest, "Stale player");
+        let p = all(&c, dest, MPATH, PLAYER)?;
+        ensure!(p["Metadata"]["mpris:trackid"] == native["props"]["Metadata"]["mpris:trackid"], "Stale track");
+        Ok(json!({"position":p["Position"],"rate":p["Rate"],"playing":p["PlaybackStatus"] == "Playing"}))
+    }).await?
+}
