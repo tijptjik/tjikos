@@ -41,6 +41,7 @@ struct Context {
     voice: RefCell<Option<telegram::Voice>>,
     media: RefCell<Vec<media::Media>>,
     hovered: Cell<bool>,
+    dragging: Cell<bool>,
     focused: Cell<bool>,
     revealers: RefCell<Vec<glib::WeakRef<gtk::Revealer>>>,
     quiet: RefCell<Vec<(glib::WeakRef<gtk::Widget>, bool)>>,
@@ -50,6 +51,7 @@ impl Context {
     fn revealed(&self) -> bool {
         let state = self.state.borrow();
         self.hovered.get()
+            || self.dragging.get()
             || self.focused.get()
             || state.selected
             || self.composing.get()
@@ -220,6 +222,7 @@ impl Card {
             voice: RefCell::new(None),
             media: RefCell::new(vec![]),
             hovered: Cell::new(false),
+            dragging: Cell::new(false),
             focused: Cell::new(false),
             revealers: RefCell::new(vec![]),
             quiet: RefCell::new(vec![]),
@@ -293,6 +296,17 @@ impl Card {
         self.context.quoted.set(false);
         self.context.reply_target.borrow_mut().take();
     }
+    pub(crate) fn copy_interaction_from(&self, other: &Card) {
+        *self.context.draft.borrow_mut() = other.context.draft.borrow().clone();
+        self.context.cursor.set(other.context.cursor.get());
+        self.context.composing.set(other.context.composing.get());
+        self.context.quoted.set(other.context.quoted.get());
+        *self.context.reply_target.borrow_mut() = other.context.reply_target.borrow().clone();
+        self.context
+            .action_page
+            .set(other.context.action_page.get());
+        self.render();
+    }
     pub fn draft(&self) -> String {
         self.context.draft.borrow().clone()
     }
@@ -329,43 +343,33 @@ impl Card {
             c.sync_reveal();
         });
         self.widget.add_controller(focus);
-        // Capture Shift before child buttons/entries, matching the existing copy contract.
-        let click = gtk::GestureClick::new();
-        click.set_button(1);
-        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        // One recognizer owns plain-surface clicks and drags, so crossing the
+        // drag threshold cannot also deliver a background dismissal.
+        let drag = gtk::GestureDrag::new();
+        drag.set_button(1);
+        drag.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let candidate = Rc::new(Cell::new(false));
+        let active = candidate.clone();
         let c = self.context.clone();
         let weak = self.widget.downgrade();
-        click.connect_pressed(move |gesture, _, _, _| {
-            if gesture
-                .current_event_state()
-                .contains(gdk::ModifierType::SHIFT_MASK)
-            {
-                gesture.set_state(gtk::EventSequenceState::Claimed);
-                if !c.state.borrow().locked {
-                    if let Some(w) = weak.upgrade() {
-                        w.clipboard()
-                            .set_text(&clipboard::markdown(&c.notice.borrow(), c.now.get()));
-                        w.set_tooltip_text(Some("Copied as Markdown"));
-                    }
-                }
-            }
-        });
-        self.widget.add_controller(click);
-        let dismiss = gtk::GestureClick::new();
-        dismiss.set_button(1);
-        let c = self.context.clone();
-        let weak = self.widget.downgrade();
-        dismiss.connect_released(move |gesture, _, x, y| {
-            if gesture
-                .current_event_state()
-                .contains(gdk::ModifierType::SHIFT_MASK)
-                || c.state.borrow().floating
-            {
-                return;
-            }
+        drag.connect_drag_begin(move |gesture, x, y| {
+            active.set(false);
+            c.dragging.set(false);
             let Some(root) = weak.upgrade() else {
                 return;
             };
+            if gesture
+                .current_event_state()
+                .contains(gdk::ModifierType::SHIFT_MASK)
+            {
+                if !c.state.borrow().locked {
+                    root.clipboard()
+                        .set_text(&clipboard::markdown(&c.notice.borrow(), c.now.get()));
+                    root.set_tooltip_text(Some("Copied as Markdown"));
+                }
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                return;
+            }
             let mut target = root.pick(x, y, gtk::PickFlags::DEFAULT);
             while let Some(w) = target {
                 if w.is::<gtk::Button>()
@@ -373,6 +377,7 @@ impl Card {
                     || w.is::<gtk::Range>()
                     || w.is::<gtk::Entry>()
                 {
+                    gesture.set_state(gtk::EventSequenceState::Denied);
                     return;
                 }
                 if w == root {
@@ -380,9 +385,54 @@ impl Card {
                 }
                 target = w.parent();
             }
-            c.emit(Intent::Dismiss);
+            if c.allowed() {
+                active.set(true);
+                if let Some(stack) = root.parent().and_downcast::<stack::Stack>() {
+                    stack.grab(true);
+                }
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+            } else {
+                gesture.set_state(gtk::EventSequenceState::Denied);
+            }
         });
-        self.widget.add_controller(dismiss);
+        let active = candidate.clone();
+        let c = self.context.clone();
+        drag.connect_drag_update(move |_, dx, dy| {
+            if !active.get() || !c.allowed() || (!c.dragging.get() && dx.hypot(dy) < 8.) {
+                return;
+            }
+            c.dragging.set(true);
+            c.emit(Intent::Drag {
+                dx,
+                dy,
+                finished: false,
+            });
+        });
+        let c = self.context.clone();
+        let weak = self.widget.downgrade();
+        drag.connect_drag_end(move |_, dx, dy| {
+            if !candidate.replace(false) {
+                return;
+            }
+            if let Some(stack) = weak
+                .upgrade()
+                .and_then(|w| w.parent())
+                .and_downcast::<stack::Stack>()
+            {
+                stack.grab(false);
+            }
+            if c.dragging.replace(false) {
+                c.emit(Intent::Drag {
+                    dx,
+                    dy,
+                    finished: true,
+                });
+                c.sync_reveal();
+            } else if dx.hypot(dy) < 8. && !c.state.borrow().floating {
+                c.emit(Intent::Dismiss);
+            }
+        });
+        self.widget.add_controller(drag);
         let keys = gtk::EventControllerKey::new();
         let c = self.context.clone();
         keys.connect_key_pressed(move |_, key, _, _| {
@@ -506,26 +556,6 @@ impl Card {
         for media in self.context.media.borrow().iter() {
             media.set_active(!state.locked && !state.paused && !state.history);
         }
-        // Only the noninteractive artwork rail starts card dragging; controls and
-        // editors keep their native gesture behavior.
-        let drag = gtk::GestureDrag::new();
-        let c = self.context.clone();
-        drag.connect_drag_update(move |_, dx, dy| {
-            c.emit(Intent::Drag {
-                dx,
-                dy,
-                finished: false,
-            })
-        });
-        let c = self.context.clone();
-        drag.connect_drag_end(move |_, dx, dy| {
-            c.emit(Intent::Drag {
-                dx,
-                dy,
-                finished: true,
-            })
-        });
-        rail.add_controller(drag);
         if restore_editor_focus && self.context.allowed() && self.context.composing.get() {
             if let Some(editor) = self.context.editor.borrow().upgrade() {
                 editor.grab_focus();

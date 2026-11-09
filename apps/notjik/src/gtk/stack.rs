@@ -32,6 +32,9 @@ mod imp {
         pub(super) slots: RefCell<Vec<Slot>>,
         pub size: Cell<(i32, i32)>,
         pub gap: Cell<f64>,
+        pub offset: Cell<(i32, i32)>,
+        pub grabbed: Cell<bool>,
+        pub input_enabled: Cell<bool>,
         pub outro: Cell<i32>,
         pub alignment: Cell<f64>,
         pub duration: Cell<f64>,
@@ -45,6 +48,9 @@ mod imp {
                 slots: RefCell::new(vec![]),
                 size: Cell::new((420, 800)),
                 gap: Cell::new(10.),
+                offset: Cell::new((0, 0)),
+                grabbed: Cell::new(false),
+                input_enabled: Cell::new(true),
                 outro: Cell::new(0),
                 alignment: Cell::new(1.),
                 duration: Cell::new(0.220),
@@ -190,8 +196,8 @@ mod imp {
                         let bottom = (s.y + s.height).min(height as f64).round() as i32;
                         if bottom > top {
                             let _ = region.union_rectangle(&gtk::cairo::RectangleInt::new(
-                                0,
-                                top,
+                                self.offset.get().0,
+                                top + self.offset.get().1,
                                 width,
                                 bottom - top,
                             ));
@@ -204,7 +210,15 @@ mod imp {
                 }
             }
             if let Some(surface) = self.obj().native().and_then(|n| n.surface()) {
-                surface.set_input_region(&region);
+                if !self.input_enabled.get() {
+                    surface.set_input_region(&gtk::cairo::Region::create());
+                } else if self.grabbed.get() {
+                    surface.set_input_region(&gtk::cairo::Region::create_rectangle(
+                        &gtk::cairo::RectangleInt::new(0, 0, surface.width(), surface.height()),
+                    ));
+                } else {
+                    surface.set_input_region(&region);
+                }
             }
             // Opt-in diagnostics for synthetic compositor acceptance tests.
             if let Some(path) = std::env::var_os("NOTJIK_GTK_LAYOUT_TRACE") {
@@ -218,7 +232,7 @@ mod imp {
                     let _ = writeln!(
                         file,
                         "{}",
-                        serde_json::json!({"time":super::super::host::now(),"width":width,"height":height,"rows":rows})
+                        serde_json::json!({"time":super::super::host::now(),"width":width,"height":height,"x":self.offset.get().0,"y":self.offset.get().1,"rows":rows})
                     );
                 }
             }
@@ -283,6 +297,22 @@ impl Stack {
     pub fn new() -> Self {
         glib::Object::new()
     }
+    pub fn position(&self, x: i32, y: i32, input_enabled: bool) {
+        self.imp().offset.set((x, y));
+        self.imp().input_enabled.set(input_enabled);
+        self.queue_allocate();
+    }
+    pub fn grab(&self, grabbed: bool) {
+        self.imp().grabbed.set(grabbed);
+        if grabbed {
+            if let Some(surface) = self.native().and_then(|n| n.surface()) {
+                surface.set_input_region(&gtk::cairo::Region::create_rectangle(
+                    &gtk::cairo::RectangleInt::new(0, 0, surface.width(), surface.height()),
+                ));
+            }
+        }
+        self.queue_allocate();
+    }
     pub fn configure(
         &self,
         width: i32,
@@ -334,6 +364,7 @@ impl Stack {
         self.queue_draw();
     }
     pub fn clear(&self) {
+        self.imp().grabbed.set(false);
         for slot in self.imp().slots.borrow_mut().drain(..) {
             slot.widget.unparent();
         }

@@ -59,6 +59,7 @@ def motion_acceptance(request, send, config, env, work, daemon):
     def click():
         event("b 1"); time.sleep(.03); event("b 0")
     layer=next(c for m in json.loads(subprocess.check_output(["hyprctl","-j","layers"],text=True)).values() for rows in m['levels'].values() for c in rows if c['namespace']=='notjik')
+    layer.update(x=expanded['x'],y=expanded['y'])
     try:
         move(layer['x']+122, layer['y']+row(expanded,voice)['y']+75)
         click()
@@ -87,6 +88,41 @@ def motion_acceptance(request, send, config, env, work, daemon):
         assert row(final,old)['y'] > before_old+50, (before_old,final)
         assert all(f['height']==expanded['height'] for f in departures), "Compositor surface resized during dismissal"
         subprocess.run(["grim","-o","NOTJIK",str(work/"motion-settled.png")],check=True,capture_output=True)
+        # Drag plain card text; the live preview must move before button release.
+        def layers():
+            return [f for f in frames()[-150:] if row(f,old)]
+        move(layer['x']+180,layer['y']+row(final,old)['y']+24)
+        event("b 1"); time.sleep(.04); event("r -150 -160")
+        try:
+            preview=wait_for(lambda: next((c for c in layers() if abs(c['x']-(layer['x']-150))<3),None),timeout=4)
+        except ValueError:
+            raise AssertionError({"layers":layers(),"status":request({"op":"status"}),"cursor":subprocess.check_output(["hyprctl","-j","cursorpos"],text=True),"log":(work/"daemon.log").read_text()})
+        assert request({"op":"status"})["queued"]==1, "Drag dismissed the card"
+        assert request({"op":"status"})["floating"]==0, "Drop committed before release"
+        event("r -55 -25")
+        try:
+            moved=wait_for(lambda: next((c for c in layers() if abs(c['x']-(preview['x']-55))<3),None),timeout=4)
+        except ValueError:
+            raise AssertionError({"preview":preview,"latest":layers()[-4:],"status":request({"op":"status"}),"cursor":subprocess.check_output(["hyprctl","-j","cursorpos"],text=True)})
+        assert abs(moved['y']-(preview['y']-25))<3,(preview,moved)
+        subprocess.run(["grim","-o","NOTJIK",str(work/"drag-held.png")],check=True,capture_output=True)
+        event("b 0")
+        wait_for(lambda: request({"op":"status"})["floating"]==1)
+        time.sleep(.2)
+        # Re-drag a detached card. Offsets are relative to its stationary grab
+        # surface, not accumulated again after each window movement.
+        move(moved['x']+180,moved['y']+24)
+        event("b 1"); time.sleep(.04); event("r 45 -35")
+        again=wait_for(lambda: next((c for c in layers() if abs(c['x']-(moved['x']+45))<3 and abs(c['y']-(moved['y']-35))<3),None))
+        event("b 0"); time.sleep(.2)
+        assert request({"op":"status"})["floating"]==1
+        assert request({"op":"status"})["queued"]==1
+        move(again['x']+280,again['y']+24)
+        time.sleep(.2)
+        settled=layers()[-1]
+        assert abs(settled['x']-again['x'])<3 and abs(settled['y']-again['y'])<3, (again,settled)
+        subprocess.run(["grim","-o","NOTJIK",str(work/"drag-dropped.png")],check=True,capture_output=True)
+        print("Native drag: plain-text pickup, live held movement, release without dismissal and repeated floating drag passed")
         print("Native motion: stable playback footer, frame-synchronous neighbours, background dismissal, recede/fade then collapse passed")
     finally:
         pointer.stdin.close(); pointer.wait(timeout=5)

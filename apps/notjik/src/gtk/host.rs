@@ -26,6 +26,7 @@ pub fn now() -> u64 {
 struct Surface {
     window: gtk::ApplicationWindow,
     list: super::stack::Stack,
+    scene: gtk::Fixed,
     cards: HashMap<String, Rc<Card>>,
     snapshots: HashMap<String, Value>,
     states: HashMap<String, String>,
@@ -37,6 +38,14 @@ struct Detached {
     x: i32,
     y: i32,
 }
+struct Drag {
+    id: String,
+    source: String,
+    preview: String,
+    origin_x: i32,
+    origin_y: i32,
+    height: i32,
+}
 struct Host {
     root: PathBuf,
     controller: Rc<RefCell<Controller>>,
@@ -45,11 +54,12 @@ struct Host {
     requests: mpsc::Receiver<ipc::Request>,
     backend: Option<backend_channel::Client>,
     pending: VecDeque<Value>,
-    events: mpsc::Receiver<CardEvent>,
-    event_tx: mpsc::Sender<CardEvent>,
+    events: mpsc::Receiver<(String, CardEvent)>,
+    event_tx: mpsc::Sender<(String, CardEvent)>,
     executor: Executor,
     windows: HashMap<String, Surface>,
     detached: HashMap<String, Detached>,
+    drag: Option<Drag>,
     feedback: HashMap<String, String>,
     busy: HashSet<String>,
     provider: Option<gtk::CssProvider>,
@@ -110,6 +120,7 @@ impl Host {
             executor: Executor::new(),
             windows: HashMap::new(),
             detached: HashMap::new(),
+            drag: None,
             feedback: HashMap::new(),
             busy: HashSet::new(),
             provider: None,
@@ -129,7 +140,7 @@ impl Host {
             }
         });
         let tick = host.clone();
-        glib::timeout_add_local(Duration::from_millis(100), move || {
+        glib::timeout_add_local(Duration::from_millis(16), move || {
             let mut h = tick.borrow_mut();
             if h.stopped {
                 return glib::ControlFlow::Break;
@@ -260,9 +271,9 @@ impl Host {
             }
             self.controller.borrow_mut().hold(&done.id, false);
         }
-        while let Ok(event) = self.events.try_recv() {
+        while let Ok((source, event)) = self.events.try_recv() {
             let id = event.id.clone();
-            if let Err(e) = self.event(event) {
+            if let Err(e) = self.event(&source, event) {
                 self.feedback.insert(id, e.to_string());
             }
         }
@@ -336,11 +347,30 @@ impl Host {
                 surface.window.close();
             }
         }
+        if self.drag.as_ref().is_some_and(|d| {
+            self.controller.borrow().locked()
+                || self.controller.borrow().concealed()
+                || !active.contains(&d.id)
+                || !self.windows.contains_key(&d.source)
+        }) {
+            if let Some(d) = self.drag.take() {
+                self.controller.borrow_mut().hold(&d.id, false);
+                if let Some(source) = self.windows.get(&d.source) {
+                    source.list.grab(false);
+                }
+                if d.preview != d.source {
+                    self.detached.remove(&d.preview);
+                    if let Some(surface) = self.windows.remove(&d.preview) {
+                        surface.window.close();
+                    }
+                }
+            }
+        }
         self.feedback.retain(|id, _| active.contains(id));
         self.busy.retain(|id| active.contains(id));
         self.render();
     }
-    fn event(&mut self, event: CardEvent) -> Result<()> {
+    fn event(&mut self, source: &str, event: CardEvent) -> Result<()> {
         let id = event.id;
         let mut c = self.controller.borrow_mut();
         match &event.intent {
@@ -449,49 +479,98 @@ impl Host {
             }
             Intent::RecordSend => self.executor.send_voice()?,
             Intent::Drag { dx, dy, finished } => {
-                if !finished || dx.abs() + dy.abs() < 10. {
-                    return Ok(());
-                }
-                let key = format!("floating:{id}");
-                if let Some(d) = self.detached.get_mut(&key) {
-                    d.x = (d.x + dx as i32).max(0);
-                    d.y = (d.y + dy as i32).max(0);
-                } else if let Some((name, surface)) =
-                    self.windows.iter().find(|(_, w)| w.cards.contains_key(&id))
-                {
-                    if let Some(monitor) = surface.window.monitor() {
-                        let origin = surface.cards[&id]
-                            .widget
-                            .compute_point(&surface.window, &gtk::graphene::Point::new(0., 0.))
-                            .unwrap_or(gtk::graphene::Point::new(0., 0.));
-                        let bounds = monitor.geometry();
-                        let x = (surface.window.margin(Edge::Left) + origin.x() as i32 + dx as i32)
-                            .clamp(0, (bounds.width() - surface.window.width()).max(0));
-                        let y = (surface.window.margin(Edge::Top) + origin.y() as i32 + dy as i32)
-                            .clamp(
-                                0,
-                                (bounds.height() - surface.cards[&id].widget.height()).max(0),
-                            );
-                        self.detached.insert(
-                            key.clone(),
-                            Detached {
-                                monitor: name.clone(),
-                                id: id.clone(),
-                                x,
-                                y,
-                            },
-                        );
+                if self.drag.is_none() {
+                    if finished || dx.hypot(dy) < 8. {
+                        return Ok(());
+                    }
+                    let surface = self
+                        .windows
+                        .get(source)
+                        .context("Drag surface disappeared")?;
+                    let card = surface.cards.get(&id).context("Drag card disappeared")?;
+                    let monitor = surface
+                        .window
+                        .monitor()
+                        .context("Drag monitor disappeared")?;
+                    let origin = card
+                        .widget
+                        .compute_point(&surface.window, &gtk::graphene::Point::new(0., 0.))
+                        .context("Drag origin unavailable")?;
+                    let monitor_name = self
+                        .detached
+                        .get(source)
+                        .map(|d| d.monitor.clone())
+                        .unwrap_or_else(|| source.to_string());
+                    let preview = if self.detached.contains_key(source) {
+                        source.to_string()
+                    } else {
+                        format!("floating:{id}:{}", now())
+                    };
+                    let x = surface.window.margin(Edge::Left) + origin.x() as i32;
+                    let y = surface.window.margin(Edge::Top) + origin.y() as i32;
+                    let height = card.widget.height();
+                    self.detached.insert(
+                        preview.clone(),
+                        Detached {
+                            monitor: monitor_name,
+                            id: id.clone(),
+                            x,
+                            y,
+                        },
+                    );
+                    if preview != source {
                         self.windows.insert(
-                            key,
+                            preview.clone(),
                             popup(
                                 &self.app,
                                 &monitor,
                                 &c.config,
                                 &self.event_tx,
                                 self.controller.clone(),
+                                &preview,
                             ),
                         );
-                        c.floating.insert(id);
+                    }
+                    self.drag = Some(Drag {
+                        id: id.clone(),
+                        source: source.into(),
+                        preview,
+                        origin_x: x,
+                        origin_y: y,
+                        height,
+                    });
+                    c.hold(&id, true);
+                }
+                let drag = self.drag.as_ref().context("Drag unavailable")?;
+                if drag.id != id || drag.source != source {
+                    return Ok(());
+                }
+                if let Some(d) = self.detached.get_mut(&drag.preview) {
+                    d.x = drag.origin_x + dx.round() as i32;
+                    d.y = drag.origin_y + dy.round() as i32;
+                    if finished {
+                        if let Some(m) = c.monitors.iter().find(|m| m["name"] == d.monitor) {
+                            d.x = d.x.clamp(
+                                0,
+                                (m["width"].as_i64().unwrap_or(1920) as i32
+                                    - c.config["style"]["width"].as_i64().unwrap_or(420) as i32)
+                                    .max(0),
+                            );
+                            d.y = d.y.clamp(
+                                0,
+                                (m["height"].as_i64().unwrap_or(1080) as i32 - drag.height).max(0),
+                            );
+                        }
+                    }
+                }
+                if finished {
+                    let drag = self.drag.take().unwrap();
+                    c.floating.insert(id.clone());
+                    c.hold(&id, false);
+                    if drag.source != drag.preview && self.detached.remove(&drag.source).is_some() {
+                        if let Some(surface) = self.windows.remove(&drag.source) {
+                            surface.window.close();
+                        }
                     }
                 }
             }
@@ -537,13 +616,14 @@ impl Host {
             selected.insert(name.clone());
             if !self.windows.contains_key(&name) {
                 self.windows.insert(
-                    name,
+                    name.clone(),
                     popup(
                         &self.app,
                         &monitor,
                         &config,
                         &self.event_tx,
                         self.controller.clone(),
+                        &name,
                     ),
                 );
             }
@@ -600,6 +680,11 @@ impl Host {
             self.provider = Some(provider);
             self.style = style.clone();
         }
+        let drag_card = self
+            .drag
+            .as_ref()
+            .and_then(|d| self.windows.get(&d.source).and_then(|s| s.cards.get(&d.id)))
+            .cloned();
         let mut stack = c.visible();
         stack.reverse();
         for (name, surface) in &mut self.windows {
@@ -680,15 +765,21 @@ impl Host {
                 let state_key = format!("{state:?}");
                 if !surface.cards.contains_key(&key) {
                     let tx = self.event_tx.clone();
+                    let source = name.clone();
                     let card = Rc::new(Card::new(
                         Notice(snapshot.clone()),
                         state.clone(),
                         &self.root,
                         now() as f64,
                         move |event| {
-                            let _ = tx.send(event);
+                            let _ = tx.send((source.clone(), event));
                         },
                     ));
+                    if self.drag.as_ref().is_some_and(|d| d.preview == *name) {
+                        if let Some(source) = &drag_card {
+                            card.copy_interaction_from(source);
+                        }
+                    }
                     surface.list.append(&card.widget);
                     surface.cards.insert(key.clone(), card);
                     surface.snapshots.insert(key.clone(), snapshot.clone());
@@ -703,25 +794,37 @@ impl Host {
                     card.set_state(state);
                     surface.states.insert(key.clone(), state_key);
                 }
+                let drag_source = self
+                    .drag
+                    .as_ref()
+                    .is_some_and(|d| d.source == *name && d.preview != *name && d.id == key);
+                card.widget.set_opacity(if drag_source { 0. } else { 1. });
+                if self.drag.as_ref().is_some_and(|d| d.preview == *name) {
+                    card.set_hovered(true);
+                }
                 card.tick(now() as f64);
                 surface
                     .list
                     .reorder_child_after(&card.widget, previous.as_ref());
                 previous = Some(card.widget.clone().upcast());
             }
-            surface
-                .window
-                .set_default_size(style["width"].as_i64().unwrap_or(420) as i32, -1);
+            let card_width = style["width"].as_i64().unwrap_or(420) as i32;
             if visible.is_empty() && !surface.list.has_faces() {
                 surface.window.set_visible(false);
             } else {
                 if surface.window.is_layer_window() {
-                    let selected_here = surface.cards.contains_key(&c.selected);
-                    if selected_here && !surface.keyboard_selected {
+                    let preview = self.drag.as_ref().is_some_and(|d| d.preview == *name);
+                    let selected_here = !preview && surface.cards.contains_key(&c.selected);
+                    if preview {
+                        surface.window.set_keyboard_mode(KeyboardMode::None);
+                    } else if selected_here && !surface.keyboard_selected {
                         tjik_gtk::surface::keyboard(&surface.window, true);
                     } else if !selected_here {
                         surface.window.set_keyboard_mode(
-                            if surface.cards.keys().any(|key| c.held.contains(key)) {
+                            if surface.cards.keys().any(|key| {
+                                c.held.contains(key)
+                                    && !self.drag.as_ref().is_some_and(|d| d.id == *key)
+                            }) {
                                 KeyboardMode::OnDemand
                             } else {
                                 KeyboardMode::None
@@ -755,22 +858,37 @@ impl Host {
                         &p,
                         m["width"].as_i64().unwrap_or(1920) as i32,
                         m["height"].as_i64().unwrap_or(1080) as i32,
-                        surface.window.default_width(),
+                        card_width,
                         scene_height.max(1),
                         m["scale"].as_f64().unwrap_or(1.),
                     );
                     let (x, y) = detached.map(|d| (d.x, d.y)).unwrap_or((x, y));
                     surface.list.configure(
-                        surface.window.default_width(),
+                        card_width,
                         scene_height,
                         style["gap"].as_i64().unwrap_or(10) as i32,
                         if detached.is_some() { 0. } else { align },
-                        c.config["stack"]["animationMs"].as_u64().unwrap_or(220),
+                        if self.drag.as_ref().is_some_and(|d| d.preview == *name) {
+                            0
+                        } else {
+                            c.config["stack"]["animationMs"].as_u64().unwrap_or(220)
+                        },
                         (m["height"].as_i64().unwrap_or(1080) as i32 - y - scene_height)
                             .clamp(0, 32),
                     );
-                    surface.window.set_margin(Edge::Left, x);
-                    surface.window.set_margin(Edge::Top, y);
+                    surface.window.set_default_size(
+                        m["width"].as_i64().unwrap_or(1920) as i32,
+                        m["height"].as_i64().unwrap_or(1080) as i32,
+                    );
+                    surface.scene.move_(&surface.list, x as f64, y as f64);
+                    surface.list.position(
+                        x,
+                        y,
+                        !self
+                            .drag
+                            .as_ref()
+                            .is_some_and(|d| d.preview == *name && d.source != *name),
+                    );
                 }
                 surface.window.set_visible(true);
             }
@@ -781,8 +899,9 @@ fn popup(
     app: &gtk::Application,
     monitor: &gdk::Monitor,
     config: &Value,
-    _event_tx: &mpsc::Sender<CardEvent>,
+    event_tx: &mpsc::Sender<(String, CardEvent)>,
     controller: Rc<RefCell<Controller>>,
+    surface_name: &str,
 ) -> Surface {
     let geometry = monitor.geometry();
     let window = gtk::ApplicationWindow::builder()
@@ -813,7 +932,135 @@ fn popup(
         config["stack"]["animationMs"].as_u64().unwrap_or(220),
         0,
     );
-    window.set_child(Some(&list));
+    let scene = gtk::Fixed::new();
+    scene.put(&list, 0., 0.);
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(&gtk::Box::new(gtk::Orientation::Vertical, 0)));
+    overlay.add_overlay(&scene);
+    overlay.set_measure_overlay(&scene, false);
+    window.set_child(Some(&overlay));
+    window.set_default_size(geometry.width(), geometry.height());
+    // Layer surfaces do not provide a widget-local grab outside a card's bounds.
+    // Keep pointer ownership on the stable monitor-sized native surface instead.
+    let pointer = gtk::EventControllerLegacy::new();
+    pointer.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let press = Rc::new(RefCell::new(None::<(String, f64, f64, bool)>));
+    let weak = window.downgrade();
+    let input = list.clone();
+    let tx = event_tx.clone();
+    let source = surface_name.to_string();
+    let owner = controller.clone();
+    let handler = Rc::new(move |event: &gdk::Event| {
+        let Some((x, y)) = event.position() else {
+            return glib::Propagation::Proceed;
+        };
+        let emit = |id: &str, intent| {
+            let _ = tx.send((
+                source.clone(),
+                CardEvent {
+                    id: id.into(),
+                    intent,
+                },
+            ));
+        };
+        match event.event_type() {
+            gdk::EventType::ButtonPress => {
+                if event
+                    .downcast_ref::<gdk::ButtonEvent>()
+                    .is_none_or(|b| b.button() != 1)
+                    || event
+                        .modifier_state()
+                        .contains(gdk::ModifierType::SHIFT_MASK)
+                {
+                    return glib::Propagation::Proceed;
+                }
+                let Some(window) = weak.upgrade() else {
+                    return glib::Propagation::Proceed;
+                };
+                let mut picked = window.pick(x, y, gtk::PickFlags::DEFAULT);
+                let mut id = None;
+                while let Some(widget) = picked {
+                    if widget.is::<gtk::Button>()
+                        || widget.is::<gtk::TextView>()
+                        || widget.is::<gtk::Range>()
+                        || widget.is::<gtk::Entry>()
+                    {
+                        return glib::Propagation::Proceed;
+                    }
+                    if let Some(key) = widget.widget_name().strip_prefix("card-") {
+                        id = Some(key.to_string());
+                        break;
+                    }
+                    picked = widget.parent();
+                }
+                let Some(id) = id else {
+                    return glib::Propagation::Proceed;
+                };
+                if !owner
+                    .borrow()
+                    .find(&id)
+                    .is_some_and(|n| owner.borrow().allowed(n))
+                {
+                    return glib::Propagation::Proceed;
+                }
+                input.grab(true);
+                *press.borrow_mut() = Some((id, x, y, false));
+                glib::Propagation::Stop
+            }
+            gdk::EventType::MotionNotify => {
+                let mut current = press.borrow_mut();
+                let Some((id, ox, oy, active)) = current.as_mut() else {
+                    return glib::Propagation::Proceed;
+                };
+                let (dx, dy) = (x - *ox, y - *oy);
+                if *active || dx.hypot(dy) >= 8. {
+                    *active = true;
+                    emit(
+                        id,
+                        Intent::Drag {
+                            dx,
+                            dy,
+                            finished: false,
+                        },
+                    );
+                }
+                glib::Propagation::Stop
+            }
+            gdk::EventType::ButtonRelease => {
+                if event
+                    .downcast_ref::<gdk::ButtonEvent>()
+                    .is_none_or(|b| b.button() != 1)
+                {
+                    return glib::Propagation::Proceed;
+                }
+                let Some((id, ox, oy, active)) = press.borrow_mut().take() else {
+                    return glib::Propagation::Proceed;
+                };
+                input.grab(false);
+                if active {
+                    emit(
+                        &id,
+                        Intent::Drag {
+                            dx: x - ox,
+                            dy: y - oy,
+                            finished: true,
+                        },
+                    );
+                } else if !owner.borrow().floating.contains(&id) {
+                    emit(&id, Intent::Dismiss);
+                }
+                glib::Propagation::Stop
+            }
+            _ => glib::Propagation::Proceed,
+        }
+    });
+    let capture = handler.clone();
+    pointer.connect_event(move |_, event| capture(event));
+    window.add_controller(pointer);
+    let target = gtk::EventControllerLegacy::new();
+    target.set_propagation_phase(gtk::PropagationPhase::Target);
+    target.connect_event(move |_, event| handler(event));
+    window.add_controller(target);
     let keys = gtk::EventControllerKey::new();
     let weak_window = window.downgrade();
     keys.connect_key_pressed(move |_, key, _, _| {
@@ -840,6 +1087,7 @@ fn popup(
     Surface {
         window,
         list,
+        scene,
         cards: HashMap::new(),
         snapshots: HashMap::new(),
         states: HashMap::new(),

@@ -37,9 +37,12 @@ actions. Bus disconnection closes native surfaces and exits. Unknown idle state 
 
 Native replacements always reset expiry. Hover, selection, interactions, pause and lock
 hold expiry. Ordinary popups do not take keyboard focus; explicit selection enables
-keyboard navigation, activation, dismissal and Escape to release focus. Drag release
-creates a detached card with an expiry hold; live movement during drag is not yet
-implemented. Monitor removal closes its surfaces.
+keyboard navigation, activation, dismissal and Escape to release focus. Dragging plain
+card content or artwork moves a live preview while retaining the original pointer grab.
+Release pins the card within its monitor bounds and holds expiry; detached cards can be
+dragged again. Buttons, editors and seeking retain their own pointer gestures. Reply
+drafts and action-page selection carry into the detached card. Monitor removal closes
+its surfaces.
 
 The executor keeps playback and recording ownership separate from widgets. Concealment
 stops audio and stops an active recording. Synthetic notifications never send Telegram
@@ -80,7 +83,9 @@ ownership, private IPC, replacements, expiry holds, native actions/signals and i
 data, command execution, configuration reload, history and layer surfaces. The gallery
 checks 19 variants in two themes against the QML reference. Unit tests cover controller
 privacy, suppression, overflow and idle observation. These checks do not establish real
-Telegram delivery, microphone capture, or end-to-end drag/keyboard interaction parity.
+Telegram delivery, microphone capture, cross-monitor dragging or keyboard interaction
+parity. Pointer acceptance covers background dismissal, live dragging before release,
+and dragging a detached card again.
 
 Install the validated build with `bash scripts/install.sh notjik`. On a managed desktop,
 set `TJIKUP_MANAGED_CONFIG=1` to preserve managed service configuration. Replacing files
