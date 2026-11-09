@@ -1,6 +1,5 @@
 use crate::util::*;
 use anyhow::Result;
-use chrono::{TimeZone, Utc};
 use serde_json::{json, Value};
 pub fn ini(raw: &str) -> Value {
     let mut out = json!({});
@@ -48,29 +47,7 @@ pub fn methods(group: &str) -> Vec<String> {
     });
     entries.iter().map(|(_, v)| s(&v["Name"]).into()).collect()
 }
-pub fn world_clock(cities: &Value, timestamp: Option<i64>) -> Value {
-    let defaults = json!([{"label":"New York","timezone":"America/New_York"},{"label":"London","timezone":"Europe/London"},{"label":"Amsterdam","timezone":"Europe/Amsterdam"},{"label":"Tokyo","timezone":"Asia/Tokyo"}]);
-    let now = timestamp
-        .and_then(|t| Utc.timestamp_opt(t, 0).single())
-        .unwrap_or_else(Utc::now);
-    let rows: Vec<_> = arr(if cities.is_null() { &defaults } else { cities })
-        .iter()
-        .filter_map(|c| {
-            let tz = s(&c["timezone"]).parse::<chrono_tz::Tz>().ok()?;
-            let local = now.with_timezone(&tz);
-            Some(field(
-                s(&c["label"]),
-                json!(local.format("%H:%M").to_string()),
-                &local.format("%a %d %b · %Z").to_string(),
-            ))
-        })
-        .collect();
-    panel(
-        "World clock",
-        json!(rows),
-        "Local times · daylight saving aware",
-    )
-}
+pub use crate::datetime::world_clock;
 pub fn grouped(n: f64, digits: usize) -> String {
     let raw = format!("{n:.digits$}");
     let (whole, frac) = raw.split_once('.').unwrap_or((&raw, ""));

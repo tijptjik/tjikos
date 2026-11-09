@@ -439,41 +439,18 @@ pub async fn poll(m: &Value) -> Result<Vec<Value>> {
             row
         }
         "datetime" => {
-            let mut env = vec![];
-            for (k, name) in [("timezone", "TZ"), ("locale", "LC_TIME")] {
-                if let Some(v) = m[k].as_str() {
-                    env.push((name.into(), v.into()));
-                }
-            }
-            let raw = command(
-                &[
-                    "date".into(),
-                    format!(
-                        "+{}\n{}\n{}",
-                        m["format"].as_str().unwrap_or("%H:%M"),
-                        m["alternate"].as_str().unwrap_or("%a %d %b"),
-                        m["tooltipFormat"].as_str().unwrap_or("%A, %d %B %Y")
-                    ),
-                ],
-                5.,
-                262144,
-                &env,
-                None,
-            )
-            .await?;
-            let values: Vec<_> = raw.lines().collect();
-            ensure!(values.len() == 3, "date formats must produce one line each");
+            let clock = crate::datetime::read(m, None).await?;
             let mut row = item(
                 "time",
-                Some(values[0]),
+                Some(&clock.text),
                 None,
                 "glyph",
                 json!({}),
-                values[2],
+                &clock.tooltip,
                 json!({"leftClick":"datetime.toggle"}),
             );
-            row["alternate"] = json!(values[1]);
-            row["panel"] = details::world_clock(&m["worldClocks"], None);
+            row["alternate"] = json!(clock.alternate);
+            row["panel"] = clock.panel;
             row
         }
         "locale" => {

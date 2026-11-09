@@ -5,6 +5,7 @@ mod cache;
 mod cities;
 mod config;
 mod connectivity;
+mod datetime;
 mod demo;
 mod details;
 mod engine;
