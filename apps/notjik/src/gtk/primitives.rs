@@ -153,6 +153,7 @@ pub fn apply_theme(style: &Value) -> gtk::CssProvider {
 .notjik button.quiet.card-dismiss {{ font-size: {title}px; }}
 .notjik .card-content {{ padding: {padding}px; }}
 .notjik .card-content.compact-footer, .notjik .card-content.auth-content {{ padding-bottom: 8px; }}
+.notjik .group-notches {{ color: {muted}; min-width: 3px; }}
 .notjik .card-title {{ font-weight: bold; font-size: {title}px; }}
 .notjik .strong, .notjik .field-name {{ font-weight: bold; }}
 @define-color notjik_accent {accent};

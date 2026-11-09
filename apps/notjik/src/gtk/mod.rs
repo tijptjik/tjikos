@@ -11,6 +11,7 @@ mod icons;
 mod keyboard;
 mod media;
 pub mod model;
+mod notches;
 pub mod primitives;
 mod showcase;
 mod stack;
@@ -199,6 +200,7 @@ pub struct Card {
     pub widget: gtk::Box,
     context: Rc<Context>,
     root: PathBuf,
+    notches: notches::Notches,
 }
 impl Card {
     pub fn new(
@@ -214,6 +216,7 @@ impl Card {
         widget.set_vexpand(false);
         widget.set_valign(gtk::Align::Start);
         widget.set_overflow(gtk::Overflow::Hidden);
+        let notches = notches::Notches::new(if state.history { 1 } else { state.group_count });
         let context = Rc::new(Context {
             notice: RefCell::new(notice),
             state: RefCell::new(state),
@@ -241,6 +244,7 @@ impl Card {
             widget,
             context,
             root: root.into(),
+            notches,
         };
         card.gestures();
         card.render();
@@ -468,6 +472,9 @@ impl Card {
             .borrow()
             .upgrade()
             .is_some_and(|editor| editor.has_focus());
+        if let Some(parent) = self.notches.widget.parent().and_downcast::<gtk::Overlay>() {
+            parent.remove_overlay(&self.notches.widget);
+        }
         while let Some(child) = self.widget.first_child() {
             self.widget.remove(&child);
         }
@@ -503,13 +510,6 @@ impl Card {
         title.set_lines(3);
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
         heading.append(&title);
-        if state.group_count > 1 {
-            let group = button(&state.group_count.to_string(), "card-group");
-            let c = self.context.clone();
-            group.connect_clicked(move |_| c.emit(Intent::OpenGroup));
-            group.set_sensitive(self.context.allowed());
-            heading.append(&group);
-        }
         let close = button("×", "card-dismiss");
         let c = self.context.clone();
         close.connect_clicked(move |_| c.emit(Intent::Dismiss));
@@ -558,6 +558,9 @@ impl Card {
         body.append(&content);
         let overlay = gtk::Overlay::new();
         overlay.set_child(Some(&body));
+        self.notches
+            .update(if state.history { 1 } else { state.group_count });
+        overlay.add_overlay(&self.notches.widget);
         let hint = column(0);
         hint.set_widget_name("interaction-hint");
         hint.add_css_class("interaction-hint");

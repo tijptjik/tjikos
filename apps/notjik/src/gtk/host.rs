@@ -1078,6 +1078,8 @@ impl Host {
                     card.set_state(state);
                     surface.states.insert(key.clone(), state_key);
                 }
+                card.notches
+                    .duration(c.config["stack"]["animationMs"].as_u64().unwrap_or(220));
                 card.tick(now() as f64);
                 surface
                     .list
