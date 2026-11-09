@@ -131,8 +131,18 @@ pub struct CapturedFrame {
     pub rgba: Vec<u8>,
 }
 pub trait WindowActions: Send + Sync {
-
-
+    /// Prepare an exact-title floating toplevel before mapping. No focus transfer.
+    fn prepare_toplevel(
+        &self,
+        _title: &str,
+        _workspace: &WorkspaceTarget,
+        _rect: Rect,
+    ) -> Result<()> {
+        Err(DesktopError::Unsupported)
+    }
+    fn release_toplevel(&self, _title: &str) -> Result<()> {
+        Err(DesktopError::Unsupported)
+    }
 
     /// Bounded, optional per-window capture. Call on a worker, never the UI thread.
     /// Returned buffers use RGBA8; Unsupported is an explicit capability result.

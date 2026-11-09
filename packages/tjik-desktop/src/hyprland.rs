@@ -333,8 +333,61 @@ impl WindowActions for Hyprland {
             ))
         }
     }
-
-
+    fn prepare_toplevel(&self, title: &str, workspace: &WorkspaceTarget, rect: Rect) -> Result<()> {
+        if !self.lua {
+            return Err(DesktopError::Unsupported);
+        }
+        if title.is_empty()
+            || !title
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b":-_".contains(&c))
+            || ![rect.x, rect.y, rect.width, rect.height]
+                .iter()
+                .all(|v| v.is_finite())
+            || rect.width <= 0.
+            || rect.height <= 0.
+        {
+            return Err(DesktopError::Unavailable(
+                "Invalid toplevel placement".into(),
+            ));
+        }
+        let snapshot = self.snapshot()?;
+        if snapshot.generation != workspace.generation {
+            return Err(DesktopError::StaleTarget);
+        }
+        let output = snapshot
+            .outputs
+            .iter()
+            .find(|o| o.id == workspace.output)
+            .ok_or(DesktopError::StaleTarget)?;
+        let selected = snapshot
+            .workspaces
+            .iter()
+            .find(|w| Some(&w.workspace.id) == workspace.id.as_ref())
+            .ok_or(DesktopError::StaleTarget)?;
+        if selected.output.as_ref() != Some(&workspace.output) {
+            return Err(DesktopError::StaleTarget);
+        }
+        let name = selected
+            .workspace
+            .name
+            .as_deref()
+            .ok_or(DesktopError::StaleTarget)?;
+        let key = lua(&format!("tjik-toplevel-{title}"));
+        self.command(&format!("eval if _G[{key}] then _G[{key}]:set_enabled(false) end; _G[{key}]=hl.window_rule({{name={key},float=true,no_initial_focus=true,no_anim=true,no_blur=true,no_shadow=true,border_size=0,workspace={},monitor={},size={{{},{}}},move={{{},{}}},match={{initial_title={}}}}})",
+            lua(&format!("{name} silent")), lua(&output.name), rect.width.ceil(), rect.height.ceil(),
+            lua(&format!("({})", (rect.x-output.logical.x).round())), lua(&format!("({})", (rect.y-output.logical.y).round())),
+            lua(&format!("^{title}$"))))
+    }
+    fn release_toplevel(&self, title: &str) -> Result<()> {
+        if !self.lua {
+            return Err(DesktopError::Unsupported);
+        }
+        let key = lua(&format!("tjik-toplevel-{title}"));
+        self.command(&format!(
+            "eval if _G[{key}] then _G[{key}]:set_enabled(false); _G[{key}]=nil end"
+        ))
+    }
     fn place(&self, id: &WindowId, r: Rect) -> Result<()> {
         if !self.lua {
             return Err(DesktopError::Unsupported);

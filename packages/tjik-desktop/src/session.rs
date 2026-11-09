@@ -294,8 +294,14 @@ impl DesktopSession for Session {
     }
 }
 impl WindowActions for Session {
-
-
+    fn prepare_toplevel(&self, title: &str, workspace: &WorkspaceTarget, rect: Rect) -> Result<()> {
+        self.inner
+            .backend()?
+            .prepare_toplevel(title, workspace, rect)
+    }
+    fn release_toplevel(&self, title: &str) -> Result<()> {
+        self.inner.backend()?.release_toplevel(title)
+    }
 
     fn capture(&self, id: &WindowId) -> Result<CapturedFrame> {
         self.inner.backend()?.capture(id)
