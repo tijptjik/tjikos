@@ -307,6 +307,9 @@ the Bitwarden desktop URI when available, then opens the matching web-vault item
 
 ### Text expansion
 
+For stalled startup or reloads on Wayland, see the
+[Espanso modifier-sync repair](docs/espanso-wayland.md).
+
 `/expand` edits Espanso's text expansion dictionary: **New** stays first, followed by
 triggers in alphabetical order. Filter with `/expand {text}` to search both triggers and
 expansions. Enter opens the selected entry; Ctrl+Enter deletes it. The inline editor

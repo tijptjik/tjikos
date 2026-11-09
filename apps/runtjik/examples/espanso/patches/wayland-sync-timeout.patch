@@ -1,0 +1,37 @@
+diff --git a/espanso-detect/src/evdev/sync/wayland.rs b/espanso-detect/src/evdev/sync/wayland.rs
+index 81195cd..2ff090f 100644
+--- a/espanso-detect/src/evdev/sync/wayland.rs
++++ b/espanso-detect/src/evdev/sync/wayland.rs
+@@ -2,8 +2,8 @@
+ 
+ use super::ModifiersState;
+ use anyhow::Result;
+-use log::debug;
+-use std::time::Duration;
++use log::{debug, warn};
++use std::time::{Duration, Instant};
+ 
+ use sctk::activation::RequestData;
+ use sctk::reexports::calloop::EventLoop;
+@@ -112,12 +112,21 @@ pub fn get_modifiers_state() -> Result<Option<super::ModifiersState>> {
+ 
+     conn.flush().unwrap();
+ 
++    let deadline = Instant::now() + Duration::from_millis(500);
+     loop {
+         if simple_window.modifiers.is_some() {
+             debug!("{:?}", simple_window.modifiers);
+             return Ok(simple_window.modifiers);
+         }
+ 
++        // A layer-shell input surface or compositor focus policy may prevent this
++        // window from ever receiving keyboard focus. Modifier synchronization is
++        // best effort; it must not block startup or config-reload shutdown.
++        if simple_window.exit || Instant::now() >= deadline {
++            warn!("Wayland modifier synchronization timed out; continuing without initial modifier state");
++            return Ok(None);
++        }
++
+         event_loop
+             .dispatch(Duration::from_millis(16), &mut simple_window)
+             .unwrap();
