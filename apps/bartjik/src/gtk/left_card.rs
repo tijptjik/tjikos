@@ -175,6 +175,7 @@ pub struct Card {
     style: RefCell<Value>,
     snapshot: RefCell<Option<Snapshot>>,
     chart: RefCell<Value>,
+    chart_trace: Rc<RefCell<crate::crypto_chart::Trace>>,
     art: RefCell<String>,
     lyrics: RefCell<Value>,
     show_lyrics: Cell<bool>,
@@ -212,6 +213,7 @@ impl Card {
             style: RefCell::new(Value::Null),
             snapshot: RefCell::new(None),
             chart: RefCell::new(Value::Null),
+            chart_trace: Rc::new(RefCell::new(crate::crypto_chart::Trace::default())),
             art: RefCell::new(String::new()),
             lyrics: RefCell::new(Value::Null),
             show_lyrics: Cell::new(false),
@@ -413,6 +415,7 @@ impl Card {
         let changed = *self.key.borrow() != key;
         if changed {
             *self.key.borrow_mut() = key;
+            *self.chart_trace.borrow_mut() = crate::crypto_chart::Trace::default();
             *self.chart.borrow_mut() = Value::Null;
             self.art.borrow_mut().clear();
             *self.lyrics.borrow_mut() = Value::Null;
@@ -606,7 +609,14 @@ impl Card {
             .filter(|(x, y)| x.is_finite() && y.is_finite())
             .take(4096)
             .collect();
-        if pts.len() < 2 {
+        let accent = gdk::RGBA::parse(s(&self.style.borrow()["accent"]))
+            .unwrap_or(gdk::RGBA::new(1., 0.32, 0.65, 1.));
+        self.body.append(&crate::crypto_chart::widget(
+            self.chart_trace.clone(),
+            pts.clone(),
+            accent,
+        ));
+        if pts.len() < 2 && (!chart.is_null() || row["state"]["unavailable"] == true) {
             let msg = label(
                 if row["state"]["unavailable"] == true {
                     "Prices unavailable"
@@ -618,7 +628,7 @@ impl Card {
                 "policy-muted",
             );
             msg.set_wrap(false);
-            msg.set_height_request(190);
+
             msg.set_halign(gtk::Align::Center);
             self.body.append(&msg);
             let retry = button("Retry", "crypto-retry");
@@ -639,51 +649,6 @@ impl Card {
             if !chart.is_null() || row["state"]["unavailable"] == true {
                 self.body.append(&retry);
             }
-        } else {
-            let graph = gtk::DrawingArea::new();
-            graph.set_content_height(190);
-            graph.set_hexpand(true);
-            let accent = gdk::RGBA::parse(s(&self.style.borrow()["accent"]))
-                .unwrap_or(gdk::RGBA::new(1., 0.32, 0.65, 1.));
-            graph.set_draw_func(move |_, cr, w, h| {
-                let lo = pts.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
-                let hi = pts.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
-                let width = (w as f64 - 62.).max(1.);
-                let height = h as f64 - 16.;
-                cr.set_source_rgba(0.65, 0.63, 0.73, 0.2);
-                cr.set_line_width(1.);
-                for i in 0..3 {
-                    let y = 8. + height * i as f64 / 2.;
-                    cr.move_to(0., y);
-                    cr.line_to(width, y);
-                }
-                let _ = cr.stroke();
-                cr.set_source_rgba(
-                    accent.red() as f64,
-                    accent.green() as f64,
-                    accent.blue() as f64,
-                    1.,
-                );
-                cr.set_line_width(2.);
-                let span = (pts.last().unwrap().0 - pts[0].0).max(1.);
-                for (i, (x, y)) in pts.iter().enumerate() {
-                    let x = (x - pts[0].0) / span * width;
-                    let y = 8. + height - (y - lo) / (hi - lo).max(0.00001) * height;
-                    if i == 0 {
-                        cr.move_to(x, y)
-                    } else {
-                        cr.line_to(x, y)
-                    }
-                }
-                let _ = cr.stroke();
-                cr.set_source_rgb(0.65, 0.63, 0.73);
-                cr.set_font_size(10.);
-                for (v, y) in [(hi, 12.), (lo, h as f64 - 3.)] {
-                    cr.move_to(width + 6., y);
-                    let _ = cr.show_text(&format!("{v:.2}"));
-                }
-            });
-            self.body.append(&graph);
         }
         let axis = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let a = label("24 hours ago", "policy-muted");

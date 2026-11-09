@@ -33,6 +33,7 @@ mod clocks;
 mod codex_card;
 mod comparison;
 mod connectivity_card;
+mod crypto_chart;
 mod edges;
 mod history_card;
 mod icons;
