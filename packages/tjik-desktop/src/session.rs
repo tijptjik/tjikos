@@ -294,6 +294,12 @@ impl DesktopSession for Session {
     }
 }
 impl WindowActions for Session {
+
+
+
+    fn capture(&self, id: &WindowId) -> Result<CapturedFrame> {
+        self.inner.backend()?.capture(id)
+    }
     fn activate(&self, id: &WindowId) -> Result<()> {
         self.inner.backend()?.activate(id)
     }

@@ -1,6 +1,8 @@
 //! Toolkit-independent desktop contract. Blocking methods belong on worker threads.
 //! Full snapshots replace state atomically; revision orders snapshots in a session.
 //! No GTK objects or async-runtime types cross this boundary.
+#[cfg(feature = "capture")]
+mod capture;
 mod events;
 pub mod fake;
 mod hyprland;
@@ -121,7 +123,22 @@ pub trait DesktopSession: Send + Sync {
         Err(DesktopError::Unsupported)
     }
 }
+#[derive(Debug, Clone)]
+pub struct CapturedFrame {
+    pub width: u32,
+    pub height: u32,
+    pub stride: usize,
+    pub rgba: Vec<u8>,
+}
 pub trait WindowActions: Send + Sync {
+
+
+
+    /// Bounded, optional per-window capture. Call on a worker, never the UI thread.
+    /// Returned buffers use RGBA8; Unsupported is an explicit capability result.
+    fn capture(&self, _target: &WindowId) -> Result<CapturedFrame> {
+        Err(DesktopError::Unsupported)
+    }
     fn activate(&self, target: &WindowId) -> Result<()>;
     fn activate_newly_mapped(&self, target: &WindowId) -> Result<()> {
         self.activate(target)

@@ -10,6 +10,8 @@ use std::{
 
 pub struct Hyprland {
     path: PathBuf,
+    #[cfg(feature = "capture")]
+    display: PathBuf,
     generation: String,
     inode: u64,
     lua: bool,
@@ -99,6 +101,8 @@ impl Hyprland {
         }
         let lua = request(&path, "eval return").is_ok_and(|s| s.trim() == "ok");
         Ok(Self {
+            #[cfg(feature = "capture")]
+            display: display.to_owned(),
             path,
             generation: format!("{signature}:{inode}"),
             inode,
@@ -286,6 +290,15 @@ impl DesktopSession for Hyprland {
     }
 }
 impl WindowActions for Hyprland {
+    #[cfg(feature = "capture")]
+    fn capture(&self, id: &WindowId) -> Result<CapturedFrame> {
+        let target = self.target(id)?;
+        let address = u64::from_str_radix(s(&target["address"]).trim_start_matches("0x"), 16)
+            .map_err(|_| DesktopError::StaleTarget)?;
+        let frame = crate::capture::capture(&self.display, address as u32)?;
+        self.target(id)?;
+        Ok(frame)
+    }
     fn activate(&self, id: &WindowId) -> Result<()> {
         let client = self.target(id)?;
         let monitors = self.query("monitors")?;
@@ -320,6 +333,8 @@ impl WindowActions for Hyprland {
             ))
         }
     }
+
+
     fn place(&self, id: &WindowId, r: Rect) -> Result<()> {
         if !self.lua {
             return Err(DesktopError::Unsupported);
@@ -629,6 +644,8 @@ mod transport_tests {
         });
         (
             Hyprland {
+                #[cfg(feature = "capture")]
+                display: PathBuf::from("/synthetic/display"),
                 path,
                 generation: "synthetic-session".into(),
                 inode,
