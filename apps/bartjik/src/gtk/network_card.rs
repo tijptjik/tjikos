@@ -150,7 +150,7 @@ impl Card {
             "Wi-Fi password; blank uses saved credentials",
         )]);
         form.append(&password);
-        body.append(&form);
+        wifi.append(&form);
         let ethernet = gtk::Box::new(gtk::Orientation::Vertical, 10);
         body.append(&ethernet);
         let card = Rc::new(Self {
@@ -290,6 +290,7 @@ impl Card {
         self.password.set_text("");
         self.selected.borrow_mut().take();
         self.form.set_visible(false);
+        self.list.set_visible(true);
     }
     fn sensitivity(&self) {
         let ready = !self.busy.get();
@@ -334,6 +335,7 @@ impl Card {
     fn select(&self, ap: Option<AccessPoint>) {
         self.password.set_text("");
         self.form.set_visible(ap.is_some());
+        self.list.set_visible(ap.is_none());
         if let Some(ap) = &ap {
             self.selected_name.set_text(&ap.ssid);
             self.password
@@ -712,10 +714,17 @@ pub fn exercise_fixture(card: &Rc<Card>, fake: &Arc<crate::network::Fake>) {
         .unwrap();
     row.emit_clicked();
     assert!(card.form.is_visible());
+    assert!(!card.list.is_visible());
+    card.select(None);
+    assert!(card.list.is_visible());
+    assert!(!card.form.is_visible());
+    row.emit_clicked();
+    assert!(!card.list.is_visible());
     card.password.set_text("synthetic-secret");
     card.connect.emit_clicked();
     assert!(card.password.text().is_empty());
     assert!(!card.form.is_visible());
+    assert!(card.list.is_visible());
     wait(|| !card.busy.get());
     assert!(fake
         .commands
