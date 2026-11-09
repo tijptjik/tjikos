@@ -43,6 +43,9 @@ mod imp {
         pub gap: Cell<f64>,
         pub offset: Cell<(i32, i32)>,
         pub grabbed: Cell<bool>,
+        pub demo_scroll: Cell<bool>,
+        pub scroll: Cell<f64>,
+        pub scroll_max: Cell<f64>,
         pub input_enabled: Cell<bool>,
         pub outro: Cell<i32>,
         pub alignment: Cell<f64>,
@@ -59,6 +62,9 @@ mod imp {
                 gap: Cell::new(10.),
                 offset: Cell::new((0, 0)),
                 grabbed: Cell::new(false),
+                demo_scroll: Cell::new(false),
+                scroll: Cell::new(0.),
+                scroll_max: Cell::new(0.),
                 input_enabled: Cell::new(true),
                 outro: Cell::new(0),
                 alignment: Cell::new(1.),
@@ -79,6 +85,23 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.obj().set_overflow(gtk::Overflow::Hidden);
+            let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+            let weak = self.obj().downgrade();
+            wheel.connect_scroll(move |_, _, dy| {
+                let Some(stack) = weak.upgrade() else {
+                    return glib::Propagation::Proceed;
+                };
+                if !stack.imp().demo_scroll.get() {
+                    return glib::Propagation::Proceed;
+                }
+                stack.imp().scroll.set(
+                    (stack.imp().scroll.get() + dy * 48.).clamp(0., stack.imp().scroll_max.get()),
+                );
+                stack.queue_allocate();
+                stack.queue_draw();
+                glib::Propagation::Stop
+            });
+            self.obj().add_controller(wheel);
             self.obj().add_tick_callback(|obj, _| {
                 if obj.imp().motion.get() {
                     obj.queue_allocate();
@@ -155,7 +178,11 @@ mod imp {
                     .map(|s| s.height + gap)
                     .sum();
                 for s in slots.iter_mut().filter(|s| s.lifted.is_none()) {
-                    if s.entrance.is_none() && admitted > 0 && reserved + s.height > height as f64 {
+                    if !self.demo_scroll.get()
+                        && s.entrance.is_none()
+                        && admitted > 0
+                        && reserved + s.height > height as f64
+                    {
                         continue;
                     }
                     if s.extent < 1. && (distance > 0. || admitted == 0 || duration == 0.) {
@@ -187,7 +214,10 @@ mod imp {
                     previous = s.extent;
                 }
             }
-            let mut y = (height as f64 - total).max(0.) * self.alignment.get();
+            self.scroll_max.set((total - height as f64).max(0.));
+            self.scroll
+                .set(self.scroll.get().clamp(0., self.scroll_max.get()));
+            let mut y = (height as f64 - total).max(0.) * self.alignment.get() - self.scroll.get();
             previous = 0.;
             let region = gtk::cairo::Region::create();
             for s in slots.iter_mut().filter(|s| s.lifted.is_none()) {
@@ -258,7 +288,7 @@ mod imp {
                     let _ = writeln!(
                         file,
                         "{}",
-                        serde_json::json!({"surface":self.obj().widget_name().as_str(),"monitor":self.obj().root().and_then(|r| r.downcast::<gtk::Window>().ok()).and_then(|w| w.monitor()).and_then(|m|m.connector()).map(|s|s.to_string()),"time":super::super::host::now(),"width":width,"height":height,"x":self.offset.get().0,"y":self.offset.get().1,"rows":rows})
+                        serde_json::json!({"scroll":self.scroll.get(),"surface":self.obj().widget_name().as_str(),"monitor":self.obj().root().and_then(|r| r.downcast::<gtk::Window>().ok()).and_then(|w| w.monitor()).and_then(|m|m.connector()).map(|s|s.to_string()),"time":super::super::host::now(),"width":width,"height":height,"x":self.offset.get().0,"y":self.offset.get().1,"rows":rows})
                     );
                 }
             }
@@ -342,6 +372,12 @@ impl Stack {
         self.imp().offset.set((x, y));
         self.imp().input_enabled.set(input_enabled);
         self.queue_allocate();
+    }
+    pub fn set_demo_scroll(&self, enabled: bool) {
+        if self.imp().demo_scroll.replace(enabled) != enabled {
+            self.imp().scroll.set(0.);
+            self.queue_allocate();
+        }
     }
     pub fn grabbed(&self) -> bool {
         self.imp().grabbed.get()

@@ -12,6 +12,7 @@ mod keyboard;
 mod media;
 pub mod model;
 pub mod primitives;
+mod showcase;
 mod stack;
 mod telegram;
 use gtk::{gdk, glib, prelude::*};

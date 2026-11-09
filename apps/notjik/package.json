@@ -8,6 +8,7 @@
     "test": "cargo test --release --locked",
     "test:gtk-unit": "bash scripts/test-gtk.sh",
     "test:gtk": "python3 -B tests/gtk_cards.py",
+    "test:gtk-demo": "python3 -B tests/gtk_demo.py",
     "test:gtk-daemon": "python3 -B tests/gtk_daemon.py",
     "test:clipboard": "python3 -B tests/native_clipboard.py",
     "demo": "bin/notjikctl demo"

@@ -62,25 +62,6 @@ pub fn robots(root: &Path) -> Result<Vec<PathBuf>> {
     }
     Ok(result)
 }
-pub fn prepare(app: &Path) -> Result<()> {
-    let patches: Value = serde_json::from_str(include_str!("../examples/demo-patches.json"))?;
-    for p in patches.as_array().unwrap() {
-        let path = app.join(text(&p["file"]));
-        let source = fs::read_to_string(&path)?;
-        let old = text(&p["old"]);
-        ensure!(
-            source.contains(old),
-            "Demo instrumentation needs updating: {}",
-            path.display()
-        );
-        fs::write(path, source.replacen(old, text(&p["new"]), 1))?;
-    }
-    fs::write(
-        app.join("qml/DemoStage.qml"),
-        include_str!("../examples/DemoStage.qml"),
-    )?;
-    Ok(())
-}
 pub struct Client {
     pub root: PathBuf,
     pub session: Option<Value>,
@@ -427,23 +408,5 @@ mod tests {
                 assert_eq!(action["command"], json!(["true"]));
             }
         }
-    }
-    #[test]
-    fn instrumentation_matches_current_qml() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let temp = tempfile::tempdir().unwrap();
-        let patches: Value =
-            serde_json::from_str(include_str!("../examples/demo-patches.json")).unwrap();
-        for p in patches.as_array().unwrap() {
-            let target = temp.path().join(text(&p["file"]));
-            if !target.exists() {
-                fs::create_dir_all(target.parent().unwrap()).unwrap();
-                fs::copy(root.join(text(&p["file"])), target).unwrap();
-            }
-        }
-        prepare(temp.path()).unwrap();
-        let recorder = fs::read_to_string(temp.path().join("qml/TelegramRecorder.qml")).unwrap();
-        assert!(recorder.contains("Only synthetic demo recordings are allowed"));
-        assert!(recorder.contains("cycleSend.restart(); return;"));
     }
 }

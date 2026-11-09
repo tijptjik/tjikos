@@ -45,8 +45,10 @@ pub fn request(value: &Value) -> Result<Option<Value>> {
     {
         return Ok(None);
     }
-    let path = path()?;
-    let mut stream = match UnixStream::connect(&path) {
+    request_at(&path()?, value)
+}
+pub fn request_at(path: &std::path::Path, value: &Value) -> Result<Option<Value>> {
+    let mut stream = match UnixStream::connect(path) {
         Ok(s) => s,
         Err(e)
             if matches!(

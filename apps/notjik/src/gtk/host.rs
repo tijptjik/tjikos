@@ -65,6 +65,7 @@ struct PointerPress {
 }
 struct Host {
     root: PathBuf,
+    showcase: Option<super::showcase::Showcase>,
     controller: Rc<RefCell<Controller>>,
     bus: Option<Bus>,
     socket: Option<ipc::Server>,
@@ -139,6 +140,9 @@ impl Host {
             std::thread::sleep(Duration::from_millis(500));
         });
         let host = Rc::new(RefCell::new(Self {
+            showcase: (std::env::var_os("NOTJIK_SYNTHETIC").is_some()
+                && root.join(".synthetic-only").is_file())
+            .then(|| super::showcase::Showcase::new(app, &controller.borrow().config)),
             root,
             controller,
             bus: Some(bus),
@@ -327,11 +331,12 @@ impl Host {
                 self.feedback.insert(id, e.to_string());
             }
         }
+        if let Some(showcase) = &mut self.showcase {
+            showcase.tick();
+        }
         while let Ok(request) = self.requests.try_recv() {
             let result = self
-                .controller
-                .borrow_mut()
-                .handle(request.value, now())
+                .request(request.value)
                 .unwrap_or_else(|e| json!({"ok":false,"error":e.to_string()}));
             let _ = request.reply.send(result);
         }
@@ -367,7 +372,9 @@ impl Host {
                     }
                 }
                 Effect::Command(args) => {
-                    self.executor.command(String::new(), "command".into(), args)
+                    if self.showcase.is_none() {
+                        self.executor.command(String::new(), "command".into(), args)
+                    }
                 }
             }
         }
@@ -422,10 +429,48 @@ impl Host {
         }) {
             self.cancel_drag();
         }
+        if let Some(showcase) = &mut self.showcase {
+            showcase.states.retain(|id, _| active.contains(id));
+        }
         self.retained.retain(|id, _| active.contains(id));
         self.feedback.retain(|id, _| active.contains(id));
         self.busy.retain(|id| active.contains(id));
         self.render();
+    }
+    fn request(&mut self, request: Value) -> Result<Value> {
+        if request["op"] == "reference-artwork" {
+            let c = self.controller.borrow();
+            let n = Notice(
+                c.find(&text(&request["id"]))
+                    .cloned()
+                    .context("Notification not found")?,
+            );
+            let image = if !text(&n.0["image"]).is_empty() {
+                text(&n.0["image"]).to_string()
+            } else if !text(&n.0["icon"]).is_empty() {
+                if text(&n.0["icon"]).starts_with("network-wireless") {
+                    crate::util::uri(&self.root.join("assets/icons/wifi-cover.png"))?
+                } else {
+                    text(&n.0["icon"])
+                }
+            } else {
+                crate::util::uri(&super::artwork_path(&self.root, &n))?
+            };
+            return Ok(json!({"ok":true,"image":image}));
+        }
+        if request["op"] == "cycle" {
+            let card = self
+                .windows
+                .values()
+                .find_map(|s| s.cards.get(&text(&request["id"])))
+                .cloned();
+            return self
+                .showcase
+                .as_mut()
+                .context("Synthetic showcase controls are disabled")?
+                .control(&self.root, &request, card.as_ref());
+        }
+        self.controller.borrow_mut().handle(request, now())
     }
     fn cancel_drag(&mut self) {
         let pressed = self.pointer.borrow_mut().take();
@@ -464,6 +509,13 @@ impl Host {
             // Outputs can be configured immediately after hotplug. Route with the
             // current GDK geometry rather than the periodic desktop snapshot.
             self.monitors();
+        }
+        if let Some(showcase) = &mut self.showcase {
+            if let Some(card) = self.windows.values().find_map(|s| s.cards.get(&id)) {
+                if showcase.event(card, &event.intent) {
+                    return Ok(());
+                }
+            }
         }
         let mut c = self.controller.borrow_mut();
         match &event.intent {
@@ -919,6 +971,12 @@ impl Host {
             if c.concealed() {
                 surface.list.clear();
             }
+            surface.list.set_demo_scroll(
+                detached.is_none()
+                    && visible
+                        .iter()
+                        .any(|n| n["app"] == crate::demo::APP && n["data"]["demoMix"] == true),
+            );
             let keys = visible
                 .iter()
                 .map(|n| text(&n["id"]))
@@ -961,7 +1019,7 @@ impl Host {
                     .filter(|r| r.id == key)
                     .map(|r| r.state.clone())
                     .unwrap_or_default();
-                let state = ViewState {
+                let mut state = ViewState {
                     locked: c.locked(),
                     floating: detached.is_some(),
                     show_when_locked: c.config["privacy"]["lockScreen"] == "show",
@@ -980,6 +1038,9 @@ impl Host {
                     recording,
                     ..Default::default()
                 };
+                if let Some(showcase) = &self.showcase {
+                    showcase.apply(&key, &mut state);
+                }
                 let state_key = format!("{state:?}");
                 if !surface.cards.contains_key(&key) {
                     let tx = self.event_tx.clone();
@@ -1613,6 +1674,7 @@ mod tests {
         let (_requests, requests) = mpsc::channel();
         let (_desktop, desktop) = mpsc::channel();
         let mut host = Host {
+            showcase: None,
             root,
             app,
             controller: Rc::new(RefCell::new(controller)),

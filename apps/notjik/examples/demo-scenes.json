@@ -42,7 +42,7 @@
   {
     "name": "grouped",
     "label": "Grouped messages",
-    "caption": "Keep related messages in one card; open history to see the conversation."
+    "caption": "Keep related messages in one card and cycle through the group."
   },
   {
     "name": "telegram-text",

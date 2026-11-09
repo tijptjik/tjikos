@@ -436,6 +436,15 @@ impl Controller {
             })
             .collect::<Vec<_>>();
         let selected = values.iter().find(|n| id(n) == self.selected).cloned();
+        let mix = values
+            .iter()
+            .filter(|n| n["app"] == crate::demo::APP && n["data"]["demoMix"] == true)
+            .take(6)
+            .cloned()
+            .collect::<Vec<_>>();
+        if !mix.is_empty() {
+            return mix.into_iter().rev().collect();
+        }
         values.truncate(self.config["maxVisible"].as_u64().unwrap_or(4).min(4) as usize);
         if let Some(n) = selected {
             if !values.iter().any(|v| id(v) == id(&n)) {
@@ -887,6 +896,24 @@ mod tests {
         c.lock = "unlocked".into();
         c.monitors = vec![json!({"name":"test"})];
         c
+    }
+    #[test]
+    fn synthetic_mix_restores_the_ordinary_queue_and_limit() {
+        let mut c = controller();
+        let ordinary = c
+            .send(json!({"app":"ordinary","title":"Keep me","timeout":0}), 1)
+            .unwrap();
+        let mut demo = vec![];
+        for i in 0..6 {
+            demo.push(c.send(json!({"app":crate::demo::APP,"id":format!("mix-{i}"),"group":format!("mix-{i}"),"title":"Synthetic card","timeout":0,"data":{"demo":true,"demoMix":true}}),i+2).unwrap());
+        }
+        assert_eq!(c.visible().len(), 6);
+        assert!(c.visible().iter().all(|n| n["app"] == crate::demo::APP));
+        for id in demo {
+            c.close(&id, 2);
+        }
+        assert_eq!(c.visible()[0]["id"], ordinary);
+        assert_eq!(c.config["maxVisible"], 4);
     }
     #[test]
     fn control_click_restores_safe_read_and_dismiss_all() {

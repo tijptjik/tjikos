@@ -78,11 +78,20 @@ fn signature(root: &Path) -> Result<String> {
         }
         Ok(())
     }
-    for dir in ["qml", "themes"] {
+    for dir in ["assets", "themes"] {
         walk(&root.join(dir), &mut hash)?;
     }
     hash.update(fs::read(std::env::current_exe()?)?);
+    hash.update(fs::read(gtk_binary(root))?);
     Ok(format!("{:x}", hash.finalize()))
+}
+fn gtk_binary(root: &Path) -> PathBuf {
+    let installed = root.join("bin/notjik-gtk");
+    if installed.is_file() {
+        installed
+    } else {
+        root.join("dist/bin/notjik-gtk")
+    }
 }
 pub fn reference(executable: Option<&str>) -> Result<PathBuf> {
     let p = if let Some(s) = executable {
@@ -201,27 +210,26 @@ fn environment(cmd: &mut Command, v: &Value, name: &str) {
     if name == "notjik" {
         cmd.env("NOTJIK_HOME", text(&v["app"]))
             .env("NOTJIK_CONFIG", directory().join("config.json"))
-            .env("NOTJIK_STATE_DIR", directory().join("history"));
+            .env("NOTJIK_STATE_DIR", directory().join("history"))
+            .env("NOTJIK_SOCKET", directory().join("notjik.sock"))
+            .env("NOTJIK_SYNTHETIC", "1")
+            .env(
+                "NOTJIK_TELEGRAM_SOCKET",
+                directory().join("disabled-telegram.sock"),
+            );
     }
 }
 pub fn call(v: &Value, r: &Value) -> Result<Value> {
-    let bytes = serde_json::to_vec(r)?;
-    ensure!(bytes.len() <= 131072, "Request exceeds 128 KiB");
-    let dir = tempfile::Builder::new()
-        .prefix("ipc-")
-        .tempdir_in(directory())?;
-    let p = dir.path().join("request.json");
-    private_write(&p, &bytes)?;
-    let mut cmd = Command::new("quickshell");
-    cmd.args(["ipc", "--path"])
-        .arg(Path::new(text(&v["app"])).join("qml"))
-        .args(["call", "notjik", "requestFile"])
-        .arg(p);
-    environment(&mut cmd, v, "notjik");
-    let response: Value = serde_json::from_slice(&run(&mut cmd, Duration::from_secs(5))?)?;
-    ensure!(response["ok"] == true, "{}", text(&response["error"]));
-    Ok(response)
+    crate::ipc::request_at(
+        &Path::new(text(&v["app"]))
+            .parent()
+            .context("Missing demo directory")?
+            .join("notjik.sock"),
+        r,
+    )?
+    .context("Native demo is not ready")
 }
+
 pub fn grouping(v: &Value, enabled: bool) -> Result<()> {
     let p = directory().join("config.json");
     let mut c = read_json(&p)?;
@@ -414,31 +422,23 @@ pub fn serve(root: &Path, dunst: &Path) -> Result<()> {
         }
         Ok(())
     }
-    for d in ["qml", "themes"] {
-        copy_ui(&root.join(d), &app.join(d))?;
+    for d in ["assets", "themes", "examples", "lib"] {
+        let source = if root.join(d).exists() {
+            root.join(d)
+        } else {
+            root.join("dist").join(d)
+        };
+        copy_ui(&source, &app.join(d))?;
     }
     private_dir(&app.join("bin"))?;
     fs::copy(std::env::current_exe()?, app.join("bin/notjik-core"))?;
     fs::copy(std::env::current_exe()?, app.join("bin/notjikctl"))?;
-    let shell = app.join("qml/shell.qml");
-    let source = fs::read_to_string(&shell)?;
-    let reference = include_str!("../examples/reference-artwork.js");
-    ensure!(
-        source.contains("case \"status\": break;"),
-        "Comparison instrumentation needs updating"
-    );
-    fs::write(
-        &shell,
-        source.replacen("case \"status\": break;", reference, 1),
-    )?;
+    fs::copy(gtk_binary(root), app.join("bin/notjik-gtk"))?;
     let cycle = std::env::var_os("NOTJIK_DEMO_CYCLE_DIR").is_some();
-    if cycle {
-        crate::demo::prepare(&app)?;
-        fs::write(
-            app.join(".synthetic-only"),
-            b"No Telegram or microphone access\n",
-        )?;
-    }
+    fs::write(
+        app.join(".synthetic-only"),
+        b"No commands, Telegram or microphone access\n",
+    )?;
     let mut cfg = crate::config::load(root)?;
     let monitor = std::env::var("NOTJIK_DEMO_CYCLE_MONITOR")
         .ok()
@@ -517,7 +517,7 @@ pub fn serve(root: &Path, dunst: &Path) -> Result<()> {
         .replace("@WIDTH@", &cfg["style"]["width"].to_string())
         .replace(
             "@ICON@",
-            &json!(app.join("qml/icons/vintage-robot.png")).to_string(),
+            &json!(app.join("assets/icons/robot-00-cover.png")).to_string(),
         );
     private_write(&path.join("dunstrc"), dunst_cfg.as_bytes())?;
     let mut value = json!({"pid":std::process::id(),"birth":birth(std::process::id()),"buses":{},"app":app,"dunst":dunst,"monitor":monitor,"offsetX":cfg["placement"]["offsetX"],"width":cfg["style"]["width"],"signature":signature(root)?});
@@ -542,8 +542,8 @@ pub fn serve(root: &Path, dunst: &Path) -> Result<()> {
             c.arg("-conf").arg(path.join("dunstrc"));
             c
         } else {
-            let mut c = Command::new("quickshell");
-            c.arg("--path").arg(app.join("qml")).arg("--no-color");
+            let mut c = Command::new(app.join("bin/notjik-gtk"));
+            c.arg("--serve");
             c
         };
         environment(&mut cmd, &value, name);

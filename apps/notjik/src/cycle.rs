@@ -230,21 +230,7 @@ impl Cycle {
                 }
                 "grouped" => {
                     self.point(id, "group", false)?;
-                    // Current group marks are informational; use the public
-                    // history command instead of the retired hover shortcut.
-                    self.client.call(&json!({"op":"history","mode":"show"}))?;
-                    let start = Instant::now();
-                    loop {
-                        let v = self.client.call(&json!({"op":"status"}))?;
-                        if v["drawerOpen"] == true && v["historyCount"].as_u64().unwrap_or(0) >= 3 {
-                            break;
-                        }
-                        ensure!(
-                            start.elapsed() < Duration::from_secs(8),
-                            "Group history did not open"
-                        );
-                        std::thread::sleep(Duration::from_millis(80));
-                    }
+                    self.point(id, "group", true)?;
                     self.pause(2.);
                 }
                 "telegram-text" => self.reply(id, false)?,
