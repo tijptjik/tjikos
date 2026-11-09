@@ -25,6 +25,8 @@ mailtjik is a Go/Charm TUI with a Python archive backend.
   replace pinned running archive workers during application updates. Generated dist/ and
   private runtime files are ignored.
 - Use gofmt for Go and four-space indentation for Python.
+- Use Biome for Markdown: `bun run format:markdown:check` is read-only;
+  `bun run format:markdown` intentionally rewrites Markdown and `llms.txt`.
 
 ## Testing
 

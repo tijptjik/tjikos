@@ -2,17 +2,25 @@
   "name": "tjikos",
   "private": true,
   "packageManager": "bun@1.4.4",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "whatsover": "cargo run --manifest-path packages/whatsover-engine/Cargo.toml --locked --bin whatsover --",
     "build": "turbo run build",
     "check": "turbo run check",
-    "format:markdown": "prettier --write \"**/*.md\" && prettier --parser markdown --write --no-error-on-unmatched-pattern \"**/llms.txt\"",
-    "format:markdown:check": "prettier --check \"**/*.md\" && prettier --parser markdown --check --no-error-on-unmatched-pattern \"**/llms.txt\"",
+    "format:markdown": "bun run scripts/checks/markdown.ts --write",
+    "format:markdown:check": "bun run scripts/checks/markdown.ts --check",
     "demo": "turbo run demo --filter=@tjikos/mailtjik",
     "install:local": "bun run build && bash scripts/install.sh --from-build",
     "dev": "bun scripts/run-local.ts",
-    "test:local-run": "bun test scripts/tests/run-local.test.ts"
+    "test:local-run": "bun test scripts/tests/run-local.test.ts",
+    "lint": "bun run format:markdown:check",
+    "test:markdown": "bun test scripts/checks/markdown.test.ts"
   },
-  "devDependencies": {"prettier": "^3.9.10", "turbo": "2.5.8"}
+  "devDependencies": {
+    "turbo": "2.5.8",
+    "@biomejs/biome": "2.6.5"
+  }
 }
