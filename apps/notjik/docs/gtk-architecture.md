@@ -1,8 +1,7 @@
 # GTK architecture
 
-GTK is the default Notjik notification frontend. `notjik --quickshell` retains the
-compatibility frontend; `notjik --gtk-cards --demo` runs the isolated synthetic gallery.
-The Control Center/history UI is implemented as a BarTjik panel.
+Notjik renders notifications with GTK; `notjik --gtk-cards --demo` runs the isolated
+synthetic gallery. The Control Center/history UI is implemented as a BarTjik panel.
 
 ## Ownership
 
@@ -15,7 +14,7 @@ The Control Center/history UI is implemented as a BarTjik panel.
 | `gtk/executor.rs`    | Command execution, Telegram requests, single voice player and recording helper                                                         |
 | `backend.rs`         | Configuration reload, pause persistence, Wayland lock/idle observation, SQLite history, sync dismissal and Telegram dismissal dispatch |
 | `backend_channel.rs` | Bounded in-process service requests and updates, explicit backpressure and disconnection                                               |
-| `worker.rs`          | Existing stdin/stdout adapter for the compatibility frontend                                                                           |
+| `worker.rs`          | Stdio backend adapter for diagnostics and persistence tests                                                                            |
 | `gtk/` card modules  | Shared presentations and typed interaction intents                                                                                     |
 
 The controller accepts elapsed time and explicit state rather than reading widgets or
@@ -27,9 +26,9 @@ credentials, captures and history stay outside the repository.
 
 The native daemon claims `org.freedesktop.Notifications` without replacing an existing
 owner. It serves `$XDG_RUNTIME_DIR/notjik.sock` with private permissions and an
-ownership lock. `NOTJIK_SOCKET` overrides that path for isolated tests. `notjikctl`
-prefers this socket and falls back to Quickshell only if no native endpoint is
-listening; failed submitted mutations are never retried against another frontend.
+ownership lock. `NOTJIK_SOCKET` overrides that path for isolated tests. `notjikctl` uses
+this socket and reports an error if the daemon is unavailable; failed submitted
+mutations are never retried.
 
 Readiness and lock state begin unknown. Backend disconnection conceals cards and blocks
 actions. Bus disconnection closes native surfaces and exits. Unknown idle state reports
@@ -60,8 +59,11 @@ clock. Footer reveal, neighbouring card positions and the input region therefore
 together. Live cards are ordered oldest to newest toward the resting edge. Dismissed
 cards keep their slot while their cached face shrinks to 82%, drops up to 64 pixels and
 fades behind the stack (65% of `stack.animationMs`); the remaining 35% collapses their
-slot. Concealment removes faces immediately. Background clicks dismiss cards while
-buttons, text editors and seek controls keep their own interactions.
+slot. Grouped successors reuse the same slot and Card, preserving notch animation. The
+outgoing face is cached separately behind the full-opacity successor and reserves no
+space; there is no successor entrance animation. Concealment removes faces immediately.
+Background clicks dismiss cards while buttons, text editors and seek controls keep their
+own interactions.
 
 Voice playback updates the existing play control, waveform, seek bar and timestamp; it
 does not replace the card, reply editor or footer during the progress ticker.
@@ -70,17 +72,12 @@ acceptance checks; it is unset in normal use.
 
 ## Compatibility boundaries
 
-All built-in card types use the GTK card library. The legacy `components` configuration
-accepts user-authored QML files only for `--quickshell`; those optional extensions use
-standard cards in GTK. This is not a missing built-in card type.
-
-GTK, named demos, directed showcases and recording use `assets/icons` and the standalone
-`assets/artwork.json` manifest. Launchers discover installations through that manifest.
-The optional Quickshell frontend and visual reference tests remain in `qml/`; its
-`icons` link points to the shared assets. GTK and its demo tooling run without that
-directory. The six-card synthetic mix temporarily takes precedence over ordinary queued
-notices and restores them when cleared, without changing saved limits. Its stack can
-scroll on short outputs so every demo card remains reachable.
+All built-in cards, named demos, showcases and recordings use GTK. Artwork lives in
+`assets/icons`, indexed by `assets/artwork.json`; launchers discover installations
+through that manifest. There is no alternate notification renderer. The six-card
+synthetic mix temporarily takes precedence over ordinary queued notices and restores
+them when cleared, without changing saved limits. Its stack can scroll on short outputs
+so every demo card remains reachable.
 
 Comparisons run GTK and Dunst on separate private buses. Directed showcases use a GTK
 stage and real card widgets; control requests are accepted only by the explicitly
@@ -101,10 +98,10 @@ dev-check bash -c 'bun run --filter @tjikos/notjik build && bun run --filter @tj
 Wayland compositor whose host window is placed silently on workspace 7. It checks name
 ownership, private IPC, replacements, expiry holds, native actions/signals and image
 data, command execution, configuration reload, history and layer surfaces. The gallery
-checks 19 variants in two themes against the QML reference. Unit tests cover controller
-privacy, suppression, overflow and idle observation. Mechanical lifecycle checks use
-real GTK widgets and a private fake Telegram socket to test replacement during dragging,
-pause/resume, lock/unlock, backend loss/recovery, uncertain send completion, output
+checks 19 variants in two themes. Unit tests cover controller privacy, suppression,
+overflow and idle observation. Mechanical lifecycle checks use real GTK widgets and a
+private fake Telegram socket to test replacement during dragging, pause/resume,
+lock/unlock, backend loss/recovery, uncertain send completion, output
 removal/reconnection, draft identity and expiry holds. Pointer acceptance checks the
 last-card buffer with a screenshot, background dismissal, repeated dragging, mixed-scale
 cross-output dragging, monitor removal during a grab, and Ctrl-click semantics. These

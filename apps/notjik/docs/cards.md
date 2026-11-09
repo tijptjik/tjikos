@@ -177,19 +177,18 @@ notjikctl send --help
 
 See [configuration](../README.md#configuration),
 [keyboard and history controls](../README.md#history-and-keyboard-navigation),
-[custom QML components](../README.md#styling-and-components), and
+[built-in card styling](../README.md#styling-and-built-in-cards), and
 [D-Bus compatibility](comparison.md) for the full contracts and current limits.
 
 ## Results tables
 
-`results-table` is built into Notjik and needs no `components` registration. Each row in
-`results` has a `label`, `value`, optional `tone`, and optional `ingredients`: secondary
-rows with `label` and `value`. The footer accepts `state` (defaults to `Running`),
-`tone`, and `duration`. Critical row values use the error accent; other values use the
-theme accent. Footer tone supports `critical`, `success`, or the theme accent. Set
-`"rainbow-text": true` to colour the footer state character-by-character, matching
-Tjikup's completion banner. Text is rendered literally, including when rainbow colouring
-is enabled.
+`results-table` is built into Notjik. Each row in `results` has a `label`, `value`,
+optional `tone`, and optional `ingredients`: secondary rows with `label` and `value`.
+The footer accepts `state` (defaults to `Running`), `tone`, and `duration`. Critical row
+values use the error accent; other values use the theme accent. Footer tone supports
+`critical`, `success`, or the theme accent. Set `"rainbow-text": true` to colour the
+footer state character-by-character, matching Tjikup's completion banner. Text is
+rendered literally, including when rainbow colouring is enabled.
 
 ```sh
 notjikctl send 'Surface survey complete' --app survey --id sector-report \
@@ -197,5 +196,5 @@ notjikctl send 'Surface survey complete' --app survey --id sector-report \
   --data '{"results":[{"label":"Sectors mapped","value":"12","ingredients":[{"label":"New signals","value":"3"}]}],"state":"Complete","tone":"success","duration":"42s"}'
 ```
 
-Sending the same application and ID again updates the table in place. The QML component
-ships at `qml/components/ResultsTable.qml` in the Notjik package.
+Sending the same application and ID again updates the table in place. The native GTK
+renderer lives in `src/gtk/details.rs`.

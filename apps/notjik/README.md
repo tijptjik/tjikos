@@ -24,12 +24,10 @@ observation and SQLite history. Python is used only by development test drivers.
 
 The [GTK architecture](docs/gtk-architecture.md) describes these boundaries. The
 [GTK card gallery](docs/gtk-cards.md) is available with `notjik --gtk-cards --demo`.
-Named demos, comparisons and animated recordings now use GTK. `notjik --quickshell`
-explicitly selects the optional compatibility frontend. The Control Center/history UI is
-implemented in BarTjik; `history-data`, `history-action` and persisted history remain
-available from Notjik. All built-in cards are native GTK. The legacy custom `components`
-option refers only to user-supplied QML extensions, which fall back to standard cards in
-GTK. Artwork and launcher discovery use `assets/`, independently of `qml/`.
+Notjik uses GTK for notifications, named demos, comparisons and animated recordings. The
+Control Center/history UI lives in BarTjik; Notjik provides `history-data`,
+`history-action` and persisted history. All built-in cards use the shared GTK library.
+Artwork and launcher discovery use `assets/`.
 
 ## Install and start
 
@@ -40,8 +38,7 @@ supplies presence; unavailable idle state conservatively reports an inactive dev
 `ffplay` provides voice playback and `ffmpeg` provides recording and media conversion.
 Bun, Rust/Cargo, SQLite and GTK development libraries are needed to build; the shared
 `tjik-gtk` build supplies layer-shell. `tijpset` is the rose-punk font, with a system
-fallback. Quickshell 0.3.2+, Qt Quick/Controls and Qt5Compat are needed only for the
-compatibility frontend and QML reference tests. No Python runtime is required.
+fallback. No Python runtime is required.
 
 Clone the repository, then build only Notjik:
 
@@ -133,9 +130,9 @@ notjikctl demo robots --interval 2s # slower robot preview
 
 Do Not Disturb (pause) is saved in `preferences.json` under the Notjik state directory
 (`$NOTJIK_STATE_DIR`, otherwise `$XDG_STATE_HOME/notjik`). Bar toggles,
-`notjikctl pause/resume/toggle`, and the drawer's Resume button share this preference.
-It survives app restarts, reboot, and managed configuration updates. Configuration
-reloads do not reset it.
+`notjikctl pause/resume/toggle`, and the BarTjik panel's Resume control share this
+preference. It survives app restarts, reboot, and managed configuration updates.
+Configuration reloads do not reset it.
 
 `send` prints the card ID. Local IDs use `local-N`; native desktop notifications appear
 in `list` as `dbus-N`. Replacing a local card refreshes its content and timeout,
@@ -238,8 +235,8 @@ notjikctl send 'Build finished' 'All checks passed' --app build --id run-123 \
 `--delivery local` and `--history local` remain the defaults. The private
 `~/.config/notjik/sync.json` configures the service and `history_exclude`, which
 excludes Telegram by default. A durable outbox handles disconnection; managed results
-are searchable in the drawer with device/run context, read state and synchronized
-dismissal. The drawer shows the selected live device. DND stays local.
+are available to the history panel with device/run context, read state and synchronized
+dismissal. The BarTjik panel shows the selected live device. DND stays local.
 
 The most recently used unlocked desktop is eligible for two minutes after input; Pi is
 the fallback. Opening Pi's [Android drawer](../notjik-android/README.md) also makes it
@@ -287,8 +284,7 @@ restarts the config/history helper. Config reload preserves current cards.
   "grouping": { "enabled": true, "windowSeconds": 120 },
   "actions": { "blacklist": [] },
   "privacy": { "lockScreen": "hide" },
-  "stack": { "animationMs": 220, "heightPercent": 75 },
-  "components": {}
+  "stack": { "animationMs": 220, "heightPercent": 75 }
 }
 ```
 
@@ -297,11 +293,11 @@ restarts the config/history helper. Config reload preserves current cards.
 `monitors` defaults to `"primary"`; it also accepts `"all"` or an array such as
 `[1, 2]`, `["DP-1"]`, or `[1, "HDMI-A-1"]`. Numbers are **1-based**, using the order in
 `notjikctl monitors`. `primaryMonitor` selects a preferred connector for `"primary"`; an
-empty or absent connector falls back to the first screen in the compositor/Qt screen
-order. It does not follow keyboard focus. The managed desktop sets `DP-1`, and the
-laptop sets `eDP-1`. Connector names are recommended for arrangements that change when
-docking. Per-monitor rules inherit global placement; connector rules override numeric
-rules. Disconnected targets retain pending notices until a selected monitor returns.
+empty or absent connector falls back to the first screen in the compositor screen order.
+It does not follow keyboard focus. The managed desktop sets `DP-1`, and the laptop sets
+`eDP-1`. Connector names are recommended for arrangements that change when docking.
+Per-monitor rules inherit global placement; connector rules override numeric rules.
+Disconnected targets retain pending notices until a selected monitor returns.
 
 | Setting                      | Meaning                                                           |
 | ---------------------------- | ----------------------------------------------------------------- |
@@ -311,7 +307,7 @@ rules. Disconnected targets retain pending notices until a selected monitor retu
 | numeric `offsetX`, `offsetY` | Signed physical pixels; converted for the monitor scale           |
 | percentage offsets           | Percent of that monitor's width/height, e.g. `"-2%"`              |
 | offset direction             | Positive X moves right; positive Y moves down, regardless of edge |
-| `margin` and style sizes     | Logical UI pixels, matching Qt/Wayland scaling                    |
+| `margin` and style sizes     | Logical UI pixels, matching GTK/Wayland scaling                   |
 
 Offsets apply after anchoring; the stack is clamped to the screen. `all` mirrors the
 same notices across selected monitors. Dismissal, actions and timeout are shared, so a
@@ -338,7 +334,7 @@ milliseconds (`-1` default, `0` persistent); the CLI accepts `default`, `never`,
 
 Pause hides the stack and queues incoming notifications. Lifetimes count only while the
 display is active, including timed notices behind `maxVisible`. Pause, lock, an open
-history drawer, and hover freeze expiration. Keyboard selection freezes the selected
+reply composition, and hover freeze expiration. Keyboard selection freezes the selected
 card. Hovering any mirrored copy freezes all copies. Suspend does not consume the whole
 remaining timeout on wake.
 
@@ -354,14 +350,13 @@ cards are persistent, new local sends fail with an explicit queue-full error; na
 arrivals are closed and recorded as `overflow`. Existing persistent cards are preserved.
 Changing timeout defaults affects future sends/replacements.
 
-### Styling and components
+### Styling and built-in cards
 
 The built-in themes are [`monochrome`](themes/monochrome.json) and
 [`rose-punk`](themes/rose-punk.json). `theme` also accepts a path to a full theme JSON,
 relative to the configuration file or absolute. `style` overrides individual tokens:
 colors, font, font size, radius, padding, gap, border width, icon size, card width and
-maximum body lines. Rose-punk follows the existing Quickshell Wi-Fi panel's purple
-surfaces, soft borders and pink accents.
+maximum body lines. Rose-punk uses purple surfaces, soft borders and pink accents.
 
 Built-in card types:
 
@@ -374,88 +369,27 @@ Built-in card types:
 | `results-table` | `results` rows with optional `ingredients`; footer `state`, `tone`, `duration`, optional `rainbow-text`. See [results tables](docs/cards.md#results-tables). |
 | `telegram`      | Bridge-managed text, photo, voice, sticker, emoji and animation data; see [Telegram setup](#telegram-photos-and-voice-messages)                              |
 
-Register a QML detail component in `components`, e.g.
-`{"issue":"components/Issue.qml"}`. Paths resolve relative to `config.json`. Copy
-[`examples/Issue.qml`](examples/Issue.qml) to that location, then:
-
-```sh
-notjikctl send 'Health check failed' --type issue \
-  --data '{"number":184,"project":"Preview deployment"}' --timeout never
-```
-
-The component receives required properties `notice` (including `data`), `theme` and
-`now` (epoch milliseconds), and supplies `implicitHeight`. The card provides the shared
-header, body, artwork, dismissal behavior and action buttons. User QML is trusted local
-code. Senders select registered component names; a notification cannot supply a QML file
-path or register executable code. Ordinary D-Bus hints cannot execute commands. QML
-source edits may require restarting notjik because Qt caches loaded components.
+Use built-in card types or [structured handlers](#structured-notification-handlers) to
+present application-specific data. Handler rules extract fields into native key/value
+cards; notifications cannot register executable UI code.
 
 ## History and keyboard navigation
 
-`history.excludeApps` optionally lists application names or desktop-entry IDs to exclude
-from local history (case-insensitive exact matches). It applies to every lifecycle
-event, including expiry and dismissal, without disabling popups. Existing history
-records are not deleted by changing this setting.
+Open BarTjik's notifications/history panel to browse saved notifications. Notjik exposes
+records through `notjikctl history-data` and resolves live actions through
+`notjikctl history-action KEY invoke --index N` or `history-action KEY dismiss`. The old
+`notjikctl history` command reports that the UI is provided by BarTjik.
 
-```sh
-notjikctl history show             # also: hide, toggle
-notjikctl navigate previous        # older
-notjikctl navigate next            # newer
-notjikctl unfocus                  # release popup keyboard focus
-notjikctl send 'Build started' --app builder --group project-a
-```
+`notjikctl navigate previous` and `navigate next` select visible notifications. Up/Down
+navigate, Enter invokes the primary action, and Delete/Backspace dismiss. Escape or
+returning focus to another application releases selection. Reply editors keep their own
+text-navigation and submission keys. Arrivals, replacements and pointer hover never
+acquire keyboard focus.
 
-The managed Hyprland bindings pair **Super+M** with Waybar's reveal/pin toggle and
-show/hide this drawer. **Super+,** selects an older notice; **Super+.** selects a newer
-one. **Super+/** dismisses the selected notice, **Super+'** invokes its primary
-(rightmost) action, and **Super+;** invokes its first secondary (leftmost) action.
-Without a popup selection these target the newest visible popup; in history they target
-the selected row. Missing actions do nothing. These are also available as
-`notjikctl selected dismiss|primary|secondary`. Primary actions use the sender's
-`default` action, falling back to the first labeled action, matching the buttons.
-Without active notices these open history. Navigation wraps around. The drawer opens on
-the focused configured monitor with groups collapsed and the list at the top. Expand a
-group for compact rows; select a row for full details. It uses on-demand focus. After
-focusing the drawer, clicking another app closes it; selected popup keyboard mode also
-clears when focus leaves. After clicking the drawer or a selected popup, Up/Down also
-browse, Enter invokes the primary live action, Tab focuses buttons, Delete dismisses the
-selected live notice, and Escape closes history or releases popup keyboard focus.
-Ordinary popups never take keyboard focus automatically. Super+, / Super+. still select
-notices globally; click the selected popup to use its local keyboard controls. Press
-**/** in the focused drawer to filter the loaded history as you type. Search ignores
-case and matches every typed word across the title, body, app, desktop-entry and group
-name. Matching groups expand automatically; their counts and the header reflect matching
-notices. Up/Down and global navigation stay within the results. **Tab** selects the next
-match in list order; **Shift+Tab** selects the previous match, wrapping at the ends
-while leaving the query editable. These keys also browse after Enter leaves the search
-field. Escape clears the search first, then closes the drawer on the next press.
-Reopening starts unfiltered. A paused service shows a Resume button in the drawer. Use
-`notjikctl status` to check delivery state, or `notjikctl resume` to resume queued
-notifications.
-
-Related popups group by application/desktop-entry and optional `--group` key within
-`grouping.windowSeconds`. Each original notification keeps its own ID, actions and
-lifetime. The newest member represents the group; keyboard navigation can select an
-older member. Grouped cards use vertically centred notches at 10 px spacing along the
-right edge instead of a text count: one per message, capped at five. The marks split and
-merge as the count changes: three to two divides the middle notch between its
-neighbours; two to three reverses that motion. A change during animation continues from
-the current positions. Counts above five keep the same five marks, and
-`stack.animationMs: 0` disables the morph. Group marks are informational and their
-accessible label retains the exact count. Clicking a grouped card, including its notch
-strip, dismisses only the displayed message, revealing the next member. Hovering never
-opens history; open history explicitly with Super+M. Single notices have no group marks.
-The drawer groups saved notices by application and group key across time, with
-expandable headings. Set `grouping.enabled` to false to show separate cards.
-
-Newest announcements appear at the bottom and push older cards upward. Every settled
-card remains full-size and fully opaque, regardless of its age or urgency. Arrivals fade
-in from 97% scale as the upward push settles; dismissed/expired cards shrink and fade
-before their space closes. The `stack.animationMs` option controls transition duration
-and `heightPercent` limits the scrollable stack height. Borders use a subtle theme
-color; critical urgency accents the content rather than adding a bright outline. Legacy
-depth-scale and depth-opacity options are ignored. The defaults use bottom-centre
-placement with a 24-pixel upward offset plus the outer margin.
+A group occupies one stack slot. Its oldest member is shown first, with up to five
+right-edge notches indicating the group size. Dismissing it immediately reveals the next
+member at full opacity while the outgoing face falls behind it. The notches animate in
+place; only dismissing the final member collapses the slot.
 
 ### Lock-screen privacy
 
@@ -488,8 +422,8 @@ enabled. Existing history is not deleted when logging is disabled. `logs` works 
 notjik is stopped; `--json` exposes full structured records. Terminal output strips
 control characters.
 
-The managed desktop keeps a rolling seven days of events, with no fixed count or drawer
-cap:
+The managed desktop keeps a rolling seven days of events, with no fixed count or
+history-query cap:
 
 ```json
 "history": {"maxAgeDays": 7, "maxEvents": 0, "drawerLimit": 0}
@@ -499,17 +433,15 @@ cap:
 least one retention limit must be positive. When both are set, both apply. Expiry uses
 the event's recorded UTC time and runs on writes, config reload, startup and once a
 minute while idle. `drawerLimit: 0` loads all retained notifications, so search covers
-the whole retained history; a positive value caps the drawer.
+the whole retained history; a positive value caps returned history.
 
-The drawer shows the latest snapshot per notification/session (up to
+The BarTjik panel shows the latest snapshot per notification/session (up to
 `history.drawerLimit` when nonzero), while `logs` shows individual events. Live records
 retain their current actions; archived records have no executable actions.
 
 History is an audit record: it does not recreate actions or replay commands after the
 sender/server exits. Pending cards are in memory; restarting the server clears them.
 Native in-memory image URLs may no longer resolve after a notification closes.
-
-![Grouped notification history](docs/history.png)
 
 ## Compatibility boundaries
 
@@ -519,8 +451,8 @@ implemented by the native D-Bus adapter. This version advertises plain body text
 image support; rich body markup, inline replies, sounds and action icons are not
 advertised. Vendor-specific extensions are outside the standard compatibility contract.
 
-Native replacements, including byte-for-byte identical resends, reset expiry. The
-Quickshell fallback retains its upstream limitation for identical native resends.
+Native replacements, including byte-for-byte identical resends, reset expiry. The Every
+native replacement resets its expiry, including an identical resend.
 
 Richer per-application routing remains a possible extension.
 
@@ -643,12 +575,11 @@ writes a `.chapters.json` file with scene timings. Existing output files are nev
 overwritten. Capture waits 2.5 seconds for the compositor backdrop transition to settle.
 Ctrl+C closes the private session and discards an incomplete recording.
 
-Requirements: Hyprland, Quickshell with QtTest, a Dunst reference binary (the same one
-used by `compare`), and `wf-recorder` plus FFprobe for recording. `--speed` is a
-duration multiplier from 0.1 to 4; the default keeps the voice interaction short.
-`--only` selects scenes in the supplied order. Dunst receives equivalent standard
-notification fields; the stage labels the media, timer and inline-action features that
-are specific to Notjik.
+Requirements: Hyprland, GTK, a Dunst reference binary (the same one used by `compare`),
+and `wf-recorder` plus FFprobe for recording. `--speed` is a duration multiplier from
+0.1 to 4; the default keeps the voice interaction short. `--only` selects scenes in the
+supplied order. Dunst receives equivalent standard notification fields; the stage labels
+the media, timer and inline-action features that are specific to Notjik.
 
 ## Rose-punk demo
 
@@ -681,50 +612,30 @@ notjikctl compare stop
 ## Validation
 
 ```sh
-bun run --filter @tjikos/notjik check
-bun run --filter @tjikos/notjik test
-cd apps/notjik
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/integration.py
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/privacy.py
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/history_search.py
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/demo_acceptance.py
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/paired_demo_acceptance.py
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/render.py /tmp/notjik-previews
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/render.py /tmp/notjik-motion --motion
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/render.py /tmp/notjik-groups --groups
+dev-check bash -c 'bun run --filter @tjikos/notjik build && bun run --filter @tjikos/notjik check && bun run --filter @tjikos/notjik test:gtk-unit && python3 -B apps/notjik/tests/native_contracts.py && python3 -B apps/notjik/tests/native_clipboard.py && bun run --filter @tjikos/notjik test:gtk-daemon && bun run --filter @tjikos/notjik test:gtk && bun run --filter @tjikos/notjik test:gtk-demo'
 ```
 
-Unit checks cover configuration, retention, terminal output, action validation and
-geometry, primary-screen selection, named updates, grouping, history snapshots and
-lock-protocol transitions. The explicit acceptance run uses a private bus with no
-desktop-service activation and briefly shows synthetic cards on the current Wayland
-compositor; it does not replace the normal notification server. The render helper
-captures only QML items from a temporary instrumented copy, never other desktop content.
-
-The history search check injects keys into a temporary drawer on the private bus,
-covering filtering, editing, Tab/Shift+Tab result navigation, group counts and Escape.
-It uses synthetic notices and cannot send keystrokes to other desktop applications.
-
-The render test asserts full settled opacity, exact card bounds and gaps before
-capturing previews. It checks only its own QML content, never desktop pixels.
-
-For manual interaction acceptance, open history, click a group, then click another
-application and type. Repeat after selecting a popup with Super+comma. Both apps should
-receive input normally; notification focus must never trap the desktop.
+Native contracts cover configuration, persistence, lock state, IPC and clipboard
+transport. GTK acceptance uses a private D-Bus session and compositor with synthetic
+notices, fake Telegram responses and generated audio. Visible test hosts are placed
+silently on workspace 7. The gallery covers 19 card variants in both themes. Daemon
+checks cover focus, grouping, cross-monitor dragging, dismissal, drafts and lifecycle
+recovery. Demo checks exercise named fixtures, the six-card mix and video export. These
+checks never send real Telegram messages or open a microphone.
 
 Notifications without sender artwork use the bundled vintage robot icon. Sender images
 and icons take precedence, except terminal command reports. Kitty uses random robot
 artwork; Fish uses a uniform random choice from 28 cybernetic fish illustrations. The
 chosen fish persists by stable name across updates and notification history. Legacy
 indices map to surviving species; deleted artwork receives a deterministic replacement.
-Original high-resolution PNGs and generation prompts are in `qml/icons/fish/`. See
-[artwork attribution](qml/icons/README.md).
+Original high-resolution PNGs and generation prompts are in `assets/icons/fish/`. See
+[artwork attribution](assets/icons/README.md).
 
 The default icon container is 56 pixels (`style.iconSize`). Actions fill a centred
-footer row. Named icons use the Qt platform theme; a service launched without your
-desktop theme settings may not find the same icons as your shell. On the managed
-desktop, the service inherits `QT_QPA_PLATFORMTHEME=qt6ct` through a user service
-override. Missing theme icons fall back to the bundled robot.
+footer row. Named icons use the GTK icon theme; a service launched without your desktop
+theme settings may not find the same icons as your shell. On the managed desktop, the
+service inherits `QT_QPA_PLATFORMTHEME=qt6ct` through a user service override. Missing
+theme icons fall back to the bundled robot.
 
 Cards use consistent content padding and a separate, subtly divided action footer only
 when actions are available. Status details render inline, countdowns use a smaller
@@ -784,22 +695,20 @@ template; copy its `handlers` array into your configuration.
   exact app name or desktop entry (case insensitive). All supplied selectors must match.
   These selectors control presentation only; display names are not authentication and
   matching never grants actions.
-- `pattern` uses JavaScript regular-expression syntax with numbered capture groups
-  (validated by the Rust backend for use by the JavaScript renderer). It must match the
-  entire body after outer whitespace and CRLF normalization. Use explicit line
-  separators; unexpected message formats remain unchanged.
+- `pattern` is a regular expression with numbered capture groups, evaluated by the Rust
+  backend. It must match the entire body after outer whitespace and CRLF normalization.
+  Use explicit line separators; unexpected message formats remain unchanged.
 - `captures` maps data names to capture numbers. Every capture must be nonempty.
   `card: "key-value"` renders `heading` plus `fields` entries containing `label` and a
-  captured `key`. A registered `components` name may select another QML renderer; it
-  receives the captured values as `notice.data`.
+  captured `key`. The native key/value renderer receives the captured values as
+  `notice.data`.
 
 Handlers format standard text and Telegram text messages only. The original body,
 transport type, ID, avatar, grouping, action policy and Telegram controls remain intact,
 including in history. Values render as literal text. Removing a rule restores ordinary
 rendering. Rules neither deduplicate notifications nor change delivery. Invalid
-templates fail configuration validation; a renderer that fails to load falls back to the
-original body. The registry is local trusted configuration, not patterns supplied by
-incoming messages.
+templates fail configuration validation; unmatched messages retain the original body.
+The registry is local trusted configuration, not patterns supplied by incoming messages.
 
 ## Telegram photos and voice messages
 
@@ -830,8 +739,8 @@ notjikctl telegram status
 It can extract the libraries from a previous local installation; otherwise it downloads
 pinned wheel archives and verifies their published SHA-256 digests. Only the native
 shared libraries are installed, with no Python interpreter, extension, or virtual
-environment dependency. The Rust bridge loads TDLib's C API directly. Qt Multimedia is
-required by the notification UI. Voice replies require `ffmpeg` and `ffprobe` with
+environment dependency. The Rust bridge loads TDLib's C API directly. GTK media support
+is required by the notification UI. Voice replies require `ffmpeg` and `ffprobe` with
 PulseAudio input and Opus support (PipeWire provides the PulseAudio input).
 
 `login` runs interactively in a terminal. Create your own API ID/hash at
@@ -964,18 +873,14 @@ Desktop settings need to be changed.
 Validation without an account:
 
 ```sh
-cargo test --release --locked
+dev-check bun run --filter @tjikos/notjik test:gtk-unit
 python3 -B tests/native_contracts.py -v
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/telegram_media.py /tmp/notjik-media-preview
+dev-check bun run --filter @tjikos/notjik test:gtk
 ```
 
-The media acceptance run uses a synthetic photo, a silent Opus recording, and a fake
-local control socket. It verifies actual QML rendering/playback, pause/seek/ speed, no
-autoplay, update continuity, literal reply transport, lock/archived behavior and native
-fallback. Recording tests replace the microphone with generated silence and cover
-send/reset, failed-send draft retention, lock stop, detachment and temporary-file
-cleanup. They never open a microphone, connect to a Telegram account or send messages.
-Real microphone capture and voice-note delivery require a separate user-driven check.
+GTK media acceptance uses bundled images and audio plus a fake control socket. It checks
+decoding, playback controls, quoted drafts, lock/privacy behavior and uncertain sends.
+Real microphone capture and Telegram delivery need a separate live acceptance check.
 
 Native notification actions can run additional local commands via `actions.nativeHooks`:
 `{"caller":"chatgpt","identifier":"default","command":["/path/to/show-codex"]}`. Caller
@@ -1025,7 +930,7 @@ visible, and stop when hidden, locked or paused; voice messages still require Pl
 Spoilers and hidden/protected previews stay hidden.
 
 The optional Telegram runtime loads native `rlottie`; FFmpeg performs bounded local
-conversion to PNG/GIF for Qt compatibility. Rendering runs outside the bridge receive
+conversion to PNG/GIF for card rendering. Rendering runs outside the bridge receive
 loop, with two workers and a bounded queue. Rendered derivatives are private under the
 Telegram state directory, retained for seven days with a 256 MiB target; active sources
 stay available. Downloads retain the existing 20 MiB limit. Run
@@ -1064,9 +969,8 @@ demos never populate or consult this cache.
 
 ### Shared history views
 
-The standalone history drawer and Bartjik's notification panel share search, grouping,
-navigation and expanded card rendering. Each build bundles its UI and artwork; Notjik's
-standalone drawer does not require Bartjik.
+BarTjik provides the notifications/history panel using Notjik's native card library and
+shared artwork.
 
 `notjikctl history-data` exposes the current history cards and display preferences for
 an independent view. It returns no history or avatars while locked, strips executable

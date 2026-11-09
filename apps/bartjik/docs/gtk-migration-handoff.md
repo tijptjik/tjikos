@@ -240,17 +240,15 @@ replacement of that workflow.
 
 ### Notification ownership is not bar ownership
 
-`apps/notjik/qml/shell.qml` currently contains a Quickshell `NotificationServer`.
-Bartjik consumes Notjik status/actions and shared notification-history UI. Removing
-Quickshell from Bartjik does not, by itself, remove it from Notjik or the rest of the
-desktop.
+Notjik's GTK daemon owns `org.freedesktop.Notifications` through
+`apps/notjik/src/gtk/desktop_bus.rs`. BarTjik consumes its history/status/action APIs
+and uses the native Notjik card library and `assets/` artwork. Notjik has no alternate
+notification renderer.
 
-Do not have Bartjik claim `org.freedesktop.Notifications`. Preserve a single
-notification authority, IDs, actions, dismissal semantics, history, and privacy. Port
-shared history presentation into a reusable GTK package where appropriate. Audit the
-shared QML media components too: audio playback/recording is not supplied merely by
-replacing labels. A future Notjik server migration is a separate task with an explicit
-ownership handoff.
+Do not have BarTjik claim the notification bus name. Preserve the single notification
+authority, IDs, actions, dismissal semantics, history and privacy. Playback and
+recording belong to Notjik's native executor; history presentation belongs to the
+BarTjik panel.
 
 ### Tray ownership and real service lifecycles
 

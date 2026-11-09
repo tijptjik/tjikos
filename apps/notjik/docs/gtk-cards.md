@@ -80,19 +80,18 @@ Animation/image display itself is implemented in the card library. This separati
 synthetic previews account-free and prevents duplicate side effects during the frontend
 migration.
 
-Every built-in card is implemented in GTK. The old `components` option refers only to
-user-authored QML extensions for the optional Quickshell frontend; it does not describe
-any unported built-in cards. GTK uses the standard fallback for these extensions.
-Artwork and action icons live under `assets/`, independently of that legacy frontend.
+Every built-in card is implemented in GTK. Application-specific presentations use
+structured handlers and the built-in key/value card. Artwork and action icons live in
+`assets/`.
 
 ## Validation
 
 `tests/gtk_cards.py` launches a private Wayland compositor silently on workspace 7,
 checks focus/placement, renders on a private headless output, loads the bundled
 synthetic media and exercises 19 card variants in rose-punk and monochrome at two
-widths. It covers media readiness and advancing animation frames, original QML reference
-captures, icon controls and hidden/revealed states, action dispatch, snoozing, reply
-draft preservation, quote-target stability, lock/history gating and uncertain recording
+widths. It covers media readiness and advancing animation frames, captures, icon
+controls and hidden/revealed states, action dispatch, snoozing, reply draft
+preservation, quote-target stability, lock/history gating and uncertain recording
 controls. It exports individual card PNGs and a gallery screenshot to a temporary
 artifact directory, never capturing the user's desktop.
 
