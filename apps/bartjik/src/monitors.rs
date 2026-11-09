@@ -760,8 +760,24 @@ pub async fn action(name: &str, selection: &str, options: &Value) -> Result<Stri
     let (apply, before, after) = plan(&panel, &request, &saved)?;
     let token = format!("{}-{}", std::process::id(), (now() * 1_000_000.) as u64);
     let mut pending = json!({"token":token,"instance":instance(),"phase":"applying","deadline":now()+30.,"before":before,"apply":apply,"after":after,"error":""});
+    // Atomic installation can leave this process on an unlinked inode. Use
+    // the supported replacement path so systemd can also restart the guard
+    // after the requesting frontend has exited.
+    let running = std::env::current_exe()?;
+    let raw = running.to_string_lossy();
+    let executable = if running.is_file() {
+        raw.into_owned()
+    } else {
+        let replacement = raw
+            .strip_suffix(" (deleted)")
+            .context("Display recovery executable is unavailable; reopen the bar")?;
+        ensure!(
+            PathBuf::from(replacement).is_file(),
+            "Display recovery executable is unavailable; reopen the bar"
+        );
+        replacement.to_owned()
+    };
     save(&pending_path(), &pending)?;
-    let executable = std::env::current_exe()?.to_string_lossy().into_owned();
     let mut guard_command = vec![
         "systemd-run".into(),
         "--user".into(),
@@ -792,9 +808,9 @@ pub async fn action(name: &str, selection: &str, options: &Value) -> Result<Stri
         token.clone(),
     ]);
     let start = command(&guard_command, 5., 4096, &[], None).await;
-    if start.is_err() {
+    if let Err(error) = start {
         std::fs::remove_file(pending_path())?;
-        anyhow::bail!("Could not start display recovery; no changes were applied");
+        anyhow::bail!("Could not start display recovery; no changes were applied: {error}");
     }
     for _ in 0..50 {
         if ready_path(&token).exists() {

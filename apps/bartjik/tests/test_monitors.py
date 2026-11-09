@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import socketserver
 import subprocess
 import sys
@@ -102,6 +103,29 @@ with (root/'guard.log').open('ab') as log:
     def expire(self):
         pending=json.loads(self.pending.read_text());pending['deadline']=time.time()-.1
         stage=self.root/'pending.next';stage.write_text(json.dumps(pending));stage.replace(self.pending)
+
+    def test_replaced_executable_can_start_recovery(self):
+        executable = self.root / 'temporary-core'
+        shutil.copy2(BIN, executable)
+        request = dict(revision=self.status()['revision'], edits=[dict(name='DP-1', settings=dict(x=100))])
+        child = subprocess.Popen([str(executable), 'helper', 'monitors', 'apply'],
+                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 text=True, env=self.env)
+        try:
+            # The helper waits for its request on stdin after exec.
+            self.wait(lambda: Path(f'/proc/{child.pid}/exe').resolve() == executable)
+            replacement = self.root / 'replacement-core'
+            shutil.copy2(BIN, replacement)
+            replacement.replace(executable)
+            out, err = child.communicate(json.dumps(request), timeout=18)
+            self.assertEqual(child.returncode, 0, err)
+            self.assertEqual(json.loads(self.pending.read_text())['phase'], 'confirm')
+            self.expire()
+            self.wait(lambda: not self.pending.exists())
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
 
     def test_guard_failure_and_last_screen_protection_do_not_apply(self):
         result=self.apply([dict(name='DP-1',settings=dict(enabled=False))],success=False)
