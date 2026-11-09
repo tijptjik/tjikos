@@ -91,6 +91,13 @@ pub fn factory(
             icon.set_margin_start(0);
         }
         icon_slot.append(&icon);
+        let emoji = gtk::Label::new(None);
+        emoji.add_css_class("emoji-preview");
+        emoji.set_halign(gtk::Align::Center);
+        emoji.set_valign(gtk::Align::Center);
+        emoji.set_size_request(icon_size, icon_size);
+        emoji.set_visible(false);
+        icon_slot.append(&emoji);
         row.append(&icon_slot);
         let labels = gtk::Box::new(gtk::Orientation::Vertical, 4);
         labels.set_hexpand(true);
@@ -170,6 +177,25 @@ pub fn factory(
             .unwrap()
             .downcast::<gtk::Image>()
             .unwrap();
+        let emoji = icon
+            .next_sibling()
+            .unwrap()
+            .downcast::<gtk::Label>()
+            .unwrap();
+        let is_emoji = text(&value, "provider") == "Emoji";
+        icon.set_visible(!is_emoji);
+        emoji.set_text(text(&value, "preview"));
+        emoji.set_visible(is_emoji);
+        emoji.set_css_classes(&["emoji-preview"]);
+        emoji.set_markup(&format!(
+            "<span size=\"{}\">{}</span>",
+            if matches!(layout, Layout::List) {
+                30000
+            } else {
+                42000
+            },
+            glib::markup_escape_text(text(&value, "preview"))
+        ));
         if matches!(layout, Layout::List) {
             let image = !text(&value, "thumbnail").is_empty();
             icon.set_pixel_size(if image { 80 } else { 40 });
@@ -202,13 +228,18 @@ pub fn factory(
             .unwrap()
             .downcast::<gtk::Label>()
             .unwrap();
-        let marker = if value["windows"].as_u64().unwrap_or(0) > 0 {
+        let window_marker = if value["windows"].as_u64().unwrap_or(0) > 0 {
+            "<span foreground=\"#ff53a6\" size=\"8000\">●</span> "
+        } else {
+            ""
+        };
+        let tone_marker = if is_emoji && value["has_tones"] == true {
             "<span foreground=\"#ff53a6\" size=\"8000\">●</span> "
         } else {
             ""
         };
         title.set_markup(&format!(
-            "{marker}{}",
+            "{window_marker}{tone_marker}{}",
             glib::markup_escape_text(text(&value, "name"))
         ));
         let subtitle = labels

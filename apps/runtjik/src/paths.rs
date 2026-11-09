@@ -10,3 +10,14 @@ pub fn root() -> PathBuf {
                 .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         })
 }
+
+pub fn command_icon(name: &str) -> String {
+    let path = root()
+        .join("qml/icons/commands")
+        .join(format!("runtjik-{name}.svg"));
+    if path.is_file() {
+        path.to_string_lossy().into_owned()
+    } else {
+        name.to_owned()
+    }
+}

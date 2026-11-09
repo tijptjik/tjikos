@@ -48,8 +48,8 @@ pub fn action(path: Option<&Path>) -> Result<Value> {
     };
     let message = if let Some(target) = path {
         ensure!(
-            target.is_absolute() && target.is_file() && !target.is_symlink(),
-            "Capture is no longer available"
+            target.is_absolute() && (target.is_file() || target.is_dir()) && !target.is_symlink(),
+            "The selected item is no longer available"
         );
         let before = items()?;
         gio::File::for_path(target).trash(gio::Cancellable::NONE)?;

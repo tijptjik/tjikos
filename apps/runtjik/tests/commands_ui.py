@@ -4,10 +4,11 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-from private_compositor import private_compositor, wait_for
+from gtk_ui import silent_compositor
+from private_compositor import wait_for
 
 app = Path(os.environ.get('RUNTJIK_TEST_HOME', Path(__file__).resolve().parents[1]))
-with private_compositor():
+with silent_compositor():
     subprocess.run(['hyprctl', 'output', 'create', 'headless', 'COMMANDS'], check=True, stdout=subprocess.DEVNULL)
     wait_for(lambda: any(m['name'] == 'COMMANDS' for m in json.loads(subprocess.check_output(['hyprctl', '-j', 'monitors'], text=True))))
     subprocess.run(['hyprctl', 'eval', 'hl.dispatch(hl.dsp.focus({monitor="COMMANDS"}))'], check=True, stdout=subprocess.DEVNULL)
@@ -22,9 +23,9 @@ with private_compositor():
     function receive(msg) {
         if(msg.kind==='edit')intermediateEdit=true;
 ''').replace('resultQuery:root.resultQuery,scrollY:',
-        'intermediateEdit:root.intermediateEdit,appMode:root.appMode,editor:todoApp.editor,resultQuery:root.resultQuery,scrollY:'))
+        'intermediateEdit:root.intermediateEdit,appMode:root.appMode,editor:todoApp.editor,cursorPosition:searchBox.cursorPosition,providerHeader:root.providerHeader,resultQuery:root.resultQuery,scrollY:'))
     config = temp / 'runtjik.conf'
-    config.write_text('[theme]\nicon_theme="rose-punk"\n[ui]\nmonitor="COMMANDS"\n[plugins]\nenabled=["Words","Clipboard","Screenshots","Recorder","Todo","Browser"]\n')
+    config.write_text('[theme]\nicon_theme="rose-punk"\n[ui]\nmonitor="COMMANDS"\nauto_launch_commands=false\n[plugins]\nenabled=["Words","Clipboard","Screenshots","Recorder","Todo","Browser"]\n')
     os.environ.update(RUNTJIK_HOME=str(home), RUNTJIK_DEMO='1', RUNTJIK_CONFIG=str(config),
                       XDG_STATE_HOME=str(temp / 'state'), QT_QUICK_CONTROLS_STYLE='Basic')
 
@@ -49,9 +50,13 @@ with private_compositor():
             assert all(Path(row['icon']).is_file() for row in state()['rows']), state()
             ipc('capture', str(temp / 'commands.png'))
             wait_for(lambda: (temp / 'commands.png').is_file())
-            for command in ('synonym', 'define', 'grab', 'rec', 'browser', 'tabs', 'history', 'cliphist', 'config', 'bindings', 'run', 'processes', 'stats'):
+            for command in ('synonym', 'define', 'grab', 'rec', 'browser', 'tabs', 'history', 'cliphist', 'config', 'bindings', 'run', 'gui', 'file', 'dir', 'emoji', 'note', 'monitor', 'bw', 'timer', 'stats'):
                 ipc('test', command)
-                wait_for(lambda: state().get('resultQuery') == command)
+                try:
+                    wait_for(lambda: state().get('resultQuery') == command)
+                except ValueError:
+                    print('Query entry failed:', command, state(), flush=True)
+                    raise
                 assert state()['rows'][0]['id'] == '/' + command, (command, state())
                 subprocess.run(['wtype', '-k', 'Return'], check=True)
                 try:
@@ -60,8 +65,24 @@ with private_compositor():
                     print('Command transition failed:', command, state(), flush=True)
                     raise
                 assert not state()['intermediateEdit'], (command, state())
+                if command == 'file':
+                    header = state()['providerHeader']
+                    assert header['title'].startswith('RESULTS from')
+                    assert header['actions'][0]['label'] == 'CHANGE ROOT'
+                if command == 'monitor':
+                    assert [action['label'] for action in state()['providerHeader']['actions']] == ['CPU', 'MEMORY']
+                if command == 'timer':
+                    assert state()['providerHeader']['title'] == 'TIMERS'
                 if command in ('define', 'synonym'):
                     assert state()['rows'][0]['id'] == 'Words:hint', state()
+            ipc('test', '')
+            wait_for(lambda: state().get('resultQuery') == '')
+            ipc('test', 'alpha beta')
+            wait_for(lambda: state().get('resultQuery') == 'alpha beta')
+            subprocess.run(['wtype', '-M', 'ctrl', '-k', 'Left', '-m', 'ctrl'], check=True)
+            wait_for(lambda: state().get('cursorPosition') == 6)
+            subprocess.run(['wtype', '-M', 'ctrl', '-k', 'Right', '-m', 'ctrl'], check=True)
+            wait_for(lambda: state().get('cursorPosition') == 10)
             ipc('test', '')
             wait_for(lambda: state().get('resultQuery') == '')
             subprocess.run(['wtype', 'todo'], check=True)

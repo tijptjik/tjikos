@@ -55,8 +55,9 @@ pagination, SQLite history, application launches, Hyprland window selection/focu
 and graceful-close escalation using process identities and pidfds. GTK/GdkPixbuf still
 resolve themes and rasterize SVGs.
 
-All bundled providers now run in Rust: Words, Browser, Clipboard, Screenshots, Recorder
-and the Tasktjik adapter. Task rules are shared with Tasktjik's native API and client
+All bundled providers now run in Rust: Words, Browser, Clipboard, Screenshots, Recorder,
+file and directory search, Emoji, scratch Notes, process Monitor, Bitwarden, Timer, and
+the Tasktjik adapter. Task rules are shared with Tasktjik's native API and client
 library. HTTPS, Unix sockets and native SSH authorities are supported. The SSH endpoint
 is `tasktjik-api serve`; no Python fallback exists.
 
@@ -234,33 +235,82 @@ result selects it; keyboard navigation keeps control until the pointer moves or 
 again. Mouse scrolling keeps the result under the pointer highlighted; keyboard
 scrolling preserves the keyboard selection.
 
-| Input                                           | Action                                                                                                                                                         |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Super+Escape                                    | Toggle the launcher on key press (fleet Hyprland binding)                                                                                                      |
-| Drag header/frame whitespace                    | Move within a monitor; release on another screen to transfer there                                                                                             |
-| Click outside                                   | Close Runtjik unless pinned; the underlying app always receives the click                                                                                      |
-| Type                                            | Search application names, keywords and descriptions, or executable names                                                                                       |
-| Tab / Shift+Tab                                 | Next / previous result, wrapping at the ends                                                                                                                   |
-| Up / Down                                       | Previous / next row (one result in list mode)                                                                                                                  |
-| Left / Right                                    | Previous / next result in grid mode (Ctrl+Left / Ctrl+Right also works in lists)                                                                               |
-| Enter / click                                   | Switch to an existing application window, or launch if none are running                                                                                        |
-| Ctrl+Enter                                      | Request that the app close gracefully; retry surviving processes with SIGTERM, then SIGKILL                                                                    |
-| Shift+Enter / Shift+click                       | Launch another application instance; save browser tabs to Reading                                                                                              |
-| Ctrl+L                                          | Toggle the current session between grid and list                                                                                                               |
-| Esc                                             | Return from a command or window picker to general search; press again to close                                                                                 |
-| `/pin`                                          | Keep the launcher visible on outside clicks and app actions; dragging still works                                                                              |
-| `/processes`, `?`                               | Browse running applications; add a name to filter. Uses matching desktop windows, not background processes. Existing launch/switch/close bindings still apply. |
-| `/run`, `/run name`                             | Browse/search previously used executable commands; clear the prefix to return to apps                                                                          |
-| `/refresh`                                      | Rebuild the application/command index                                                                                                                          |
-| `/grid`, `/list`                                | Select the current session view                                                                                                                                |
-| `/stats`                                        | Open the activity graph and daily-average / all-time statistics in the main pane                                                                               |
-| `/cliphist [text]`                              | Search mixed clipboard history; Enter copies, Ctrl+Enter deletes the selected item.                                                                            |
-| `/cliphist images [text]`                       | Show only clipboard images, optionally filtered by preview text.                                                                                               |
-| `/rec`, `/sr`, `/screenrecord`                  | Recording targets, Stop recording, and previous recordings.                                                                                                    |
-| `/grab`, `/shot`, `/screenshot`, `/ss`, `/snap` | Screenshot targets and previous screenshots.                                                                                                                   |
-| `/define word`, `/synonym word`                 | Look up definitions/examples or synonyms; Results appear inline after a typing pause; Enter opens a source while retaining results.                            |
-| `/config`                                       | Browse and edit featured settings                                                                                                                              |
-| `/shortcuts`, `/bindings`                       | Show this shortcut guide inside the launcher                                                                                                                   |
+| Input                                           | Action                                                                                                                                                |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Super+Escape                                    | Toggle the launcher on key press (fleet Hyprland binding)                                                                                             |
+| Drag header/frame whitespace                    | Move within a monitor; release on another screen to transfer there                                                                                    |
+| Click outside                                   | Close Runtjik unless pinned; the underlying app always receives the click                                                                             |
+| Type                                            | Search application names, keywords and descriptions, or executable names                                                                              |
+| Tab / Shift+Tab                                 | Next / previous result, wrapping at the ends                                                                                                          |
+| Up / Down                                       | Previous / next row (one result in list mode)                                                                                                         |
+| Left / Right                                    | Previous / next result in grid mode; Ctrl+Left / Ctrl+Right moves the input cursor by word                                                            |
+| Enter / click                                   | Switch to an existing application window, or launch if none are running                                                                               |
+| Ctrl+Enter                                      | Request that the app close gracefully; retry surviving processes with SIGTERM, then SIGKILL                                                           |
+| Shift+Enter / Shift+click                       | Launch another application instance; save browser tabs to Reading                                                                                     |
+| Ctrl+L                                          | Toggle the current session between grid and list                                                                                                      |
+| Esc                                             | Return from a command or window picker to general search; press again to close                                                                        |
+| `/pin`                                          | Keep the launcher visible on outside clicks and app actions; dragging still works                                                                     |
+| `/gui`, `?`                                     | Browse running application windows; add a name to filter. This does not list background processes. Existing launch/switch/close bindings still apply. |
+| `/run`, `/run name`                             | Browse/search previously used executable commands; clear the prefix to return to apps                                                                 |
+| `/refresh`                                      | Rebuild the application/command index                                                                                                                 |
+| `/grid`, `/list`                                | Select the current session view                                                                                                                       |
+| `/stats`                                        | Open the activity graph and daily-average / all-time statistics in the main pane                                                                      |
+| `/cliphist [text]`                              | Search mixed clipboard history; Enter copies, Ctrl+Enter deletes the selected item.                                                                   |
+| `/cliphist images [text]`                       | Show only clipboard images, optionally filtered by preview text.                                                                                      |
+| `/rec`, `/sr`, `/screenrecord`                  | Recording targets, Stop recording, and previous recordings.                                                                                           |
+| `/grab`, `/shot`, `/screenshot`, `/ss`, `/snap` | Screenshot targets and previous screenshots.                                                                                                          |
+| `/define word`, `/synonym word`                 | Look up definitions/examples or synonyms; Results appear inline after a typing pause; Enter opens a source while retaining results.                   |
+| `/config`                                       | Browse and edit featured settings                                                                                                                     |
+| `/timer set 10 minutes`                         | Start a countdown; `/timer` lists active timers. Accepts durations or date phrases such as `tomorrow at 9am`; Ctrl+Enter cancels a selected timer.    |
+| `/file search`, `/find search`                 | Search files below the selected root; Ctrl+R or the header changes it. Enter opens, Ctrl+Enter moves the file to Trash.                                |
+| `/dir search`                                   | Search familiar directories from zoxide; Enter opens the directory in the file manager.                                                               |
+| `/emoji search`                                 | Preview emoji glyphs; Enter copies and closes, Shift+Enter opens skin-tone variants (marked with a dot).                                               |
+| `/note`                                         | Create scratch notes, browse history, delete to Trash, and promote into an Obsidian vault.                                                            |
+| `/monitor search`, `/cpu`, `/mem`               | Browse the process tree, sorted by the selected metric; Ctrl+Enter sends SIGTERM, then SIGKILL on a second request.                                    |
+| `/bw search`                                    | Search Bitwarden items; Enter copies the password, Shift+Enter copies TOTP, Alt+Enter copies username, Ctrl+Enter opens the item in Bitwarden.        |
+| `/shortcuts`, `/bindings`                       | Show this shortcut guide inside the launcher                                                                                                          |
+
+Timer records live in Runtjik's private state database. A user-systemd timer fires
+independently of the launcher, then sends a Notjik alert (with a desktop notification
+fallback). If delivery fails, the finished timer stays visible so Enter can retry.
+
+`/file` (also `/find`) searches paths below the root shown in its header. Ctrl+R opens
+the folder chooser. The selected root is saved to `file_search.root` in `runtjik.conf`;
+an empty value uses `$HOME`. It uses `fd` to enumerate paths and `fzf` to rank fuzzy
+matches, then applies `file_search.preferred_extensions` and
+`file_search.deprioritized_extensions` from that same config. All three settings are
+also editable with `/config file_search.*`. Documents and media rank
+ahead of source files by default. The path list stays in memory for the current launcher
+session; file contents are not indexed. A sole file or directory result opens directly.
+Enter opens the file with its default handler; Ctrl+Enter moves it to desktop Trash.
+`/dir` reads ranked directory paths from
+`zoxide query --list` and opens a selected path in the default file manager. Fish must
+load `zoxide init fish` so its directory history is the same source.
+
+`/emoji` uses the system Unicode emoji catalog, previews the glyph, and copies selected
+emoji to the clipboard before closing. A dot marks emoji with skin-tone variants;
+Shift+Enter opens those variants. `/note` stores scratch Markdown outside
+the repo in Runtjik's private state directory, opens it with `obsidian-viewer`, and
+offers history, Trash deletion, and a vault folder tree for copying notes into an
+Obsidian vault. Set `RUNTJIK_NOTES_DIR` and `RUNTJIK_OBSIDIAN_VAULT` to choose the
+scratch directory and initial vault; the header also lets you choose a vault.
+
+`/monitor` samples `/proc` for a process tree and offers CPU and memory ordering; its
+header names the active sort. `/cpu` and `/mem` open the same view with that sort selected.
+Ctrl+Enter sends SIGTERM, pulses the row while the process remains, and sends SIGKILL if
+requested again. It checks both PID and process start time before signaling. `/bw`
+requires an unlocked Bitwarden CLI session. Result rows contain item names and account
+metadata only; secret lookups honor item reprompt and are excluded from command history.
+Password and TOTP clipboard owners release the value after one paste. Ctrl+Enter uses
+the Bitwarden desktop URI when available, then opens the matching web-vault item. Set
+`RUNTJIK_BITWARDEN_VAULT_URL` for a self-hosted vault.
+
+### Text expansion
+
+Espanso can provide system-wide text expansion. The sample match file in
+[`examples/espanso/match/runtjik.yml`](examples/espanso/match/runtjik.yml) uses `;` as its
+trigger prefix and defines `;gca` for the atomic-commit request. Install it under
+`~/.config/espanso/match/` and restart or reload Espanso after editing matches.
 
 `/stats` shows up to 26 weeks of launcher opens in seven Monday–Sunday rows, with fewer
 week columns in narrower windows. Hover a day for its date and count. Launcher opens are
@@ -783,10 +833,10 @@ List rows use equal outer margins, aligned icon/title columns, and a separate
 running-dot gutter on the left. Grid indicators remain beside the title.
 
 Closing an app keeps Runtjik open. Its icon pulses while the requested windows remain
-open, including save prompts. In `/processes`, closed apps shrink/fade out and the
-remaining tiles animate into place; in normal search the app stays available for
-launching. Search changes, paging, sorting and view changes do not animate result
-positions. Close tracking polls every 180 ms only while needed.
+open, including save prompts. In `/gui`, closed apps shrink/fade out and the remaining
+tiles animate into place; in normal search the app stays available for launching. Search
+changes, paging, sorting and view changes do not animate result positions. Close
+tracking polls every 180 ms only while needed.
 
 ### Migrating an existing configuration
 

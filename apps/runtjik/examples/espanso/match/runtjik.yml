@@ -1,0 +1,3 @@
+matches:
+  - trigger: ";gca"
+    replace: "Please take all of the changes in the thread and commit them in a series of atomic commits."

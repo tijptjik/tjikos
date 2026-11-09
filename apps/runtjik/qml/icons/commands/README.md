@@ -16,8 +16,10 @@ Sources (all original Rose Punk artwork):
 - Refresh, pin, grid, list, stats, config and shortcuts are copied from Dotjik's primary
   `rose-punk/scalable/apps/runtjik-*.svg` exports. Their authoritative designs are
   `scripts/icons/material_art.py:COMMAND_ART` in Dotjik.
-- Run, processes and grab reuse Dotjik's unbranded `terminal.svg`, `system-monitor.svg`
-  and `camera.svg` exports respectively.
+- Run, GUI and monitor use command-specific Rose Punk icons; grab reuses Dotjik's
+  unbranded `system-monitor.svg` and `camera.svg` exports respectively.
+- File search, directory jump, emoji search, scratch notes, timers and Bitwarden use
+  command-specific Rose Punk object icons drawn in the same palette and frameless style.
 - Browser, tabs, clipboard, dictionary, reading, synonym, Todo and recording are
   companion object illustrations authored here, using the material palette from Dotjik's
   `scripts/icons/material_art.py`.

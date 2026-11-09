@@ -21,16 +21,16 @@ def silent_compositor():
     def hypr(*args):
         return subprocess.check_output(["hyprctl", *args], env=host, text=True)
     clients = json.loads(hypr("-j", "clients"))
-    assert not any(c["initialClass"] == "aquamarine" for c in clients), "An existing nested compositor is in use"
+    existing = {c["address"] for c in clients}
     workspace = json.loads(hypr("-j", "activeworkspace"))["id"]
-    rule = 'runtjik_gtk_test_rule'
-    result = hypr("eval", f'_G.{rule}=hl.window_rule({{name="runtjik-gtk-test",workspace="7 silent",no_initial_focus=true,no_focus=true,match={{initial_class="^aquamarine$"}}}})')
+    rule = f'runtjik_gtk_test_rule_{os.getpid()}'
+    result = hypr("eval", f'_G.{rule}=hl.window_rule({{name="{rule}",workspace="7 silent",no_initial_focus=true,no_focus=true,match={{initial_class="^aquamarine$"}}}})')
     assert "error" not in result.lower(), result
     try:
         with private_compositor():
             assert os.environ["XDG_RUNTIME_DIR"] != host["XDG_RUNTIME_DIR"]
             assert os.environ["HYPRLAND_INSTANCE_SIGNATURE"] != host["HYPRLAND_INSTANCE_SIGNATURE"]
-            nested = wait_for(lambda: next((c for c in json.loads(hypr("-j", "clients")) if c["initialClass"] == "aquamarine"), None))
+            nested = wait_for(lambda: next((c for c in json.loads(hypr("-j", "clients")) if c["initialClass"] == "aquamarine" and c["address"] not in existing), None))
             assert nested["workspace"]["id"] == 7, nested
             assert json.loads(hypr("-j", "activewindow")).get("address") != nested["address"], "Test compositor stole host focus"
             yield

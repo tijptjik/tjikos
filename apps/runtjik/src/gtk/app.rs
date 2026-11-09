@@ -34,6 +34,7 @@ struct Ui {
     results: gtk::Stack,
     rich: gtk::ScrolledWindow,
     word_header: gtk::Box,
+    provider_header: gtk::Box,
     word_key: RefCell<String>,
     hidden_sources: Rc<RefCell<std::collections::HashSet<String>>>,
     message: gtk::Label,
@@ -81,6 +82,114 @@ struct Ui {
     app: gtk::Application,
 }
 impl Ui {
+    fn choose_folder(self: &Rc<Self>, mode: &str) {
+        if self.demo {
+            self.message("Demo mode does not change folder settings");
+            return;
+        }
+        let title = if mode == "set-root" {
+            "Choose file search root"
+        } else {
+            "Choose Obsidian vault folder"
+        };
+        let dialog = gtk::FileChooserNative::new(
+            Some(title),
+            Some(&self.window),
+            gtk::FileChooserAction::SelectFolder,
+            Some("Choose"),
+            Some("Cancel"),
+        );
+        dialog.set_modal(true);
+        if mode == "set-root" {
+            let home = std::env::var_os("HOME")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from("/"));
+            let configured = self.settings.borrow()["file_search"]["root"]
+                .as_str()
+                .unwrap_or("")
+                .to_owned();
+            let configured = if let Some(tail) = configured.strip_prefix("~/") {
+                home.join(tail)
+            } else if configured == "~" || configured.is_empty() {
+                home.clone()
+            } else {
+                std::path::PathBuf::from(configured)
+            };
+            let start = gio::File::for_path(if configured.is_dir() {
+                configured
+            } else {
+                home
+            });
+            let _ = dialog.set_current_folder(Some(&start));
+        }
+        let weak = Rc::downgrade(self);
+        let action = mode.to_owned();
+        dialog.connect_response(move |dialog, response| {
+            if let Some(ui) = weak.upgrade() {
+                if response == gtk::ResponseType::Accept {
+                    if let Some(path) = dialog.file().and_then(|file| file.path()) {
+                        ui.auto.set(false);
+                        ui.next_generation();
+                        ui.cancel_refresh();
+                        ui.send(json!({"op":"activate","id":if action=="set-root"{"/file"}else{"/note"},"mode":action,"path":path}));
+                    }
+                } else {
+                    let query = ui.query.borrow().clone();
+                    ui.lookup(&query);
+                }
+                ui.window.present();
+                ui.search.grab_focus();
+            }
+            dialog.destroy();
+        });
+        dialog.show();
+    }
+
+    fn update_provider_header(self: &Rc<Self>, value: &Value) {
+        while let Some(child) = self.provider_header.first_child() {
+            self.provider_header.remove(&child);
+        }
+        let header = &value["header"];
+        if !header.is_object() {
+            self.provider_header.set_visible(false);
+            return;
+        }
+        let title = gtk::Label::new(Some(s(header, "title")));
+        title.set_xalign(0.0);
+        title.set_hexpand(true);
+        title.add_css_class("muted");
+        self.provider_header.append(&title);
+        if let Some(actions) = header["actions"].as_array() {
+            for action in actions {
+                let button = gtk::Button::with_label(s(action, "label"));
+                button.add_css_class("flat");
+                if action["active"] == true {
+                    button.add_css_class("suggested-action");
+                }
+                let weak = Rc::downgrade(self);
+                let action = action.clone();
+                button.connect_clicked(move |_| {
+                    if let Some(ui) = weak.upgrade() {
+                        match s(&action, "mode") {
+                            "choose-root" | "choose-vault" => {
+                                ui.choose_folder(if s(&action, "mode") == "choose-root" {
+                                    "set-root"
+                                } else {
+                                    "set-vault"
+                                })
+                            }
+                            _ => ui.send(
+                                json!({"op":"activate","id":action["id"],"mode":action["mode"]}),
+                            ),
+                        }
+                    }
+                });
+                self.provider_header.append(&button);
+            }
+        }
+        self.provider_header.set_visible(true);
+    }
+
     fn recovery_state(&self) {
         if !self.restoring.get() {
             crate::recovery::remember(
@@ -205,6 +314,8 @@ impl Ui {
         if self.settings.borrow()["history"]["enabled"] == false
             || query.trim().is_empty()
             || !query.starts_with(['!', '/', '?'])
+            || query.trim_start().starts_with("/bw ")
+            || query.trim() == "/bw"
         {
             return;
         }
@@ -358,6 +469,8 @@ impl Ui {
         let parent = self.windows_for.borrow().clone();
         let mode = if action == "close" {
             "close"
+        } else if action == "username" {
+            "username"
         } else if action == "copy" || action == "alternate" && self.gallery() {
             "copy"
         } else if app {
@@ -525,6 +638,7 @@ impl Ui {
     }
     fn layout(self: &Rc<Self>, value: &Value) {
         self.word_header.set_visible(false);
+        self.update_provider_header(value);
         let app_mode = s(value, "app_mode") == "Todo";
         self.topbar.set_visible(!app_mode);
         self.stack
@@ -627,7 +741,7 @@ impl Ui {
             && !gallery
             && (*self.view.borrow() == "list"
                 || !self.windows_for.borrow().is_empty()
-                || (q.starts_with('/') && !q.starts_with("/run") && !q.starts_with("/processes")));
+                || (q.starts_with('/') && !q.starts_with("/run") && !q.starts_with("/gui")));
         let cols = if list {
             1
         } else if browser || gallery {
@@ -827,6 +941,8 @@ impl Ui {
                         let settings = self.settings.borrow();
                         let auto = if s(&row, "provider") == "apps" {
                             settings["ui"]["auto_launch_applications"] != false
+                        } else if ["File", "Directory"].contains(&s(&row, "provider")) {
+                            true
                         } else {
                             settings["ui"]["auto_launch_commands"] != false
                                 && ["commands", "internal"].contains(&s(&row, "provider"))
@@ -844,7 +960,9 @@ impl Ui {
                         }
                     }
                 }
-                if value["pending"] == true
+                if ["MONITOR", "TIMERS"].contains(&s(&value["header"], "title")) {
+                    self.schedule_refresh(1000);
+                } else if value["pending"] == true
                     || value["closing"].as_array().is_some_and(|v| !v.is_empty())
                 {
                     self.schedule_refresh(180);
@@ -990,6 +1108,9 @@ fn build(
     let word_header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     word_header.set_visible(false);
     root.append(&word_header);
+    let provider_header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    provider_header.set_visible(false);
+    root.append(&provider_header);
     let model = gtk::StringList::new(&[]);
     let selection = gtk::SingleSelection::new(Some(model.clone()));
     let select = selection.clone();
@@ -1134,6 +1255,7 @@ fn build(
         results,
         rich,
         word_header,
+        provider_header,
         word_key: RefCell::new(String::new()),
         hidden_sources: Rc::new(RefCell::new(std::collections::HashSet::new())),
         message,
@@ -1293,6 +1415,22 @@ fn build(
         if ui.stack.visible_child_name().as_deref() == Some("tasks") {
             return glib::Propagation::Proceed;
         }
+        if matches!(key, gdk::Key::Left | gdk::Key::Right)
+            && mods.contains(gdk::ModifierType::CONTROL_MASK)
+        {
+            // Ctrl+Arrow belongs to the input widget's word-wise cursor movement.
+            return glib::Propagation::Proceed;
+        }
+        if key == gdk::Key::r && mods.contains(gdk::ModifierType::CONTROL_MASK) {
+            let query = ui.query.borrow().trim_start().to_owned();
+            if ["/file", "/find"]
+                .iter()
+                .any(|command| query == *command || query.starts_with(&format!("{command} ")))
+            {
+                ui.choose_folder("set-root");
+                return glib::Propagation::Stop;
+            }
+        }
         if ui.results.visible_child_name().as_deref() == Some("rich") && key != gdk::Key::Escape {
             if ui.word_header.is_visible()
                 && matches!(
@@ -1383,7 +1521,13 @@ fn build(
         if ![gdk::Key::Return, gdk::Key::KP_Enter].contains(&key) {
             return glib::Propagation::Proceed;
         }
-        if mods.contains(gdk::ModifierType::CONTROL_MASK) {
+        if mods.contains(gdk::ModifierType::ALT_MASK)
+            && ui
+                .selected()
+                .is_some_and(|row| row["provider"] == "Bitwarden")
+        {
+            ui.activate("username");
+        } else if mods.contains(gdk::ModifierType::CONTROL_MASK) {
             ui.activate("close");
         } else if mods.contains(gdk::ModifierType::SHIFT_MASK) {
             ui.activate("alternate");

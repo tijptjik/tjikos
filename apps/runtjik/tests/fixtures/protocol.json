@@ -5002,143 +5002,9 @@
           "serial": 7
         },
         "response": {
-          "kind": "results",
-          "version": "0.8.3",
-          "results": [
-            {
-              "id": "/shortcuts/0",
-              "name": "Super+Escape",
-              "subtitle": "Toggle Runtjik (desktop binding, on key press)",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/1",
-              "name": "Tab / Shift+Tab",
-              "subtitle": "Next / previous result",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/2",
-              "name": "Up / Down",
-              "subtitle": "Previous / next row",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/3",
-              "name": "Left / Right",
-              "subtitle": "Previous / next result in the grid; Ctrl+Left / Ctrl+Right also works in lists",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/4",
-              "name": "Enter / click",
-              "subtitle": "Switch to a running application, or launch if none are running",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/5",
-              "name": "Ctrl+Enter",
-              "subtitle": "Delete a clipboard item; close a browser tab; trash a capture; otherwise close the selected app",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/6",
-              "name": "Ctrl+Z",
-              "subtitle": "Undo the most recent capture trash action while browsing capture history",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/7",
-              "name": "Ctrl+Up / Ctrl+Down",
-              "subtitle": "Previous / next launcher command; Down past newest restores the draft",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/8",
-              "name": "Shift+Enter / Shift+click",
-              "subtitle": "Launch a new application instance; save browser tabs to Reading",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/9",
-              "name": "Ctrl+L",
-              "subtitle": "Toggle grid / list for this session",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/10",
-              "name": "Esc",
-              "subtitle": "Return from a command or instance picker to general search; otherwise close",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/11",
-              "name": "Drag the header or frame",
-              "subtitle": "Move within a monitor; release on another monitor to move there",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            }
-          ],
           "config": {
-            "ui": {
-              "view": "grid",
-              "columns": 5,
-              "width": 720,
-              "height": 600,
-              "icon_size": 52,
-              "font": "tijpset",
-              "font_size": 14,
-              "monitor": "focused",
-              "max_results": 100,
-              "keep_alive": true,
-              "auto_launch_applications": true,
-              "auto_launch_commands": true,
-              "close_on_outside_click": true
-            },
-            "theme": {
-              "background": "#191724",
-              "surface": "#26233a",
-              "tile": "#1f1d2e",
-              "text": "#e0def4",
-              "muted": "#908caa",
-              "accent": "#ff53a6",
-              "border": "#403a52",
-              "icon_theme": "rose-punk"
+            "history": {
+              "enabled": true
             },
             "index": {
               "desktop_apps": true,
@@ -5146,14 +5012,82 @@
               "refresh_seconds": 5
             },
             "launch": {
+              "isolate": false,
               "terminal": [
                 "kitty",
                 "--"
-              ],
-              "isolate": false
+              ]
             },
-            "history": {
-              "enabled": true
+            "overrides": {},
+            "plugin_settings": {
+              "Browser": {
+                "columns": 3,
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$"
+                  }
+                ],
+                "history_browser": [
+                  "zen-browser"
+                ],
+                "history_profiles": []
+              },
+              "Clipboard": {
+                "max_results": 50
+              },
+              "Recorder": {
+                "audio": false,
+                "countdown_seconds": 3,
+                "directory": "xdg:VIDEOS",
+                "fps": 30,
+                "gallery_columns": 3,
+                "gallery_rows": 3,
+                "max_results": 40
+              },
+              "Screenshots": {
+                "copy_to_clipboard": true,
+                "directory": "xdg:PICTURES/screenshots",
+                "gallery_columns": 3,
+                "gallery_rows": 3,
+                "history_directories": [],
+                "include_clipboard": true,
+                "max_results": 40,
+                "viewer": [
+                  "imv"
+                ]
+              },
+              "Todo": {
+                "authority": "si",
+                "directory": "~/.local/share/runtjik-todo",
+                "socket": "",
+                "ssh_command": [
+                  "ssh"
+                ],
+                "url": "",
+                "vault": ""
+              },
+              "Words": {
+                "define_sources": [
+                  "wiktionary",
+                  "urban_dictionary"
+                ],
+                "languages": [
+                  "English"
+                ],
+                "max_results_per_source": 12,
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ],
+                "synonym_sources": [
+                  "wiktionary"
+                ],
+                "timeout_seconds": 5
+              }
             },
             "plugins": {
               "enabled": [
@@ -5164,88 +5098,152 @@
                 "Todo"
               ]
             },
-            "plugin_settings": {
-              "Words": {
-                "define_sources": [
-                  "wiktionary",
-                  "urban_dictionary"
-                ],
-                "synonym_sources": [
-                  "wiktionary"
-                ],
-                "max_results_per_source": 12,
-                "timeout_seconds": 5,
-                "languages": [
-                  "English"
-                ],
-                "sections": [
-                  "definitions",
-                  "synonyms",
-                  "related_terms"
-                ]
-              },
-              "Clipboard": {
-                "max_results": 50
-              },
-              "Screenshots": {
-                "directory": "xdg:PICTURES/screenshots",
-                "copy_to_clipboard": true,
-                "viewer": [
-                  "imv"
-                ],
-                "max_results": 40,
-                "gallery_columns": 3,
-                "gallery_rows": 3,
-                "history_directories": [],
-                "include_clipboard": true
-              },
-              "Recorder": {
-                "directory": "xdg:VIDEOS",
-                "audio": false,
-                "fps": 30,
-                "max_results": 40,
-                "gallery_columns": 3,
-                "gallery_rows": 3,
-                "countdown_seconds": 3
-              },
-              "Browser": {
-                "columns": 3,
-                "history_profiles": [],
-                "history_browser": [
-                  "zen-browser"
-                ],
-                "favicon_overrides": [
-                  {
-                    "domain_regex": "(^|\\.)overturemaps\\.org$",
-                    "icon": "bundled:overture.png"
-                  },
-                  {
-                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
-                    "icon": "bundled:hkgov.png"
-                  }
-                ]
-              },
-              "Todo": {
-                "authority": "si",
-                "directory": "~/.local/share/runtjik-todo",
-                "vault": "",
-                "ssh_command": [
-                  "ssh"
-                ],
-                "url": "",
-                "socket": ""
-              }
-            },
-            "overrides": {},
             "stats": {
               "enabled": true
+            },
+            "theme": {
+              "accent": "#ff53a6",
+              "background": "#191724",
+              "border": "#403a52",
+              "icon_theme": "rose-punk",
+              "muted": "#908caa",
+              "surface": "#26233a",
+              "text": "#e0def4",
+              "tile": "#1f1d2e"
+            },
+            "ui": {
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true,
+              "columns": 5,
+              "font": "tijpset",
+              "font_size": 14,
+              "height": 600,
+              "icon_size": 52,
+              "keep_alive": true,
+              "max_results": 100,
+              "monitor": "focused",
+              "view": "grid",
+              "width": 720
             }
           },
-          "indexed": 251,
-          "warnings": [],
           "demo": false,
+          "indexed": 251,
+          "kind": "results",
           "query": "/bindings",
-          "serial": 7
+          "results": [
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/0",
+              "name": "Super+Escape",
+              "provider": "internal",
+              "subtitle": "Toggle Runtjik (desktop binding, on key press)",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/1",
+              "name": "Tab / Shift+Tab",
+              "provider": "internal",
+              "subtitle": "Next / previous result",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/2",
+              "name": "Up / Down",
+              "provider": "internal",
+              "subtitle": "Previous / next row",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/3",
+              "name": "Left / Right",
+              "provider": "internal",
+              "subtitle": "Previous / next result in the grid; Ctrl+Left / Ctrl+Right moves the search cursor by word",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/4",
+              "name": "Enter / click",
+              "provider": "internal",
+              "subtitle": "Switch to a running application, or launch if none are running",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/5",
+              "name": "Ctrl+Enter",
+              "provider": "internal",
+              "subtitle": "Delete a clipboard item; close a browser tab; trash a capture; otherwise close the selected app",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/6",
+              "name": "Ctrl+Z",
+              "provider": "internal",
+              "subtitle": "Undo the most recent capture trash action while browsing capture history",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/7",
+              "name": "Ctrl+Up / Ctrl+Down",
+              "provider": "internal",
+              "subtitle": "Previous / next launcher command; Down past newest restores the draft",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/8",
+              "name": "Shift+Enter / Shift+click",
+              "provider": "internal",
+              "subtitle": "Launch a new application instance; save browser tabs to Reading",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/9",
+              "name": "Ctrl+L",
+              "provider": "internal",
+              "subtitle": "Toggle grid / list for this session",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/10",
+              "name": "Esc",
+              "provider": "internal",
+              "subtitle": "Return from a command or instance picker to general search; otherwise close",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/11",
+              "name": "Drag the header or frame",
+              "provider": "internal",
+              "subtitle": "Move within a monitor; release on another monitor to move there",
+              "windows": 0
+            }
+          ],
+          "serial": 7,
+          "version": "0.8.3",
+          "warnings": []
         }
       },
       {
@@ -5255,163 +5253,9 @@
           "serial": 7
         },
         "response": {
-          "kind": "results",
-          "version": "0.8.3",
-          "results": [
-            {
-              "id": "/bindings",
-              "name": "/bindings  ·  /shortcuts",
-              "subtitle": "Show keyboard shortcuts and dragging",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/cliphist",
-              "name": "/cliphist",
-              "subtitle": "Search clipboard history · /cliphist images filters images",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/config",
-              "name": "/config",
-              "subtitle": "View and change featured settings",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/define",
-              "name": "/define",
-              "subtitle": "Definitions and usage examples · Live results",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/grab",
-              "name": "/grab  ·  /shot, /screenshot, /ss, /snap",
-              "subtitle": "Take a screenshot or browse previous screenshots",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/grid",
-              "name": "/grid",
-              "subtitle": "Show applications as an icon grid",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/list",
-              "name": "/list",
-              "subtitle": "Show applications as a list",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/pin",
-              "name": "/pin",
-              "subtitle": "Toggle keeping the launcher open on outside clicks",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/processes",
-              "name": "/processes  ·  ?",
-              "subtitle": "Search applications with running windows",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/reading",
-              "name": "/reading",
-              "subtitle": "Reading list",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/rec",
-              "name": "/rec  ·  /screenrecord, /sr",
-              "subtitle": "Record screen, workspace, window or region · previous recordings",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/refresh",
-              "name": "/refresh",
-              "subtitle": "Rebuild the application and command index",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/run",
-              "name": "/run  ·  !!",
-              "subtitle": "Search previously used terminal commands",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/stats",
-              "name": "/stats",
-              "subtitle": "Daily launcher activity, averages and all-time totals",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/synonym",
-              "name": "/synonym",
-              "subtitle": "Thesaurus synonyms · Live results",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/todo",
-              "name": "/todo  ·  -",
-              "subtitle": "Todo app",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            }
-          ],
           "config": {
-            "ui": {
-              "view": "grid",
-              "columns": 5,
-              "width": 720,
-              "height": 600,
-              "icon_size": 52,
-              "font": "tijpset",
-              "font_size": 14,
-              "monitor": "focused",
-              "max_results": 100,
-              "keep_alive": true,
-              "auto_launch_applications": true,
-              "auto_launch_commands": true,
-              "close_on_outside_click": true
-            },
-            "theme": {
-              "background": "#191724",
-              "surface": "#26233a",
-              "tile": "#1f1d2e",
-              "text": "#e0def4",
-              "muted": "#908caa",
-              "accent": "#ff53a6",
-              "border": "#403a52",
-              "icon_theme": "rose-punk"
+            "history": {
+              "enabled": true
             },
             "index": {
               "desktop_apps": true,
@@ -5419,14 +5263,82 @@
               "refresh_seconds": 5
             },
             "launch": {
+              "isolate": false,
               "terminal": [
                 "kitty",
                 "--"
-              ],
-              "isolate": false
+              ]
             },
-            "history": {
-              "enabled": true
+            "overrides": {},
+            "plugin_settings": {
+              "Browser": {
+                "columns": 3,
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$"
+                  }
+                ],
+                "history_browser": [
+                  "zen-browser"
+                ],
+                "history_profiles": []
+              },
+              "Clipboard": {
+                "max_results": 50
+              },
+              "Recorder": {
+                "audio": false,
+                "countdown_seconds": 3,
+                "directory": "xdg:VIDEOS",
+                "fps": 30,
+                "gallery_columns": 3,
+                "gallery_rows": 3,
+                "max_results": 40
+              },
+              "Screenshots": {
+                "copy_to_clipboard": true,
+                "directory": "xdg:PICTURES/screenshots",
+                "gallery_columns": 3,
+                "gallery_rows": 3,
+                "history_directories": [],
+                "include_clipboard": true,
+                "max_results": 40,
+                "viewer": [
+                  "imv"
+                ]
+              },
+              "Todo": {
+                "authority": "si",
+                "directory": "~/.local/share/runtjik-todo",
+                "socket": "",
+                "ssh_command": [
+                  "ssh"
+                ],
+                "url": "",
+                "vault": ""
+              },
+              "Words": {
+                "define_sources": [
+                  "wiktionary",
+                  "urban_dictionary"
+                ],
+                "languages": [
+                  "English"
+                ],
+                "max_results_per_source": 12,
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ],
+                "synonym_sources": [
+                  "wiktionary"
+                ],
+                "timeout_seconds": 5
+              }
             },
             "plugins": {
               "enabled": [
@@ -5437,88 +5349,236 @@
                 "Todo"
               ]
             },
-            "plugin_settings": {
-              "Words": {
-                "define_sources": [
-                  "wiktionary",
-                  "urban_dictionary"
-                ],
-                "synonym_sources": [
-                  "wiktionary"
-                ],
-                "max_results_per_source": 12,
-                "timeout_seconds": 5,
-                "languages": [
-                  "English"
-                ],
-                "sections": [
-                  "definitions",
-                  "synonyms",
-                  "related_terms"
-                ]
-              },
-              "Clipboard": {
-                "max_results": 50
-              },
-              "Screenshots": {
-                "directory": "xdg:PICTURES/screenshots",
-                "copy_to_clipboard": true,
-                "viewer": [
-                  "imv"
-                ],
-                "max_results": 40,
-                "gallery_columns": 3,
-                "gallery_rows": 3,
-                "history_directories": [],
-                "include_clipboard": true
-              },
-              "Recorder": {
-                "directory": "xdg:VIDEOS",
-                "audio": false,
-                "fps": 30,
-                "max_results": 40,
-                "gallery_columns": 3,
-                "gallery_rows": 3,
-                "countdown_seconds": 3
-              },
-              "Browser": {
-                "columns": 3,
-                "history_profiles": [],
-                "history_browser": [
-                  "zen-browser"
-                ],
-                "favicon_overrides": [
-                  {
-                    "domain_regex": "(^|\\.)overturemaps\\.org$",
-                    "icon": "bundled:overture.png"
-                  },
-                  {
-                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
-                    "icon": "bundled:hkgov.png"
-                  }
-                ]
-              },
-              "Todo": {
-                "authority": "si",
-                "directory": "~/.local/share/runtjik-todo",
-                "vault": "",
-                "ssh_command": [
-                  "ssh"
-                ],
-                "url": "",
-                "socket": ""
-              }
-            },
-            "overrides": {},
             "stats": {
               "enabled": true
+            },
+            "theme": {
+              "accent": "#ff53a6",
+              "background": "#191724",
+              "border": "#403a52",
+              "icon_theme": "rose-punk",
+              "muted": "#908caa",
+              "surface": "#26233a",
+              "text": "#e0def4",
+              "tile": "#1f1d2e"
+            },
+            "ui": {
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true,
+              "columns": 5,
+              "font": "tijpset",
+              "font_size": 14,
+              "height": 600,
+              "icon_size": 52,
+              "keep_alive": true,
+              "max_results": 100,
+              "monitor": "focused",
+              "view": "grid",
+              "width": 720
             }
           },
-          "indexed": 251,
-          "warnings": [],
           "demo": false,
+          "indexed": 251,
+          "kind": "results",
           "query": "/",
-          "serial": 7
+          "results": [
+            {
+              "count": 0,
+              "id": "/bindings",
+              "name": "/bindings  ·  /shortcuts",
+              "provider": "internal",
+              "subtitle": "Show keyboard shortcuts and dragging",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/bw",
+              "name": "/bw",
+              "provider": "internal",
+              "subtitle": "Search Bitwarden items",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/cliphist",
+              "name": "/cliphist",
+              "provider": "internal",
+              "subtitle": "Search clipboard history · /cliphist images filters images",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/config",
+              "name": "/config",
+              "provider": "internal",
+              "subtitle": "View and change featured settings",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/define",
+              "name": "/define",
+              "provider": "internal",
+              "subtitle": "Definitions and usage examples · Live results",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/dir",
+              "name": "/dir",
+              "provider": "internal",
+              "subtitle": "Jump to familiar directories with zoxide",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/emoji",
+              "name": "/emoji",
+              "provider": "internal",
+              "subtitle": "Search and copy emoji",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/file",
+              "name": "/file",
+              "provider": "internal",
+              "subtitle": "Search files below a selectable root",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/grab",
+              "name": "/grab  ·  /shot, /screenshot, /ss, /snap",
+              "provider": "internal",
+              "subtitle": "Take a screenshot or browse previous screenshots",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/grid",
+              "name": "/grid",
+              "provider": "internal",
+              "subtitle": "Show applications as an icon grid",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/gui",
+              "name": "/gui  ·  ?",
+              "provider": "internal",
+              "subtitle": "Search applications with running windows",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/list",
+              "name": "/list",
+              "provider": "internal",
+              "subtitle": "Show applications as a list",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/monitor",
+              "name": "/monitor",
+              "provider": "internal",
+              "subtitle": "Browse running processes by CPU or memory",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/note",
+              "name": "/note",
+              "provider": "internal",
+              "subtitle": "Create and browse scratch notes",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/pin",
+              "name": "/pin",
+              "provider": "internal",
+              "subtitle": "Toggle keeping the launcher open on outside clicks",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/reading",
+              "name": "/reading",
+              "provider": "internal",
+              "subtitle": "Reading list",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/rec",
+              "name": "/rec  ·  /screenrecord, /sr",
+              "provider": "internal",
+              "subtitle": "Record screen, workspace, window or region · previous recordings",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/refresh",
+              "name": "/refresh",
+              "provider": "internal",
+              "subtitle": "Rebuild the application and command index",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/run",
+              "name": "/run  ·  !!",
+              "provider": "internal",
+              "subtitle": "Search previously used terminal commands",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/stats",
+              "name": "/stats",
+              "provider": "internal",
+              "subtitle": "Daily launcher activity, averages and all-time totals",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/synonym",
+              "name": "/synonym",
+              "provider": "internal",
+              "subtitle": "Thesaurus synonyms · Live results",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/timer",
+              "name": "/timer",
+              "provider": "internal",
+              "subtitle": "Set or review countdown timers",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/todo",
+              "name": "/todo  ·  -",
+              "provider": "internal",
+              "subtitle": "Todo app",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/voice",
+              "name": "/voice",
+              "provider": "internal",
+              "subtitle": "Record voice or browse transcription history",
+              "windows": 0
+            }
+          ],
+          "serial": 7,
+          "version": "0.8.3",
+          "warnings": []
         }
       },
       {
@@ -10353,143 +10413,9 @@
           "serial": 7
         },
         "response": {
-          "kind": "results",
-          "version": "0.8.3",
-          "results": [
-            {
-              "id": "/shortcuts/0",
-              "name": "Super+Escape",
-              "subtitle": "Toggle Runtjik (desktop binding, on key press)",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/1",
-              "name": "Tab / Shift+Tab",
-              "subtitle": "Next / previous result",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/2",
-              "name": "Up / Down",
-              "subtitle": "Previous / next row",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/3",
-              "name": "Left / Right",
-              "subtitle": "Previous / next result in the grid; Ctrl+Left / Ctrl+Right also works in lists",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/4",
-              "name": "Enter / click",
-              "subtitle": "Switch to a running application, or launch if none are running",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/5",
-              "name": "Ctrl+Enter",
-              "subtitle": "Delete a clipboard item; close a browser tab; trash a capture; otherwise close the selected app",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/6",
-              "name": "Ctrl+Z",
-              "subtitle": "Undo the most recent capture trash action while browsing capture history",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/7",
-              "name": "Ctrl+Up / Ctrl+Down",
-              "subtitle": "Previous / next launcher command; Down past newest restores the draft",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/8",
-              "name": "Shift+Enter / Shift+click",
-              "subtitle": "Launch a new application instance; save browser tabs to Reading",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/9",
-              "name": "Ctrl+L",
-              "subtitle": "Toggle grid / list for this session",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/10",
-              "name": "Esc",
-              "subtitle": "Return from a command or instance picker to general search; otherwise close",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            },
-            {
-              "id": "/shortcuts/11",
-              "name": "Drag the header or frame",
-              "subtitle": "Move within a monitor; release on another monitor to move there",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0,
-              "disabled": true
-            }
-          ],
           "config": {
-            "ui": {
-              "view": "grid",
-              "columns": 5,
-              "width": 720,
-              "height": 600,
-              "icon_size": 52,
-              "font": "tijpset",
-              "font_size": 14,
-              "monitor": "focused",
-              "max_results": 100,
-              "keep_alive": true,
-              "auto_launch_applications": true,
-              "auto_launch_commands": true,
-              "close_on_outside_click": true
-            },
-            "theme": {
-              "background": "#191724",
-              "surface": "#26233a",
-              "tile": "#1f1d2e",
-              "text": "#e0def4",
-              "muted": "#908caa",
-              "accent": "#ff53a6",
-              "border": "#403a52",
-              "icon_theme": "rose-punk"
+            "history": {
+              "enabled": true
             },
             "index": {
               "desktop_apps": true,
@@ -10497,14 +10423,82 @@
               "refresh_seconds": 5
             },
             "launch": {
+              "isolate": false,
               "terminal": [
                 "kitty",
                 "--"
-              ],
-              "isolate": false
+              ]
             },
-            "history": {
-              "enabled": true
+            "overrides": {},
+            "plugin_settings": {
+              "Browser": {
+                "columns": 3,
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$"
+                  }
+                ],
+                "history_browser": [
+                  "zen-browser"
+                ],
+                "history_profiles": []
+              },
+              "Clipboard": {
+                "max_results": 50
+              },
+              "Recorder": {
+                "audio": false,
+                "countdown_seconds": 3,
+                "directory": "xdg:VIDEOS",
+                "fps": 30,
+                "gallery_columns": 3,
+                "gallery_rows": 3,
+                "max_results": 40
+              },
+              "Screenshots": {
+                "copy_to_clipboard": true,
+                "directory": "xdg:PICTURES/screenshots",
+                "gallery_columns": 3,
+                "gallery_rows": 3,
+                "history_directories": [],
+                "include_clipboard": true,
+                "max_results": 40,
+                "viewer": [
+                  "imv"
+                ]
+              },
+              "Todo": {
+                "authority": "si",
+                "directory": "~/.local/share/runtjik-todo",
+                "socket": "",
+                "ssh_command": [
+                  "ssh"
+                ],
+                "url": "",
+                "vault": ""
+              },
+              "Words": {
+                "define_sources": [
+                  "wiktionary",
+                  "urban_dictionary"
+                ],
+                "languages": [
+                  "English"
+                ],
+                "max_results_per_source": 12,
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ],
+                "synonym_sources": [
+                  "wiktionary"
+                ],
+                "timeout_seconds": 5
+              }
             },
             "plugins": {
               "enabled": [
@@ -10515,88 +10509,152 @@
                 "Todo"
               ]
             },
-            "plugin_settings": {
-              "Words": {
-                "define_sources": [
-                  "wiktionary",
-                  "urban_dictionary"
-                ],
-                "synonym_sources": [
-                  "wiktionary"
-                ],
-                "max_results_per_source": 12,
-                "timeout_seconds": 5,
-                "languages": [
-                  "English"
-                ],
-                "sections": [
-                  "definitions",
-                  "synonyms",
-                  "related_terms"
-                ]
-              },
-              "Clipboard": {
-                "max_results": 50
-              },
-              "Screenshots": {
-                "directory": "xdg:PICTURES/screenshots",
-                "copy_to_clipboard": true,
-                "viewer": [
-                  "imv"
-                ],
-                "max_results": 40,
-                "gallery_columns": 3,
-                "gallery_rows": 3,
-                "history_directories": [],
-                "include_clipboard": true
-              },
-              "Recorder": {
-                "directory": "xdg:VIDEOS",
-                "audio": false,
-                "fps": 30,
-                "max_results": 40,
-                "gallery_columns": 3,
-                "gallery_rows": 3,
-                "countdown_seconds": 3
-              },
-              "Browser": {
-                "columns": 3,
-                "history_profiles": [],
-                "history_browser": [
-                  "zen-browser"
-                ],
-                "favicon_overrides": [
-                  {
-                    "domain_regex": "(^|\\.)overturemaps\\.org$",
-                    "icon": "bundled:overture.png"
-                  },
-                  {
-                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
-                    "icon": "bundled:hkgov.png"
-                  }
-                ]
-              },
-              "Todo": {
-                "authority": "si",
-                "directory": "~/.local/share/runtjik-todo",
-                "vault": "",
-                "ssh_command": [
-                  "ssh"
-                ],
-                "url": "",
-                "socket": ""
-              }
-            },
-            "overrides": {},
             "stats": {
               "enabled": true
+            },
+            "theme": {
+              "accent": "#ff53a6",
+              "background": "#191724",
+              "border": "#403a52",
+              "icon_theme": "rose-punk",
+              "muted": "#908caa",
+              "surface": "#26233a",
+              "text": "#e0def4",
+              "tile": "#1f1d2e"
+            },
+            "ui": {
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true,
+              "columns": 5,
+              "font": "tijpset",
+              "font_size": 14,
+              "height": 600,
+              "icon_size": 52,
+              "keep_alive": true,
+              "max_results": 100,
+              "monitor": "focused",
+              "view": "grid",
+              "width": 720
             }
           },
-          "indexed": 15,
-          "warnings": [],
           "demo": true,
+          "indexed": 15,
+          "kind": "results",
           "query": "/bindings",
-          "serial": 7
+          "results": [
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/0",
+              "name": "Super+Escape",
+              "provider": "internal",
+              "subtitle": "Toggle Runtjik (desktop binding, on key press)",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/1",
+              "name": "Tab / Shift+Tab",
+              "provider": "internal",
+              "subtitle": "Next / previous result",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/2",
+              "name": "Up / Down",
+              "provider": "internal",
+              "subtitle": "Previous / next row",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/3",
+              "name": "Left / Right",
+              "provider": "internal",
+              "subtitle": "Previous / next result in the grid; Ctrl+Left / Ctrl+Right moves the search cursor by word",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/4",
+              "name": "Enter / click",
+              "provider": "internal",
+              "subtitle": "Switch to a running application, or launch if none are running",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/5",
+              "name": "Ctrl+Enter",
+              "provider": "internal",
+              "subtitle": "Delete a clipboard item; close a browser tab; trash a capture; otherwise close the selected app",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/6",
+              "name": "Ctrl+Z",
+              "provider": "internal",
+              "subtitle": "Undo the most recent capture trash action while browsing capture history",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/7",
+              "name": "Ctrl+Up / Ctrl+Down",
+              "provider": "internal",
+              "subtitle": "Previous / next launcher command; Down past newest restores the draft",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/8",
+              "name": "Shift+Enter / Shift+click",
+              "provider": "internal",
+              "subtitle": "Launch a new application instance; save browser tabs to Reading",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/9",
+              "name": "Ctrl+L",
+              "provider": "internal",
+              "subtitle": "Toggle grid / list for this session",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/10",
+              "name": "Esc",
+              "provider": "internal",
+              "subtitle": "Return from a command or instance picker to general search; otherwise close",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "disabled": true,
+              "id": "/shortcuts/11",
+              "name": "Drag the header or frame",
+              "provider": "internal",
+              "subtitle": "Move within a monitor; release on another monitor to move there",
+              "windows": 0
+            }
+          ],
+          "serial": 7,
+          "version": "0.8.3",
+          "warnings": []
         }
       },
       {
@@ -11246,163 +11304,9 @@
           "serial": 7
         },
         "response": {
-          "kind": "results",
-          "version": "0.8.3",
-          "results": [
-            {
-              "id": "/bindings",
-              "name": "/bindings  ·  /shortcuts",
-              "subtitle": "Show keyboard shortcuts and dragging",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/cliphist",
-              "name": "/cliphist",
-              "subtitle": "Search clipboard history · /cliphist images filters images",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/config",
-              "name": "/config",
-              "subtitle": "View and change featured settings",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/define",
-              "name": "/define",
-              "subtitle": "Definitions and usage examples · Live results",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/grab",
-              "name": "/grab  ·  /shot, /screenshot, /ss, /snap",
-              "subtitle": "Take a screenshot or browse previous screenshots",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/grid",
-              "name": "/grid",
-              "subtitle": "Show applications as an icon grid",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/list",
-              "name": "/list",
-              "subtitle": "Show applications as a list",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/pin",
-              "name": "/pin",
-              "subtitle": "Toggle keeping the launcher open on outside clicks",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/processes",
-              "name": "/processes  ·  ?",
-              "subtitle": "Search applications with running windows",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/reading",
-              "name": "/reading",
-              "subtitle": "Reading list",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/rec",
-              "name": "/rec  ·  /screenrecord, /sr",
-              "subtitle": "Record screen, workspace, window or region · previous recordings",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/refresh",
-              "name": "/refresh",
-              "subtitle": "Rebuild the application and command index",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/run",
-              "name": "/run  ·  !!",
-              "subtitle": "Search previously used terminal commands",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/stats",
-              "name": "/stats",
-              "subtitle": "Daily launcher activity, averages and all-time totals",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/synonym",
-              "name": "/synonym",
-              "subtitle": "Thesaurus synonyms · Live results",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            },
-            {
-              "id": "/todo",
-              "name": "/todo  ·  -",
-              "subtitle": "Todo app",
-              "provider": "internal",
-              "count": 0,
-              "windows": 0
-            }
-          ],
           "config": {
-            "ui": {
-              "view": "grid",
-              "columns": 5,
-              "width": 720,
-              "height": 600,
-              "icon_size": 52,
-              "font": "tijpset",
-              "font_size": 14,
-              "monitor": "focused",
-              "max_results": 100,
-              "keep_alive": true,
-              "auto_launch_applications": true,
-              "auto_launch_commands": true,
-              "close_on_outside_click": true
-            },
-            "theme": {
-              "background": "#191724",
-              "surface": "#26233a",
-              "tile": "#1f1d2e",
-              "text": "#e0def4",
-              "muted": "#908caa",
-              "accent": "#ff53a6",
-              "border": "#403a52",
-              "icon_theme": "rose-punk"
+            "history": {
+              "enabled": true
             },
             "index": {
               "desktop_apps": true,
@@ -11410,14 +11314,82 @@
               "refresh_seconds": 5
             },
             "launch": {
+              "isolate": false,
               "terminal": [
                 "kitty",
                 "--"
-              ],
-              "isolate": false
+              ]
             },
-            "history": {
-              "enabled": true
+            "overrides": {},
+            "plugin_settings": {
+              "Browser": {
+                "columns": 3,
+                "favicon_overrides": [
+                  {
+                    "domain_regex": "(^|\\.)overturemaps\\.org$"
+                  },
+                  {
+                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$"
+                  }
+                ],
+                "history_browser": [
+                  "zen-browser"
+                ],
+                "history_profiles": []
+              },
+              "Clipboard": {
+                "max_results": 50
+              },
+              "Recorder": {
+                "audio": false,
+                "countdown_seconds": 3,
+                "directory": "xdg:VIDEOS",
+                "fps": 30,
+                "gallery_columns": 3,
+                "gallery_rows": 3,
+                "max_results": 40
+              },
+              "Screenshots": {
+                "copy_to_clipboard": true,
+                "directory": "xdg:PICTURES/screenshots",
+                "gallery_columns": 3,
+                "gallery_rows": 3,
+                "history_directories": [],
+                "include_clipboard": true,
+                "max_results": 40,
+                "viewer": [
+                  "imv"
+                ]
+              },
+              "Todo": {
+                "authority": "si",
+                "directory": "~/.local/share/runtjik-todo",
+                "socket": "",
+                "ssh_command": [
+                  "ssh"
+                ],
+                "url": "",
+                "vault": ""
+              },
+              "Words": {
+                "define_sources": [
+                  "wiktionary",
+                  "urban_dictionary"
+                ],
+                "languages": [
+                  "English"
+                ],
+                "max_results_per_source": 12,
+                "sections": [
+                  "definitions",
+                  "synonyms",
+                  "related_terms"
+                ],
+                "synonym_sources": [
+                  "wiktionary"
+                ],
+                "timeout_seconds": 5
+              }
             },
             "plugins": {
               "enabled": [
@@ -11428,88 +11400,236 @@
                 "Todo"
               ]
             },
-            "plugin_settings": {
-              "Words": {
-                "define_sources": [
-                  "wiktionary",
-                  "urban_dictionary"
-                ],
-                "synonym_sources": [
-                  "wiktionary"
-                ],
-                "max_results_per_source": 12,
-                "timeout_seconds": 5,
-                "languages": [
-                  "English"
-                ],
-                "sections": [
-                  "definitions",
-                  "synonyms",
-                  "related_terms"
-                ]
-              },
-              "Clipboard": {
-                "max_results": 50
-              },
-              "Screenshots": {
-                "directory": "xdg:PICTURES/screenshots",
-                "copy_to_clipboard": true,
-                "viewer": [
-                  "imv"
-                ],
-                "max_results": 40,
-                "gallery_columns": 3,
-                "gallery_rows": 3,
-                "history_directories": [],
-                "include_clipboard": true
-              },
-              "Recorder": {
-                "directory": "xdg:VIDEOS",
-                "audio": false,
-                "fps": 30,
-                "max_results": 40,
-                "gallery_columns": 3,
-                "gallery_rows": 3,
-                "countdown_seconds": 3
-              },
-              "Browser": {
-                "columns": 3,
-                "history_profiles": [],
-                "history_browser": [
-                  "zen-browser"
-                ],
-                "favicon_overrides": [
-                  {
-                    "domain_regex": "(^|\\.)overturemaps\\.org$",
-                    "icon": "bundled:overture.png"
-                  },
-                  {
-                    "domain_regex": "(^|\\.)csdi\\.gov\\.hk$",
-                    "icon": "bundled:hkgov.png"
-                  }
-                ]
-              },
-              "Todo": {
-                "authority": "si",
-                "directory": "~/.local/share/runtjik-todo",
-                "vault": "",
-                "ssh_command": [
-                  "ssh"
-                ],
-                "url": "",
-                "socket": ""
-              }
-            },
-            "overrides": {},
             "stats": {
               "enabled": true
+            },
+            "theme": {
+              "accent": "#ff53a6",
+              "background": "#191724",
+              "border": "#403a52",
+              "icon_theme": "rose-punk",
+              "muted": "#908caa",
+              "surface": "#26233a",
+              "text": "#e0def4",
+              "tile": "#1f1d2e"
+            },
+            "ui": {
+              "auto_launch_applications": true,
+              "auto_launch_commands": true,
+              "close_on_outside_click": true,
+              "columns": 5,
+              "font": "tijpset",
+              "font_size": 14,
+              "height": 600,
+              "icon_size": 52,
+              "keep_alive": true,
+              "max_results": 100,
+              "monitor": "focused",
+              "view": "grid",
+              "width": 720
             }
           },
-          "indexed": 15,
-          "warnings": [],
           "demo": true,
+          "indexed": 15,
+          "kind": "results",
           "query": "/",
-          "serial": 7
+          "results": [
+            {
+              "count": 0,
+              "id": "/bindings",
+              "name": "/bindings  ·  /shortcuts",
+              "provider": "internal",
+              "subtitle": "Show keyboard shortcuts and dragging",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/bw",
+              "name": "/bw",
+              "provider": "internal",
+              "subtitle": "Search Bitwarden items",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/cliphist",
+              "name": "/cliphist",
+              "provider": "internal",
+              "subtitle": "Search clipboard history · /cliphist images filters images",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/config",
+              "name": "/config",
+              "provider": "internal",
+              "subtitle": "View and change featured settings",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/define",
+              "name": "/define",
+              "provider": "internal",
+              "subtitle": "Definitions and usage examples · Live results",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/dir",
+              "name": "/dir",
+              "provider": "internal",
+              "subtitle": "Jump to familiar directories with zoxide",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/emoji",
+              "name": "/emoji",
+              "provider": "internal",
+              "subtitle": "Search and copy emoji",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/file",
+              "name": "/file",
+              "provider": "internal",
+              "subtitle": "Search files below a selectable root",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/grab",
+              "name": "/grab  ·  /shot, /screenshot, /ss, /snap",
+              "provider": "internal",
+              "subtitle": "Take a screenshot or browse previous screenshots",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/grid",
+              "name": "/grid",
+              "provider": "internal",
+              "subtitle": "Show applications as an icon grid",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/gui",
+              "name": "/gui  ·  ?",
+              "provider": "internal",
+              "subtitle": "Search applications with running windows",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/list",
+              "name": "/list",
+              "provider": "internal",
+              "subtitle": "Show applications as a list",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/monitor",
+              "name": "/monitor",
+              "provider": "internal",
+              "subtitle": "Browse running processes by CPU or memory",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/note",
+              "name": "/note",
+              "provider": "internal",
+              "subtitle": "Create and browse scratch notes",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/pin",
+              "name": "/pin",
+              "provider": "internal",
+              "subtitle": "Toggle keeping the launcher open on outside clicks",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/reading",
+              "name": "/reading",
+              "provider": "internal",
+              "subtitle": "Reading list",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/rec",
+              "name": "/rec  ·  /screenrecord, /sr",
+              "provider": "internal",
+              "subtitle": "Record screen, workspace, window or region · previous recordings",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/refresh",
+              "name": "/refresh",
+              "provider": "internal",
+              "subtitle": "Rebuild the application and command index",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/run",
+              "name": "/run  ·  !!",
+              "provider": "internal",
+              "subtitle": "Search previously used terminal commands",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/stats",
+              "name": "/stats",
+              "provider": "internal",
+              "subtitle": "Daily launcher activity, averages and all-time totals",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/synonym",
+              "name": "/synonym",
+              "provider": "internal",
+              "subtitle": "Thesaurus synonyms · Live results",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/timer",
+              "name": "/timer",
+              "provider": "internal",
+              "subtitle": "Set or review countdown timers",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/todo",
+              "name": "/todo  ·  -",
+              "provider": "internal",
+              "subtitle": "Todo app",
+              "windows": 0
+            },
+            {
+              "count": 0,
+              "id": "/voice",
+              "name": "/voice",
+              "provider": "internal",
+              "subtitle": "Record voice or browse transcription history",
+              "windows": 0
+            }
+          ],
+          "serial": 7,
+          "version": "0.8.3",
+          "warnings": []
         }
       },
       {

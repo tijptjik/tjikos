@@ -19,10 +19,36 @@ pub fn commands(settings: &Value) -> Vec<Command> {
             "audio-input-microphone",
         ),
         (
-            "/processes",
+            "/gui",
             "Search applications with running windows",
-            "runtjik-stats",
+            "runtjik-gui",
         ),
+        ("/timer", "Set or review countdown timers", "runtjik-timer"),
+        (
+            "/file",
+            "Search files below a selectable root",
+            "runtjik-file",
+        ),
+        ("/find", "Alias for /file search", "runtjik-file"),
+        (
+            "/dir",
+            "Jump to familiar directories with zoxide",
+            "runtjik-dir",
+        ),
+        ("/emoji", "Search and copy emoji", "runtjik-emoji"),
+        ("/note", "Create and browse scratch notes", "runtjik-note"),
+        (
+            "/monitor",
+            "Browse running processes by CPU or memory",
+            "runtjik-monitor",
+        ),
+        ("/cpu", "Monitor processes sorted by CPU", "runtjik-monitor"),
+        (
+            "/mem",
+            "Monitor processes sorted by memory",
+            "runtjik-monitor",
+        ),
+        ("/bw", "Search Bitwarden items", "runtjik-bw"),
         (
             "/run",
             "Search previously used terminal commands",
@@ -60,10 +86,10 @@ pub fn commands(settings: &Value) -> Vec<Command> {
             id: id.into(),
             description: description.into(),
             icon: icon.into(),
-            aliases: if id == "/bindings" {
-                vec!["/shortcuts".into()]
-            } else {
-                vec![]
+            aliases: match id {
+                "/bindings" => vec!["/shortcuts".into()],
+                "/gui" => vec!["?".into()],
+                _ => vec![],
             },
             provider: String::new(),
             app: false,
@@ -195,7 +221,7 @@ pub fn query(q: &str, settings: &Value) -> Result<Option<Vec<Value>>> {
         }
         let mut commands = commands;
         commands.sort_by(|a, b| a.id.cmp(&b.id));
-        commands.into_iter().filter(|c|c.id.starts_with(q)||c.aliases.iter().any(|a|a.starts_with(q))).map(|c|{let suffix=if c.id=="/processes"{"  ·  ?".into()}else if c.id=="/run"{"  ·  !!".into()}else if c.aliases.is_empty(){String::new()}else{format!("  ·  {}",c.aliases.join(", "))};json!({"id":c.id,"name":format!("{}{suffix}",c.id),"subtitle":c.description,"icon":c.icon,"provider":"internal","count":0,"windows":0})}).collect()
+        commands.into_iter().filter(|c|c.id.starts_with(q)||c.aliases.iter().any(|a|a.starts_with(q))).map(|c|{let suffix=if c.id=="/run"{"  ·  !!".into()}else if c.aliases.is_empty(){String::new()}else{format!("  ·  {}",c.aliases.join(", "))};json!({"id":c.id,"name":format!("{}{suffix}",c.id),"subtitle":c.description,"icon":c.icon,"provider":"internal","count":0,"windows":0})}).collect()
     } else {
         return Ok(None);
     };

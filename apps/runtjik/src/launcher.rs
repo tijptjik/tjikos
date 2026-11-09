@@ -6,6 +6,7 @@ use crate::{
     util::*,
 };
 use anyhow::{bail, Context, Result};
+use gio::prelude::FileExt;
 use serde_json::{json, Value};
 use std::{collections::HashMap, time::Instant};
 pub struct Launcher {
@@ -29,12 +30,31 @@ pub struct Launcher {
     reading: crate::reading::Reading,
     clipboard: crate::clipboard::Clipboard,
     captures: crate::capture::Captures,
+    file_root: std::path::PathBuf,
+    file_search: crate::file_search::FileSearch,
+    monitor: crate::monitor::Monitor,
+    notes: crate::note::Notes,
 }
 impl Launcher {
     pub fn new(demo: bool) -> Result<Self> {
         let settings = config::load()?;
         let icons = Icons::new(&settings);
         let store = if demo { None } else { Some(Store::open()?) };
+        let configured_root = s(&settings["file_search"]["root"]);
+        let configured_root = if configured_root.is_empty() {
+            home()
+        } else if configured_root == "~" {
+            home()
+        } else if let Some(tail) = configured_root.strip_prefix("~/") {
+            home().join(tail)
+        } else {
+            std::path::PathBuf::from(configured_root)
+        };
+        let file_root = configured_root
+            .is_dir()
+            .then(|| configured_root.canonicalize().ok())
+            .flatten()
+            .unwrap_or_else(home);
         let mut app = Self {
             entries: vec![],
             settings,
@@ -56,6 +76,10 @@ impl Launcher {
             reading: crate::reading::Reading::default(),
             clipboard: crate::clipboard::Clipboard::default(),
             captures: crate::capture::Captures::default(),
+            file_root,
+            file_search: crate::file_search::FileSearch::default(),
+            monitor: crate::monitor::Monitor::default(),
+            notes: crate::note::Notes::default(),
         };
         app.refresh(false)?;
         Ok(app)
@@ -80,7 +104,7 @@ impl Launcher {
         self.last_query.clear();
     }
     fn history(&self) -> Result<Value> {
-        Ok(json!(if self.settings["history"]["enabled"] == true {
+        let mut history = if self.settings["history"]["enabled"] == true {
             self.store
                 .as_ref()
                 .map(|s| s.history())
@@ -88,7 +112,9 @@ impl Launcher {
                 .unwrap_or_default()
         } else {
             vec![]
-        }))
+        };
+        history.retain(|query| !query.trim_start().starts_with("/bw ") && query.trim() != "/bw");
+        Ok(json!(history))
     }
     fn tracking_enabled(&self) -> bool {
         self.settings["history"]["enabled"] == true && self.settings["stats"]["enabled"] == true
@@ -122,6 +148,10 @@ impl Launcher {
         let total = entries.len();
         self.current = entries.iter().map(|e| (e.id.clone(), e.clone())).collect();
         let rows:Vec<_>=entries.into_iter().skip(offset).take(limit).map(|e| { let mut row = json!({"id":e.id,"name":e.name,"subtitle":e.subtitle,"provider":e.provider,"icon":self.icons.resolve(&e.icon),"favicon":s(&e.data["favicon"]),"hide_launcher":e.data["hide_launcher"]==true || e.data["capture"].as_str().is_some_and(|s|!s.is_empty()),"keep_open":e.data["keep_open"]==true,"thumbnail":s(&e.data["thumbnail"]),"empty_state":e.data["empty_state"]==true,"disabled":e.data["disabled"]==true,"count":0,"windows":0});
+            if e.provider == "Emoji" {
+                row["preview"] = e.data["emoji"].clone();
+                row["has_tones"] = e.data["has_tones"].clone();
+            }
             for key in ["recent_word", "lookup_query", "word_source", "part_of_speech", "examples", "url", "language", "section", "group", "etymology", "headword", "sense_number", "sense_depth", "sense_synonyms", "terms", "context"] {
                 if e.provider == "Words" {
                     if let Some(value) = e.data.get(key) { row[key] = value.clone(); }
@@ -222,8 +252,113 @@ impl Launcher {
             };
             return Ok(v);
         }
+        let raw_command = q.split_whitespace().next().unwrap_or("");
+        if raw_command == "/cpu" || raw_command == "/mem" {
+            self.monitor.sort_by(if raw_command == "/mem" {
+                "memory"
+            } else {
+                "cpu"
+            });
+            let term = q
+                .split_once(char::is_whitespace)
+                .map(|(_, term)| term.trim())
+                .unwrap_or("");
+            let normalized = if term.is_empty() {
+                "/monitor ".to_owned()
+            } else {
+                format!("/monitor {term}")
+            };
+            return self.open_query(&normalized);
+        }
+        let command = if raw_command == "/find" {
+            "/file"
+        } else {
+            raw_command
+        };
+        if command == "/timer" {
+            let rows = match crate::timer::query(q, self.store.as_ref(), self.demo) {
+                Ok(rows) => rows,
+                Err(e) => return Ok(self.provider_error("Timer", display, e)),
+            };
+            let mut value = self.provider_payload(rows, display, offset, limit, false, false);
+            value["header"] = json!({"title":"TIMERS","actions":[]});
+            return Ok(value);
+        }
+        if command == "/file" {
+            let rows = match self.file_search.files(
+                q,
+                &self.file_root,
+                &self.settings["file_search"],
+                self.demo,
+            ) {
+                Ok(rows) => rows,
+                Err(e) => {
+                    let mut value = self.provider_error("File", display, e);
+                    value["header"] = json!({"title":format!("RESULTS from {}",crate::file_search::display_root(&self.file_root)),"root":self.file_root.to_string_lossy().to_string(),"actions":[{"label":"CHANGE ROOT","mode":"choose-root","id":"/file"}]});
+                    return Ok(value);
+                }
+            };
+            let mut value = self.provider_payload(rows, display, offset, limit, false, false);
+            value["header"] = json!({"title":format!("RESULTS from {}",crate::file_search::display_root(&self.file_root)),"root":self.file_root.to_string_lossy().to_string(),"actions":[{"label":"CHANGE ROOT","mode":"choose-root","id":"/file"}]});
+            return Ok(value);
+        }
+        if command == "/dir" {
+            let rows = match crate::file_search::directories(q, self.demo) {
+                Ok(rows) => rows,
+                Err(e) => return Ok(self.provider_error("Directory", display, e)),
+            };
+            let mut value = self.provider_payload(rows, display, offset, limit, false, false);
+            value["header"] = json!({"title":"DIRECTORIES · ZOXIDE","actions":[]});
+            return Ok(value);
+        }
+        if command == "/emoji" {
+            let rows = match crate::emoji::query(q, self.demo) {
+                Ok(rows) => rows,
+                Err(e) => return Ok(self.provider_error("Emoji", display, e)),
+            };
+            let mut value = self.provider_payload(rows, display, offset, limit, false, false);
+            value["header"] = json!({"title":"EMOJI","actions":[]});
+            return Ok(value);
+        }
+        if command == "/note" {
+            let rows = match self.notes.query(q, self.demo) {
+                Ok(rows) => rows,
+                Err(e) => return Ok(self.provider_error("Note", display, e)),
+            };
+            let mut value = self.provider_payload(rows, display, offset, limit, false, false);
+            let vault_view = q.trim_start().starts_with("/note vault");
+            value["header"] = if vault_view {
+                json!({"title":"COPY NOTE TO VAULT","actions":[{"label":"CANCEL","mode":"cancel-note-copy","id":"/note"}]})
+            } else {
+                json!({"title":"SCRATCH NOTES","actions":[{"label":"NEW","mode":"launch","id":"Note:new"},{"label":"HISTORY","mode":"note-history","id":"/note"},{"label":"VAULT","mode":"note-vault","id":"/note"},{"label":"CHOOSE VAULT","mode":"choose-vault","id":"/note"}]})
+            };
+            return Ok(value);
+        }
+        if command == "/monitor" {
+            let (rows, closing) = match self.monitor.query(q, self.demo) {
+                Ok(rows) => rows,
+                Err(e) => return Ok(self.provider_error("Monitor", display, e)),
+            };
+            let mut value = self.provider_payload(rows, display, offset, limit, false, false);
+            value["closing"] = json!(closing);
+            let sort = self.monitor.sort().to_uppercase();
+            value["header"] = json!({"title":format!("MONITOR · {sort}"),"actions":[{"label":"CPU","mode":"sort-cpu","id":"/monitor","active":self.monitor.sort()=="cpu"},{"label":"MEMORY","mode":"sort-memory","id":"/monitor","active":self.monitor.sort()=="memory"}]});
+            return Ok(value);
+        }
+        if command == "/bw" {
+            let rows = match crate::bitwarden::query(q, self.demo) {
+                Ok(rows) => rows,
+                Err(e) => return Ok(self.provider_error("Bitwarden", display, e)),
+            };
+            let mut value = self.provider_payload(rows, display, offset, limit, false, false);
+            value["header"] = json!({"title":"BITWARDEN","actions":[]});
+            return Ok(value);
+        }
         let run = q == "/run" || q.starts_with("/run ") || q.starts_with("!!");
-        let running = q.starts_with('?') || q == "/processes" || q.starts_with("/processes ");
+        let running = q.starts_with('?')
+            || ["/gui"]
+                .iter()
+                .any(|prefix| q == *prefix || q.starts_with(&format!("{prefix} ")));
         let search = if let Some(s) = q.strip_prefix("!!") {
             s.trim_start()
         } else if run {
@@ -235,7 +370,6 @@ impl Launcher {
         } else {
             q
         };
-        let command = q.split_whitespace().next().unwrap_or("");
         if command != "/tabs" {
             self.browser.scope = None;
         }
@@ -463,6 +597,62 @@ impl Launcher {
     fn activate(&mut self, req: Value) -> Result<Value> {
         let id = s(&req["id"]);
         let mode = req["mode"].as_str().unwrap_or("launch");
+        if mode == "set-root" {
+            let raw = s(&req["path"]);
+            let path = if raw.starts_with("file:") {
+                gio::File::for_uri(raw)
+                    .path()
+                    .context("Folder chooser returned an invalid path")?
+            } else {
+                std::path::PathBuf::from(raw)
+            };
+            anyhow::ensure!(
+                path.is_absolute() && path.is_dir(),
+                "Choose an existing folder as the search root"
+            );
+            self.file_root = path.canonicalize()?;
+            if !self.demo {
+                self.settings = crate::settings::save(
+                    "file_search.root",
+                    &serde_json::to_string(&self.file_root.to_string_lossy().to_string())?,
+                )?;
+            }
+            let mut value = self.open_query("/file ")?;
+            value["message"] = json!(format!(
+                "Search root changed to {}",
+                crate::file_search::display_root(&self.file_root)
+            ));
+            return Ok(value);
+        }
+        if mode == "set-vault" {
+            let raw = s(&req["path"]);
+            let path = if raw.starts_with("file:") {
+                gio::File::for_uri(raw)
+                    .path()
+                    .context("Folder chooser returned an invalid path")?
+            } else {
+                std::path::PathBuf::from(raw)
+            };
+            self.notes.set_vault(&path)?;
+            return self.open_query("/note");
+        }
+        match mode {
+            "sort-cpu" => {
+                self.monitor.sort_by("cpu");
+                return self.open_query("/monitor ");
+            }
+            "sort-memory" => {
+                self.monitor.sort_by("memory");
+                return self.open_query("/monitor ");
+            }
+            "note-history" => return self.open_query("/note history"),
+            "note-vault" => return self.open_query("/note vault"),
+            "cancel-note-copy" => {
+                self.notes.cancel_promotion();
+                return self.open_query("/note");
+            }
+            _ => {}
+        }
         if mode == "copy" {
             let entry = self
                 .current
@@ -481,7 +671,7 @@ impl Launcher {
                 .captures
                 .activate(entry, &self.settings, mode, self.demo);
         }
-        if !["launch", "switch", "close"].contains(&mode) {
+        if !["launch", "switch", "close", "username"].contains(&mode) {
             bail!("Unknown action");
         }
         if id == "/refresh" && mode != "close" {
@@ -534,7 +724,7 @@ impl Launcher {
                 v["message"] = json!(format!("Saved {key} in runtjik.conf"));
                 return Ok(v);
             }
-            if ["/voice", "/stats", "/run", "/processes"].contains(&id) {
+            if ["/voice", "/stats", "/run", "/gui", "/timer"].contains(&id) {
                 let query = if id == "/stats" {
                     id.to_owned()
                 } else {
@@ -558,7 +748,124 @@ impl Launcher {
             .get(id)
             .or_else(|| self.entries.iter().find(|e| e.id == id))
             .cloned();
+        if let Some(entry) = entry.as_ref() {
+            if ["File", "Directory"].contains(&entry.provider.as_str()) {
+                if self.demo {
+                    return Ok(
+                        json!({"kind":"message","message":"Demo mode leaves files unchanged"}),
+                    );
+                }
+                let path = std::path::Path::new(s(&entry.data["path"]));
+                if mode == "close" {
+                    let trashed = crate::trash::action(Some(path))?;
+                    let mut value = self.open_query(&self.last_query.clone())?;
+                    value["message"] = trashed["message"].clone();
+                    return Ok(value);
+                }
+                crate::file_search::open(path)?;
+                return Ok(json!({"kind":"activated","message":"Opened with the default handler"}));
+            }
+            if entry.provider == "Note" {
+                let action = self.notes.activate(entry, mode, self.demo)?;
+                if let Some(query) = action["open_query"].as_str() {
+                    let mut value = self.open_query(query)?;
+                    if !action["message"].is_null() {
+                        value["message"] = action["message"].clone();
+                    }
+                    return Ok(value);
+                }
+                return Ok(action);
+            }
+            if entry.provider == "Monitor" && mode == "close" {
+                let message = self.monitor.close(entry, self.demo)?;
+                let mut value = self.open_query(&self.last_query.clone())?;
+                value["message"] = json!(message);
+                return Ok(value);
+            }
+            if entry.provider == "Emoji" {
+                if mode == "switch" {
+                    if entry.data["has_tones"] == true {
+                        return self
+                            .open_query(&format!("/emoji tones {}", s(&entry.data["base_name"])));
+                    }
+                    return Ok(json!({
+                        "kind":"message",
+                        "message":"No skin tone variants for this emoji"
+                    }));
+                }
+                if self.demo {
+                    return Ok(
+                        json!({"kind":"message","message":"Demo mode leaves the clipboard unchanged"}),
+                    );
+                }
+                crate::clipboard::copy_text(s(&entry.data["emoji"]), false)?;
+                return Ok(
+                    json!({"kind":"activated","message":"Emoji copied","close_launcher":true}),
+                );
+            }
+            if entry.provider == "Bitwarden" {
+                return crate::bitwarden::activate(entry, mode, self.demo);
+            }
+        }
         if let Some(e) = &entry {
+            if e.provider == "Timer" {
+                let timer_id = s(&e.data["timer_id"]);
+                if !timer_id.is_empty() {
+                    if mode == "close" {
+                        if self.demo {
+                            return Ok(
+                                json!({"kind":"message","message":"Demo timers are synthetic"}),
+                            );
+                        }
+                        let removed =
+                            crate::timer::cancel(self.store.as_ref().unwrap(), timer_id, false)?;
+                        let mut value = self.open_query("/timer")?;
+                        value["message"] = json!(if removed {
+                            "Timer cancelled"
+                        } else {
+                            "That timer has already finished"
+                        });
+                        if removed {
+                            value["removed_entry"] = json!(e.id);
+                        }
+                        return Ok(value);
+                    }
+                    if e.data["finished"] == true {
+                        if let Err(error) =
+                            crate::timer::retry(self.store.as_ref().unwrap(), timer_id, self.demo)
+                        {
+                            return Ok(json!({"kind":"message","message":error.to_string()}));
+                        }
+                        let mut value = self.open_query("/timer")?;
+                        value["message"] = json!("Timer alert sent");
+                        value["removed_entry"] = json!(e.id);
+                        return Ok(value);
+                    }
+                    return Ok(
+                        json!({"kind":"message","message":"Active timer · Ctrl+Enter cancels"}),
+                    );
+                }
+                if let Some((seconds, label)) = crate::timer::parse_set_row(e) {
+                    if self.demo {
+                        let mut value = self.open_query("/timer")?;
+                        value["message"] = json!(format!(
+                            "Demo: {} timer set",
+                            crate::timer::duration_label(seconds)
+                        ));
+                        return Ok(value);
+                    }
+                    match crate::timer::start(self.store.as_ref().unwrap(), seconds, &label) {
+                        Ok(_) => {
+                            let mut value = self.open_query("/timer")?;
+                            value["message"] = json!(format!("Timer set · {label}"));
+                            return Ok(value);
+                        }
+                        Err(error) => {
+                            return Ok(json!({"kind":"message","message":error.to_string()}))
+                        }
+                    }
+                }
+            }
             if e.provider == "Voice" {
                 let action = crate::voice::activate(e, mode, &self.settings, self.demo)?;
                 if let Some(query) = action["open_query"].as_str() {
@@ -660,7 +967,10 @@ impl Launcher {
             match id {
                 "/pin" => return Ok(json!({"kind":"pin"})),
                 "/grid" | "/list" => return Ok(json!({"kind":"view","view":&id[1..]})),
-                "/run" | "/processes" | "?" => return self.open_query(&format!("{id} ")),
+                "/run" | "/gui" | "/timer" | "/file" | "/find" | "/dir" | "/emoji" | "/note"
+                | "/monitor" | "/cpu" | "/mem" | "/bw" | "?" => {
+                    return self.open_query(&format!("{id} "))
+                }
                 _ => {}
             }
         }
@@ -807,7 +1117,11 @@ impl Launcher {
                 self.query(s(&req["query"]), offset, limit)?
             }
             "remember-command" => {
-                if self.settings["history"]["enabled"] == true {
+                let query = crate::util::s(&req["query"]);
+                if self.settings["history"]["enabled"] == true
+                    && !query.trim_start().starts_with("/bw ")
+                    && query.trim() != "/bw"
+                {
                     if let Some(s) = &self.store {
                         s.remember(crate::util::s(&req["query"]))?;
                     }

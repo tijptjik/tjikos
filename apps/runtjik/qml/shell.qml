@@ -1,6 +1,7 @@
 //@ pragma UseQApplication
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
@@ -48,6 +49,7 @@ ShellRoot {
     property bool browserTabScope: false
     property string appMode: ""
     property var statistics: null
+    property var providerHeader: null
     property var appState: ({})
     property var results: []
     property string runtimeVersion: ''
@@ -89,7 +91,7 @@ ShellRoot {
     // arrives. Typing must not hide tiles or reflow them into the next menu early.
     readonly property string displayQuery: resultQuery.startsWith('!') && !resultQuery.startsWith('!!') ? '/' + resultQuery.slice(1).replace(/^\s+/, '') : resultQuery
     readonly property bool runMode: displayQuery === '/run' || displayQuery.startsWith('/run ') || resultQuery.startsWith('!!')
-    readonly property bool runningMode: resultQuery.startsWith('?') || resultQuery==='/processes' || resultQuery.startsWith('/processes ')
+    readonly property bool runningMode: resultQuery.startsWith('?') || resultQuery==='/gui' || resultQuery.startsWith('/gui ')
     readonly property var activeItems: wordMode ? wordPane.view : items
     readonly property bool wordMode: /^\/(define|synonym)( |$)/.test(displayQuery)
     readonly property bool browserWindows: /^\/(browser|zen)( |$)/.test(displayQuery)
@@ -110,7 +112,7 @@ ShellRoot {
     property bool navigatingHistory: false
     property bool autoActivationPending: false
     function rememberCommand(text) {
-        if(!settings.history?.enabled || !text.trim() || !/^[!/?]/.test(text))return;
+        if(!settings.history?.enabled || !text.trim() || !/^[!/?]/.test(text) || /^\/bw(?:\s|$)/.test(text.trim()))return;
         if(commandHistory[commandHistory.length-1]===text)return;
         commandHistory=commandHistory.filter(value=>value!==text).concat([text]).slice(-100);
         if(!demo && backend.running)backend.write(JSON.stringify({op:'remember-command',query:text})+'\n');
@@ -187,16 +189,25 @@ ShellRoot {
         panel.acquireKeyboard();
         root.focusInput();
     }
+    function chooseFileRoot() {
+        if(busy)return;
+        debounce.stop();
+        busy=true;
+        fileRootDialog.open();
+    }
     function autoActivateResult() {
         if(!autoActivationPending || !opened || busy || providerPending || hasMore || windowEntry
             || pendingAction!==null || results.length!==1 || total!==1 || resultQuery!==query)return;
         const row=results[0];
         if(row.disabled || !query.trim())return;
         const menus=['/tabs','/browser','/history','/todo','/reading','/define','/synonym',
-            '/cliphist','/rec','/grab','/processes','/run','/stats','/config','/bindings'];
+            '/cliphist','/rec','/grab','/gui','/run','/timer','/stats','/config','/bindings'];
+        const pathResult=['File','Directory'].includes(row.provider);
         const refresh=row.id==='/refresh';
         if(row.provider==='apps') {
             if(settings.ui.auto_launch_applications===false)return;
+        } else if(pathResult) {
+            // A unique file or familiar directory is an unambiguous open action.
         } else {
             if(settings.ui.auto_launch_commands===false)return;
             if(row.provider!=='commands' && (row.provider!=='internal'
@@ -212,7 +223,7 @@ ShellRoot {
             root.selected=0;root.activate(false);
         });
     }
-    function activate(switchWindow, closeWindow=false) {
+    function activate(switchWindow, closeWindow=false, forcedMode='') {
         if (busy || !results[selected]) return;
         if (galleryEmpty && !closeWindow) { searchBox.text = galleryProvider === 'Recorder' ? '/rec' : '/grab'; return; }
         if (results[selected].disabled || (wordMode && !wordPane.rowVisible(results[selected]))) return;
@@ -228,7 +239,7 @@ ShellRoot {
             if(!demo){recordingStop.running=true;return;}
         }
         const appResult=['apps','commands'].includes(results[selected].provider);
-        const mode=closeWindow?'close':appResult?(switchWindow?'launch':'switch'):(switchWindow?'switch':'launch');
+        const mode=forcedMode || (closeWindow?'close':appResult?(switchWindow?'launch':'switch'):(switchWindow?'switch':'launch'));
         const request=windowEntry?{op:'activate',id:windowEntry,mode:closeWindow?'close':'switch',address:results[selected].id}
             :{op:'activate',id:results[selected].id,mode:mode};
         request.prepare=mode==='switch' && !closeWindow && !windowEntry && appResult;
@@ -301,6 +312,7 @@ ShellRoot {
             if(msg.command_history!==undefined){commandHistory=msg.command_history;historyCursor=-1;}
             providerPending=!!msg.pending;
             wordSourceCounts=msg.word_source_counts || ({});
+            providerHeader=msg.header || null;
             if(root.wordMode && !providerPending && root.historyCursor<0)root.rememberCommand(root.query);
             closingIds=msg.closing || [];
             applyingResults=true;
@@ -419,6 +431,7 @@ ShellRoot {
     Timer {interval:1000;repeat:true;running:root.ready && root.opened && root.appMode==='Todo' && !root.busy;onTriggered:{root.busy=true;root.send({op:'app-action',provider:'Todo',action:'refresh'});}}
     Timer {id:debounce;interval:/^\/(define|synonym)( |$)/.test(root.commandQuery)?350:60;onTriggered:root.search()}
     Timer {interval:root.settings.index.refresh_seconds*1000;running:root.ready && root.opened && !root.appMode;repeat:true;onTriggered:root.search()}
+    Timer {interval:1000;running:root.ready && root.opened && (/^\/monitor( |$)/.test(root.displayQuery) || root.displayQuery.trim()==='/timer') && !root.busy;repeat:true;onTriggered:root.search()}
     IpcHandler {
         target: 'runtjik'
         function close(): void {root.close();}
@@ -626,6 +639,8 @@ ShellRoot {
                             }
                             Keys.onPressed:event=>{
                                 root.pointerSelection=false;
+                                if((event.modifiers & Qt.ControlModifier) && [Qt.Key_Left,Qt.Key_Right].includes(event.key)){root.focusInput();event.accepted=false;}
+                                else if(event.key===Qt.Key_R && (event.modifiers & Qt.ControlModifier) && /^\/(file|find)( |$)/.test(root.query.trimStart())){root.chooseFileRoot();event.accepted=true;}
                                 if(event.key===Qt.Key_C && event.modifiers===Qt.ControlModifier && root.galleryMode && !searchBox.selectedText){if(!event.isAutoRepeat)root.copyCapture();event.accepted=true;}
                                 else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && (event.modifiers & ~Qt.KeypadModifier)===Qt.ShiftModifier && root.galleryMode){if(!event.isAutoRepeat)root.copyCapture();event.accepted=true;}
                                 else if((event.modifiers & Qt.ControlModifier) && (event.key===Qt.Key_Up || event.key===Qt.Key_Down)){root.browseHistory(event.key===Qt.Key_Up?-1:1);event.accepted=true;}
@@ -637,7 +652,8 @@ ShellRoot {
                                 else if(event.key===Qt.Key_Tab || event.key===Qt.Key_Backtab){root.move((event.modifiers & Qt.ShiftModifier || event.key===Qt.Key_Backtab)?-1:1);event.accepted=true;}
                                 else if(event.key===Qt.Key_Down){root.move(root.listMode?1:root.gridColumns);event.accepted=true;}
                                 else if(event.key===Qt.Key_Up){root.move(root.listMode?-1:-root.gridColumns);event.accepted=true;}
-                                else if((event.key===Qt.Key_Left || event.key===Qt.Key_Right) && (!root.listMode || (event.modifiers & Qt.ControlModifier))){root.move(event.key===Qt.Key_Left?-1:1);event.accepted=true;}
+                                else if((event.key===Qt.Key_Left || event.key===Qt.Key_Right) && !(event.modifiers & Qt.ControlModifier) && !root.listMode){root.move(event.key===Qt.Key_Left?-1:1);event.accepted=true;}
+                                else if((event.key===Qt.Key_Return || event.key===Qt.Key_Enter) && (event.modifiers & Qt.AltModifier) && root.results[root.selected]?.provider==='Bitwarden'){root.activate(false,false,'username');event.accepted=true;}
                                 else if(event.key===Qt.Key_Return || event.key===Qt.Key_Enter){root.activate(!!(event.modifiers & Qt.ShiftModifier),!!(event.modifiers & Qt.ControlModifier));event.accepted=true;}
                                 else if(event.key===Qt.Key_Escape){if(!event.isAutoRepeat && !(event.modifiers & Qt.MetaModifier))root.back();event.accepted=true;}
                                 else if(event.key===Qt.Key_L && (event.modifiers & Qt.ControlModifier)){root.view=root.view==='grid'?'list':'grid';event.accepted=true;}
@@ -647,12 +663,12 @@ ShellRoot {
                 }
                 Row {
                     id:resultsHeading
-                    visible:panel.pinned || root.galleryMode || root.wordMode || !!root.windowEntry || root.runningMode || root.runMode || root.displayQuery.startsWith('/config') || ['/shortcuts','/bindings'].includes(root.resultQuery.trim())
-                    width:parent.width;height:visible?(root.wordMode?34:24):0;spacing:12
+                    visible:panel.pinned || root.galleryMode || root.wordMode || !!root.windowEntry || root.runningMode || root.runMode || root.providerHeader!==null || root.displayQuery.startsWith('/config') || ['/shortcuts','/bindings'].includes(root.resultQuery.trim())
+                    width:parent.width;height:visible?(root.wordMode || root.providerHeader!==null?34:24):0;spacing:12
                     Text {
                         id: resultsLabel
-                        width:root.wordMode?headingMetrics.advanceWidth:parent.width;height:parent.height
-                        text:root.statistics?'STATISTICS':root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.displayQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.displayQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.resultQuery.trim())?'SHORTCUTS':(root.runningMode?'RUNNING APPLICATIONS':root.runMode?'RUN COMMANDS':(root.resultQuery?'SEARCH RESULTS':'APPLICATIONS'))))
+                        width:root.wordMode?headingMetrics.advanceWidth:root.providerHeader?Math.min(headingMetrics.advanceWidth,parent.width*.48):parent.width;height:parent.height
+                        text:root.providerHeader?.title || (root.statistics?'STATISTICS':root.galleryMode?(root.galleryProvider==='Recorder'?'RECORDINGS':'SCREENSHOTS'):root.wordMode?(root.displayQuery.startsWith('/define')?'DEFINITIONS':'SYNONYMS'):root.windowEntry?'RUNNING WINDOWS':(root.displayQuery.startsWith('/config')?'SETTINGS':(['/shortcuts','/bindings'].includes(root.resultQuery.trim())?'SHORTCUTS':(root.runningMode?'GUI WINDOWS':root.runMode?'RUN COMMANDS':(root.resultQuery?'SEARCH RESULTS':'APPLICATIONS')))))
                         font.family:root.settings.ui.font;font.pixelSize:11;font.letterSpacing:1.8
                         verticalAlignment:Text.AlignVCenter;color:root.theme.muted
                         TextMetrics {id: headingMetrics; font: resultsLabel.font; text: resultsLabel.text}
@@ -660,8 +676,34 @@ ShellRoot {
                     Item {
                         id: wordProviderHeader
                         visible: root.wordMode
-                        width: parent.width-resultsLabel.width-parent.spacing
+                        width: Math.max(0,parent.width-resultsLabel.width-providerActions.implicitWidth-parent.spacing*2)
                         height: parent.height
+                    }
+                    Row {
+                        id: providerActions
+                        visible: !!root.providerHeader
+                        height: parent.height
+                        spacing: 6
+                        Repeater {
+                            model: root.providerHeader?.actions || []
+                            Button {
+                                required property var modelData
+                                height: parent.height
+                                text: modelData.label || ''
+                                padding: 8
+                                leftPadding: 10
+                                rightPadding: 10
+                                font.family: root.settings.ui.font
+                                font.pixelSize: 10
+                                background: Rectangle { radius: 8; color: modelData.active ? root.theme.accent : root.theme.surface; border.width: 1; border.color: modelData.active ? root.theme.accent : root.theme.border }
+                                contentItem: Text { text: parent.text; color: modelData.active ? root.theme.background : root.theme.text; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                onClicked: {
+                                    if(modelData.mode==='choose-root')root.chooseFileRoot();
+                                    else if(modelData.mode==='choose-vault')vaultFolderDialog.open();
+                                    else root.send({op:'activate',id:modelData.id,mode:modelData.mode});
+                                }
+                            }
+                        }
                     }
 
                 }
@@ -878,6 +920,7 @@ ShellRoot {
                                 }
                                 Image {
                                     id:art
+                                    visible:modelData.provider!=='Emoji'
                                     SequentialAnimation on opacity {
                                         running: art.parent.closing
                                         loops: Animation.Infinite
@@ -892,10 +935,14 @@ ShellRoot {
                                     fillMode:Image.PreserveAspectFit;asynchronous:root.galleryMode
                                 }
                                 Text {
-                                    visible:art.status===Image.Error || art.source.toString()===''
+                                    visible:modelData.provider==='Emoji' || art.status===Image.Error || art.source.toString()===''
                                     x:art.x;y:art.y;width:art.width;height:art.height
-                                    text:modelData.name.slice(0,1).toUpperCase();color:root.theme.accent;font.pixelSize:28
+                                    text:modelData.provider==='Emoji'?modelData.preview:modelData.name.slice(0,1).toUpperCase();color:root.theme.accent;font.pixelSize:modelData.provider==='Emoji'?Math.min(art.height*.78,48):28
                                     horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter
+                                }
+                                Rectangle {
+                                    visible:modelData.provider==='Emoji' && modelData.has_tones
+                                    x:parent.width-width-12;y:8;width:7;height:7;radius:width/2;color:root.theme.accent
                                 }
                                 Rectangle {
                                     visible:root.listMode && resultTile.showStatusMarker
@@ -1041,5 +1088,16 @@ ShellRoot {
                 }
             }
         }
+    }
+    FolderDialog {
+        id: fileRootDialog
+        title: 'Choose file search root'
+        onAccepted: {root.send({op:'activate',id:'/file',mode:'set-root',path:selectedFolder.toString()});Qt.callLater(()=>root.focusInput());}
+        onRejected: {root.busy=false;root.search();root.focusInput();}
+    }
+    FolderDialog {
+        id: vaultFolderDialog
+        title: 'Choose an Obsidian vault folder'
+        onAccepted: root.send({op:'activate',id:'/note',mode:'set-vault',path:selectedFolder.toString()})
     }
 }

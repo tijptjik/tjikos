@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+ <defs>
+  <linearGradient id="rose" x1="0" y1="0" x2="0.35" y2="1"><stop stop-color="#f8c5c2"/><stop offset=".45" stop-color="#df77ac"/><stop offset="1" stop-color="#8e477e"/></linearGradient>
+  <linearGradient id="steel" x1="0" y1="0" x2="0.4" y2="1"><stop stop-color="#cfddd9"/><stop offset=".5" stop-color="#9eb9ca"/><stop offset="1" stop-color="#667b9b"/></linearGradient>
+  <linearGradient id="jade" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#b4ead5"/><stop offset="1" stop-color="#46b6a2"/></linearGradient>
+ </defs>
+ <g stroke-linecap="round" stroke-linejoin="round">
+  <path d="m18 13 7 7M46 13l-7 7" fill="none" stroke="url(#steel)" stroke-width="5"/>
+  <path d="M22 11h20" fill="none" stroke="url(#rose)" stroke-width="5"/>
+  <circle cx="32" cy="37" r="22" fill="#49445e" opacity=".5" transform="translate(0 3)"/>
+  <circle cx="32" cy="35" r="21" fill="url(#rose)" stroke="#f8c5c2" stroke-width="1.5"/>
+  <circle cx="32" cy="35" r="15.5" fill="#26233a" stroke="#f1b2c9" stroke-width="1.5"/>
+  <path d="M32 25v11l8 5" fill="none" stroke="url(#jade)" stroke-width="3.5"/>
+  <circle cx="32" cy="35" r="2.5" fill="#fff4df"/>
+  <path d="M17 56h30" fill="none" stroke="url(#steel)" stroke-width="3" opacity=".85"/>
+ </g>
+</svg>
