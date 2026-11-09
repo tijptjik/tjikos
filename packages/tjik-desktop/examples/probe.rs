@@ -17,6 +17,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        Some("workspace") => {
+            desktop.select_workspace(&serde_json::from_str::<tjik_desktop::WorkspaceTarget>(
+                args.get(1).ok_or("Missing workspace intent")?,
+            )?)?
+        }
         Some("activate") => desktop.activate(&tjik_desktop::WindowId(
             args.get(1).ok_or("Missing target")?.clone(),
         ))?,

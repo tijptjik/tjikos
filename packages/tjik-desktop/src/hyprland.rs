@@ -173,6 +173,7 @@ impl DesktopSession for Hyprland {
             version: Some(self.version.clone()),
             capabilities: Capabilities {
                 windows: true,
+                workspace_select: true,
                 activate: true,
                 close: true,
                 outputs: true,
@@ -258,11 +259,28 @@ impl DesktopSession for Hyprland {
                 focus_order: c["focusHistoryID"].as_i64(),
             });
         }
+        let raw_workspaces = self.query("workspaces")?;
+        let workspaces = raw_workspaces
+            .as_array()
+            .ok_or_else(|| DesktopError::Unavailable("Invalid workspaces".into()))?
+            .iter()
+            .filter_map(|w| {
+                Some(WorkspaceState {
+                    workspace: self.workspace(w)?,
+                    output: outputs
+                        .iter()
+                        .find(|o| o.name == s(&w["monitor"]))
+                        .map(|o| o.id.clone()),
+                    special: s(&w["name"]).starts_with("special:") || s(&w["name"]) == "special",
+                })
+            })
+            .collect();
         self.check()?;
         Ok(Snapshot {
             generation: self.generation.clone(),
             revision: self.revision.fetch_add(1, Ordering::Relaxed) + 1,
             windows,
+            workspaces,
             outputs,
         })
     }
@@ -325,6 +343,113 @@ impl WindowActions for Hyprland {
         ))
     }
 }
+impl WorkspaceActions for Hyprland {
+    fn select_workspace(&self, target: &WorkspaceTarget) -> Result<()> {
+        self.check()?;
+        if target.generation != self.generation {
+            return Err(DesktopError::StaleTarget);
+        }
+        if target.name.is_empty()
+            || target.name.len() > 256
+            || target.name.chars().any(char::is_control)
+        {
+            return Err(DesktopError::Unavailable("Invalid workspace name".into()));
+        }
+        let monitors = self.query("monitors")?;
+        let monitor = monitors
+            .as_array()
+            .and_then(|rows| {
+                rows.iter()
+                    .find(|m| self.id("output", s(&m["name"])) == target.output)
+            })
+            .ok_or(DesktopError::StaleTarget)?;
+        let name = s(&monitor["name"]);
+        let workspaces = self.query("workspaces")?;
+        let rows = workspaces
+            .as_array()
+            .ok_or_else(|| DesktopError::Unavailable("Invalid workspaces".into()))?;
+        let existing = if let Some(id) = &target.id {
+            Some(
+                rows.iter()
+                    .find(|w| self.workspace(w).is_some_and(|ws| ws.id == *id))
+                    .ok_or(DesktopError::StaleTarget)?,
+            )
+        } else {
+            rows.iter().find(|w| s(&w["name"]) == target.name)
+        };
+        if existing.is_some_and(|w| s(&w["monitor"]) != name) {
+            return Err(DesktopError::StaleTarget);
+        }
+        let workspace_name = existing.map(|w| s(&w["name"])).unwrap_or(&target.name);
+        let special = workspace_name == "special" || workspace_name.starts_with("special:");
+        if special && target.id.is_none() {
+            return Err(DesktopError::Unsupported);
+        }
+        let focus = if self.lua {
+            format!("hl.dsp.focus({{monitor={}}})", lua(name))
+        } else {
+            format!("focusmonitor {name}")
+        };
+        self.command(&format!("dispatch {focus}"))?;
+        // Monitor removal or workspace migration during the handoff invalidates the intent.
+        let current = self.query("monitors")?;
+        let current_monitor = current
+            .as_array()
+            .and_then(|ms| ms.iter().find(|m| s(&m["name"]) == name))
+            .ok_or(DesktopError::StaleTarget)?;
+        if let Some(id) = &target.id {
+            let current = self.query("workspaces")?;
+            if !current.as_array().is_some_and(|ws| {
+                ws.iter().any(|w| {
+                    self.workspace(w).is_some_and(|ws| ws.id == *id) && s(&w["monitor"]) == name
+                })
+            }) {
+                return Err(DesktopError::StaleTarget);
+            }
+        }
+        let visible = s(&current_monitor["specialWorkspace"]["name"]);
+        let toggle = |name: &str| {
+            if self.lua {
+                format!(
+                    "hl.dsp.workspace.toggle_special({})",
+                    lua(name.trim_start_matches("special:"))
+                )
+            } else {
+                format!(
+                    "togglespecialworkspace {}",
+                    name.trim_start_matches("special:")
+                )
+            }
+        };
+        if !visible.is_empty() && (!special || visible != workspace_name) {
+            self.command(&format!("dispatch {}", toggle(visible)))?;
+        }
+        if special {
+            if visible != workspace_name {
+                self.command(&format!("dispatch {}", toggle(workspace_name)))?;
+            }
+            return Ok(());
+        }
+        let selector =
+            if let Some(number) = existing.and_then(|w| w["id"].as_i64()).filter(|id| *id > 0) {
+                number.to_string()
+            } else if let Ok(number) = workspace_name.parse::<u64>() {
+                if number == 0 || number > i32::MAX as u64 {
+                    return Err(DesktopError::Unsupported);
+                }
+                number.to_string()
+            } else {
+                format!("name:{workspace_name}")
+            };
+        let dispatch = if self.lua {
+            format!("hl.dsp.focus({{workspace={}}})", lua(&selector))
+        } else {
+            format!("workspace {selector}")
+        };
+        self.command(&format!("dispatch {dispatch}"))
+    }
+}
+
 impl Desktop for Hyprland {
     fn pointer(&self) -> Result<(f64, f64)> {
         self.check()?;
@@ -515,12 +640,37 @@ mod transport_tests {
         )
     }
     #[test]
+    fn configured_empty_workspace_focuses_output_then_workspace() {
+        let monitors =
+            json!([{"name":"fixture-output","specialWorkspace":{"name":""}}]).to_string();
+        let (d, worker) = fixture(vec![
+            ("j/monitors", monitors.clone()),
+            ("j/workspaces", "[]".into()),
+            (
+                "/dispatch hl.dsp.focus({monitor=\"fixture-output\"})",
+                "ok".into(),
+            ),
+            ("j/monitors", monitors),
+            ("/dispatch hl.dsp.focus({workspace=\"8\"})", "ok".into()),
+        ]);
+        d.select_workspace(&WorkspaceTarget {
+            generation: d.generation.clone(),
+            output: d.id("output", "fixture-output"),
+            id: None,
+            name: "8".into(),
+        })
+        .unwrap();
+        worker.join().unwrap();
+        std::fs::remove_file(d.path).unwrap();
+    }
+    #[test]
     fn normalized_snapshot_rotation_and_opaque_ids() {
         let monitor = json!([{"id":42,"name":"fixture-output","width":1920,"height":1080,"scale":1.5,"transform":1,"x":-720,"y":0,"focused":true,"activeWorkspace":{"id":3,"name":"three"},"specialWorkspace":{"id":0}}]);
         let clients = json!([{"address":"0xabc","monitor":42,"workspace":{"id":3,"name":"three"},"class":"editor","title":"test","at":[1,2],"size":[300,200]}]);
         let (d, t) = fixture(vec![
             ("j/monitors", monitor.to_string()),
             ("j/clients", clients.to_string()),
+            ("j/workspaces", json!([{ "id":3,"name":"three","monitor":"fixture-output" },{"id":4,"name":"empty","monitor":"fixture-output"}]).to_string()),
         ]);
         let s = d.snapshot().unwrap();
         assert_eq!(s.outputs[0].logical.width, 720.);
@@ -529,6 +679,7 @@ mod transport_tests {
         assert!(s.windows[0].id.0.contains("synthetic-session"));
         assert_eq!(s.windows[0].hidden, None);
         assert_eq!(s.revision, 1);
+        assert_eq!(s.workspaces.len(), 2);
         t.join().unwrap();
         std::fs::remove_file(d.path).unwrap();
     }

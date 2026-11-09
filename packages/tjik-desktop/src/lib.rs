@@ -33,6 +33,21 @@ pub struct Workspace {
     pub id: String,
     pub name: Option<String>,
 }
+/// Workspaces exist independently of windows, including empty workspaces.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkspaceState {
+    pub workspace: Workspace,
+    pub output: Option<String>,
+    pub special: bool,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkspaceTarget {
+    pub generation: String,
+    pub output: String,
+    /// Existing opaque identity, or None to materialize a configured normal workspace.
+    pub id: Option<String>,
+    pub name: String,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Rect {
     pub x: f64,
@@ -71,6 +86,7 @@ pub struct Window {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Capabilities {
     pub windows: bool,
+    pub workspace_select: bool,
     pub activate: bool,
     pub close: bool,
     pub outputs: bool,
@@ -84,6 +100,8 @@ pub struct Snapshot {
     pub generation: String,
     pub revision: u64,
     pub windows: Vec<Window>,
+    #[serde(default)]
+    pub workspaces: Vec<WorkspaceState>,
     pub outputs: Vec<Output>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -113,7 +131,12 @@ pub trait WindowActions: Send + Sync {
         Err(DesktopError::Unsupported)
     }
 }
-pub trait Desktop: DesktopSession + WindowActions {
+pub trait WorkspaceActions: Send + Sync {
+    fn select_workspace(&self, _target: &WorkspaceTarget) -> Result<()> {
+        Err(DesktopError::Unsupported)
+    }
+}
+pub trait Desktop: DesktopSession + WindowActions + WorkspaceActions {
     fn pointer(&self) -> Result<(f64, f64)> {
         Err(DesktopError::Unsupported)
     }
@@ -152,6 +175,7 @@ impl WindowActions for Unavailable {
         Err(DesktopError::Unavailable(self.0.clone()))
     }
 }
+impl WorkspaceActions for Unavailable {}
 impl Desktop for Unavailable {}
 /// Resolve the runtime/display once. Recovery never searches another display or runtime.
 /// TJIK_COMPOSITOR=fake never opens a host endpoint. Explicit unknown choices fail closed.

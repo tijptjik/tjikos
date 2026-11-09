@@ -307,6 +307,11 @@ impl WindowActions for Session {
         self.inner.backend()?.place(id, r)
     }
 }
+impl WorkspaceActions for Session {
+    fn select_workspace(&self, target: &WorkspaceTarget) -> Result<()> {
+        self.inner.backend()?.select_workspace(target)
+    }
+}
 impl Desktop for Session {
     fn pointer(&self) -> Result<(f64, f64)> {
         self.inner.backend()?.pointer()
