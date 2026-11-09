@@ -112,7 +112,7 @@ fn main() -> Result<()> {
         return request(action);
     }
     if action == "--help" {
-        println!("bartjik --gtk [serve [--reserve] [--demo]|status|panel|hide-panel|reload|quit]\nOpt-in surface slice; Quickshell remains the default. --reserve enables configured per-edge reservations.");
+        println!("bartjik --gtk [serve [--reserve] [--demo]|status|panel|hide-panel|reload|quit]\nGTK desktop bar; use bartjik --quickshell for the legacy renderer. --reserve enables configured per-edge reservations.");
         return Ok(());
     }
     if action != "serve"

@@ -1,18 +1,20 @@
 # GTK migration: remaining work
 
-The installed GTK build remains an opt-in workspace-7 preview. Quickshell is still the
-default bar. The recent work implements system policy cards, crypto/music/workspace
-cards, live capture, compact overflow tooltips, and independently owned detached Bartjik
-windows. Compilation and synthetic fixtures are not a full parity sign-off.
+GTK is now the default bar; Quickshell remains available for explicit rollback. The
+recent work implements system policy cards, crypto/music/workspace cards, live capture,
+compact overflow tooltips, and independently owned detached Bartjik windows. Compilation
+and synthetic fixtures are not a full parity sign-off.
 
 ## Implementation gaps
 
-- Notjik detached cards still use layer-shell visibility management. Port them to
-  compositor-owned windows if they must follow normal workspace transitions, using the
-  same adapter placement boundary as Bartjik.
-- Native Bartjik windows do not yet implement drag-back reattachment. Audit output
-  removal and cross-output movement: detached provider refresh currently retains its
-  original output context.
+- Notjik detached cards now convert to compositor-owned windows through the shared
+  adapter. The synthetic native-window fixture covers workspace-7 placement, focus,
+  draft identity and scoped dismissal; live workspace-transition and drag review remain.
+- Drag-back reattachment is out of scope by user decision: detached panels do not need
+  to dock back into the bar.
+- The user accepted current cross-monitor movement and output removal behavior. Detached
+  provider refresh still retains its original output context; revisit this only for a
+  demonstrated monitor-specific correctness issue.
 - There is one detached view per provider (Mullvad/Tailscale share one). Clicking that
   provider activates its existing window; simultaneous independent copies of the same
   provider are not implemented.
@@ -37,8 +39,8 @@ windows. Compilation and synthetic fixtures are not a full parity sign-off.
   than relying on earlier, superseded text-only history limitations.
 - Repeat startup and idle CPU/wakeups/PSS measurements with the complete frontend and
   provider processes. Recheck active capture/media workloads after the panel changes.
-- Only after acceptance, authorize the default switch, update authoritative Dotjik
-  policy and the installed service together, verify running bytes, and retain rollback.
+- The default switch is authorized. See `gtk-cutover.md` for deployed state,
+  verification, rollback and the remaining normal-desktop acceptance observations.
 
 ## Current verification evidence
 

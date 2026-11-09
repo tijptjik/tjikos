@@ -3,6 +3,13 @@ set -euo pipefail
 root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 if [[ ! -f "$root/qml/shell.qml" ]]; then root="${BARTJIK_HOME:-$HOME/.local/lib/bartjik}"; fi
 export BARTJIK_HOME="$root"
+# Foreground GTK is the desktop default; retain an explicit rollback renderer.
+if [[ $# == 0 ]]; then set -- --gtk serve --reserve; fi
+if [[ "${1:-}" == --quickshell ]]; then
+    shift
+    if [[ -x "$root/bin/bartjik-core" ]]; then exec "$root/bin/bartjik-core" launch "$@"; fi
+    exec "$root/target/release/bartjik-core" launch "$@"
+fi
 if [[ "${1:-}" == --gtk ]]; then
     shift
     if [[ -x "$root/bin/bartjik-gtk" ]]; then exec "$root/bin/bartjik-gtk" "$@"; fi

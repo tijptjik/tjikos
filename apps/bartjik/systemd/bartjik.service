@@ -1,9 +1,9 @@
 [Unit]
-Description=bartjik Quickshell bar
+Description=bartjik GTK bar
 After=graphical-session.target
 PartOf=graphical-session.target
 [Service]
-ExecStart=%h/.local/bin/bartjik
+ExecStart=%h/.local/bin/bartjik --gtk serve --reserve
 Restart=on-failure
 RestartSec=2
 [Install]
