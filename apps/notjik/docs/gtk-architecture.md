@@ -2,7 +2,7 @@
 
 GTK is the default Notjik notification frontend. `notjik --quickshell` retains the
 compatibility frontend; `notjik --gtk-cards --demo` runs the isolated synthetic gallery.
-The Control Center/history UI remains deferred to a BarTjik panel.
+The Control Center/history UI is implemented as a BarTjik panel.
 
 ## Ownership
 
@@ -70,22 +70,31 @@ acceptance checks; it is unset in normal use.
 
 ## Compatibility boundaries
 
-All built-in card types use the GTK card library. Registered custom QML components fall
-back to standard cards in GTK. The `--quickshell` frontend remains available for those
-components and the old drawer. GTK does not execute QML. Some static SVG assets still
-live under `qml/icons`, artwork filenames come from `qml/Logic.js` at compile time, and
-the launcher uses `qml/shell.qml` to locate the installation root. These resource and
-launcher dependencies remain to be separated from the compatibility frontend. GTK
-returns an explicit deferred-panel error for drawer commands, while local history
-data/action APIs remain available. Global history merging and the six-card demo-only
-stack exception are not implemented by the GTK controller.
+All built-in card types use the GTK card library. The legacy `components` configuration
+accepts user-authored QML files only for `--quickshell`; those optional extensions use
+standard cards in GTK. This is not a missing built-in card type.
+
+GTK, named demos, directed showcases and recording use `assets/icons` and the standalone
+`assets/artwork.json` manifest. Launchers discover installations through that manifest.
+The optional Quickshell frontend and visual reference tests remain in `qml/`; its
+`icons` link points to the shared assets. GTK and its demo tooling run without that
+directory. The six-card synthetic mix temporarily takes precedence over ordinary queued
+notices and restores them when cleared, without changing saved limits. Its stack can
+scroll on short outputs so every demo card remains reachable.
+
+Comparisons run GTK and Dunst on separate private buses. Directed showcases use a GTK
+stage and real card widgets; control requests are accepted only by the explicitly
+synthetic host. Replies, recording, playback progress and actions are simulated there;
+commands and microphone access are disabled. The production daemon rejects showcase
+control requests. History UI is provided by BarTjik, with local history data/action APIs
+remaining available from Notjik.
 
 ## Validation
 
 Run heavy validation through `dev-check` on managed desktops:
 
 ```sh
-dev-check bash -c 'bun run --filter @tjikos/notjik build && bun run --filter @tjikos/notjik check && bash apps/notjik/scripts/test-gtk.sh && python3 -B apps/notjik/tests/native_contracts.py && python3 -B apps/notjik/tests/gtk_daemon.py && python3 -B apps/notjik/tests/gtk_cards.py'
+dev-check bash -c 'bun run --filter @tjikos/notjik build && bun run --filter @tjikos/notjik check && bash apps/notjik/scripts/test-gtk.sh && python3 -B apps/notjik/tests/native_contracts.py && python3 -B apps/notjik/tests/gtk_daemon.py && python3 -B apps/notjik/tests/gtk_cards.py && python3 -B apps/notjik/tests/gtk_demo.py'
 ```
 
 `gtk_daemon.py` uses a private D-Bus session, synthetic notifications and a private

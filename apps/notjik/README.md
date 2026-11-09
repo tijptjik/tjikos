@@ -24,12 +24,12 @@ observation and SQLite history. Python is used only by development test drivers.
 
 The [GTK architecture](docs/gtk-architecture.md) describes these boundaries. The
 [GTK card gallery](docs/gtk-cards.md) is available with `notjik --gtk-cards --demo`.
-`notjik --quickshell` explicitly selects the compatibility frontend. Existing images,
-animated showcases and drawer-specific instructions below document that frontend; GTK
-has no Control Center/history drawer. That UI is deferred to a BarTjik panel, while
-`history-data`, `history-action` and persisted history remain available. Custom QML
-components render as standard cards in GTK; use the compatibility frontend when their
-custom presentation is required.
+Named demos, comparisons and animated recordings now use GTK. `notjik --quickshell`
+explicitly selects the optional compatibility frontend. The Control Center/history UI is
+implemented in BarTjik; `history-data`, `history-action` and persisted history remain
+available from Notjik. All built-in cards are native GTK. The legacy custom `components`
+option refers only to user-supplied QML extensions, which fall back to standard cards in
+GTK. Artwork and launcher discovery use `assets/`, independently of `qml/`.
 
 ## Install and start
 
@@ -582,14 +582,13 @@ removes both halves of paired demos, leaving other senders and manually sent com
 fixtures untouched. `demo clear --solo` clears demos from the normal service. Demo
 actions execute only `true`; the Dunst reference carries action labels and emits native
 signals without running commands. No browser, service or real application is opened.
-Demos are transient by default. Use `demo grouped --log` to review grouped history in
-the isolated demo drawer, or add `--solo` to explicitly retain those synthetic notices
-in normal history.
+Demos are transient by default. Use `--log --solo` to retain synthetic notices in normal
+history for review in the BarTjik panel.
 
-Paired demos use your current theme, width, typography and custom components. Their
+Paired demos use your current theme, width, typography and native GTK cards. Their
 copied UI refreshes on the next demo after installed code or config changes. Solo demos
 also use your normal placement. Neither mode changes production configuration or resumes
-DND. Starting a demo closes its own history drawer so cards are visible.
+DND.
 
 Titles, bodies, icons/images, urgency, timeouts, progress hints, actions, resident
 behaviour and replacement IDs are sent to Dunst through the standard notification
@@ -621,11 +620,12 @@ in-place updates, grouped messages, and Telegram text, photo, voice and GIF card
 followed by the 12 selected robots (four everyday, four urgent and four dream) at a
 fixed 0.25-second interval. The standalone `demo robots` command still shows the full
 gallery. Every scene has an intro, a settled view and a complete outro before the next
-scene starts. A visible pointer uses Qt's test input to hover both action buttons, click
-the error action, compose text and quote replies, mark a photo read, play two seconds of
-voice, and simulate recording/sending a 3.2-second reply. Maya uses a dream robot
-portrait. Grouped messages open a populated notification center backed by the private
-demo history. The shared production QML supplies the actual controls and transitions.
+scene starts. A visible pointer accompanies GTK control activation to reveal both action
+buttons, click the error action, compose text and quote replies, mark a photo read, play
+two seconds of voice, and simulate recording/sending a 3.2-second reply. Maya uses a
+dream robot portrait. Grouped messages cycle through their members. The production GTK
+card library supplies the actual controls and transitions; the separate BarTjik panel is
+not reproduced in the demo.
 
 Each run creates its own private Dunst and Notjik comparison session. It never clears
 production notifications or changes the ordinary `demo`/`compare` session. Only bundled

@@ -12,19 +12,19 @@ This gallery does not claim the notification D-Bus name. It uses synthetic notic
 simulates action completion and voice playback/recording, and never sends Telegram
 messages, executes notification commands or opens a microphone. The separate native
 daemon (`notjik`, or `notjik --gtk`) delivers desktop notifications. The Control
-Center/history panel is deferred to a BarTjik panel.
+Center/history UI is implemented as a BarTjik panel.
 
 ## Reusable components
 
-| Component    | Responsibility                                                                                                                                     |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Card`       | Stable outer frame, artwork/initials rail, title/body, urgency, grouping control, selection, dismissal, drag intents and Shift-click Markdown copy |
-| `primitives` | Theme CSS, wrapping text, field rows, nested results, status strip, literal rainbow text and paged action layouts                                  |
-| `details`    | Status, progress, countdown, results, key/value, auth code and todo content; shared snooze presets and calendar                                    |
-| `media`      | Local image, GIF and silent video surfaces with unavailable-media fallbacks and visibility/privacy gating                                          |
-| `telegram`   | Message text, inline emoji surfaces, media, waveform/seek controls, transcript, reply/quote editor and recording controls                          |
-| `clipboard`  | Content-only Markdown export, independent of GTK widgets and action commands                                                                       |
-| `model`      | Notice snapshots, host view state, playback/recording state and typed action intents                                                               |
+| Component    | Responsibility                                                                                                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Card`       | Stable outer frame, artwork/initials rail, title/body, urgency, animated group notches, selection, dismissal, drag intents and Shift-click Markdown copy |
+| `primitives` | Theme CSS, wrapping text, field rows, nested results, status strip, literal rainbow text and paged action layouts                                        |
+| `details`    | Status, progress, countdown, results, key/value, auth code and todo content; shared snooze presets and calendar                                          |
+| `media`      | Local image, GIF and silent video surfaces with unavailable-media fallbacks and visibility/privacy gating                                                |
+| `telegram`   | Message text, inline emoji surfaces, media, waveform/seek controls, transcript, reply/quote editor and recording controls                                |
+| `clipboard`  | Content-only Markdown export, independent of GTK widgets and action commands                                                                             |
+| `model`      | Notice snapshots, host view state, playback/recording state and typed action intents                                                                     |
 
 ## Renderers
 
@@ -66,21 +66,24 @@ actions, local commands, task operations and Telegram requests.
 `ViewState` defaults to locked. Set the confirmed lock/privacy state explicitly. Locked
 or paused cards are hidden; archived, history, blocked and busy cards disable actions.
 The host handles `Hold` and hover events when calculating expiry. It also supplies group
-counts and handles group-opening intents; this library does not build a history panel.
-Feed parsed handler presentations as `key-value` snapshots.
+counts for informational right-edge notches; this library does not build a history
+panel. The notches split and merge like the original cards, with up to five six-pixel
+bars. Idle popup surfaces reject keyboard focus, including during arrival and pointer
+hover. Keyboard navigation and reply editing acquire focus only after explicit
+interaction. Feed parsed handler presentations as `key-value` snapshots.
 
 Voice playback, speed/seek and recording use explicit host state and intents. The
-widgets do not own an audio subprocess or Telegram connection. A production GTK host
-must wire those effects to its playback/recording service, propagate failures and
-uncertain sends, and clear a reply only after confirmed success with `clear_reply`.
+widgets do not own an audio subprocess or Telegram connection. The production GTK host
+wires those effects to its playback/recording service, propagates failures and uncertain
+sends, and clears a reply only after confirmed success with `clear_reply`.
 Animation/image display itself is implemented in the card library. This separation keeps
 synthetic previews account-free and prevents duplicate side effects during the frontend
 migration.
 
-Custom QML components cannot run inside GTK. They currently use the standard fallback;
-new native extensions can compose the shared primitives. Production renderer selection
-must not change until the notification controller, native IPC/D-Bus adapters and media
-action executor are integrated.
+Every built-in card is implemented in GTK. The old `components` option refers only to
+user-authored QML extensions for the optional Quickshell frontend; it does not describe
+any unported built-in cards. GTK uses the standard fallback for these extensions.
+Artwork and action icons live under `assets/`, independently of that legacy frontend.
 
 ## Validation
 
