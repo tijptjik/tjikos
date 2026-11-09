@@ -141,6 +141,7 @@ pub struct Recording {
 pub enum Intent {
     Invoke(usize),
     Dismiss,
+    ControlDismiss,
     OpenGroup,
     Hover(bool),
     Select,

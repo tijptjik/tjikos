@@ -422,6 +422,7 @@ impl Host {
             .context("Notification no longer active")?;
         anyhow::ensure!(c.allowed(&n), "Actions unavailable");
         match event.intent {
+            Intent::ControlDismiss => c.control_dismiss(&id),
             Intent::Dismiss => {
                 let shown = c.visible().iter().map(|n| text(&n["id"])).collect();
                 c.dismiss(&id, &shown);

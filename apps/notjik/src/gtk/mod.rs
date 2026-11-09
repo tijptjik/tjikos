@@ -422,7 +422,7 @@ impl Card {
         });
         let c = self.context.clone();
         let weak = self.widget.downgrade();
-        drag.connect_drag_end(move |_, dx, dy| {
+        drag.connect_drag_end(move |gesture, dx, dy| {
             if !candidate.replace(false) {
                 return;
             }
@@ -440,6 +440,12 @@ impl Card {
                     finished: true,
                 });
                 c.sync_reveal();
+            } else if dx.hypot(dy) < 8.
+                && gesture
+                    .current_event_state()
+                    .contains(gdk::ModifierType::CONTROL_MASK)
+            {
+                c.emit(Intent::ControlDismiss);
             } else if dx.hypot(dy) < 8. && !c.state.borrow().floating {
                 c.emit(Intent::Dismiss);
             }

@@ -345,6 +345,31 @@ impl Controller {
         }
         self.close(key, 2);
     }
+    /// Match the original noninteractive-surface Ctrl-click contract.
+    pub fn control_dismiss(&mut self, key: &str) {
+        let Some(n) = self.find(key).cloned() else {
+            return;
+        };
+        if !self.allowed(&n) {
+            return;
+        }
+        let shown = self.visible().iter().map(|n| id(n).to_string()).collect();
+        if n["type"] == "telegram" {
+            if self.floating.contains(key) || self.visible().iter().any(|n| id(n) == key) {
+                self.log("user-safe-read", &n);
+            }
+            self.close(key, 2);
+        } else {
+            for key in self
+                .notices
+                .iter()
+                .map(|n| id(n).to_string())
+                .collect::<Vec<_>>()
+            {
+                self.dismiss(&key, &shown);
+            }
+        }
+    }
     pub fn hover(&mut self, key: &str, on: bool) {
         if on {
             self.hovered.insert(key.into());
@@ -862,6 +887,38 @@ mod tests {
         c.lock = "unlocked".into();
         c.monitors = vec![json!({"name":"test"})];
         c
+    }
+    #[test]
+    fn control_click_restores_safe_read_and_dismiss_all() {
+        let mut c = controller();
+        let ordinary = c
+            .send(json!({"id":"ordinary","title":"Plain","timeout":0}), 1)
+            .unwrap();
+        let telegram = c.send(json!({"id":"telegram","title":"Message","type":"telegram","app":"Telegram via Notjik","data":{"kind":"text","chatId":"17","messageId":"23"},"timeout":0}), 2).unwrap();
+        c.effects.clear();
+        c.control_dismiss(&telegram);
+        assert!(c.find(&ordinary).is_some());
+        assert!(c.find(&telegram).is_none());
+        let event = c
+            .effects
+            .iter()
+            .find_map(|e| match e {
+                Effect::Backend(e) if e["event"] == "user-safe-read" => Some(e),
+                _ => None,
+            })
+            .unwrap();
+        let request = crate::backend::dismiss_request(&c.config, event)
+            .unwrap()
+            .unwrap();
+        assert_eq!(request["action"], "safeRead");
+        assert_eq!(request["messageId"], "23");
+        c.send(json!({"title":"Another","timeout":0}), 3).unwrap();
+        c.control_dismiss(&ordinary);
+        assert!(c.notices.is_empty());
+        let id = c.send(json!({"title":"Locked","timeout":0}), 4).unwrap();
+        c.lock = "locked".into();
+        c.control_dismiss(&id);
+        assert!(c.find(&id).is_some());
     }
     #[test]
     fn replacements_and_close_reasons() {
