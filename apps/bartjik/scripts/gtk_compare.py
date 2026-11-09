@@ -97,12 +97,14 @@ def prepare(gutter):
     mirror()
 
 
-def run(gutter, binary):
+def run(gutter, binary, native=False):
     old = legacy('bars')['bars']
     prepare(gutter)
     env = {**os.environ, 'BARTJIK_HOME': str(INSTALL), 'BARTJIK_CONFIG': str(ROOT / 'config.json'),
            'BARTJIK_GTK_SOCKET': str(SOCKET), 'BARTJIK_GTK_COMPARE_FILE': str(ROOT / 'items.json'),
            'TJIK_COMPOSITOR': 'hyprland', 'GTK_A11Y': 'none'}
+    if native:
+        env.pop("BARTJIK_GTK_COMPARE_FILE", None)
     child = None
     stopping = False
     def stop(*_):
@@ -113,14 +115,15 @@ def run(gutter, binary):
     try:
         legacy('show-reveal')
         with (ROOT / 'gtk.log').open('w') as log:
-            child = subprocess.Popen(['dbus-run-session', '--', str(binary), 'serve'], env=env,
+            child = subprocess.Popen(([str(binary), 'serve'] if native else ['dbus-run-session', '--', str(binary), 'serve']), env=env,
                                      stdout=log, stderr=log, start_new_session=True)
             state = {'pid': os.getpid(), 'start': identity(os.getpid()), 'child': child.pid,
-                     'gutter': gutter, 'socket': str(SOCKET), 'binary': str(binary)}
+                     'native': native, 'gutter': gutter, 'socket': str(SOCKET), 'binary': str(binary)}
             write(STATE, state)
             reveal_at = 0.0
             while not stopping and child.poll() is None:
-                mirror()
+                if not native:
+                    mirror()
                 # Keep the reference visible without modifying managed configuration.
                 if time.monotonic() >= reveal_at:
                     legacy('show-reveal')
@@ -150,6 +153,7 @@ def main():
     parser.add_argument('action', choices=['start', 'status', 'stop', 'run'], nargs='?', default='start')
     parser.add_argument('--gutter', type=int, default=8)
     parser.add_argument('--binary', type=Path, default=INSTALL / 'bin/bartjik-gtk')
+    parser.add_argument('--native', action='store_true', help='Independent GTK providers and real configured actions on the session bus')
     args = parser.parse_args()
     ROOT.mkdir(mode=0o700, exist_ok=True)
     ROOT.chmod(0o700)
@@ -166,13 +170,13 @@ def main():
                 raise RuntimeError('Comparison did not close')
         print('Comparison closed; the existing bar remains running.')
     elif args.action == 'run':
-        run(args.gutter, args.binary)
+        run(args.gutter, args.binary, args.native)
     elif active:
         print(json.dumps(active))
     else:
         with (ROOT / 'supervisor.log').open('w') as log:
             subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'run', '--gutter', str(args.gutter),
-                              '--binary', str(args.binary)], stdout=log, stderr=log, start_new_session=True)
+                              '--binary', str(args.binary)] + (['--native'] if args.native else []), stdout=log, stderr=log, start_new_session=True)
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             active = session()

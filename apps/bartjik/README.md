@@ -1128,44 +1128,56 @@ only for development scripts, test drivers and the test-only migration oracle un
 `tests/reference`; none is installed with Bartjik. See
 [migration validation and measurements](docs/rust-migration.md).
 
-## Opt-in GTK surface
+## Opt-in GTK bar
 
-`bartjik --gtk serve` starts the initial GTK surface alongside the existing bar. The
-default command and service still use Quickshell. This slice shows a clock, configured
-islands, workspace buttons and a window panel on each output, using the shared
-`tjik-desktop` adapter and existing theme configuration. Workspace buttons select
-existing or configured persistent workspaces, including empty ones.
+`bartjik --gtk serve` runs the GTK bar with an independent Rust provider engine, native
+MPRIS/SNI subscriptions and the shared `tjik-desktop` compositor adapter. The default
+launcher and service remain Quickshell. Panels, notification history, workspace
+thumbnails and their detachment flows are a separate migration milestone.
 
-Use `bartjik --gtk status`, `bartjik --gtk panel`, `bartjik --gtk hide-panel` and
-`bartjik --gtk quit` to inspect or control only this surface. Its default reserves no
-edge space. `serve --reserve` enables configured reservations on each edge; do not run
-it over another bar reserving that edge. Layer-shell is required.
+Bar input uses the same module/item/part action precedence and explicit null overrides
+as Quickshell: left/middle/right/double click, hover dwell and wheel/touchpad scroll.
+Time toggles to the configured date; media scroll selects previous/next (previous
+restarts a seekable track after one second). The merged VPN flag and lower Tailscale
+dots retain separate configured actions. Panel actions report that the panel is not
+ported rather than opening a duplicate legacy panel.
 
-Configured bars support all four edges, offsets, columns and island gaps; unsupported
-providers are labeled. Auto-hide uses the shared adapter pointer capability, with
-configured edge dwell, hide delay, retention distance, fades and monitor
-synchronization. Concealed bars release input and reserved space. Missing or stale
-pointer data keeps bars visible; `status` reports `autoHideError`. Pointer sampling
-stops when no visible bar has auto-hide enabled. Open panels hold their bars visible.
+GTK owns one `bartjik-gtk-core` plus read-only activity helpers. Native tray state
+reuses the current watcher, or owns the watcher when none exists; it never claims
+`org.freedesktop.Notifications`. Unread dots represent attention presence, not numeric
+message counts. Recording state arrives directly at the existing helper cadence (voice
+150ms, screen 250ms), without the mirror's extra sampling delay. Tray insertion and
+removal retain the 240ms transition.
 
-Tray, audio, notifications, detachment and process-level compositor restart recovery
-remain on the migration backlog. The GTK slice does not start a second provider engine
-or claim notification/tray bus names.
+Use `bartjik --gtk status`, `reload`, and `quit` to control only GTK. The default
+reserves no edge space; `serve --reserve` enables configured reservations. Do not run
+two reserving bars on the same edge. Layer-shell is required. Auto-hide retains the
+configured dwell, retention, fade and monitor synchronization; unavailable pointer state
+keeps the bar visible and is reported in status.
 
 Build with `dev-check bun run build --filter=@tjikos/bartjik`. The supported
-`scripts/install.sh --gtk-only` installs the opt-in executable, library and launcher
-without replacing QML, the core or service policy.
+`scripts/install.sh --gtk-only` installs GTK and its separate `bartjik-gtk-core`,
+bundled library and launcher without replacing the production core, QML or service
+policy.
 
-For the requested same-session comparison, run
-`python3 apps/bartjik/scripts/gtk_compare.py start`. It leaves the existing Quickshell
-bar in place and displays GTK directly above it with an 8-pixel gutter, using the same
-configuration and cached item data. Both bars stay visible. The upper bar is read-only:
-this bridge compares rendering, not provider/action parity. No nested compositor,
-workspace switch, extra reservation or duplicate provider engine is involved. Do not
-wrap this persistent viewer in `dev-check`.
+For the requested same-session stacked comparison:
 
-Use `python3 apps/bartjik/scripts/gtk_compare.py status` or `stop` to inspect or close
-only the comparison. Closing restores the reference bar's previous reveal state.
-Configuration and service policy are not changed. After starting it, run
-`dev-check bun run --filter @tjikos/bartjik test:gtk` for geometry checks and cropped
-comparison images. See [GTK progress and parity](docs/gtk-progress.md).
+```sh
+python3 apps/bartjik/scripts/gtk_compare.py start --native
+python3 apps/bartjik/scripts/gtk_compare.py status
+python3 apps/bartjik/scripts/gtk_compare.py stop
+```
+
+The GTK bar sits above Quickshell with an 8px gutter and no extra reservation. Native
+mode uses real provider state and configured actions; only the bar you interact with
+executes that action. No automated real-device mutations are performed. Omit `--native`
+for the original read-only mirror and synthetic renderer tests. Stop before changing
+modes. Neither mode changes the default service or switches workspace/focus. Do not hold
+`dev-check` for this persistent viewer.
+
+`tests/native_services.py` uses a private bus for service actions and lifecycle tests.
+`tests/gtk_native.py` uses synthetic providers, fake compositor actions and a private
+bus in the prepared stacked geometry (close the comparison first). Its IPC intent checks
+do not substitute for physical pointer/keyboard acceptance. Run finite tests through
+`dev-check`. See [GTK progress and parity](docs/gtk-progress.md) for evidence and
+remaining acceptance work.

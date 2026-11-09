@@ -233,21 +233,21 @@ parity remain incomplete.
 
 ### Workspace motion and media text (2026-11-09)
 
-The same-session comparison now keeps module widgets across snapshots. Workspace
-slots use the reference 32px minimum width, 24px height, configured gap, 22px accent
-ring, 240ms OutCubic ring motion, and 200ms InOutCubic label/dot transition. Labels
-use Pango ink bounds for centering. Media has separate artist, middle-dot separator
-and track slots with the configured 5px gaps and independent width limits. Text
-uses the configured font and style precedence. Overflowing marquee text pauses
-1200ms, travels at 35px/s (minimum 800ms), pauses 1400ms, then returns over 300ms.
-Unchanged text widgets survive unrelated snapshot and playback-icon updates.
+The same-session comparison now keeps module widgets across snapshots. Workspace slots
+use the reference 32px minimum width, 24px height, configured gap, 22px accent ring,
+240ms OutCubic ring motion, and 200ms InOutCubic label/dot transition. Labels use Pango
+ink bounds for centering. Media has separate artist, middle-dot separator and track
+slots with the configured 5px gaps and independent width limits. Text uses the
+configured font and style precedence. Overflowing marquee text pauses 1200ms, travels at
+35px/s (minimum 800ms), pauses 1400ms, then returns over 300ms. Unchanged text widgets
+survive unrelated snapshot and playback-icon updates.
 
 A live check found and fixed startup-width clipping after the first item snapshot;
-`gtk_host.py` now checks that every island fits inside its allocated bar as well as
-44px island height and the 8px comparison gutter. `gtk_motion.py` temporarily pauses
-only the comparison mirror and supplies synthetic presentation data, checking ring
-interpolation and ticker progress across updates. Its finally block restores the
-snapshot and resumes the mirror. It never selects a host workspace or changes media.
+`gtk_host.py` now checks that every island fits inside its allocated bar as well as 44px
+island height and the 8px comparison gutter. `gtk_motion.py` temporarily pauses only the
+comparison mirror and supplies synthetic presentation data, checking ring interpolation
+and ticker progress across updates. Its finally block restores the snapshot and resumes
+the mirror. It never selects a host workspace or changes media.
 
 Validation commands for this slice:
 
@@ -258,87 +258,159 @@ Validation commands for this slice:
 - `dev-check python3 -B apps/bartjik/tests/gtk_host.py`
 
 Install through `scripts/install.sh --gtk-only`, verify dist/installed hashes, and
-restart only `gtk_compare.py`. The default Quickshell service remains unchanged.
-Install receipt and rollback path: `/tmp/bartjik-gtk-host-final-install.json`.
-Screenshots remain in `/run/user/1000/bartjik-gtk-comparison/`.
+restart only `gtk_compare.py`. The default Quickshell service remains unchanged. Install
+receipt and rollback path: `/tmp/bartjik-gtk-host-final-install.json`. Screenshots
+remain in `/run/user/1000/bartjik-gtk-comparison/`.
 
-Scope: these workspace/media changes are in the read-only comparison renderer.
-Native workspace buttons still need the same rendering plus accessible activation,
-hover/preview and input validation. Native media providers/actions, icon parity,
-other transitions, detachment and full provider parity remain subsequent work.
+Scope: these workspace/media changes are in the read-only comparison renderer. Native
+workspace buttons still need the same rendering plus accessible activation,
+hover/preview and input validation. Native media providers/actions, icon parity, other
+transitions, detachment and full provider parity remain subsequent work.
 
 ### Connectivity, tray attention/activity and icon morphs (2026-11-09)
 
-The GTK comparison now follows Quickshell's same-island connectivity composition:
-a Tailscale module paired with Mullvad is hidden, and `connection == Running` adds
-three muted dots beneath Mullvad's artwork. An unpaired Tailscale module remains
-separate. The mirror retains only the connection string from provider panel state.
+The GTK comparison now follows Quickshell's same-island connectivity composition: a
+Tailscale module paired with Mullvad is hidden, and `connection == Running` adds three
+muted dots beneath Mullvad's artwork. An unpaired Tailscale module remains separate. The
+mirror retains only the connection string from provider panel state.
 
-Chat artwork displays the existing `state.urgent` accent badge. The authoritative
-legacy tray sets that from SNI NeedsAttention or the existing attention helper;
-GTK does not infer unread counts or touch chats. The mirror also carries the native
-screenRecording and hyprvoice states. The tray adds a 10px red recording dot for
-screen/voice recording, and a 1100ms opacity pulse for voice processing, unless
-screen recording takes precedence or animation is disabled. Inactive/unavailable
-states remove the slot. The live comparison now displays the host's existing
-recording state; no recording was started or stopped for testing.
+Chat artwork displays the existing `state.urgent` accent badge. The authoritative legacy
+tray sets that from SNI NeedsAttention or the existing attention helper; GTK does not
+infer unread counts or touch chats. The mirror also carries the native screenRecording
+and hyprvoice states. The tray adds a 10px red recording dot for screen/voice recording,
+and a 1100ms opacity pulse for voice processing, unless screen recording takes
+precedence or animation is disabled. Inactive/unavailable states remove the slot. The
+live comparison now displays the host's existing recording state; no recording was
+started or stopped for testing.
 
-Persistent GTK icon objects interpolate the existing licensed MorphData paths with
-220ms InOutCubic timing. Supported pairs match Quickshell: notification bell,
-idle coffee/bed, nightlight/sun, desktop/game and speaker/headphones. Interrupted
-morphs continue from their current interpolated shape. Noncompatible changes use
-the normal artwork; animateIcons=false and material icons skip morphing.
+Persistent GTK icon objects interpolate the existing licensed MorphData paths with 220ms
+InOutCubic timing. Supported pairs match Quickshell: notification bell, idle coffee/bed,
+nightlight/sun, desktop/game and speaker/headphones. Interrupted morphs continue from
+their current interpolated shape. Noncompatible changes use the normal artwork;
+animateIcons=false and material icons skip morphing.
 
 Validation: release build, app static checks and 13 GTK unit tests passed.
-`dev-check python3 -B apps/bartjik/tests/gtk_indicators.py` passed synthetic checks
-for intermediate morph progress, merged connectivity visibility, attention on/off,
-processing pulse, steady screen-recording precedence and inactive cleanup. This
-fixture pauses only the mirror supervisor and restores it in finally; it changes
-no host service/device/chat state. `gtk_host.py` passed geometry and clipping checks
-on all three live surfaces. Rendered evidence: `synthetic-indicators.png` and
+`dev-check python3 -B apps/bartjik/tests/gtk_indicators.py` passed synthetic checks for
+intermediate morph progress, merged connectivity visibility, attention on/off,
+processing pulse, steady screen-recording precedence and inactive cleanup. This fixture
+pauses only the mirror supervisor and restores it in finally; it changes no host
+service/device/chat state. `gtk_host.py` passed geometry and clipping checks on all
+three live surfaces. Rendered evidence: `synthetic-indicators.png` and
 `DP-1-status-bar.png` in the comparison runtime directory.
 
-Installed via the supported --gtk-only installer with validated-byte comparison;
-legacy core/QML files and service invocation remain unchanged. These are renderer
-and mirrored-state improvements; native SNI hosting, notification authority and
-connectivity mutations are not newly implemented by this slice.
+Installed via the supported --gtk-only installer with validated-byte comparison; legacy
+core/QML files and service invocation remain unchanged. These are renderer and
+mirrored-state improvements; native SNI hosting, notification authority and connectivity
+mutations are not newly implemented by this slice.
 
 Connectivity spacing follow-up: Tailscale dots now sit below the icon slot, matching
 Quickshell's negative bottom margin. The overlay gets extra drawing space without
-changing the flag center, module spacing or island height. Previously GTK positioned
-the dots inside the slot, crowding the flag.
+changing the flag center, module spacing or island height. Previously GTK positioned the
+dots inside the slot, crowding the flag.
 
 ### Ordered connectivity dots and tray insertion/removal (2026-11-09)
 
-Tailscale dots fade in left-to-right and out right-to-left, with 90ms stagger and
-140ms per-dot easing (320ms total). Reversal starts from current dot opacity;
-unchanged snapshots do not restart it. Only dots are drawn, with no numeric labels.
+Tailscale dots fade in left-to-right and out right-to-left, with 90ms stagger and 140ms
+per-dot easing (320ms total). Reversal starts from current dot opacity; unchanged
+snapshots do not restart it. Only dots are drawn, with no numeric labels.
 
-The comparison tray now retains stable icon widgets through 240ms eased insertion
-and removal. Slot width, gap and opacity animate together, including the recording
-slot. Removed slots remain until collapse completes, then are unparented. Returning
-IDs reverse from their current width. A frame callback recalculates the bar's
-geometry while resizing and stops afterward. Animation-disabled configuration
-settles immediately. Existing icon morphs and recording pulses remain independent.
+The comparison tray now retains stable icon widgets through 240ms eased insertion and
+removal. Slot width, gap and opacity animate together, including the recording slot.
+Removed slots remain until collapse completes, then are unparented. Returning IDs
+reverse from their current width. A frame callback recalculates the bar's geometry while
+resizing and stops afterward. Animation-disabled configuration settles immediately.
+Existing icon morphs and recording pulses remain independent.
 
 Validation: release build, static checks and 14 GTK unit tests; synthetic
 `gtk_tray_motion.py` observed ordered on/off dot states and intermediate tray widths
-from 20px to 84px and back, plus corresponding whole-bar resize frames. Removed
-widgets were released and idle ticks stopped. Frame evidence is retained in
-`/run/user/1000/bartjik-gtk-comparison/tray-motion-evidence.json`.
-`gtk_indicators.py` also checks rendered badge/recording pixels; `gtk_host.py`
-checks 44px island height, 8px gutter and unclipped allocations. Existing private
-fixture isolation and --gtk-only install/byte verification workflow are unchanged.
+from 20px to 84px and back, plus corresponding whole-bar resize frames. Removed widgets
+were released and idle ticks stopped. Frame evidence is retained in
+`/run/user/1000/bartjik-gtk-comparison/tray-motion-evidence.json`. `gtk_indicators.py`
+also checks rendered badge/recording pixels; `gtk_host.py` checks 44px island height,
+8px gutter and unclipped allocations. Existing private fixture isolation and --gtk-only
+install/byte verification workflow are unchanged.
 
-Live preview freshness follow-up: the previous bridge sampled Quickshell every
-second and GTK independently polled the file every second, allowing nearly two
-seconds of latency and missed short activity states. GTK now monitors the mirror's
-parent directory on a private GLib worker context, surviving atomic file replacement
-and keeping reads/parsing off the UI thread. The mirror samples about every 200ms,
-skips unchanged writes, and retains the original once-per-second reveal heartbeat.
-This remains polling at the Quickshell boundary; it is not a new native provider.
+Live preview freshness follow-up: the previous bridge sampled Quickshell every second
+and GTK independently polled the file every second, allowing nearly two seconds of
+latency and missed short activity states. GTK now monitors the mirror's parent directory
+on a private GLib worker context, surviving atomic file replacement and keeping
+reads/parsing off the UI thread. The mirror samples about every 200ms, skips unchanged
+writes, and retains the original once-per-second reveal heartbeat. This remains polling
+at the Quickshell boundary; it is not a new native provider.
 
-Build/static validation and indicator/tray-motion/host checks passed. A short
-synthetic recording pulse reached GTK 3.6ms after the file update; this excludes
-Quickshell sampling latency. Actual live unread badges were also visually checked.
-The tray contract supplies urgent/unread presence, not a numeric unread count.
+Build/static validation and indicator/tray-motion/host checks passed. A short synthetic
+recording pulse reached GTK 3.6ms after the file update; this excludes Quickshell
+sampling latency. Actual live unread badges were also visually checked. The tray
+contract supplies urgent/unread presence, not a numeric unread count.
+
+## Native bar input and services (2026-11-09)
+
+This supersedes the earlier read-only-bridge limitation for `serve` and comparison
+`start --native`. Mirror mode remains available for renderer regressions.
+
+| Bar feature          | Current GTK implementation                                                                                                 | Evidence boundary                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Configured providers | Existing core scheduling and actions; native MPRIS/SNI rows                                                                | Provider policy retained, no rewrite of account or device policy                                |
+| Time/date            | Existing formatter and per-bar alternate state                                                                             | Synthetic GTK roundtrip and formatter tests                                                     |
+| Mouse intents        | Shared precedence, part/item overrides, null disabling, double click, hover dwell, scroll accumulation                     | Rust precedence and synthetic GTK dispatch tests; physical input acceptance remains             |
+| Media                | Native subscriptions and bounded worker actions; previous/next, restart, play/pause, configured actions                    | Private-bus fixture; no host playback changed by tests                                          |
+| VPN                  | One visual; flag and lower dots resolve to distinct modules                                                                | Renderer and action resolver; real network toggles not automated                                |
+| Tray/unread          | SNI host, queued watcher ownership, icon overrides/pixmaps, attention dots, actions                                        | Private-bus registration/path registration/owner-loss/stale-target tests                        |
+| Tray menu            | DBusMenu layout, AboutToShow, revision updates, nested back, checks/radio, disabled/removed validation; non-grabbing popup | Protocol fixture; physical focus/placement acceptance still required                            |
+| Recording            | Direct read-only helpers; no Quickshell mirror dependency; insertion remains animated                                      | Existing helper tests and rendered synthetic indicator checks; live latency not yet benchmarked |
+| Recovery             | Owned core restart, screen replay, bounded input queue and writes                                                          | Synthetic GTK abrupt-core-crash recovery                                                        |
+| Surfaces/motion      | Existing 44px islands, ring/ticker/morph/dot/tray motion, auto-hide and reservations                                       | Prior and repeated renderer checks                                                              |
+
+Panels remain outside this bar-only milestone, including audio/device panels,
+notification history, live window previews and their drag/detachment transitions. The
+tray exposes unread presence, not numeric counts. Full custom tooltip styling, physical
+mixed-DPI/IME and menu keyboard/focus review remain acceptance gaps; this is not a
+declaration of complete desktop-shell parity.
+
+The separate installed `bartjik-gtk-core` keeps Quickshell's current core untouched.
+Core commands remain authoritative and re-resolve configured actions; media owners are
+revalidated. A bounded writer keeps pipes off GTK, restarts replay screens, and owned
+process groups are torn down. Native state uses coalesced signal-triggered refreshes
+rather than an idle polling timer. Activity helpers retain their explicit 150/250ms
+cadence. No recording, chat action, network toggle or host media action is used as an
+automated test.
+
+Validation (all finite heavy checks through `dev-check`):
+
+- `bun run build --filter=@tjikos/bartjik` and `bash scripts/check.sh`: passed.
+- `cargo test --release --locked --features gtk-ui`: 22 core + 15 GTK tests passed.
+- `/usr/bin/python3 -B tests/native_services.py`: private-bus service/lifecycle tests
+  passed.
+- `/usr/bin/python3 -B tests/gtk_native.py`: date roundtrip, media/configured/null
+  intents and abrupt owned-core restart passed. Synthetic voice state reached GTK in
+  162.7ms including the helper cadence; this is state delivery, not a physical
+  microphone-to-pixel benchmark. The fixture explicitly selects the backend `serve`
+  process rather than an activity helper when simulating a crash.
+- `gtk_indicators.py`, `gtk_tray_motion.py`, `gtk_motion.py`, `gtk_host.py`: passed
+  against installed mirror mode. Rendered badges, ordered dots, 20→84→20px tray motion,
+  ring interpolation and ticker persistence were exercised.
+- `gtk_host.py` also passed in native mode: three surfaces, 44px islands, 8px gutter, no
+  clipping or extra reservation. Native status and media screenshots were inspected.
+
+Live artifacts: `/run/user/1000/bartjik-gtk-comparison/DP-1-status-bar.png`,
+`DP-1-workspace-bar.png`, `DP-2-workspace-bar.png`, `synthetic-indicators.png` and
+`tray-motion-evidence.json` in the same directory. Native mode remains open for
+interactive review. No nested compositor was launched or host mutation tested.
+
+Installed through `scripts/install.sh --gtk-only`; hashes and rollback backup are in
+`/tmp/bartjik-gtk-host-final-install.json`. GTK SHA-256:
+`17b510cda5f04e31ce84d8211facf31e80f85ccb35c0bb303c59d84562a31f16`; its separate core:
+`da531c2a394a940ca8c406ccc28179e92327cea36068662ee2180b6189f66dc9`. Legacy core/QML
+hashes, service PID 225097 and invocation `4ececfe112124c6491928307a59f1cf2` were
+unchanged. Rollback: close only the comparison, restore the receipt's backup files and
+launcher, then reopen the desired opt-in mode. Quickshell requires no restart.
+
+Commit progression: `b4dbc9f` adapter workspace discovery/selection; `5403ba4` shared
+datetime; `a8d3d56` GTK surfaces/rendering; `eaa937f` safe comparison/motion fixtures;
+`5b21002` native services; `1cfb081` independent GTK runtime and bar intents. Subsequent
+comparison/documentation commit records the current evidence and explicit gaps.
+Unrelated concurrent changes are excluded. No push or default switch is performed.
+
+Earlier renderer-only performance numbers are not comparable to this independent
+provider runtime. Next: physical gesture/menu-focus review and remaining tooltip polish,
+then the separate provider-panel migration; do not claim those as verified.

@@ -21,7 +21,9 @@ while True:
         break
     assert time.monotonic() < end, upper
     time.sleep(.2)
-assert upper['comparison'] and not upper['reserve']
+assert upper['comparison'] == (not session.get('native', False)) and not upper['reserve']
+if session.get('native'):
+    assert upper['nativeRuntime'] and upper['backendReady']
 assert upper['clockProviders'] == 0 and not upper['pointerSampling']
 assert len(upper['bars']) == len(lower)
 monitors = {m['name']: m for m in read('hyprctl', '-j', 'monitors')}
@@ -50,4 +52,4 @@ for bar in upper['bars']:
     name = bar['key'].replace('/', '-') + '.png'
     subprocess.run(['grim', '-g', f'{x},{y} {right-x}x{bottom-y}', str(root / name)], check=True)
     print(f"PASS {bar['key']}: GTK above Quickshell, {actual['height']:g}px matching island height, {gap:g}px gutter; {root / name}")
-print('PASS: same session, no second provider set or edge reservation')
+print('PASS: same session, no extra edge reservation; ' + ('independent native providers' if session.get('native') else 'read-only mirror'))
