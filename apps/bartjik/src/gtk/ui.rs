@@ -1437,6 +1437,8 @@ impl Ui {
                 if command == "resize" {
                     self.sync_panel();
                     return;
+                } else if command == "detach" {
+                    self.deck.borrow_mut().pinned = true;
                 } else if command == "pin" {
                     let mut deck = self.deck.borrow_mut();
                     deck.pinned = !deck.pinned;
@@ -1446,6 +1448,7 @@ impl Ui {
                 self.sync_panel();
                 self.configure_edges();
             }
+
             Event::Input(context) => self.input(context),
             Event::Backend(value) => {
                 if value["kind"] == "menuChanged" {

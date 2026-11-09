@@ -579,3 +579,58 @@ cannot rewind it. The reveal widget also enforces monotonic fade progress within
 handoff. Regression coverage repeatedly resets geometry during one content transition
 and injects a late low-progress frame into the rendered fixture. Both must preserve
 forward content progress and release the old snapshot after completion.
+
+### Network panel and platform boundary
+
+`src/network.rs` defines toolkit-independent device, access-point, address, traffic,
+capability, error, and action types plus an object-safe asynchronous `Adapter`.
+`src/network/linux.rs` owns NetworkManager CLI arguments/parsing, optional resolved DNS
+lookup, and Linux counters. Both the bar indicator and GTK panel consume this boundary.
+Another platform implements the trait and selection; card widgets contain no tool names
+or shell commands. This is a network boundary, not a claim that the whole Wayland
+application already runs on another OS. Unsupported platforms fail explicitly. `Fake`
+records credential-free action names and never probes the host.
+
+The GTK network card retains connected Wi-Fi/Ethernet details, traffic since adapter
+reset, addresses/default DNS, at most three complete nearby-network rows, scan/radio
+controls, saved-credential or password connection, disconnect, and inactive Ethernet
+state/connection. Passwords are cleared on submission, cancellation, target loss, and
+unmapping; they travel to nmcli over stdin, never argv. Permission, timeout, unavailable
+service, and stale-target results are sanitized. Busy controls reconcile with the
+adapter response; background status cannot acknowledge an outstanding mutation.
+
+One shared card/controller serves all bars in the process. Its bounded worker polls
+status every 10 seconds and counters every second only while mapped; unmapping cancels
+outstanding helper processes, drops pending requests, clears secrets, and invalidates
+late replies. This slice uses polling rather than NetworkManager D-Bus subscriptions.
+NetworkManager remains responsible for credentials and authorization;
+enterprise/hidden-network setup is not a new workflow in this migration.
+
+Validation commands:
+
+- `dev-check python3 apps/bartjik/tests/gtk_panel_primitives.py --network` renders GTK
+  and QML fixtures and exercises synthetic connect, radio, Ethernet, permission-error
+  recovery, device loss, and password clearing.
+- `dev-check python3 apps/bartjik/tests/network_adapter.py` substitutes private nmcli
+  and resolvectl executables for protocol/mutation validation without host actions.
+- Cargo unit tests cover fake adapter actions/failures, traffic counter resets, Linux
+  parsing/error mapping, and worker teardown when the card closes.
+
+Rendered artifacts: `/tmp/bartjik-network-primitives.png` and
+`/tmp/bartjik-network-reference.png`. Physical Wi-Fi association, authorization-agent
+prompts, and mixed-DPI/IME interaction still require device acceptance; automated checks
+never disconnect the host network.
+
+Validation passed: build, static checks, 55 unit tests, private-tool tests, and the
+rendered interaction fixture. Read-only host verification found connected Wi-Fi and
+unavailable Ethernet; no real connection/radio actions were executed. Installed
+byte/rollback receipt: `/tmp/bartjik-gtk-network-install.json`.
+
+### Network width regression
+
+Live-sized traffic values reproduced a 414px minimum body inside the 388px content area,
+clipping every right-edge control. Traffic columns now size independently, with
+ellipsizing labels allowing constrained allocations instead of widening the card.
+Connection subtitles also shrink safely. The rendered network fixture uses 138 GiB
+transferred and multi-digit KiB/s rates, asserts the body minimum fits, and checks that
+the Wi-Fi, disconnect, and Ethernet controls stay within its bounds.

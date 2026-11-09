@@ -83,6 +83,18 @@ pub fn clock_row(label: &str, value: &str, detail: &str) -> gtk::Box {
     row.append(&time);
     row
 }
+/// Shared icon content: text-row alignment must never leak into button glyphs.
+/// GTK label alignment is a widget property, not a CSS text-align property.
+pub fn control_symbol(text: &str) -> gtk::Label {
+    let glyph = gtk::Label::new(Some(text));
+    glyph.add_css_class("panel-symbol");
+    glyph.add_css_class("panel-control-symbol");
+    glyph.set_xalign(0.5);
+    glyph.set_yalign(0.5);
+    glyph.set_halign(gtk::Align::Center);
+    glyph.set_valign(gtk::Align::Center);
+    glyph
+}
 fn stylesheet(style: &Value) -> String {
     let color = |key: &str, fallback: &str| {
         gdk::RGBA::parse(s(&style[key]))
@@ -107,7 +119,7 @@ fn stylesheet(style: &Value) -> String {
 .panel-card .network-title {{font-size:14px;font-weight:600;}}
 .panel-card .network-muted {{font-size:11px;color:{muted};}}
 .panel-card .network-address-name {{font-size:13px;color:{muted};min-height:16px;}}
-.panel-card .network-symbol {{font-size:20px;}}
+.panel-card .network-symbol, .panel-card .panel-control-symbol {{font-size:20px;}}
 .panel-card .network-accent-symbol {{color:{accent};}}
 .panel-card .network-connection {{padding:12px;background:{surface};border-radius:10px;}}
 .panel-card .network-connection separator {{background:alpha({border},0.45);}}
@@ -141,6 +153,7 @@ fn stylesheet(style: &Value) -> String {
 .panel-card button.panel-control:active {{border-color:{accent};background:mix({surface},white,0.09);}}
 .panel-card button.panel-control:checked {{border-color:{accent};}}
 .panel-card button.panel-control:focus-visible {{outline:1px solid {accent};outline-offset:2px;}}
+.panel-card button.panel-close:hover {{color:{accent};border-color:transparent;background:{surface};}}
 .panel-card button.panel-control:disabled {{opacity:0.4;}}
 "#,
         background = color("background", "#1f1d2e"),
@@ -228,6 +241,7 @@ pub fn status_content(target: &Target) -> Content {
     if target.provider == "codex" {
         return crate::codex_card::content(&target.row, &target.style);
     }
+
     let panel = &target.row["panel"];
     let body = section("");
     if target.provider == "datetime" {
@@ -278,7 +292,7 @@ pub struct Surface {
     header: gtk::Box,
     stack: gtk::Stack,
     scroll: gtk::ScrolledWindow,
-    pin: gtk::ToggleButton,
+    detached: Rc<Cell<Option<(f64, f64)>>>,
     close: gtk::Button,
     css: gtk::CssProvider,
     last: Value,
@@ -319,18 +333,9 @@ impl Surface {
         window.set_child(Some(&fixed));
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-        let pin = gtk::ToggleButton::new();
-        pin.add_css_class("panel-control");
-        pin.update_property(&[gtk::accessible::Property::Label("Keep this panel open")]);
-        pin.set_tooltip_text(Some("Keep this panel open"));
-        let tx = send.clone();
-        pin.connect_clicked(move |_| {
-            let _ = tx.try_send(Event::PanelCommand("pin".into()));
-        });
-        buttons.append(&pin);
         let close = gtk::Button::new();
         close.add_css_class("panel-control");
-        close.set_tooltip_text(Some("Close"));
+        close.add_css_class("panel-close");
         close.update_property(&[gtk::accessible::Property::Label("Close panel")]);
         let tx = send.clone();
         close.connect_clicked(move |_| {
@@ -366,6 +371,7 @@ impl Surface {
         let i = inside.clone();
         motion.connect_leave(move |_| i.set(false));
         reveal.add_controller(motion);
+        let drag_send = send.clone();
         let keys = gtk::EventControllerKey::new();
         keys.connect_key_pressed(move |_, key, _, _| {
             if key == gdk::Key::Escape {
@@ -388,7 +394,7 @@ impl Surface {
             width: 0.,
             height: 0.,
         };
-        Self {
+        let surface = Self {
             window,
             fixed,
             card,
@@ -396,7 +402,7 @@ impl Surface {
             header,
             stack,
             scroll,
-            pin,
+            detached: Rc::new(Cell::new(None)),
             close,
             css,
             last: Value::Null,
@@ -413,7 +419,87 @@ impl Surface {
             since: Rc::new(RefCell::new(Instant::now())),
             fade_since: Rc::new(RefCell::new(Instant::now())),
             ticking: Rc::new(Cell::new(false)),
-        }
+        };
+        surface.install_drag(drag_send);
+        surface
+    }
+    fn install_drag(&self, send: async_channel::Sender<Event>) {
+        let drag = gtk::GestureDrag::new();
+        drag.set_button(1);
+        let origin = Rc::new(Cell::new(None::<Rect>));
+        let start = origin.clone();
+        let actual = self.actual.clone();
+        drag.connect_drag_begin(move |gesture, x, y| {
+            let Some(widget) = gesture.widget() else {
+                return;
+            };
+            // Let controls, text selection and scrolling retain their own gestures.
+            let mut picked = widget.pick(x, y, gtk::PickFlags::DEFAULT);
+            while let Some(child) = picked {
+                if child.is::<gtk::Button>()
+                    || child.is::<gtk::Range>()
+                    || child.is::<gtk::Editable>()
+                    || child
+                        .downcast_ref::<gtk::ScrolledWindow>()
+                        .is_some_and(|s| {
+                            let a = s.vadjustment();
+                            a.upper() > a.page_size()
+                        })
+                    || child
+                        .downcast_ref::<gtk::Label>()
+                        .is_some_and(|l| l.is_selectable())
+                {
+                    gesture.set_state(gtk::EventSequenceState::Denied);
+                    start.set(None);
+                    return;
+                }
+                if child == widget {
+                    break;
+                }
+                picked = child.parent();
+            }
+            start.set(Some(actual.get()));
+        });
+        let detached = self.detached.clone();
+        let actual = self.actual.clone();
+        let target = self.target.clone();
+        let from = self.from.clone();
+        let screen = self.screen.clone();
+        let window = self.window.downgrade();
+        let fixed = self.fixed.downgrade();
+        let reveal = self.reveal.downgrade();
+        let close = self.close.downgrade();
+        drag.connect_drag_update(move |gesture, dx, dy| {
+            let (Some(window), Some(fixed), Some(reveal), Some(close)) = (
+                window.upgrade(),
+                fixed.upgrade(),
+                reveal.upgrade(),
+                close.upgrade(),
+            ) else {
+                return;
+            };
+            let Some(mut r) = origin.get() else {
+                return;
+            };
+            if dx.hypot(dy) < 8. && detached.get().is_none() {
+                return;
+            }
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            let bounds = screen.get();
+            r = dragged_rect(r, bounds, dx, dy);
+            let first = detached.get().is_none();
+            detached.set(Some((r.x, r.y)));
+            actual.set(r);
+            target.set(r);
+            from.set(r);
+            close.set_visible(true);
+            apply(&window, &fixed, &reveal, r, bounds, 1.);
+            if first {
+                let _ = send.try_send(Event::PanelCommand("detach".into()));
+            }
+        });
+        // The fullscreen shell stays stationary while the card moves beneath it.
+        self.window.add_controller(drag);
     }
     pub fn rect(&self) -> Rect {
         self.actual.get()
@@ -431,9 +517,10 @@ impl Surface {
             *self.fade_since.borrow_mut() = Instant::now();
             self.reveal.freeze();
         }
-        self.pin.set_active(pinned);
-        self.pin.set_visible(target.provider != "codex" || pinned);
-        self.close.set_visible(target.provider != "codex" || pinned);
+        if switching {
+            self.detached.set(None);
+        }
+        self.close.set_visible(self.detached.get().is_some());
         self.screen.set(target.screen);
         if changed {
             self.last = data;
@@ -449,7 +536,6 @@ impl Surface {
             };
             self.reveal
                 .colors(color("background", "#1f1d2e"), color(border, "#555169"));
-            self.pin.set_child(Some(&artwork("pin", 20)));
             self.close.set_child(Some(&artwork("close", 20)));
             while let Some(c) = self.header.first_child() {
                 self.header.remove(&c);
@@ -468,10 +554,10 @@ impl Surface {
             }
             let body = content.body;
             // The outgoing card is an immutable render node, not a second live layout.
-            while let Some(child) = self.stack.first_child() {
-                self.stack.remove(&child);
-            }
             if body.parent().as_ref() != Some(self.stack.upcast_ref()) {
+                while let Some(child) = self.stack.first_child() {
+                    self.stack.remove(&child);
+                }
                 self.stack.add_child(&body);
             }
             self.stack.set_visible_child(&body);
@@ -487,7 +573,7 @@ impl Surface {
             .min((target.screen.width - 24.).max(1.));
         self.scroll
             .set_max_content_height((target.screen.height * 0.65 - 90.).max(40.) as i32);
-        if changed {
+        {
             self.card.set_size_request(width as i32, -1);
             self.natural_height = (self
                 .card
@@ -495,7 +581,11 @@ impl Surface {
                 .1 as f64)
                 .max(120.);
         }
-        let next = panels::place(target, width, self.natural_height);
+        let mut next = panels::place(target, width, self.natural_height);
+        if let Some((x, y)) = self.detached.get() {
+            next.x = x;
+            next.y = y;
+        }
         self.reveal
             .layout(next.width.ceil() as i32, next.height.ceil() as i32);
         if self.target.get() != next || switching {
@@ -561,6 +651,14 @@ impl Surface {
         });
     }
 }
+fn dragged_rect(mut r: Rect, bounds: Rect, dx: f64, dy: f64) -> Rect {
+    r.x = (r.x + dx).clamp(bounds.x, (bounds.x + bounds.width - r.width).max(bounds.x));
+    r.y = (r.y + dy).clamp(
+        bounds.y,
+        (bounds.y + bounds.height - r.height).max(bounds.y),
+    );
+    r
+}
 fn transition_progress(geometry: f64, content: f64) -> (f64, f64) {
     let ease = |t: f64| 1. - (1. - t.clamp(0., 1.)).powi(3);
     (ease(geometry), ease(content))
@@ -568,6 +666,27 @@ fn transition_progress(geometry: f64, content: f64) -> (f64, f64) {
 #[cfg(test)]
 mod transition_tests {
     use super::*;
+    #[test]
+    fn dragging_clamps_to_selected_output_including_negative_origins() {
+        let bounds = Rect {
+            x: -1000.,
+            y: 50.,
+            width: 1000.,
+            height: 800.,
+        };
+        let r = Rect {
+            x: -800.,
+            y: 100.,
+            width: 420.,
+            height: 220.,
+        };
+        let moved = dragged_rect(r, bounds, 100., 60.);
+        assert_eq!((moved.x, moved.y), (-700., 160.));
+        let edge = dragged_rect(r, bounds, 2000., 2000.);
+        assert_eq!((edge.x, edge.y), (-420., 630.));
+        let edge = dragged_rect(r, bounds, -2000., -2000.);
+        assert_eq!((edge.x, edge.y), (-1000., 50.));
+    }
     #[test]
     fn pointer_retargets_never_rewind_content_fade() {
         let mut previous = 0.;
@@ -776,10 +895,10 @@ mod render_tests {
             &css,
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 2,
         );
-        let codex = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("codex");
         let network = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("network");
         let fake_network = std::sync::Arc::new(crate::network::Fake::demo());
         let mut network_card = None;
+        let codex = std::env::var("BARTJIK_CARD_FIXTURE").as_deref() == Ok("codex");
         if codex {
             let (send, _receive) = async_channel::bounded(8);
             let module = json!({"provider":"codex","panel":{"hover":true},"comparisonItems":[{"id":"quota","type":"text","text":{"value":"23%"},"tooltip":"raw account table"}]});
@@ -812,21 +931,22 @@ mod render_tests {
                 "datetime"
             },
         );
+
         let card = card_frame(&header);
         let first;
-        if codex {
-            let row: Value =
-                serde_json::from_str(include_str!("../../tests/fixtures/codex-card.json")).unwrap();
-            let content = crate::codex_card::content_at(&row, &style, 1000000., false);
-            first = content.body.clone();
-            card.append(&content.body);
-        } else if network {
-            let (send, _receive) = async_channel::bounded(32);
+        if network {
+            let (send, _receive) = async_channel::bounded(8);
             let view = crate::network_card::Card::new(fake_network.clone(), send);
             let content = view.content();
             first = content.body.clone();
             card.append(&content.body);
             network_card = Some(view);
+        } else if codex {
+            let row: Value =
+                serde_json::from_str(include_str!("../../tests/fixtures/codex-card.json")).unwrap();
+            let content = crate::codex_card::content_at(&row, &style, 1000000., false);
+            first = content.body.clone();
+            card.append(&content.body);
         } else {
             let rows = gtk::Box::new(gtk::Orientation::Vertical, 6);
             let clock = clock_row("Hong Kong", "18:42", "Monday, 9 November");
@@ -877,12 +997,15 @@ mod render_tests {
             );
         }
         let snap = gtk::Snapshot::new();
+        // Snapshot the manually allocated card directly: inactive workspaces may
+        // not repaint the window's cached WidgetPaintable after a traffic update.
         window.snapshot_child(&card, &snap);
         let node = snap.to_node().expect("rendered card");
         let texture = window.renderer().unwrap().render_texture(&node, None);
         texture
             .save_to_png(std::env::var("BARTJIK_PANEL_ARTIFACT").unwrap())
             .unwrap();
+
         if let Some(card) = network_card {
             crate::network_card::exercise_fixture(&card, &fake_network);
         }

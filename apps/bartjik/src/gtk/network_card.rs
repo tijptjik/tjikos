@@ -23,18 +23,12 @@ fn accent_symbol(text: &str) -> gtk::Label {
     l
 }
 fn symbol(text: &str) -> gtk::Label {
-    let l = label(text, "panel-symbol");
-    l.add_css_class("network-symbol");
-    l
+    crate::panel_view::control_symbol(text)
 }
 fn button(icon: &str, accessible: &str) -> gtk::Button {
     let b = gtk::Button::new();
     b.add_css_class("panel-control");
     let glyph = symbol(icon);
-    glyph.set_xalign(0.5);
-    glyph.set_yalign(0.5);
-    glyph.set_halign(gtk::Align::Center);
-    glyph.set_valign(gtk::Align::Center);
     b.set_child(Some(&glyph));
     b.update_property(&[gtk::accessible::Property::Label(accessible)]);
     b
