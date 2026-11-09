@@ -1,3 +1,4 @@
+mod action_choice;
 mod actions;
 mod audio;
 mod battery;
@@ -13,6 +14,7 @@ mod hyprvoice;
 mod idle;
 mod lyrics;
 mod monitors;
+mod native;
 mod navigation;
 mod network;
 mod nightlight;

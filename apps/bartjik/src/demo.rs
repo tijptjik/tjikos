@@ -46,6 +46,8 @@ pub fn items(provider: &str, o: &Value) -> Vec<Value> {
         }
     }
     if provider == "datetime" {
+        rows[0]["alternate"] = json!("Mon 15 Jun");
+        rows[0]["actions"] = json!({"leftClick":"datetime.toggle"});
         rows[0]["panel"] = crate::details::world_clock(&o["worldClocks"], Some(1781524800));
     }
     if provider == "monitor-layout" {

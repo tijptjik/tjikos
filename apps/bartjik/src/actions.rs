@@ -13,31 +13,10 @@ pub fn detach(args: &[String], context: &Value) -> Result<()> {
         .spawn()?;
     Ok(())
 }
+pub use crate::action_choice::choose;
 use crate::{config, providers, workspaces};
 use anyhow::ensure;
 use serde_json::json;
-pub fn choose(module: &Value, row: &Value, part: &str, event: &str) -> Value {
-    let event = if event == "click" { "leftClick" } else { event };
-    let mut result = Value::Null;
-    for a in [
-        &row["actions"],
-        &row[part]["actions"],
-        &module["actions"],
-        &module[part]["actions"],
-        &module["items"][s(&row["id"])]["actions"],
-        &module["items"][s(&row["id"])][part]["actions"],
-    ] {
-        if event == "leftClick" {
-            if let Some(v) = a.get("click") {
-                result = v.clone();
-            }
-        }
-        if let Some(v) = a.get(event) {
-            result = v.clone();
-        }
-    }
-    result
-}
 pub async fn route(name: &str) -> Result<()> {
     let sinks = jc(&["pactl", "-f", "json", "list", "sinks"]).await?;
     ensure!(
@@ -172,6 +151,15 @@ pub async fn execute(
         return Ok(());
     }
     let action = s(action);
+    if std::env::var("BARTJIK_FRONTEND").as_deref() == Ok("gtk")
+        && (action.starts_with("player.") || action.starts_with("tray."))
+    {
+        ensure!(
+            c["nativeOwner"].is_null() || c["nativeOwner"] == row["native"]["owner"],
+            "Stale native target"
+        );
+        return crate::native::action(action.into(), row.clone(), c.clone()).await;
+    }
     ensure!(
         arr(&config::contract()["INTERNAL"]).contains(&json!(action)),
         "unknown internal action"

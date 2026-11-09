@@ -8,6 +8,7 @@ use tokio::{
     task::JoinHandle,
 };
 enum Event {
+    Native(Value),
     Provider(String, Value),
     Compositor(Value, String),
     Emit(Value),
@@ -275,6 +276,8 @@ fn watcher(tx: mpsc::Sender<Event>, geometry: bool) -> Task {
     }))
 }
 struct Engine {
+    gtk: bool,
+    native: Value,
     demo: bool,
     cfg: Option<Value>,
     bars: Vec<Value>,
@@ -314,6 +317,8 @@ impl Engine {
                 let key = s(&b["sources"][&mid]).to_owned();
                 if self.demo {
                     states.insert(key,json!({"items":demo::items(s(&m["provider"]),&m),"state":"demo","error":""}));
+                } else if self.gtk && ["playerctl", "icontray"].contains(&s(&m["provider"])) {
+                    states.insert(key,json!({"items":crate::native::items(&m,&self.native),"error":self.native["error"]}));
                 } else if m["provider"] == "workspaces" {
                     let mut rows = workspaces::view(&self.compositor, s(&b["screen"]), &m);
                     if !self.compositor_error.is_empty() {
@@ -379,6 +384,10 @@ impl Engine {
                     .insert(k.clone(), worker(k, m, self.tx.clone(), self.alert.clone()));
             }
         }
+        if self.gtk {
+            need_ws = false;
+            need_pointer = false;
+        }
         if self.demo || !need_ws {
             self.watcher = None;
             self.compositor = json!({});
@@ -421,6 +430,30 @@ impl Engine {
             );
             self.screens = msg["screens"].clone();
             return self.reload(false).await;
+        }
+        if self.gtk && (op == "nativeMenu" || op == "nativeMenuEvent") {
+            self.tasks.retain(|t| !t.0.is_finished());
+            ensure!(self.tasks.len() < 32, "Menu command queue full");
+            let (_, module, _) = self.context(&msg)?;
+            let row = crate::native::items(&module, &self.native)
+                .into_iter()
+                .find(|r| r["id"] == msg["context"]["item"])
+                .context("Tray item disappeared")?;
+            let context = msg["context"].clone();
+            let id = msg["menuId"].as_i64().unwrap_or(0) as i32;
+            let activate = op == "nativeMenuEvent";
+            let tx = self.tx.clone();
+            let task = tokio::spawn(async move {
+                let value = match crate::native::menu(row, id, activate).await {
+                    Ok(menu) => {
+                        json!({"kind":"menu","context":context,"menuId":id,"activated":activate,"menu":menu})
+                    }
+                    Err(e) => json!({"kind":"menu","context":context,"error":e.to_string()}),
+                };
+                let _ = tx.send(Event::Emit(value)).await;
+            });
+            self.tasks.push(Task(task));
+            return Ok(false);
         }
         if op == "reload" {
             return self.reload(true).await;
@@ -561,6 +594,7 @@ impl Engine {
             }
             "action" | "panelAction" => {
                 if demo {
+                    crate::emit(&json!({"kind":"intent","context":msg["context"]}));
                     return Ok(op == "panelAction" && demo::control(&msg["context"]));
                 }
                 let (_, m, key) = self.context(&msg)?;
@@ -568,7 +602,11 @@ impl Engine {
                 let rows = if m["provider"] == "workspaces" {
                     workspaces::view(&self.compositor, s(&context["monitor"]), &m)
                 } else if ["playerctl", "icontray"].contains(&s(&m["provider"])) {
-                    vec![json!({"id":context["item"]})]
+                    if self.gtk {
+                        crate::native::items(&m, &self.native)
+                    } else {
+                        vec![json!({"id":context["item"]})]
+                    }
                 } else {
                     self.workers
                         .get(&key)
@@ -712,7 +750,16 @@ impl Engine {
 }
 pub async fn serve(demo: bool) -> Result<()> {
     let (tx, mut rx) = mpsc::channel(256);
+    let gtk = std::env::var("BARTJIK_FRONTEND").as_deref() == Ok("gtk");
+    if gtk && !demo {
+        let sender = tx.clone();
+        crate::native::watch(move |v| {
+            let _ = sender.blocking_send(Event::Native(v));
+        });
+    }
     let mut engine = Engine {
+        gtk,
+        native: json!({}),
         demo,
         cfg: None,
         bars: vec![],
@@ -742,7 +789,7 @@ pub async fn serve(demo: bool) -> Result<()> {
     let mut publish = tokio::time::interval(Duration::from_millis(30));
     let mut dirty = false;
     loop {
-        tokio::select! {read=async {ensure!(raw.len()<=1048576,"helper input limit exceeded");Ok::<_,anyhow::Error>((&mut reader).take(1048577-raw.len() as u64).read_until(b'\n',&mut raw).await?)}=>{let n=read?;if n==0{break;}ensure!(raw.len()<=1048576,"helper input limit exceeded");if let Ok(msg)=serde_json::from_slice::<Value>(&raw){match engine.message(msg).await{Ok(changed)=>dirty|=changed,Err(e)=>{engine.error=e.to_string();dirty=true;}}}raw.clear();},Some(event)=rx.recv()=>{match event{Event::Provider(key,state)=>{if let Some(w)=engine.workers.get_mut(&key){w.state=state;dirty=true;}},Event::Compositor(data,error)=>{engine.compositor=data;engine.compositor_error=error;dirty=true;},Event::Emit(v)=>crate::emit(&v),Event::Action(error,feedback)=>{engine.action_error=error;if truth(&feedback){engine.feedback=feedback;}dirty=true;}}},_=reload.tick()=>{if !demo {let pending=crate::monitors::pending();if pending!=engine.monitor_change {engine.monitor_change=pending;dirty=true;}}match engine.reload(false).await{Ok(changed)=>dirty|=changed,Err(e)=>{let error=e.to_string();dirty|=engine.error!=error;engine.error=error;}}},_=publish.tick()=>{if dirty{engine.publish();dirty=false;}}}
+        tokio::select! {read=async {ensure!(raw.len()<=1048576,"helper input limit exceeded");Ok::<_,anyhow::Error>((&mut reader).take(1048577-raw.len() as u64).read_until(b'\n',&mut raw).await?)}=>{let n=read?;if n==0{break;}ensure!(raw.len()<=1048576,"helper input limit exceeded");if let Ok(msg)=serde_json::from_slice::<Value>(&raw){match engine.message(msg).await{Ok(changed)=>dirty|=changed,Err(e)=>{engine.error=e.to_string();dirty=true;}}}raw.clear();},Some(event)=rx.recv()=>{match event{Event::Native(value)=>{if value["kind"]=="menuChanged"{crate::emit(&value);}else if engine.native!=value{engine.native=value;dirty=true;}},Event::Provider(key,state)=>{if let Some(w)=engine.workers.get_mut(&key){w.state=state;dirty=true;}},Event::Compositor(data,error)=>{engine.compositor=data;engine.compositor_error=error;dirty=true;},Event::Emit(v)=>crate::emit(&v),Event::Action(error,feedback)=>{engine.action_error=error;if truth(&feedback){engine.feedback=feedback;}dirty=true;}}},_=reload.tick()=>{if !demo {let pending=crate::monitors::pending();if pending!=engine.monitor_change {engine.monitor_change=pending;dirty=true;}}match engine.reload(false).await{Ok(changed)=>dirty|=changed,Err(e)=>{let error=e.to_string();dirty|=engine.error!=error;engine.error=error;}}},_=publish.tick()=>{if dirty{engine.publish();dirty=false;}}}
     }
     engine.tasks.clear();
     engine.panels.cancel();
