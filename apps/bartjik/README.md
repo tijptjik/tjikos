@@ -1127,3 +1127,45 @@ renderer. `busctl` and `dbus-monitor` provide the tray adapter transport. Python
 only for development scripts, test drivers and the test-only migration oracle under
 `tests/reference`; none is installed with Bartjik. See
 [migration validation and measurements](docs/rust-migration.md).
+
+## Opt-in GTK surface
+
+`bartjik --gtk serve` starts the initial GTK surface alongside the existing bar. The
+default command and service still use Quickshell. This slice shows a clock, configured
+islands, workspace buttons and a window panel on each output, using the shared
+`tjik-desktop` adapter and existing theme configuration. Workspace buttons select
+existing or configured persistent workspaces, including empty ones.
+
+Use `bartjik --gtk status`, `bartjik --gtk panel`, `bartjik --gtk hide-panel` and
+`bartjik --gtk quit` to inspect or control only this surface. Its default reserves no
+edge space. `serve --reserve` enables configured reservations on each edge; do not run
+it over another bar reserving that edge. Layer-shell is required.
+
+Configured bars support all four edges, offsets, columns and island gaps; unsupported
+providers are labeled. Auto-hide uses the shared adapter pointer capability, with
+configured edge dwell, hide delay, retention distance, fades and monitor
+synchronization. Concealed bars release input and reserved space. Missing or stale
+pointer data keeps bars visible; `status` reports `autoHideError`. Pointer sampling
+stops when no visible bar has auto-hide enabled. Open panels hold their bars visible.
+
+Tray, audio, notifications, detachment and process-level compositor restart recovery
+remain on the migration backlog. The GTK slice does not start a second provider engine
+or claim notification/tray bus names.
+
+Build with `dev-check bun run build --filter=@tjikos/bartjik`. The supported
+`scripts/install.sh --gtk-only` installs the opt-in executable, library and launcher
+without replacing QML, the core or service policy.
+
+For the requested same-session comparison, run
+`python3 apps/bartjik/scripts/gtk_compare.py start`. It leaves the existing Quickshell
+bar in place and displays GTK directly above it with an 8-pixel gutter, using the same
+configuration and cached item data. Both bars stay visible. The upper bar is read-only:
+this bridge compares rendering, not provider/action parity. No nested compositor,
+workspace switch, extra reservation or duplicate provider engine is involved. Do not
+wrap this persistent viewer in `dev-check`.
+
+Use `python3 apps/bartjik/scripts/gtk_compare.py status` or `stop` to inspect or close
+only the comparison. Closing restores the reference bar's previous reveal state.
+Configuration and service policy are not changed. After starting it, run
+`dev-check bun run --filter @tjikos/bartjik test:gtk` for geometry checks and cropped
+comparison images. See [GTK progress and parity](docs/gtk-progress.md).
