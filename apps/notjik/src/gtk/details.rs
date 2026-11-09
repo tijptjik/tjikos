@@ -45,6 +45,7 @@ pub(super) fn content(ctx: &Rc<Context>, parent: &gtk::Box) {
             }
         }
         "auth-code" => {
+            parent.add_css_class("auth-content");
             let b = column(4);
             b.add_css_class("auth-panel");
             let code = label(&text(&d["code"]), "auth-code");

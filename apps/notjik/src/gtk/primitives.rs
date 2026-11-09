@@ -150,7 +150,7 @@ pub fn apply_theme(style: &Value) -> gtk::CssProvider {
 .notjik .card-frame.selected, .notjik .card-frame:focus-within {{ border-color: {accent}; }}
 .notjik .card-frame.urgent {{ border-color: {critical}; }}
 .notjik .card-content {{ padding: {padding}px; }}
-.notjik .card-content.compact-footer {{ padding-bottom: 8px; }}
+.notjik .card-content.compact-footer, .notjik .card-content.auth-content {{ padding-bottom: 8px; }}
 .notjik .card-title {{ font-weight: bold; font-size: {title}px; }}
 .notjik .strong, .notjik .field-name {{ font-weight: bold; }}
 @define-color notjik_accent {accent};
@@ -197,7 +197,7 @@ pub fn apply_theme(style: &Value) -> gtk::CssProvider {
 .notjik .wave-seek:disabled slider {{ opacity: 0; }}
 .notjik .interaction-hint {{ background: {border}; border-radius: 2px; }}
 .notjik button.page-action {{ font-size: 16px; }}
-.notjik button.auth-copy {{ min-height: 26px; padding: 5px 12px; border: 0; background: transparent; color: {muted}; font-size: {small}px; }}
+.notjik button.auth-copy {{ min-height: 26px; padding: 0 12px; border: 0; background: transparent; color: {muted}; font-size: {small}px; }}
 .notjik button.auth-copy:hover {{ color: {text}; background: transparent; }}
 .notjik button.auth-copy:active {{ background: {surface}; }}
 .notjik button.auth-copy:focus-visible {{ outline: none; color: {text}; background: alpha({accent}, .09); }}

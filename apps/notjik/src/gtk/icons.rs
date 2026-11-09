@@ -66,7 +66,6 @@ pub fn play(playing: bool) -> gtk::Button {
     } else {
         "Play voice message"
     };
-    b.set_tooltip_text(Some(title));
     b.update_property(&[gtk::accessible::Property::Label(title)]);
     let area = gtk::DrawingArea::new();
     area.set_content_width(18);
