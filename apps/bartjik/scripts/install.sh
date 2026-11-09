@@ -9,6 +9,10 @@ test -x "$source_dir/bin/bartjik-core"
 test -x "$source_dir/bin/bartjik-gtk"
 test -f "$source_dir/qml/IconFonts.qml"
 test -f "$source_dir/qml/fonts/MaterialSymbolsRounded.ttf"
+install_notification_assets() {
+    install -d -m 755 "$target_dir/lib/notification-cards/assets"
+    cp -R "$source_dir/lib/notification-cards/assets/." "$target_dir/lib/notification-cards/assets/"
+}
 install_gtk() {
     install -d -m 755 "$target_dir/bin" "$target_dir/lib"
     install -m 755 "$source_dir/bin/bartjik-gtk-core" "$target_dir/bin/.bartjik-gtk-core.pending"
@@ -16,11 +20,15 @@ install_gtk() {
     install -m 755 "$source_dir/lib/libgtk4-layer-shell.so.0" "$target_dir/lib/.layer-shell.pending"
     mv -f "$target_dir/lib/.layer-shell.pending" "$target_dir/lib/libgtk4-layer-shell.so.0"
     install -m 644 "$source_dir/lib/gtk4-layer-shell.LICENSE" "$target_dir/lib/"
-    install -d -m 755 "$target_dir/lib/notification-cards/qml"
-    cp -R "$source_dir/lib/notification-cards/qml/icons" "$target_dir/lib/notification-cards/qml/"
+    install_notification_assets
     install -m 755 "$source_dir/bin/bartjik-gtk" "$target_dir/bin/.bartjik-gtk.pending"
     mv -f "$target_dir/bin/.bartjik-gtk.pending" "$target_dir/bin/bartjik-gtk"
 }
+if [[ "${1:-}" == --notification-assets-only ]]; then
+    install_notification_assets
+    printf 'Installed BarTjik notification artwork; binaries and services were not changed\n'
+    exit 0
+fi
 if [[ "${1:-}" == --gtk-only ]]; then
     install_gtk
     install -d -m 755 "$install_home/.local/bin" "$target_dir/docs"
@@ -31,7 +39,7 @@ if [[ "${1:-}" == --gtk-only ]]; then
     printf 'Installed opt-in Bartjik GTK; existing bar and services were not restarted\n'
     exit 0
 fi
-[[ $# == 0 ]] || { echo 'Usage: install.sh [--gtk-only]' >&2; exit 2; }
+[[ $# == 0 ]] || { echo 'Usage: install.sh [--gtk-only|--notification-assets-only]' >&2; exit 2; }
 install -d -m 755 "$install_home/.local/bin" "$target_dir" "$config_dir/systemd/user"
 cp -R "$source_dir"/qml "$source_dir"/themes "$source_dir"/examples "$source_dir"/docs "$source_dir"/hypr "$target_dir/"
 install -m 644 "$source_dir/README.md" "$target_dir/"

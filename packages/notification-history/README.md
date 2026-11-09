@@ -1,11 +1,15 @@
-# Notification history
+# BarTjik legacy history presentation
 
-Shared search, grouping, navigation and history content for Notjik and Bartjik. The
-renderer and artwork links reference Notjik's canonical sources. Both builds dereference
-these links into their own distributions, so installed QML and assets never import
-another installed application. Changes to history browsing and card rendering therefore
-reach both entry points together.
+This package owns the rendering files used by BarTjik's currently supported Quickshell
+history panel. It does not contain a notification server, launcher or Notjik frontend.
+Its artwork link points to Notjik's shared `assets/icons` directory. BarTjik's build
+copies these resources into its own installation.
 
-Notjik remains the notification service and action authority. Bartjik uses the existing
-`notjikctl` connection with the bounded `history-data` / `history-action` API;
-executable actions stay inside Notjik, and history is unavailable when locked.
+Notjik is GTK-only. The native BarTjik history panel uses the Rust Notjik card library;
+it does not use this package. Retire this package when BarTjik's Quickshell frontend is
+removed. Until then, keeping it self-contained avoids breaking the running bar when
+Notjik is updated.
+
+Notjik remains the notification and action authority. Both history views use
+`notjikctl history-data` and `history-action`; executable actions stay inside Notjik,
+and history is unavailable when locked.
