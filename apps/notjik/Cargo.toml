@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-gtk-ui = ["dep:gtk", "dep:tjik-gtk"]
+gtk-ui = ["dep:gtk", "dep:tjik-gtk", "dep:gtk4-layer-shell"]
 
 [[bin]]
 name = "notjik-gtk"
@@ -13,6 +13,7 @@ required-features = ["gtk-ui"]
 
 [dependencies]
 gtk = { package = "gtk4", version = "0.10", features = ["v4_12"], optional = true }
+gtk4-layer-shell = { version = "0.7", optional = true }
 tjik-gtk = { path = "../../packages/tjik-gtk", optional = true }
 notjik-sync = { path = "../../packages/notjik-sync" }
 anyhow = "1"

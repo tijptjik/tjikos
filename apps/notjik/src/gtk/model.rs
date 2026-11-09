@@ -66,6 +66,7 @@ pub fn local_path(source: &str) -> Option<PathBuf> {
 #[derive(Clone, Debug)]
 pub struct ViewState {
     pub locked: bool,
+    pub show_when_locked: bool,
     pub paused: bool,
     pub selected: bool,
     pub floating: bool,
@@ -81,6 +82,7 @@ impl Default for ViewState {
     fn default() -> Self {
         Self {
             locked: true,
+            show_when_locked: false,
             paused: false,
             selected: false,
             floating: false,

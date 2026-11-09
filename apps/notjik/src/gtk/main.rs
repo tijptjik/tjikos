@@ -21,6 +21,9 @@ struct Options {
     width: i32,
 }
 fn main() -> glib::ExitCode {
+    if std::env::args().nth(1).as_deref() == Some("--serve") {
+        return cards::host::run();
+    }
     let opts = Rc::new(Options::parse());
     if opts.self_test {
         let default = std::panic::take_hook();

@@ -2,8 +2,11 @@
 //! remain host responsibilities. The synthetic gallery is one such host.
 mod actions;
 pub mod clipboard;
+mod desktop_bus;
 mod details;
+mod executor;
 pub mod fixtures;
+pub mod host;
 mod icons;
 mod media;
 pub mod model;
@@ -359,7 +362,8 @@ impl Card {
         let n = self.context.notice.borrow().clone();
         let state = self.context.state.borrow().clone();
         self.widget.set_widget_name(&format!("card-{}", n.id()));
-        self.widget.set_visible(!state.locked && !state.paused);
+        self.widget
+            .set_visible((!state.locked || state.show_when_locked) && !state.paused);
         for (class, on) in [
             ("selected", state.selected),
             ("urgent", n.0["urgency"] == "critical"),

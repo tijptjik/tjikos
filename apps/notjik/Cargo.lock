@@ -1034,6 +1034,7 @@ dependencies = [
  "fancy-regex",
  "flate2",
  "gtk4",
+ "gtk4-layer-shell",
  "libc",
  "notjik-sync",
  "regex",
