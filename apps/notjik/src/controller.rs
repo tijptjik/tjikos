@@ -357,7 +357,6 @@ impl Controller {
             self.held.insert(key.into());
         } else {
             self.held.remove(key);
-            self.floating.remove(key);
         }
     }
     pub fn visible(&self) -> Vec<Value> {
@@ -928,6 +927,23 @@ mod tests {
         c.hover(&id, false);
         c.tick(201);
         assert!(c.find(&id).is_none());
+    }
+    #[test]
+    fn releasing_interaction_hold_preserves_floating_card() {
+        let mut c = controller();
+        let id = c
+            .send(json!({"title":"Floating","timeout":200}), 0)
+            .unwrap();
+        c.hold(&id, true);
+        c.floating.insert(id.clone());
+        c.hold(&id, false);
+        c.tick(500);
+        assert!(c.floating.contains(&id));
+        assert!(!c.held.contains(&id));
+        assert!(c.find(&id).is_some());
+        assert!(c.visible().is_empty());
+        c.close(&id, 2);
+        assert!(!c.floating.contains(&id));
     }
     #[test]
     fn grouped_oldest_and_selected() {
