@@ -431,7 +431,7 @@ impl Host {
                 }
             }
             Intent::PlaybackRate(rate) => {
-                anyhow::ensure!([1., 1.5, 2.].contains(&rate), "Invalid playback rate");
+                anyhow::ensure!([1., 1.25, 1.5, 2.].contains(&rate), "Invalid playback rate");
                 let playing = self.executor.playback.get(&id).is_some_and(|p| p.playing);
                 self.executor.stop_audio();
                 self.executor.playback.entry(id.clone()).or_default().rate = rate;

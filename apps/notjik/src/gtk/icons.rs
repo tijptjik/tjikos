@@ -61,6 +61,10 @@ pub fn play(playing: bool) -> gtk::Button {
     b.add_css_class("voice-play");
     b.set_halign(gtk::Align::Start);
     b.set_valign(gtk::Align::Start);
+    set_playing(&b, playing);
+    b
+}
+pub fn set_playing(b: &gtk::Button, playing: bool) {
     let title = if playing {
         "Pause voice message"
     } else {
@@ -85,5 +89,4 @@ pub fn play(playing: bool) -> gtk::Button {
         let _ = cr.fill();
     });
     b.set_child(Some(&area));
-    b
 }

@@ -2,7 +2,7 @@
 use serde_json::Value;
 use std::path::PathBuf;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Notice(pub Value);
 impl Notice {
     pub fn id(&self) -> String {
@@ -63,7 +63,7 @@ pub fn local_path(source: &str) -> Option<PathBuf> {
 }
 
 /// State controlled by the host; default to hidden and inert until lock state is known.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ViewState {
     pub locked: bool,
     pub show_when_locked: bool,
@@ -106,7 +106,7 @@ impl ViewState {
             && !notice.archived()
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Playback {
     pub playing: bool,
     pub position_ms: u64,
@@ -127,7 +127,7 @@ impl Default for Playback {
         }
     }
 }
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Recording {
     pub phase: String,
     pub duration_ms: u64,

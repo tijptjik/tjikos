@@ -37,6 +37,7 @@ struct Context {
     snoozing: Cell<bool>,
     reply_target: RefCell<Option<ReplyTarget>>,
     timer: RefCell<Option<(gtk::Label, gtk::Label)>>,
+    voice: RefCell<Option<telegram::Voice>>,
     media: RefCell<Vec<media::Media>>,
     hovered: Cell<bool>,
     focused: Cell<bool>,
@@ -215,6 +216,7 @@ impl Card {
             snoozing: Cell::new(false),
             reply_target: RefCell::new(None),
             timer: RefCell::new(None),
+            voice: RefCell::new(None),
             media: RefCell::new(vec![]),
             hovered: Cell::new(false),
             focused: Cell::new(false),
@@ -240,8 +242,25 @@ impl Card {
         self.render();
     }
     pub fn set_state(&self, state: ViewState) {
+        let mut previous = self.state();
+        let playing_changed = previous.playback.playing != state.playback.playing;
+        previous.playback = state.playback.clone();
+        previous.selected = state.selected;
+        let incremental = previous == state;
         *self.context.state.borrow_mut() = state;
-        self.render();
+        if incremental {
+            if self.context.state.borrow().selected {
+                self.widget.add_css_class("selected");
+            } else {
+                self.widget.remove_css_class("selected");
+            }
+            if let Some(voice) = self.context.voice.borrow().as_ref() {
+                voice.update(&self.context, playing_changed);
+            }
+            self.context.sync_reveal();
+        } else {
+            self.render();
+        }
     }
     /// Pause decorative animation for reduced motion, capture, or hidden hosts.
     pub fn media_status(&self) -> Vec<MediaStatus> {
@@ -356,6 +375,7 @@ impl Card {
             self.widget.remove(&child);
         }
         self.context.timer.borrow_mut().take();
+        self.context.voice.borrow_mut().take();
         self.context.media.borrow_mut().clear();
         self.context.revealers.borrow_mut().clear();
         self.context.quiet.borrow_mut().clear();

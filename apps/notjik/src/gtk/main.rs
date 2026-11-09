@@ -357,6 +357,33 @@ fn self_test(all: &Rc<RefCell<Vec<Rc<Card>>>>, events: &Rc<RefCell<Vec<CardEvent
     assert!(play.has_css_class("voice-play"));
     assert!(play.label().is_none());
     assert!(play.is_sensitive());
+    let voice = &cards[10];
+    voice.set_hovered(true);
+    let footer = find(&voice.widget, "telegram-controls-reveal")
+        .unwrap()
+        .downcast::<gtk::Revealer>()
+        .unwrap();
+    let seek = find(&voice.widget, "voice-seek").unwrap();
+    let editor = find(&voice.widget, "telegram-reply").unwrap();
+    let before_playback = voice.state();
+    for position in (0..8000).step_by(100) {
+        let mut state = voice.state();
+        state.playback.playing = position < 7900;
+        state.playback.position_ms = position;
+        state.playback.duration_ms = 8000;
+        state.playback.seekable = true;
+        voice.set_state(state);
+        assert_eq!(find(&voice.widget, "voice-play").unwrap(), play);
+        assert_eq!(find(&voice.widget, "voice-seek").unwrap(), seek);
+        assert_eq!(find(&voice.widget, "telegram-reply").unwrap(), editor);
+        assert_eq!(
+            find(&voice.widget, "telegram-controls-reveal").unwrap(),
+            footer
+        );
+        assert!(footer.reveals_child());
+    }
+    voice.set_state(before_playback);
+    voice.set_hovered(false);
     let read = find(&cards[8].widget, "telegram-read")
         .unwrap()
         .downcast::<gtk::Button>()

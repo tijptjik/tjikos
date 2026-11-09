@@ -2,6 +2,46 @@ use super::{model::*, primitives::*, Context};
 use gtk::{gdk, glib, prelude::*};
 use std::rc::Rc;
 
+pub(super) struct Voice {
+    play: gtk::Button,
+    wave: gtk::DrawingArea,
+    seek: gtk::Scale,
+    elapsed: gtk::Label,
+    speed: gtk::Button,
+    error: gtk::Label,
+}
+impl Voice {
+    pub fn update(&self, ctx: &Context, playing_changed: bool) {
+        let state = ctx.state.borrow();
+        let p = &state.playback;
+        let duration = p
+            .duration_ms
+            .max((number(&ctx.notice.borrow().data()["duration"]) * 1000.) as u64);
+        if playing_changed {
+            super::icons::set_playing(&self.play, p.playing);
+        }
+        self.wave.queue_draw();
+        self.seek.set_range(0., duration.max(1) as f64);
+        self.seek.set_value(p.position_ms as f64);
+        self.seek
+            .set_sensitive(ctx.allowed() && p.seekable && ctx.revealed());
+        // sync_reveal must keep the updated seek capability on subsequent hover changes.
+        for (widget, enabled) in ctx.quiet.borrow_mut().iter_mut() {
+            if widget.upgrade().is_some_and(|w| w == self.seek) {
+                *enabled = ctx.allowed() && p.seekable;
+            }
+        }
+        self.elapsed.set_text(&format!(
+            "{} / {}",
+            stamp(p.position_ms / 1000),
+            stamp(duration / 1000)
+        ));
+        self.speed.set_label(&format!("{}×", p.rate));
+        self.error.set_text(&p.error);
+        self.error.set_visible(!p.error.is_empty());
+    }
+}
+
 pub(super) fn content(ctx: &Rc<Context>, parent: &gtk::Box) {
     let n = ctx.notice.borrow().clone();
     let d = n.data();
@@ -296,12 +336,15 @@ fn voice(ctx: &Rc<Context>, parent: &gtk::Box) {
     wave.set_content_height(30);
     wave.set_hexpand(true);
     let peaks = d["waveform"].as_array().cloned().unwrap_or_default();
-    let fraction = if p.duration_ms > 0 {
-        p.position_ms as f64 / p.duration_ms as f64
-    } else {
-        0.
-    };
+    let c = ctx.clone();
     wave.set_draw_func(move |widget, cr, w, h| {
+        let state = c.state.borrow();
+        let p = &state.playback;
+        let fraction = if p.duration_ms > 0 {
+            p.position_ms as f64 / p.duration_ms as f64
+        } else {
+            0.
+        };
         let count = peaks.len().min((w / 4).max(1) as usize);
         let bar_width = (w as f64 - count.saturating_sub(1) as f64 * 2.) / count.max(1) as f64;
         let ink = widget.color();
@@ -398,10 +441,10 @@ fn voice(ctx: &Rc<Context>, parent: &gtk::Box) {
     elapsed.set_hexpand(true);
     actions.append(&elapsed);
     let speed = button(&format!("{}×", p.rate), "voice-speed");
-    let rate = p.rate;
     let c = ctx.clone();
     speed.connect_clicked(move |_| {
         let rates = [1., 1.25, 1.5, 2.];
+        let rate = c.state.borrow().playback.rate;
         let at = rates.iter().position(|r| *r == rate).unwrap_or(0);
         c.emit(Intent::PlaybackRate(rates[(at + 1) % 4]));
     });
@@ -424,8 +467,16 @@ fn voice(ctx: &Rc<Context>, parent: &gtk::Box) {
     actions.append(&transcribe);
     actions.append(&speed);
     right.append(&actions);
-    if !p.error.is_empty() {
-        area.append(&label(&p.error, "critical"));
-    }
+    let error = label(&p.error, "critical");
+    error.set_visible(!p.error.is_empty());
+    area.append(&error);
+    *ctx.voice.borrow_mut() = Some(Voice {
+        play,
+        wave,
+        seek,
+        elapsed,
+        speed,
+        error,
+    });
     parent.append(&area);
 }
