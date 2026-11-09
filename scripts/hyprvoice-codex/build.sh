@@ -14,6 +14,9 @@ git apply --check "$script_dir/subscription-provider.patch"
 git apply "$script_dir/subscription-provider.patch"
 git apply --check "$script_dir/empty-text.patch"
 git apply "$script_dir/empty-text.patch"
+git apply --check "$script_dir/network-error.patch"
+git apply "$script_dir/network-error.patch"
+cp "$script_dir/network_error.go" "$script_dir/network_error_test.go" internal/daemon/
 mkdir -p cmd/codex-smoke "$cache_root/tmp"
 cp "$script_dir/smoke.go" cmd/codex-smoke/main.go
 cp "$script_dir/empty_text_test.go" internal/pipeline/empty_text_test.go
@@ -23,6 +26,7 @@ CI=true go test ./internal/config ./internal/provider ./internal/llm ./internal/
 # The upstream notify suite invokes the desktop; this focused test uses a stub.
 go test ./internal/notify -run '^TestErrorsOnlyDesktopNotifications$'
 go test ./internal/pipeline -run '^TestPipeline_WithMocks'
+go test ./internal/daemon -run '^TestPipelineNotificationNetworkError$'
 output=${1:-${XDG_DATA_HOME:-$HOME/.local/share}/hyprvoice-codex}
 mkdir -p "$output"
 go build -o "$output/hyprvoice.next" ./cmd/hyprvoice

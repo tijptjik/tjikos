@@ -1,0 +1,14 @@
+diff --git a/internal/daemon/daemon.go b/internal/daemon/daemon.go
+index 4b9e8e5..528f8a1 100644
+--- a/internal/daemon/daemon.go
++++ b/internal/daemon/daemon.go
+@@ -245,7 +245,8 @@ func (d *Daemon) monitorPipelineErrors(p pipeline.Pipeline) {
+ 				message = fmt.Sprintf("%s: %v", message, pipelineErr.Err)
+ 			}
+ 
+-			d.notifier.Error(message)
++			log.Printf("Pipeline error: %s", message)
++			d.notifier.Error(pipelineNotificationMessage(pipelineErr, message))
+ 		case <-d.ctx.Done():
+ 			return
+ 		}
