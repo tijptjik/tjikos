@@ -19,7 +19,7 @@ def motion_acceptance(request, send, config, env, work, daemon):
     time.sleep(.4)
     config.write_text(json.dumps({"theme":"rose-punk", "placement":{"monitors":"all","edge":"b","position":"r"}, "grouping":{"enabled":False}, "stack":{"animationMs":500}}))
     time.sleep(1.3)
-    old=send("Older card stays attached",id="motion-old",body="Moves down after the lower card leaves.",timeout=0)
+    old=send("Older card stays attached",id="motion-old",body="Moves down after the lower card leaves.",actions=[{"identifier":"default","label":"Open","command":["true"]}],timeout=0)
     fixture=json.loads((ROOT/"examples/demo-fixtures.json").read_text())["telegram-voice"]["notices"][0]
     fixture=json.loads(json.dumps(fixture).replace("NOTJIK_ROOT",str(ROOT/"dist")))
     fixture.update(app="notjik demo",id="motion-voice",timeout=0,transient=True)
@@ -122,6 +122,24 @@ def motion_acceptance(request, send, config, env, work, daemon):
         settled=layers()[-1]
         assert abs(settled['x']-again['x'])<3 and abs(settled['y']-again['y'])<3, (again,settled)
         subprocess.run(["grim","-o","NOTJIK",str(work/"drag-dropped.png")],check=True,capture_output=True)
+        # Leaving the pinned card collapses its footer; switching workspace hides
+        # the layer without dismissing its notification, then restores it.
+        expanded_height = row(settled, old)['height']
+        move(10, 10)
+        wait_for(lambda: row(layers()[-1], old)['height'] < expanded_height)
+        def popup_count():
+            outputs = json.loads(subprocess.check_output(["hyprctl", "-j", "layers"], text=True))
+            return sum(1 for output in outputs.values() for entries in output['levels'].values()
+                       for entry in entries if entry.get('namespace') == 'notjik')
+        original_workspace = json.loads(subprocess.check_output(["hyprctl", "-j", "activeworkspace"], text=True))['id']
+        visible_count = popup_count()
+        subprocess.run(["hyprctl", "eval", 'hl.dispatch(hl.dsp.focus({workspace="98"}))'], check=True, capture_output=True)
+        wait_for(lambda: popup_count() < visible_count)
+        assert request({"op":"status"})["floating"] == 1
+        subprocess.run(["hyprctl", "eval", f'hl.dispatch(hl.dsp.focus({{workspace="{original_workspace}"}}))'], check=True, capture_output=True)
+        wait_for(lambda: popup_count() == visible_count)
+        subprocess.run(["grim", "-o", "NOTJIK", str(work / "pinned-idle.png")], check=True, capture_output=True)
+        print("Pinned card: hover footer collapse and workspace hide/restore passed")
         print("Native drag: plain-text pickup, live held movement, release without dismissal and repeated floating drag passed")
         print("Native motion: stable playback footer, frame-synchronous neighbours, background dismissal, recede/fade then collapse passed")
     finally:

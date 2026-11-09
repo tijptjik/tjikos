@@ -15,16 +15,23 @@ struct Slot {
     retirement: Option<(Instant, f64)>,
     node: Option<gsk::RenderNode>,
 }
-// The face recedes first; only then does its reserved space collapse.
+// Recede early, then accelerate downward along a depth/drop arc. Keep the
+// face visible through the bend; only then collapse its reserved space.
 fn departure(progress: f64) -> (f64, f64, f64, f64) {
-    let face = (progress / 0.65).clamp(0., 1.).powi(2);
+    let face = (progress / 0.65).clamp(0., 1.);
+    let depth = 1. - (1. - face).powi(2);
     let flow = ((progress - 0.65) / 0.35).clamp(0., 1.);
     let flow = if flow < 0.5 {
         4. * flow.powi(3)
     } else {
         1. - (-2. * flow + 2.).powi(3) / 2.
     };
-    (1. - face, 1. - 0.1 * face, 28. * face, 1. - flow)
+    (
+        1. - face.powi(3),
+        1. - 0.18 * depth,
+        64. * face.powi(2),
+        1. - flow,
+    )
 }
 mod imp {
     use super::*;
@@ -398,13 +405,23 @@ impl Stack {
 mod tests {
     use super::*;
     #[test]
+    fn departure_bends_from_recession_into_a_fall() {
+        let early = departure(0.65 * 0.25);
+        let middle = departure(0.65 * 0.5);
+        let late = departure(0.65 * 0.75);
+        // Depth advances most at the start; downward travel grows toward the end.
+        assert!(early.1 - middle.1 > middle.1 - late.1);
+        assert!(middle.2 - early.2 < late.2 - middle.2);
+        assert!(middle.0 > 0.8);
+    }
+    #[test]
     fn departure_preserves_space_until_face_has_receded() {
         assert_eq!(departure(0.), (1., 1., 0., 1.));
         let mid = departure(0.325);
-        assert_eq!(mid, (0.75, 0.975, 7., 1.));
+        assert_eq!(mid, (0.875, 0.865, 16., 1.));
         let hidden = departure(0.65);
-        assert_eq!(hidden, (0., 0.9, 28., 1.));
+        assert_eq!(hidden, (0., 1. - 0.18, 64., 1.));
         assert!((departure(0.825).3 - 0.5).abs() < 1e-10);
-        assert_eq!(departure(1.), (0., 0.9, 28., 0.));
+        assert_eq!(departure(1.), (0., 1. - 0.18, 64., 0.));
     }
 }

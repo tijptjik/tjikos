@@ -149,6 +149,8 @@ pub fn apply_theme(style: &Value) -> gtk::CssProvider {
 .notjik .card-frame {{ background: {bg}; border: 1px solid {border}; border-radius: {radius}px; }}
 .notjik .card-frame.selected, .notjik .card-frame:focus-within {{ border-color: {accent}; }}
 .notjik .card-frame.urgent {{ border-color: {critical}; }}
+.notjik .card-frame.floating {{ border-color: transparent; }}
+.notjik button.quiet.card-dismiss {{ font-size: {title}px; }}
 .notjik .card-content {{ padding: {padding}px; }}
 .notjik .card-content.compact-footer, .notjik .card-content.auth-content {{ padding-bottom: 8px; }}
 .notjik .card-title {{ font-weight: bold; font-size: {title}px; }}

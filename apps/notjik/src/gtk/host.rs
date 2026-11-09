@@ -34,6 +34,7 @@ struct Surface {
 }
 struct Detached {
     monitor: String,
+    workspace: Option<i64>,
     id: String,
     x: i32,
     y: i32,
@@ -69,6 +70,7 @@ struct Host {
     last: Instant,
     monitor_tick: Instant,
     desktop: mpsc::Receiver<Value>,
+    workspaces: HashMap<String, i64>,
     app: gtk::Application,
     hold: Option<gio::ApplicationHoldGuard>,
     stopped: bool,
@@ -97,13 +99,21 @@ impl Host {
         let recording_id = Rc::new(RefCell::new(None));
         let (desktop_tx, desktop) = mpsc::sync_channel(2);
         std::thread::spawn(move || loop {
-            let v = crate::util::run(
+            let mut v = crate::util::run(
                 std::process::Command::new("hyprctl").args(["-j", "activewindow"]),
                 Duration::from_secs(2),
             )
             .ok()
             .and_then(|v| serde_json::from_slice::<Value>(&v).ok())
             .unwrap_or(json!({}));
+            if let Ok(bytes) = crate::util::run(
+                std::process::Command::new("hyprctl").args(["-j", "monitors"]),
+                Duration::from_secs(2),
+            ) {
+                if let Ok(monitors) = serde_json::from_slice::<Value>(&bytes) {
+                    v["monitors"] = monitors;
+                }
+            }
             if desktop_tx.send(v).is_err() {
                 break;
             }
@@ -132,6 +142,7 @@ impl Host {
             last: Instant::now(),
             monitor_tick: Instant::now() - Duration::from_secs(2),
             desktop,
+            workspaces: HashMap::new(),
             app: app.clone(),
             hold: Some(app.hold()),
             stopped: false,
@@ -191,6 +202,20 @@ impl Host {
             }
         }
         while let Ok(desktop) = self.desktop.try_recv() {
+            if let Some(monitors) = desktop["monitors"].as_array() {
+                self.workspaces = monitors
+                    .iter()
+                    .filter_map(|m| {
+                        let special = m["specialWorkspace"]["id"].as_i64().unwrap_or(0);
+                        let workspace = if special != 0 {
+                            Some(special)
+                        } else {
+                            m["activeWorkspace"]["id"].as_i64()
+                        };
+                        Some((m["name"].as_str()?.to_string(), workspace?))
+                    })
+                    .collect();
+            }
             self.controller.borrow_mut().focused_app =
                 desktop["class"].as_str().unwrap_or("").into();
         }
@@ -515,6 +540,7 @@ impl Host {
                     self.detached.insert(
                         preview.clone(),
                         Detached {
+                            workspace: self.workspaces.get(&monitor_name).copied(),
                             monitor: monitor_name,
                             id: id.clone(),
                             x,
@@ -553,6 +579,7 @@ impl Host {
                     d.x = drag.origin_x + dx.round() as i32;
                     d.y = drag.origin_y + dy.round() as i32;
                     if finished {
+                        d.workspace = self.workspaces.get(&d.monitor).copied();
                         if let Some(m) = c.monitors.iter().find(|m| m["name"] == d.monitor) {
                             d.x = d.x.clamp(
                                 0,
@@ -569,6 +596,13 @@ impl Host {
                 }
                 if finished {
                     let drag = self.drag.take().unwrap();
+                    if let Some(card) = self
+                        .windows
+                        .get(&drag.preview)
+                        .and_then(|s| s.cards.get(&id))
+                    {
+                        card.set_drag_preview(false);
+                    }
                     c.floating.insert(id.clone());
                     c.hold(&id, false);
                     if drag.source != drag.preview && self.detached.remove(&drag.source).is_some() {
@@ -702,6 +736,16 @@ impl Host {
         stack.reverse();
         for (name, surface) in &mut self.windows {
             let detached = self.detached.get(name);
+            if detached.is_some_and(|d| {
+                d.workspace.is_some() && self.workspaces.get(&d.monitor).copied() != d.workspace
+            }) && !self.drag.as_ref().is_some_and(|d| d.preview == *name)
+            {
+                surface.window.set_visible(false);
+                for card in surface.cards.values() {
+                    card.set_hovered(false);
+                }
+                continue;
+            }
             let visible = if let Some(d) = detached {
                 if c.concealed() {
                     vec![]
@@ -813,7 +857,7 @@ impl Host {
                     .is_some_and(|d| d.source == *name && d.preview != *name && d.id == key);
                 card.widget.set_opacity(if drag_source { 0. } else { 1. });
                 if self.drag.as_ref().is_some_and(|d| d.preview == *name) {
-                    card.set_hovered(true);
+                    card.set_drag_preview(true);
                 }
                 card.tick(now() as f64);
                 surface

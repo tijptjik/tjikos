@@ -53,8 +53,7 @@ impl Context {
         let state = self.state.borrow();
         self.hovered.get()
             || self.dragging.get()
-            || self.focused.get()
-            || state.selected
+            || (!state.floating && (self.focused.get() || state.selected))
             || self.composing.get()
             || state.busy
             || !["", "idle", "error"].contains(&state.recording.phase.as_str())
@@ -286,6 +285,10 @@ impl Card {
         self.context.hovered.set(hovered);
         self.context.sync_reveal();
     }
+    pub fn set_drag_preview(&self, dragging: bool) {
+        self.context.dragging.set(dragging);
+        self.context.sync_reveal();
+    }
     pub fn tick(&self, now: f64) {
         self.context.now.set(now);
         self.context.tick_timer();
@@ -470,6 +473,7 @@ impl Card {
             .set_visible((!state.locked || state.show_when_locked) && !state.paused);
         for (class, on) in [
             ("selected", state.selected),
+            ("floating", state.floating),
             ("urgent", n.0["urgency"] == "critical"),
         ] {
             if on {
@@ -501,6 +505,7 @@ impl Card {
         close.connect_clicked(move |_| c.emit(Intent::Dismiss));
         close.set_sensitive(self.context.allowed());
         close.add_css_class("quiet");
+        close.add_css_class("card-dismiss");
         if state.floating {
             self.context.quiet(&close);
             heading.append(&close);
