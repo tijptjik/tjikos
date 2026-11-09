@@ -5,9 +5,9 @@
   "dotjik_revision": "971db4a6e5505ee6ef5533255d341b6fbe193032",
   "tjikos_revision": "0c4e346eb5157f447d196878c7e94c58f0e3ed05",
   "tjikup_binary": {
-    "url": "https://github.com/tijptjik/tjikos/releases/download/tjikup-v0.2.0-bootstrap.7/tjikup-x86_64-unknown-linux-musl",
-    "sha256": "1f981f941e508f873521ae191bb081afc1552e3de3a532f6544cf68dcdeeac2e",
-    "source_revision": "c303b00ead739a76593d835710f1d6d75ce54e8a",
+    "url": "https://github.com/tijptjik/tjikos/releases/download/tjikup-v0.2.0-bootstrap.8/tjikup-x86_64-unknown-linux-musl",
+    "sha256": "621f545f62291549b027857c5cd502e52b5f3abb5bc665d81322c103242bda44",
+    "source_revision": "e771e78db19dfb218bed76b9fb7e6e356dfaf08b",
     "target": "x86_64-unknown-linux-musl"
   },
   "synctjik_binary": {
