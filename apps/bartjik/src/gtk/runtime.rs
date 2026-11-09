@@ -128,6 +128,20 @@ impl Runtime {
                 }
                 use std::os::unix::process::CommandExt;
                 command.process_group(0);
+                let parent = std::process::id();
+                // These children are the owned core/status readers, never capture workers.
+                // Do not leave duplicate providers behind if GTK crashes.
+                unsafe {
+                    command.pre_exec(move || {
+                        if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        if libc::getppid() as u32 != parent {
+                            return Err(std::io::Error::other("GTK parent exited"));
+                        }
+                        Ok(())
+                    });
+                }
                 match command.spawn() {
                     Ok(mut child) => {
                         let pid = child.id();

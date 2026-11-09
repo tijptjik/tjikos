@@ -122,6 +122,8 @@ impl Icon {
         let root = gtk::Overlay::new();
         root.set_overflow(gtk::Overflow::Visible);
         let art = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        // Artwork can be replaced on state changes; only the stable overlay is an input target.
+        art.set_can_target(false);
         art.set_halign(gtk::Align::Center);
         art.set_valign(gtk::Align::Center);
         root.set_child(Some(&art));

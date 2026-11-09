@@ -158,9 +158,15 @@ impl Binding {
         let entered_hover = hovered.clone();
         motion.connect_enter(move |_, x, y| {
             entered_hover.set(true);
-            if let Some(style) = entered_style.borrow().as_ref() {
-                style(true);
-            }
+            // GTK is walking its crossing-event target chain here. Never replace artwork
+            // until that walk has completed; coalesce to the latest hover state.
+            let styles = entered_style.clone();
+            let hover = entered_hover.clone();
+            glib::idle_add_local_once(move || {
+                if let Some(style) = styles.borrow().as_ref() {
+                    style(hover.get());
+                }
+            });
             entered_at.set((x, y));
             epoch_in.set(epoch_in.get() + 1);
             let serial = epoch_in.get();
@@ -180,9 +186,13 @@ impl Binding {
         let f = fire.clone();
         motion.connect_leave(move |_| {
             hovered.set(false);
-            if let Some(style) = appearance.borrow().as_ref() {
-                style(false);
-            }
+            let styles = appearance.clone();
+            let hover = hovered.clone();
+            glib::idle_add_local_once(move || {
+                if let Some(style) = styles.borrow().as_ref() {
+                    style(hover.get());
+                }
+            });
             hover_epoch.set(hover_epoch.get() + 1);
             if hover_entered.replace(false) {
                 let (x, y) = leave_at.get();
