@@ -36,13 +36,20 @@ actions. Bus disconnection closes native surfaces and exits. Unknown idle state 
 120 seconds to avoid advertising an unobserved device as active to Notjik sync.
 
 Native replacements always reset expiry. Hover, selection, interactions, pause and lock
-hold expiry. Ordinary popups do not take keyboard focus; explicit selection enables
-keyboard navigation, activation, dismissal and Escape to release focus. Dragging plain
-card content or artwork moves a live preview while retaining the original pointer grab.
-Release pins the card within its monitor bounds and holds expiry; detached cards can be
-dragged again. Buttons, editors and seeking retain their own pointer gestures. Reply
-drafts and action-page selection carry into the detached card. Monitor removal closes
-its surfaces.
+hold expiry. Ordinary popups do not take keyboard focus on arrival; click focus delivers
+held modifiers, and explicit selection enables keyboard navigation, activation,
+dismissal and Escape to release focus. Dragging plain card content or artwork
+immediately transfers the original widget from stack flow to an input-transparent drag
+surface. No duplicate card or reserved gap remains, including when the stack becomes
+empty. Native Wayland drag-and-drop and monitor-sized input regions maintain the gesture
+across outputs; the pointer selects the destination and release clamps the card to that
+output. Detached cards can be dragged again. Buttons, editors and seeking retain their
+own pointer gestures. Reply drafts and action-page selection stay in the same card
+widget. Monitor removal cancels a grab and rehomes cards on a surviving output; if no
+output remains, cards are retained for reconnection. Pause, lock and backend
+disconnection hide surfaces without discarding composers. Composing and dragging hold
+notification expiry. Ctrl-click requests Telegram safe-read for that card; on an
+ordinary card it dismisses the entire queue.
 
 The executor keeps playback and recording ownership separate from widgets. Concealment
 stops audio and stops an active recording. Synthetic notifications never send Telegram
@@ -51,7 +58,7 @@ actions or open the microphone. A pending or uncertain voice send retains its ca
 The popup scene keeps a fixed layer-surface height and measures its cards on GTK's frame
 clock. Footer reveal, neighbouring card positions and the input region therefore update
 together. Live cards are ordered oldest to newest toward the resting edge. Dismissed
-cards keep their slot while their cached face shrinks to 90%, drops up to 28 pixels and
+cards keep their slot while their cached face shrinks to 82%, drops up to 64 pixels and
 fades behind the stack (65% of `stack.animationMs`); the remaining 35% collapses their
 slot. Concealment removes faces immediately. Background clicks dismiss cards while
 buttons, text editors and seek controls keep their own interactions.
@@ -65,9 +72,13 @@ acceptance checks; it is unset in normal use.
 
 All built-in card types use the GTK card library. Registered custom QML components fall
 back to standard cards in GTK. The `--quickshell` frontend remains available for those
-components and the old drawer. GTK returns an explicit deferred-panel error for drawer
-commands, while local history data/action APIs remain available. Global history merging
-and the six-card demo-only stack exception are not implemented by the GTK controller.
+components and the old drawer. GTK does not execute QML. Some static SVG assets still
+live under `qml/icons`, artwork filenames come from `qml/Logic.js` at compile time, and
+the launcher uses `qml/shell.qml` to locate the installation root. These resource and
+launcher dependencies remain to be separated from the compatibility frontend. GTK
+returns an explicit deferred-panel error for drawer commands, while local history
+data/action APIs remain available. Global history merging and the six-card demo-only
+stack exception are not implemented by the GTK controller.
 
 ## Validation
 
@@ -82,10 +93,13 @@ Wayland compositor whose host window is placed silently on workspace 7. It check
 ownership, private IPC, replacements, expiry holds, native actions/signals and image
 data, command execution, configuration reload, history and layer surfaces. The gallery
 checks 19 variants in two themes against the QML reference. Unit tests cover controller
-privacy, suppression, overflow and idle observation. These checks do not establish real
-Telegram delivery, microphone capture, cross-monitor dragging or keyboard interaction
-parity. Pointer acceptance covers background dismissal, live dragging before release,
-and dragging a detached card again.
+privacy, suppression, overflow and idle observation. Mechanical lifecycle checks use
+real GTK widgets and a private fake Telegram socket to test replacement during dragging,
+pause/resume, lock/unlock, backend loss/recovery, uncertain send completion, output
+removal/reconnection, draft identity and expiry holds. Pointer acceptance checks the
+last-card buffer with a screenshot, background dismissal, repeated dragging, mixed-scale
+cross-output dragging, monitor removal during a grab, and Ctrl-click semantics. These
+checks do not establish real Telegram delivery or microphone capture.
 
 Install the validated build with `bash scripts/install.sh notjik`. On a managed desktop,
 set `TJIKUP_MANAGED_CONFIG=1` to preserve managed service configuration. Replacing files
