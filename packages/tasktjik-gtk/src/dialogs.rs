@@ -14,46 +14,39 @@ impl TaskView {
         self.stack.set_visible_child_name(name);
     }
     pub(crate) fn show_image(self: &Rc<Self>, source: &str) {
-        use base64::Engine;
-        let result = source
-            .split_once(',')
-            .and_then(|(_, data)| base64::engine::general_purpose::STANDARD.decode(data).ok());
-        let Some(bytes) = result else {
-            self.error("Invalid image response");
-            return;
-        };
-        let Ok(texture) = gdk::Texture::from_bytes(&glib::Bytes::from_owned(bytes)) else {
-            self.error("Could not decode image");
-            return;
-        };
-        let picture = gtk::Picture::for_paintable(&texture);
-        picture.set_can_shrink(true);
-        picture.set_vexpand(true);
-        let panel = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        panel.append(&picture);
-        self.panel("image", &panel);
+        let source = source.to_owned();
+        self.media(
+            move || media::decode(source),
+            |view, texture| {
+                let picture = gtk::Picture::for_paintable(&texture);
+                picture.set_can_shrink(true);
+                picture.set_vexpand(true);
+                let panel = gtk::Box::new(gtk::Orientation::Vertical, 8);
+                panel.append(&picture);
+                view.panel("image", &panel);
+            },
+        );
     }
     pub(crate) fn paste_image(self: &Rc<Self>, task: Value) {
-        use base64::Engine;
         let weak = Rc::downgrade(self);
+        let epoch = self.media_epoch.get();
         self.root
             .clipboard()
             .read_texture_async(None::<&gtk::gio::Cancellable>, move |result| {
-                let Some(v) = weak.upgrade() else { return };
+                let Some(view) = weak.upgrade() else { return };
+                if view.media_epoch.get() != epoch || view.pending.get() {
+                    return;
+                }
                 match result {
                     Ok(Some(texture)) if texture.width() <= 8192 && texture.height() <= 8192 => {
-                        let bytes = texture.save_to_png_bytes();
-                        if bytes.len() > 5 * 1024 * 1024 {
-                            v.error("Image exceeds 5 MiB");
-                            return;
-                        }
-                        v.action(
-                            "attach-image",
-                            &task,
-                            json!({"data":base64::engine::general_purpose::STANDARD.encode(bytes)}),
+                        view.media(
+                            move || media::encode(&texture.save_to_png_bytes()),
+                            move |view, data| {
+                                view.action("attach-image", &task, json!({"data":data}));
+                            },
                         );
                     }
-                    _ => v.error("Copy a PNG, JPEG or WebP image first"),
+                    _ => view.error("Copy a PNG, JPEG or WebP image first"),
                 }
             });
     }

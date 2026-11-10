@@ -2,6 +2,7 @@
 //! this crate owns presentation, never recurrence, workflow or persistence rules.
 mod dialogs;
 mod editor;
+mod media;
 #[cfg(test)]
 mod performance;
 pub mod previews;
@@ -51,6 +52,8 @@ pub struct TaskView {
     send: Rc<dyn Fn(Value)>,
     pub(crate) pending: Cell<bool>,
     pending_action: RefCell<String>,
+    media_busy: Cell<bool>,
+    media_epoch: Cell<u64>,
     dragging: Cell<bool>,
     rendered: RefCell<Value>,
     navigation: RefCell<BTreeMap<String, glib::WeakRef<gtk::Box>>>,
@@ -142,11 +145,25 @@ impl TaskView {
             send: Rc::new(send),
             pending: Cell::new(false),
             pending_action: RefCell::new(String::new()),
+            media_busy: Cell::new(false),
+            media_epoch: Cell::new(0),
             dragging: Cell::new(false),
             rendered: RefCell::new(Value::Null),
             navigation: RefCell::new(BTreeMap::new()),
             order: RefCell::new(Vec::new()),
             editor: RefCell::new(None),
+        });
+        let weak = Rc::downgrade(&view);
+        view.stack.connect_visible_child_notify(move |_| {
+            if let Some(view) = weak.upgrade() {
+                view.media_epoch.set(view.media_epoch.get().wrapping_add(1));
+            }
+        });
+        let weak = Rc::downgrade(&view);
+        view.root.connect_unmap(move |_| {
+            if let Some(view) = weak.upgrade() {
+                view.media_epoch.set(view.media_epoch.get().wrapping_add(1));
+            }
         });
         let weak = Rc::downgrade(&view);
         view.reading.connect(move |action, task| {

@@ -1,5 +1,4 @@
 use super::*;
-use base64::Engine;
 
 pub(crate) struct Editor {
     pub root: gtk::ScrolledWindow,
@@ -350,17 +349,42 @@ impl TaskView {
         if !s(&task, "id").is_empty() {
             let weak = Rc::downgrade(self);
             let tracked = tracked_task.clone();
-            form.append(&button("Attach image…",move ||{
-                let Some(view)=weak.upgrade()else{return};
-                let dialog=gtk::FileDialog::new();let weak=Rc::downgrade(&view);let tracked=tracked.clone();
-                let parent=view.root.root().and_then(|w|w.downcast::<gtk::Window>().ok());
-                dialog.open(parent.as_ref(),None::<&gtk::gio::Cancellable>,move |result|{
-                    let Some(view)=weak.upgrade()else{return};let Ok(file)=result else{return};let Some(path)=file.path()else{return};
-                    match std::fs::metadata(&path).and_then(|m|{if m.len()>5*1024*1024{Err(std::io::Error::other("Image exceeds 5 MiB"))}else{std::fs::read(path)}}){
-                        Ok(bytes)=>view.action("attach-image",&tracked.borrow(),json!({"data":base64::engine::general_purpose::STANDARD.encode(bytes)})),
-                        Err(error)=>view.error(&error.to_string()),
-                    }
-                });
+            form.append(&button("Attach image…", move || {
+                let Some(view) = weak.upgrade() else { return };
+                let dialog = gtk::FileDialog::new();
+                let weak = Rc::downgrade(&view);
+                let tracked = tracked.clone();
+                let epoch = view.media_epoch.get();
+                let parent = view
+                    .root
+                    .root()
+                    .and_then(|w| w.downcast::<gtk::Window>().ok());
+                dialog.open(
+                    parent.as_ref(),
+                    None::<&gtk::gio::Cancellable>,
+                    move |result| {
+                        let Some(view) = weak.upgrade() else { return };
+                        if view.media_epoch.get() != epoch || !view.is_editing() {
+                            return;
+                        }
+                        let Ok(file) = result else { return };
+                        let Some(path) = file.path() else { return };
+                        let task = tracked.borrow().clone();
+                        view.media(
+                            move || media::read_file(path),
+                            move |view, data| {
+                                let current = view.editor.borrow().as_ref().is_some_and(|editor| {
+                                    Rc::ptr_eq(&editor.task, &tracked)
+                                        && !editor.saving.get()
+                                        && *tracked.borrow() == task
+                                });
+                                if current {
+                                    view.action("attach-image", &task, json!({"data":data}));
+                                }
+                            },
+                        );
+                    },
+                );
             }));
         }
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
