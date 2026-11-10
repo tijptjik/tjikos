@@ -55,6 +55,8 @@ mod pointer;
 #[path = "../profile.rs"]
 mod profile;
 mod runtime;
+#[path = "../status_events.rs"]
+mod status_events;
 mod system_card;
 mod thumbnail;
 mod tray_menu;

@@ -23,6 +23,7 @@ mod providers;
 mod screen_record;
 mod session_lock;
 mod spotify;
+mod status_events;
 mod tray;
 mod util;
 mod workspaces;

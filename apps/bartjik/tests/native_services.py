@@ -102,14 +102,25 @@ class Menu(dbus.service.Object):
     def Event(self, item, event, value, timestamp):
         calls.append(('MenuEvent',int(item),str(event)))
 
-player, item, menu = Player(), Item(), Menu()
+class InputMethod(dbus.service.Object):
+    def __init__(self):
+        self.name = dbus.service.BusName('org.fcitx.Fcitx5', bus=bus)
+        super().__init__(bus, '/controller')
+    @dbus.service.method('org.fcitx.Fcitx.Controller1', out_signature='s')
+    def CurrentInputMethod(self):
+        return 'keyboard-us'
+    @dbus.service.method('org.fcitx.Fcitx.Controller1', out_signature='s')
+    def CurrentInputMethodGroup(self):
+        return 'Fixture'
+
+player, item, menu, input_method = Player(), Item(), Menu(), InputMethod()
 loop = GLib.MainLoop()
 threading.Thread(target=loop.run,daemon=True).start()
 with tempfile.TemporaryDirectory(prefix='bartjik-services-') as tmp:
     root=Path(tmp)
-    config={'modules':{'music':{'provider':'playerctl','players':['Fixture']},'tray':{'provider':'icontray'}},'bars':[{'id':'fixture','islands':[{'id':'one','modules':['music','tray']}]}]}
+    config={'modules':{'music':{'provider':'playerctl','players':['Fixture']},'tray':{'provider':'icontray'},'locale':{'provider':'locale'}},'bars':[{'id':'fixture','islands':[{'id':'one','modules':['music','tray','locale']}]}]}
     (root/'config.json').write_text(json.dumps(config))
-    env={**os.environ,'BARTJIK_HOME':str(APP),'BARTJIK_CONFIG':str(root/'config.json'),'BARTJIK_FRONTEND':'gtk','XDG_CACHE_HOME':str(root/'cache'),'XDG_STATE_HOME':str(root/'state'),'XDG_RUNTIME_DIR':str(root/'runtime')}
+    env={**os.environ,'G_DEBUG':'fatal-criticals','BARTJIK_HOME':str(APP),'BARTJIK_CONFIG':str(root/'config.json'),'BARTJIK_FRONTEND':'gtk','XDG_CONFIG_HOME':str(root/'config-home'),'XDG_CACHE_HOME':str(root/'cache'),'XDG_STATE_HOME':str(root/'state'),'XDG_RUNTIME_DIR':str(root/'runtime')}
     (root/'runtime').mkdir()
     env.pop('HYPRLAND_INSTANCE_SIGNATURE',None)
     p=subprocess.Popen([str(APP/'target/release/bartjik-core'),'serve'],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
@@ -144,6 +155,8 @@ with tempfile.TemporaryDirectory(prefix='bartjik-services-') as tmp:
         media=row(state,'music');assert media['track']['value']=='Fixture track'
         assert media['artist']['actions']['leftClick']=='player.artist'
         assert media['track']['actions']['leftClick']=='player.radio'
+        locale_state=wait(lambda v:row(v,'locale') is not None) if row(state,'locale') is None else state
+        assert row(locale_state,'locale')['id']=='method', 'Native input method state unavailable'
         watcher=dbus.Interface(bus.get_object(WATCHER,'/StatusNotifierWatcher'),WATCHER)
         watcher.RegisterStatusNotifierItem('org.example.TrayFixture')
         state=wait(lambda v:row(v,'tray') is not None)

@@ -35,10 +35,13 @@ fn call(
     )?)
 }
 pub fn value(v: &glib::Variant) -> Value {
-    if let Some(inner) = v.as_variant() {
-        return value(&inner);
-    }
     let ty = v.type_().as_str();
+    if ty == "v" {
+        return v
+            .as_variant()
+            .map(|inner| value(&inner))
+            .unwrap_or(Value::Null);
+    }
     match ty {
         "s" | "o" | "g" => json!(v.str().unwrap_or("")),
         "b" => json!(v.get::<bool>()),
@@ -231,7 +234,8 @@ pub fn watch(send: impl Fn(Value) + Send + Sync + 'static) {
   b.schedule();reply.return_value(Some(&().to_variant()));
  }).property(move|_,_,_,_,property|match property{"RegisteredStatusNotifierItems"=>prop.registered.borrow().clone().to_variant(),"IsStatusNotifierHostRegistered"=>true.to_variant(),_=>0i32.to_variant()}).build()?;
  let b=bus.clone();let lost=bus.clone();let ownership=gio::bus_own_name_on_connection(&c,WATCHER,gio::BusNameOwnerFlags::NONE,move|_,_|b.schedule(),move|_,_|{lost.host_registered.borrow_mut().clear();lost.schedule();});
- let b=bus.clone();let subscription=c.signal_subscribe(None,None,None,None,None,gio::DBusSignalFlags::NONE,move|connection,sender,path,interface,member,args|{
+ let subscriptions: Vec<_> = [PROPS, SNI, WATCHER, DBUS, "com.canonical.dbusmenu"].into_iter().map(|interface| {
+ let b=bus.clone();c.signal_subscribe(None,Some(interface),if interface==DBUS {Some("NameOwnerChanged")} else {None},None,None,gio::DBusSignalFlags::NONE,move|connection,sender,path,interface,member,args|{
   if interface=="com.canonical.dbusmenu" {(b.send)(json!({"kind":"menuChanged","owner":sender,"path":path}));}
   // Unrelated PropertiesChanged and transient helper bus connections must not
   // trigger full media/tray rereads (including expensive pixmap decoding).
@@ -244,13 +248,13 @@ pub fn watch(send: impl Fn(Value) + Send + Sync + 'static) {
        || b.registered.borrow().iter().any(|v| endpoint(v).0==name) {b.schedule();}
   }
   if interface==DBUS && member=="NameOwnerChanged"{let (name,_old,new)=args.get::<(String,String,String)>().unwrap_or_default();if new.is_empty(){let removed:Vec<_>=b.registered.borrow().iter().filter(|v|endpoint(v).0==name).cloned().collect();b.registered.borrow_mut().retain(|v|endpoint(v).0!=name);for name in removed{let _=connection.emit_signal(None,"/StatusNotifierWatcher",WATCHER,"StatusNotifierItemUnregistered",Some(&(name,).to_variant()));}}}
- });
+ })}).collect();
  let loop_ = glib::MainLoop::new(Some(&context), false);
  let done = loop_.clone();
  c.connect_closed(move |_, _, _| done.quit());
  bus.schedule();
  loop_.run();
- c.signal_unsubscribe(subscription);
+ for subscription in subscriptions { c.signal_unsubscribe(subscription); }
  gio::bus_unown_name(ownership);
  let _ = c.unregister_object(registration);
  Ok(())
@@ -541,4 +545,87 @@ pub async fn position(native: Value) -> Result<Value> {
         ensure!(p["Metadata"]["mpris:trackid"] == native["props"]["Metadata"]["mpris:trackid"], "Stale track");
         Ok(json!({"position":p["Position"],"rate":p["Rate"],"playing":p["PlaybackStatus"] == "Playing"}))
     }).await?
+}
+
+/// Read Fcitx state without starting a new CLI process or activating the daemon.
+pub async fn input_method() -> Result<(String, Option<String>)> {
+    tokio::task::spawn_blocking(|| {
+        let c = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)?;
+        let read = |method| -> Result<String> {
+            let reply = c.call_sync(
+                Some("org.fcitx.Fcitx5"),
+                "/controller",
+                "org.fcitx.Fcitx.Controller1",
+                method,
+                Some(&().to_variant()),
+                None,
+                gio::DBusCallFlags::NO_AUTO_START,
+                1200,
+                gio::Cancellable::NONE,
+            )?;
+            Ok(reply
+                .child_value(0)
+                .str()
+                .context("Invalid input method state")?
+                .to_owned())
+        };
+        Ok((
+            read("CurrentInputMethod")?,
+            read("CurrentInputMethodGroup").ok(),
+        ))
+    })
+    .await?
+}
+
+/// Read the user unit's authoritative files through the existing session bus.
+/// Used for frequent inspection; mutation still follows the policy controller.
+pub async fn idle_unit() -> Result<(u32, String)> {
+    tokio::task::spawn_blocking(|| {
+        let c = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)?;
+        let path = call(
+            &c,
+            "org.freedesktop.systemd1",
+            "/org/freedesktop/systemd1",
+            "org.freedesktop.systemd1.Manager",
+            "GetUnit",
+            &("hypridle.service",).to_variant(),
+        )?;
+        let path = path
+            .child_value(0)
+            .str()
+            .context("Invalid idle unit")?
+            .to_owned();
+        let get = |interface: &str, property: &str| -> Result<glib::Variant> {
+            call(
+                &c,
+                "org.freedesktop.systemd1",
+                &path,
+                PROPS,
+                "Get",
+                &(interface, property).to_variant(),
+            )?
+            .child_value(0)
+            .as_variant()
+            .context("Invalid idle property")
+        };
+        let fragment = get("org.freedesktop.systemd1.Unit", "FragmentPath")?
+            .get::<String>()
+            .context("Invalid unit path")?;
+        let dropins = get("org.freedesktop.systemd1.Unit", "DropInPaths")?
+            .get::<Vec<String>>()
+            .context("Invalid unit drop-ins")?;
+        let pid = get("org.freedesktop.systemd1.Service", "MainPID")?
+            .get::<u32>()
+            .context("Invalid idle PID")?;
+        let mut text = String::new();
+        for path in std::iter::once(&fragment).chain(&dropins) {
+            if path.is_empty() {
+                continue;
+            }
+            text.push_str(&format!("# {path}\n{}\n", std::fs::read_to_string(path)?));
+        }
+        ensure!(!text.is_empty(), "Idle unit files unavailable");
+        Ok((pid, text))
+    })
+    .await?
 }

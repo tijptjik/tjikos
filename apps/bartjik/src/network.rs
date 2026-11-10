@@ -124,6 +124,12 @@ impl std::fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 pub trait Adapter: Send + Sync {
+    fn subscribe(
+        &self,
+        _wake: Arc<tokio::sync::Notify>,
+    ) -> Option<crate::status_events::Subscription> {
+        None
+    }
     fn name(&self) -> &'static str;
     fn capabilities(&self) -> Capabilities;
     fn snapshot(&self) -> Reply<'_, Snapshot>;

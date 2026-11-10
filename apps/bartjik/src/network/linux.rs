@@ -345,6 +345,17 @@ fn classify(error: anyhow::Error) -> Error {
 }
 pub(super) struct NetworkManager;
 impl Adapter for NetworkManager {
+    fn subscribe(
+        &self,
+        wake: std::sync::Arc<tokio::sync::Notify>,
+    ) -> Option<crate::status_events::Subscription> {
+        Some(crate::status_events::Subscription::start(
+            "nmcli",
+            &["monitor"],
+            |_| true,
+            wake,
+        ))
+    }
     fn name(&self) -> &'static str {
         "network-manager-cli"
     }

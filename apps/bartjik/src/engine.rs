@@ -83,6 +83,20 @@ fn worker(
     let wake = Arc::new(Notify::new());
     let w = wake.clone();
     let task = tokio::spawn(async move {
+        let subscription = match s(&spec["provider"]) {
+            "network" => crate::network::selected().subscribe(w.clone()),
+            "audio" => Some(crate::status_events::Subscription::start(
+                "pactl",
+                &["subscribe"],
+                |line| {
+                    [" on server ", " on sink ", " on card "]
+                        .iter()
+                        .any(|kind| line.contains(kind))
+                },
+                w.clone(),
+            )),
+            _ => None,
+        };
         let mut polls = 0u64;
         let mut failures = 0u32;
         let mut rows = vec![];
@@ -176,6 +190,14 @@ fn worker(
             };
             if tx.send(Event::Provider(key.clone(), state)).await.is_err() {
                 break;
+            }
+            // Push changes immediately; retain a reconciliation audit and the original
+            // polling cadence when a subscription fails or an interval is explicit.
+            if failures == 0
+                && spec.get("interval").is_none()
+                && subscription.as_ref().is_some_and(|s| s.healthy())
+            {
+                delay = 30.;
             }
             tokio::select! {_=tokio::time::sleep(Duration::from_secs_f64(delay))=>{},_=w.notified()=>{}}
         }

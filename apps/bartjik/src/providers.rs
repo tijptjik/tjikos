@@ -405,7 +405,19 @@ pub async fn poll(m: &Value) -> Result<Vec<Value>> {
             row
         }
         "locale" => {
-            let current = cmd(&["fcitx5-remote", "--check", "-n"]).await?;
+            let native = if std::env::var("BARTJIK_FRONTEND").as_deref() == Ok("gtk") {
+                crate::native::input_method().await.ok()
+            } else {
+                None
+            };
+            let (current, group) = if let Some(state) = native {
+                state
+            } else {
+                (
+                    cmd(&["fcitx5-remote", "--check", "-n"]).await?,
+                    cmd(&["fcitx5-remote", "--check", "-q"]).await.ok(),
+                )
+            };
             ensure!(!current.is_empty(), "Fcitx 5 unavailable");
             let method = &config::contract()["METHODS"][&current];
             let (label, tip) = (
@@ -421,7 +433,7 @@ pub async fn poll(m: &Value) -> Result<Vec<Value>> {
                 tip,
                 json!({"leftClick":"locale.cycle","rightClick":{"command":["fcitx5-configtool"],"detach":true}}),
             );
-            row["panel"] = if let Ok(group) = cmd(&["fcitx5-remote", "--check", "-q"]).await {
+            row["panel"] = if let Some(group) = group {
                 let methods = details::methods(&group);
                 let mut rows: Vec<_> = methods
                     .iter()
@@ -481,7 +493,17 @@ pub async fn poll(m: &Value) -> Result<Vec<Value>> {
         }
         "openrouter" => return openrouter(m).await,
         "DND" => {
-            let data = jc(&[m["ctl"].as_str().unwrap_or("notjikctl"), "status"]).await?;
+            let ctl = m["ctl"].as_str().unwrap_or("notjikctl");
+            #[cfg(feature = "gtk-ui")]
+            let data = if ctl == "notjikctl" {
+                tokio::task::spawn_blocking(|| notjik_core::ipc::request(&json!({"op":"status"})))
+                    .await??
+                    .context("notjik unavailable")?
+            } else {
+                jc(&[ctl, "status"]).await?
+            };
+            #[cfg(not(feature = "gtk-ui"))]
+            let data = jc(&[ctl, "status"]).await?;
             ensure!(
                 data["ok"] == true && data["paused"].is_boolean(),
                 "notjik unavailable"

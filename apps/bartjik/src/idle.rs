@@ -63,8 +63,46 @@ fn fingerprint() -> Result<Value> {
     ]))
 }
 async fn running() -> Result<bool> {
+    if std::env::var("BARTJIK_FRONTEND").as_deref() == Ok("gtk") {
+        if let Ok((pid, _)) = crate::native::idle_unit().await {
+            if pid > 0
+                && std::fs::read_to_string(format!("/proc/{pid}/comm"))
+                    .is_ok_and(|v| v.trim() == "hypridle")
+            {
+                return Ok(true);
+            }
+        }
+    }
+    if std::env::var("BARTJIK_FRONTEND").as_deref() == Ok("gtk") {
+        if let Ok(result) = tokio::task::spawn_blocking(|| {
+            running_in(std::path::Path::new("/proc"), unsafe { libc::geteuid() })
+        })
+        .await?
+        {
+            return Ok(result);
+        }
+    }
     let uid = unsafe { libc::geteuid() }.to_string();
     succeeds(&["pgrep", "-u", &uid, "-x", "hypridle"]).await
+}
+fn running_in(root: &std::path::Path, uid: u32) -> std::io::Result<bool> {
+    for entry in std::fs::read_dir(root)?.flatten() {
+        if !entry
+            .file_name()
+            .to_string_lossy()
+            .bytes()
+            .all(|b| b.is_ascii_digit())
+        {
+            continue;
+        }
+        if std::fs::read_to_string(entry.path().join("comm"))
+            .is_ok_and(|name| name.trim() == "hypridle")
+            && entry.metadata().is_ok_and(|m| m.uid() == uid)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 async fn succeeds(args: &[&str]) -> Result<bool> {
     match cmd(args).await {
@@ -154,6 +192,11 @@ fn source_from_unit(unit: &str) -> Result<Source> {
     })
 }
 async fn source() -> Result<Source> {
+    if std::env::var("BARTJIK_FRONTEND").as_deref() == Ok("gtk") {
+        if let Ok((_, text)) = crate::native::idle_unit().await {
+            return source_from_unit(&text);
+        }
+    }
     source_from_unit(&cmd(&["systemctl", "--user", "cat", "hypridle.service"]).await?)
 }
 fn listeners() -> Regex {
@@ -579,4 +622,22 @@ pub fn demo() -> Value {
     row(
         json!({"title":"Idle & Sleep","rows":[],"inhibited":true,"running":false,"duration":0,"deadline":null,"delays":{"dim":60,"lock":180,"screenOff":600,"suspend":1800},"revision":"synthetic","editable":true,"gamePolicy":false,"error":""}),
     )
+}
+
+#[cfg(test)]
+mod process_tests {
+    use super::*;
+    #[test]
+    fn idle_process_detection_handles_absence_and_removal() {
+        let root = tempfile::tempdir().unwrap();
+        let uid = unsafe { libc::geteuid() };
+        assert!(!running_in(root.path(), uid).unwrap());
+        std::fs::create_dir(root.path().join("123")).unwrap();
+        std::fs::write(root.path().join("123/comm"), "hypridle-helper\n").unwrap();
+        assert!(!running_in(root.path(), uid).unwrap());
+        std::fs::write(root.path().join("123/comm"), "hypridle\n").unwrap();
+        assert!(running_in(root.path(), uid).unwrap());
+        std::fs::remove_dir_all(root.path().join("123")).unwrap();
+        assert!(!running_in(root.path(), uid).unwrap());
+    }
 }
