@@ -39,6 +39,7 @@ struct Ui {
     message: gtk::Label,
     expansion_error: RefCell<Option<gtk::Label>>,
     startup: gtk::Picture,
+    initial_results: Cell<bool>,
     effects: gtk::Overlay,
     composing: Cell<bool>,
     composition_commit: Cell<bool>,
@@ -707,7 +708,39 @@ impl Ui {
         }
         let strings: Vec<_> = rows.iter().map(Value::to_string).collect();
         let refs: Vec<_> = strings.iter().map(String::as_str).collect();
-        self.model.splice(0, self.model.n_items(), &refs);
+        let old_rows = self.rows.borrow();
+        if old_rows.len() == rows.len()
+            && old_rows
+                .iter()
+                .zip(&rows)
+                .all(|(old, new)| old["id"] == new["id"])
+        {
+            // Window-count and other metadata changes must not recycle every
+            // application tile and restart all its image loads.
+            for (index, (old, new)) in old_rows.iter().zip(&rows).enumerate() {
+                if old != new {
+                    self.model.splice(index as u32, 1, &refs[index..index + 1]);
+                }
+            }
+        } else {
+            let prefix = old_rows
+                .iter()
+                .zip(&rows)
+                .take_while(|(a, b)| a == b)
+                .count();
+            let suffix = old_rows[prefix..]
+                .iter()
+                .rev()
+                .zip(rows[prefix..].iter().rev())
+                .take_while(|(a, b)| a == b)
+                .count();
+            self.model.splice(
+                prefix as u32,
+                (old_rows.len() - prefix - suffix) as u32,
+                &refs[prefix..rows.len() - suffix],
+            );
+        }
+        drop(old_rows);
         *self.rows.borrow_mut() = rows;
         self.selection.set_selected(at as u32);
     }
@@ -751,9 +784,11 @@ impl Ui {
         self.configured_size(settings);
         let columns = settings["ui"]["columns"].as_u64().unwrap_or(5).clamp(1, 12) as u32;
         self.columns.set(columns);
-        self.grid.set_min_columns(1);
-        self.grid.set_max_columns(columns);
-        self.grid.set_min_columns(columns);
+        if self.grid.max_columns() != columns || self.grid.min_columns() != columns {
+            self.grid.set_min_columns(1);
+            self.grid.set_max_columns(columns);
+            self.grid.set_min_columns(columns);
+        }
         let weak = Rc::downgrade(self);
         let icon = settings["ui"]["icon_size"].as_i64().unwrap_or(52) as i32;
         self.grid
@@ -890,9 +925,11 @@ impl Ui {
         }
         .max(1);
         self.columns.set(cols);
-        self.grid.set_min_columns(1);
-        self.grid.set_max_columns(cols);
-        self.grid.set_min_columns(cols);
+        if self.grid.max_columns() != cols || self.grid.min_columns() != cols {
+            self.grid.set_min_columns(1);
+            self.grid.set_max_columns(cols);
+            self.grid.set_min_columns(cols);
+        }
         let weak = Rc::downgrade(self);
         let icon = self.settings.borrow()["ui"]["icon_size"]
             .as_i64()
@@ -1045,8 +1082,45 @@ impl Ui {
                 self.next_offset
                     .set(value["next_offset"].as_u64().unwrap_or(0));
                 self.has_more.set(value["has_more"] == true);
+                let initial = !rows.is_empty() && self.initial_results.replace(false);
+                if initial {
+                    self.results.set_opacity(0.);
+                }
+                // Only the initial application grid can be prepared without its
+                // rows. Rich provider views consume the new model during layout.
+                let prepare_grid = initial
+                    && self.display_query.borrow().is_empty()
+                    && value["statistics"].is_null()
+                    && s(&value, "app_mode").is_empty();
+                if prepare_grid {
+                    self.layout(&value);
+                }
                 self.replace_rows(rows, same);
-                self.layout(&value);
+                if !prepare_grid {
+                    self.layout(&value);
+                }
+                if initial {
+                    let weak = Rc::downgrade(self);
+                    glib::spawn_future_local(async move {
+                        let started = std::time::Instant::now();
+                        // Allow the grid to bind its visible rows before checking
+                        // their image demand. Never delay later searches/opens.
+                        loop {
+                            glib::timeout_future(Duration::from_millis(16)).await;
+                            let Some(ui) = weak.upgrade() else { return };
+                            if ui.generation.get() != generation || !ui.opened.get() {
+                                ui.results.set_opacity(1.);
+                                return;
+                            }
+                            if !tjik_gtk::images::pending_within(&ui.results)
+                                || started.elapsed() >= Duration::from_millis(200)
+                            {
+                                ui.results.set_opacity(1.);
+                                break;
+                            }
+                        }
+                    });
+                }
                 self.message(if s(&value, "kind") == "windows" {
                     "Choose a window · Enter switches · Esc goes back"
                 } else if !s(&value, "message").is_empty() {
@@ -1393,6 +1467,7 @@ fn build(
         message,
         expansion_error: RefCell::new(None),
         startup,
+        initial_results: Cell::new(true),
         effects: overlay,
         composing: Cell::new(false),
         composition_commit: Cell::new(false),
