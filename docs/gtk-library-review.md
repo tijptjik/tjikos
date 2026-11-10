@@ -412,8 +412,11 @@ launcher and layer-shell library also match the build. Author notices were refre
 verified for all four installed applications without restarting the other applications.
 The concurrent Bartjik work remains separately owned.
 
-Cargo secret provisioning is prepared in Dotjik as a sensitive mode-0600 managed
-credential file for clients, with synthetic tests for Fi, Li, Si and portable devices.
-Actual bws storage and enrollment remain pending the real Cargo API token; no token was
-found in Cargo credentials, the environment or matching bws metadata, and no placeholder
-secret was created. Registry publication remains pending as previously requested.
+Cargo credential provisioning is complete. Hidden local input uploaded
+`CRATES_IO_API_TOKEN` to the bws `dotfiles` project, and exact value readback verified
+the upload without exposing the token. Dotjik commit `d8b1a01` enrolls Fi, Li and
+portable clients with the `home:secrets` subscription by UUID; server roles stay
+excluded. All 410 Dotjik tests passed with nine skips using synthetic credentials. Only
+the local Cargo credential group was applied: the file is mode 0600, its value matches
+bws, and the managed check converges. Other eligible systems receive it on their next
+Dotjik apply; no remote application or registry publication was performed.

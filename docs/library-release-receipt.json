@@ -43,7 +43,7 @@
   },
   "remaining": [
     "regenerate and validate desktop and GTK candidates from updated source before publication",
-    "provision Cargo credentials when the maintainer wants publication",
+    "verify managed Cargo credentials in the clean release environment",
     "recheck exact names and ownership/version availability",
     "publish only independent desktop and GTK candidates from a newly validated clean source",
     "read back published metadata and archive hashes"
@@ -54,5 +54,16 @@
   ],
   "deferred_packages": {
     "tjik-task-gtk": "internal shared library; publish=false until applications stabilise and maintainer reconsiders"
+  },
+  "credential_provisioning": {
+    "status": "verified bws upload; Dotjik client enrollment committed; local managed apply verified",
+    "key": "CRATES_IO_API_TOKEN",
+    "project": "dotfiles",
+    "secret_id": "ea529b3b-bac7-4e41-9452-b4fe009eb4f3",
+    "dotjik_commit": "d8b1a01",
+    "local_file": "~/.cargo/credentials.toml",
+    "local_mode": "0600",
+    "remote_apply": false,
+    "publication_resumed": false
   }
 }
