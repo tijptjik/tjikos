@@ -1333,7 +1333,7 @@ fn build(
         move || {
             let _ = exit.try_send(Event::ExitView);
         },
-        demo,
+        crate::previews::provider(demo),
     );
     stack.add_named(&tasks.root, Some("tasks"));
     stack.set_visible_child_name("launcher");

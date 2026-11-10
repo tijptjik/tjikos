@@ -252,7 +252,13 @@ def preview_batch(urls):
         yield {'url': url, 'preview': result}
 
 
+def cancelled(signum, frame):
+    # BaseException bypasses per-URL fallback handlers and still runs render cleanup.
+    raise SystemExit(0)
+
+
 if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, cancelled)
     signal.signal(signal.SIGALRM, deadline)
     try:
         request = sys.stdin.read().strip()

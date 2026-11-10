@@ -4,6 +4,7 @@ mod completion;
 mod control;
 mod countdown;
 mod desktop;
+mod previews;
 mod recovery;
 mod result_adapter;
 mod style;

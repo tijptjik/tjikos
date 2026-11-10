@@ -63,6 +63,18 @@ class PreviewCacheTest(unittest.TestCase):
             receipt.write_text(content)
             self.assertIsNone(previews.cached_preview(self.url))
 
+    def test_cancellation_unwinds_browser_process_cleanup(self):
+        with patch.object(previews.shutil, 'which', return_value='/synthetic/browser'), \
+                patch.object(previews.subprocess, 'Popen') as spawn, \
+                patch.object(previews.os, 'killpg') as kill:
+            process = spawn.return_value
+            process.pid = 12345
+            process.wait.side_effect = [SystemExit(0), 0]
+            with self.assertRaises(SystemExit):
+                previews.render_page(self.url, Path(self.directory.name), 'synthetic')
+            kill.assert_called_once_with(12345, previews.signal.SIGKILL)
+            self.assertEqual(process.wait.call_count, 2)
+
     def test_all_cache_hits_arrive_before_first_render(self):
         saved, _ = self.save()
         uncached = 'https://example.invalid/slow'

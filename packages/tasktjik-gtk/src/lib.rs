@@ -2,8 +2,13 @@
 //! this crate owns presentation, never recurrence, workflow or persistence rules.
 mod dialogs;
 mod editor;
+#[cfg(test)]
+mod performance;
+pub mod previews;
 mod reading;
 pub mod style;
+mod viewport;
+mod virtual_column;
 use serde_json::{json, Value};
 use std::{
     cell::{Cell, RefCell},
@@ -28,6 +33,7 @@ pub struct TaskView {
     pub root: gtk::Box,
     pub stack: gtk::Stack,
     body: gtk::Box,
+    scroll: gtk::ScrolledWindow,
     toolbar: gtk::Box,
     options: gtk::FlowBox,
     reading: Rc<reading::Reading>,
@@ -47,11 +53,16 @@ pub struct TaskView {
     pending_action: RefCell<String>,
     dragging: Cell<bool>,
     rendered: RefCell<Value>,
-    navigation: RefCell<Vec<(String, gtk::Box)>>,
+    navigation: RefCell<BTreeMap<String, glib::WeakRef<gtk::Box>>>,
+    order: RefCell<Vec<(String, glib::WeakRef<virtual_column::VirtualColumn>, usize)>>,
     pub(crate) editor: RefCell<Option<editor::Editor>>,
 }
 impl TaskView {
-    pub fn new(send: impl Fn(Value) + 'static, exit: impl Fn() + 'static, demo: bool) -> Rc<Self> {
+    pub fn new(
+        send: impl Fn(Value) + 'static,
+        exit: impl Fn() + 'static,
+        previews: Option<Rc<dyn previews::PreviewProvider>>,
+    ) -> Rc<Self> {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 10);
         root.set_focusable(true);
         let bar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -107,12 +118,13 @@ impl TaskView {
             .hscrollbar_policy(gtk::PolicyType::Never)
             .build();
         stack.add_named(&scroll, Some("tasks"));
-        let reading = reading::Reading::new(demo);
+        let reading = reading::Reading::new(previews);
         stack.add_named(&reading.root, Some("reading"));
         let view = Rc::new(Self {
             root,
             stack,
             body,
+            scroll,
             toolbar: bar,
             options: options.clone(),
             reading,
@@ -132,7 +144,8 @@ impl TaskView {
             pending_action: RefCell::new(String::new()),
             dragging: Cell::new(false),
             rendered: RefCell::new(Value::Null),
-            navigation: RefCell::new(Vec::new()),
+            navigation: RefCell::new(BTreeMap::new()),
+            order: RefCell::new(Vec::new()),
             editor: RefCell::new(None),
         });
         let weak = Rc::downgrade(&view);
@@ -243,14 +256,18 @@ impl TaskView {
                     v.filter.grab_focus();
                 }
                 gdk::Key::Down | gdk::Key::Up => {
-                    let items = v.navigation.borrow();
+                    let items = v.order.borrow();
                     if !items.is_empty() {
-                        let current = items.iter().position(|(id, _)| *id == *v.selected.borrow());
+                        let current = items
+                            .iter()
+                            .position(|(id, _, _)| *id == *v.selected.borrow());
                         let delta = if key == gdk::Key::Down { 1 } else { -1 };
                         let index = current
                             .map(|i| (i as i32 + delta).rem_euclid(items.len() as i32) as usize)
                             .unwrap_or(0);
-                        items[index].1.grab_focus();
+                        let id = items[index].0.clone();
+                        drop(items);
+                        v.focus_task(&id);
                     }
                 }
                 gdk::Key::Escape => {
@@ -441,14 +458,23 @@ impl TaskView {
                 self.navigation
                     .borrow()
                     .iter()
-                    .any(|(_, card)| focus == *card || focus.is_ancestor(card))
+                    .filter_map(|(_, card)| card.upgrade())
+                    .any(|card| focus == card || focus.is_ancestor(&card))
             });
         self.navigation.borrow_mut().clear();
+        self.order.borrow_mut().clear();
         clear(&self.body);
         let state = self.state.borrow().clone();
         let collection = self.collection.borrow().clone();
         let filter = self.filter.text().to_lowercase();
         let mut groups: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+        let horizon = chrono::Local::now().date_naive()
+            + chrono::Duration::days(match self.dates.selected() {
+                1 => 0,
+                2 => 7,
+                _ => 30,
+            });
+        let horizon = horizon.to_string();
         for task in state["tasks"].as_array().into_iter().flatten() {
             let kind = s(task, "kind");
             if kind != collection && !(collection == "todo" && kind == "project") {
@@ -466,13 +492,7 @@ impl TaskView {
             } else {
                 s(task, "due")
             };
-            let horizon = chrono::Local::now().date_naive()
-                + chrono::Duration::days(match self.dates.selected() {
-                    1 => 0,
-                    2 => 7,
-                    _ => 30,
-                });
-            if self.dates.selected() > 0 && !due.is_empty() && due > horizon.to_string().as_str() {
+            if self.dates.selected() > 0 && !due.is_empty() && due > horizon.as_str() {
                 continue;
             }
             if task["done"] == true && !self.completed.is_active() {
@@ -564,10 +584,21 @@ impl TaskView {
             panel.set_size_request(280, -1);
             panel.set_valign(gtk::Align::Start);
             panel.append(&heading);
-            let list = gtk::Box::new(gtk::Orientation::Vertical, 6);
-            for task in tasks {
-                list.append(&self.card(task));
-            }
+            let tasks = Rc::new(tasks);
+            let weak = Rc::downgrade(self);
+            let records = tasks.clone();
+            let list =
+                virtual_column::VirtualColumn::new(&self.scroll, tasks.len(), move |index| {
+                    weak.upgrade()
+                        .map(|v| v.card(records[index].clone()).upcast())
+                        .unwrap_or_else(|| gtk::Box::new(gtk::Orientation::Vertical, 0).upcast())
+                });
+            self.order.borrow_mut().extend(
+                tasks
+                    .iter()
+                    .enumerate()
+                    .map(|(index, task)| (s(task, "id").to_owned(), list.downgrade(), index)),
+            );
             let weak = Rc::downgrade(self);
             let name = group.clone();
             let drop = gtk::DropTarget::new(String::static_type(), gdk::DragAction::MOVE);
@@ -594,13 +625,34 @@ impl TaskView {
             columns.insert(&panel, -1);
         }
         if restore_focus {
-            let navigation = self.navigation.borrow();
-            if let Some((_, card)) = navigation
+            let order = self.order.borrow();
+            let id = order
                 .iter()
-                .find(|(id, _)| *id == *self.selected.borrow())
-                .or_else(|| navigation.first())
-            {
-                card.grab_focus();
+                .find(|(id, _, _)| *id == *self.selected.borrow())
+                .or_else(|| order.first())
+                .map(|entry| entry.0.clone());
+            drop(order);
+            if let Some(id) = id {
+                self.focus_task(&id);
+            }
+        }
+    }
+    fn focus_task(&self, id: &str) {
+        let target = self
+            .order
+            .borrow()
+            .iter()
+            .find(|(key, _, _)| key == id)
+            .and_then(|(_, column, index)| column.upgrade().map(|column| (column, *index)));
+        if let Some((column, index)) = target {
+            *self.selected.borrow_mut() = id.to_owned();
+            column.reveal(index);
+        }
+    }
+    fn pin_task(&self, id: &str, pinned: bool) {
+        if let Some((_, column, index)) = self.order.borrow().iter().find(|(key, _, _)| key == id) {
+            if let Some(column) = column.upgrade() {
+                column.pin(pinned.then_some(*index));
             }
         }
     }
@@ -748,15 +800,19 @@ impl TaskView {
         source
             .connect_prepare(move |_, _, _| Some(gdk::ContentProvider::for_value(&id.to_value())));
         let weak = Rc::downgrade(self);
+        let drag_id = s(&task, "id").to_owned();
         source.connect_drag_begin(move |_, _| {
             if let Some(v) = weak.upgrade() {
                 v.dragging.set(true);
+                v.pin_task(&drag_id, true);
             }
         });
         let weak = Rc::downgrade(self);
+        let drag_id = s(&task, "id").to_owned();
         source.connect_drag_end(move |_, _, _| {
             if let Some(v) = weak.upgrade() {
                 v.dragging.set(false);
+                v.pin_task(&drag_id, false);
                 v.render();
             }
         });
@@ -805,19 +861,23 @@ impl TaskView {
         focus.connect_enter(move |_| {
             if let Some(v) = weak.upgrade() {
                 *v.selected.borrow_mut() = id.clone();
-                for (key, card) in v.navigation.borrow().iter() {
+                v.navigation.borrow_mut().retain(|key, weak| {
+                    let Some(card) = weak.upgrade() else {
+                        return false;
+                    };
                     if *key == id {
                         card.add_css_class("task-selected");
                     } else {
                         card.remove_css_class("task-selected");
                     }
-                }
+                    true
+                });
             }
         });
         card.add_controller(focus);
         self.navigation
             .borrow_mut()
-            .push((s(&task, "id").to_owned(), card.clone()));
+            .insert(s(&task, "id").to_owned(), card.downgrade());
         card
     }
     fn subtasks(self: &Rc<Self>, parent: &gtk::Box, task: &Value) {
@@ -874,15 +934,10 @@ impl TaskView {
             self.stack.remove(&editor.root);
         }
         self.pending.set(false);
-        if let Some((_, card)) = self
-            .navigation
-            .borrow()
-            .iter()
-            .find(|(id, _)| *id == *self.selected.borrow())
-        {
-            card.grab_focus();
-        }
+        let selected = self.selected.borrow().clone();
+        self.focus_task(&selected);
     }
+
     fn confirm_delete(self: &Rc<Self>, task: Value) {
         let dialog = gtk::Box::new(gtk::Orientation::Vertical, 12);
         dialog.append(&gtk::Label::new(Some(&format!(
