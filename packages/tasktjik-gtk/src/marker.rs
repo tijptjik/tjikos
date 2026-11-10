@@ -137,6 +137,22 @@ impl Marker {
             }
         });
     }
+    pub fn set_snoozed(&self, until: &str) {
+        let attributes = gtk::pango::AttrList::new();
+        attributes.insert(gtk::pango::AttrInt::new_underline(
+            gtk::pango::Underline::Single,
+        ));
+        self.date.set_attributes(Some(&attributes));
+        let date = chrono::DateTime::parse_from_rfc3339(until)
+            .map(|d| {
+                d.with_timezone(&chrono::Local)
+                    .format("%a %d %b, %H:%M")
+                    .to_string()
+            })
+            .unwrap_or_else(|_| until.into());
+        self.button
+            .set_tooltip_text(Some(&format!("Complete · Snoozed until {date}")));
+    }
     pub fn set_selected(&self, selected: bool) {
         self.selected.set(selected);
         self.paint();

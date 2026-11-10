@@ -77,4 +77,19 @@ pub const CSS: &str = r#"
 .tjik .tasktjik .icon-button.filter-only:hover { background: alpha(#ff53a6,.24); }
 .tjik .tasktjik .task-completed .task-title, .tjik .tasktjik .task-cancelled .task-title { color: #aaa5ba; }
 .tjik .tasktjik .task-completed.task-selected .task-title { color: #a8c7a0; }
+/* Calendar picker uses the same quiet surfaces and colored shortcut chips. */
+.tjik .tasktjik .snooze-heading { font-size: 18px; font-weight: bold; }
+.tjik .tasktjik .snooze-picker calendar { background: #2b283f; border: 0; border-radius: 10px; padding: 10px; }
+.tjik .tasktjik .snooze-picker calendar header button { min-width: 20px; min-height: 20px; padding: 3px; border: 0; background: transparent; }
+.tjik .tasktjik .snooze-picker calendar header button:hover { background: #39354b; }
+.tjik .tasktjik .snooze-picker calendar label:selected { background: #ff53a6; color: #26233a; border-radius: 6px; }
+.tjik .tasktjik .snooze-picker calendar:focus-visible { outline: 1px solid alpha(#ff53a6,.35); outline-offset: 2px; }
+.tjik .tasktjik .snooze-picker .snooze-option { padding: 7px 10px; background: alpha(currentColor,.06); border-color: alpha(currentColor,.2); }
+.tjik .tasktjik .snooze-picker .snooze-option:hover { background: alpha(currentColor,.15); }
+.tjik .tasktjik .snooze-picker .snooze-option:focus-visible { border-color: currentColor; }
+.tjik .tasktjik .snooze-picker .afternoon { color: #f2ce98; }
+.tjik .tasktjik .snooze-picker .evening { color: #ebadbd; }
+.tjik .tasktjik .snooze-picker .night { color: #c4b2e7; }
+.tjik .tasktjik .snooze-picker .tomorrow { color: #ff53a6; }
+.tjik .tasktjik .snooze-picker .weekend { color: #9dc6d8; }
 "#;

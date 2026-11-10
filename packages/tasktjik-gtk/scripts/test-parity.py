@@ -148,6 +148,32 @@ with rendering_display():
             assert max(centers) - min(centers) <= 1, centers
             assert all(g["width"] == 22 and g["height"] == 22 for g in footer_icons)
             shot("gtk-footer-islands")
+            subprocess.run(["wtype", "-k", "s"], check=True)
+            time.sleep(0.3)
+            assert item("snooze-calendar")["width"] < 400
+            shot("gtk-snooze-picker")
+            entry = item("snooze-date")
+            move(entry["x"] + 50, entry["y"] + entry["height"] / 2)
+            event("b 1")
+            event("b 0")
+            subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-m", "ctrl", "2099-02-17", "-k", "Return"], check=True)
+            time.sleep(0.3)
+            calendar = item("snooze-calendar")
+            day = next(g for g in inspect()["geometry"] if g["text"] == "18" and calendar["x"] <= g["x"] < calendar["x"] + calendar["width"] and calendar["y"] <= g["y"] < calendar["y"] + calendar["height"])
+            move(day["x"] + day["width"] / 2, day["y"] + day["height"] / 2)
+            event("b 1")
+            event("b 0")
+            time.sleep(0.2)
+            save = item("snooze-save")
+            assert save["y"] + save["height"] <= 680, "Snooze confirmation must fit the standard window"
+            move(save["x"] + save["width"] / 2, save["y"] + save["height"] / 2)
+            event("b 1")
+            event("b 0")
+            time.sleep(0.3)
+            request = inspect()["requests"][-1]
+            assert request["action"] == "snooze", request
+            assert request["until"].startswith("2099-02-18T09:00:00"), request
+            command("error", message="Synthetic snooze rejected")
             fixture = json.loads((root / "fixture.json").read_text())
             statuses = [
                 dict(

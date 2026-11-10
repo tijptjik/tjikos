@@ -14,6 +14,7 @@ mod presentation;
 pub mod preview_helper;
 pub mod previews;
 mod reading;
+mod snooze;
 mod status_filter;
 pub mod style;
 mod viewport;
@@ -375,7 +376,11 @@ impl TaskView {
         view.stack.connect_visible_child_notify(move |_| {
             if let Some(view) = weak.upgrade() {
                 view.media_epoch.set(view.media_epoch.get().wrapping_add(1));
-
+                match view.stack.visible_child_name().as_deref() {
+                    Some("snooze") => view.options.set_visible(false),
+                    Some("tasks") => view.options.set_visible(true),
+                    _ => {}
+                }
             }
         });
         let weak = Rc::downgrade(&view);
@@ -1209,6 +1214,7 @@ Ctrl+Z  Undo     Escape  Back",
         // Keep an in-progress editor and its input focus intact during sync updates.
         if self.is_editing()
             || self.completing.get()
+            || self.stack.visible_child_name().as_deref() == Some("snooze")
         {
             return;
         }
@@ -1781,7 +1787,12 @@ Ctrl+Z  Undo     Escape  Back",
         }
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         row.add_css_class("task-title-row");
-        let due = if s(&task, "effectiveDue").is_empty() {
+        let snoozed_date = chrono::DateTime::parse_from_rfc3339(s(&task, "snoozedUntil"))
+            .map(|date| date.with_timezone(&chrono::Local).date_naive().to_string())
+            .unwrap_or_default();
+        let due = if !snoozed_date.is_empty() {
+            snoozed_date.as_str()
+        } else if s(&task, "effectiveDue").is_empty() {
             s(&task, "due")
         } else {
             s(&task, "effectiveDue")
@@ -1810,7 +1821,9 @@ Ctrl+Z  Undo     Escape  Back",
         marker
             .button
             .set_sensitive(!["project", "template"].contains(&s(&task, "kind")));
-
+        if !snoozed_date.is_empty() {
+            marker.set_snoozed(s(&task, "snoozedUntil"));
+        }
         marker.set_selected(s(&task, "id") == *self.selected.borrow());
         marker.follow_focus(&card);
         marker.hover_on(&row);
