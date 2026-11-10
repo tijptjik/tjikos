@@ -594,6 +594,7 @@ impl Bar {
         let active = self.opacity > 0.01;
         if active != self.input_active {
             self.input_active = active;
+            set_bar_mapped(&self.window, self.visible, active);
             if active {
                 // Wake after the fade becomes visible: a tick at opacity zero
                 // would immediately suspend the marquee again.
@@ -1277,7 +1278,7 @@ impl Ui {
         // while the pointer is elsewhere. Still step the deck to clear dismissal
         // suppression, and retain normal tracking for pending/detached panels.
         let over_bar = self.bars.borrow().values().any(|bar| {
-            bar.window.is_visible()
+            bar.visible
                 && bar.input_active
                 && (bar.hovered.get()
                     || point.is_some_and(|point| {
@@ -2284,6 +2285,27 @@ pub(super) fn exercise_detached_ownership(
 }
 
 #[cfg(test)]
+mod idle_tests {
+    use super::*;
+    #[test]
+    fn poll_bookkeeping_does_not_refresh_but_content_and_errors_do() {
+        let initial = json!({"providers":{"audio":{"items":[{"id":"sink","text":{"value":"50%"}}],"error":"","polls":1,"updated":1}}});
+        let mut next = initial.clone();
+        next["providers"]["audio"]["polls"] = json!(2);
+        next["providers"]["audio"]["updated"] = json!(2);
+        assert!(!presentation_changed(&initial, &next));
+        next["providers"]["audio"]["items"][0]["text"]["value"] = json!("60%");
+        assert!(presentation_changed(&initial, &next));
+        next = initial.clone();
+        next["providers"]["audio"]["error"] = json!("Device disconnected");
+        assert!(presentation_changed(&initial, &next));
+        next = initial.clone();
+        next["providers"] = json!({});
+        assert!(presentation_changed(&initial, &next));
+    }
+}
+
+#[cfg(test)]
 mod input_region_tests {
     use super::*;
 
@@ -2328,26 +2350,5 @@ mod input_region_tests {
         set_bar_mapped(&window, false, true);
         assert!(!window.is_mapped());
         window.destroy();
-    }
-}
-
-#[cfg(test)]
-mod idle_tests {
-    use super::*;
-    #[test]
-    fn poll_bookkeeping_does_not_refresh_but_content_and_errors_do() {
-        let initial = json!({"providers":{"audio":{"items":[{"id":"sink","text":{"value":"50%"}}],"error":"","polls":1,"updated":1}}});
-        let mut next = initial.clone();
-        next["providers"]["audio"]["polls"] = json!(2);
-        next["providers"]["audio"]["updated"] = json!(2);
-        assert!(!presentation_changed(&initial, &next));
-        next["providers"]["audio"]["items"][0]["text"]["value"] = json!("60%");
-        assert!(presentation_changed(&initial, &next));
-        next = initial.clone();
-        next["providers"]["audio"]["error"] = json!("Device disconnected");
-        assert!(presentation_changed(&initial, &next));
-        next = initial.clone();
-        next["providers"] = json!({});
-        assert!(presentation_changed(&initial, &next));
     }
 }
