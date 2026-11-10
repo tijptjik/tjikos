@@ -1,5 +1,5 @@
 {
-  "status": "publication-authorized; blocked by crates.io account email verification; source tags published",
+  "status": "published and verified; tjik-desktop 0.1.0 and tjik-gtk 0.1.0",
   "registry": "crates-io",
   "prefix": "tjik",
   "source_commit": "a0c45a7029abd41a14d6bd61844f109adaf7603d",
@@ -10,18 +10,26 @@
       "version": "0.1.0",
       "sha256": "a93f6ff8241f46fa8c15a9b9282a87a58f2c84acc2689a60224da6ef31da87d2",
       "tag": "tjik-desktop-v0.1.0",
+      "publication": "verified",
+      "registry_url": "https://crates.io/crates/tjik-desktop/0.1.0",
+      "published_at": "2026-11-10T11:16:27.514679Z",
+      "registry_checksum": "a93f6ff8241f46fa8c15a9b9282a87a58f2c84acc2689a60224da6ef31da87d2",
       "commit": "a0c45a7029abd41a14d6bd61844f109adaf7603d",
       "source_url": "https://github.com/tijptjik/tjikos/tree/tjik-desktop-v0.1.0",
-      "uploaded": false
+      "uploaded": true
     },
     {
       "name": "tjik-gtk",
       "version": "0.1.0",
       "sha256": "42ab14f7c978276f87ebffa7b17479f597968e94a5ac925dad3591d71ca8d9c6",
       "tag": "tjik-gtk-v0.1.0",
+      "publication": "verified",
+      "registry_url": "https://crates.io/crates/tjik-gtk/0.1.0",
+      "published_at": "2026-11-10T11:16:31.344405Z",
+      "registry_checksum": "42ab14f7c978276f87ebffa7b17479f597968e94a5ac925dad3591d71ca8d9c6",
       "commit": "a0c45a7029abd41a14d6bd61844f109adaf7603d",
       "source_url": "https://github.com/tijptjik/tjikos/tree/tjik-gtk-v0.1.0",
-      "uploaded": false
+      "uploaded": true
     }
   ],
   "names_at_preflight": "all three exact names returned crates.io HTTP 404",
@@ -36,20 +44,15 @@
     "native_dependencies": "GTK 4.12+ and gtk4-layer-shell required separately"
   },
   "publication_attempt": {
-    "package": "tjik-desktop",
+    "packages": [
+      "tjik-desktop",
+      "tjik-gtk"
+    ],
     "version": "0.1.0",
-    "uploaded": false,
-    "result": "crates.io HTTP 400: verified account email required",
-    "registry_readback": {
-      "tjik-desktop": 404,
-      "tjik-gtk": 404
-    }
+    "result": "published; registry versions and downloaded archive checksums verified",
+    "uploaded": true
   },
-  "remaining": [
-    "verify the crates.io account email at https://crates.io/settings/profile",
-    "retry both 0.1.0 publications from the validated clean source after email verification",
-    "read back registry metadata and archive hashes against validated candidates"
-  ],
+  "remaining": [],
   "publication_targets": [
     "tjik-desktop",
     "tjik-gtk"
@@ -99,6 +102,18 @@
       "uploaded": false
     }
   },
-  "receipt_updated_at": "2026-11-10T11:02:50.483067+00:00",
-  "fleet_rollout_receipt": "fleet-rollout-2026-11-10.json"
+  "receipt_updated_at": "2026-11-10T11:18:56.359994+00:00",
+  "fleet_rollout_receipt": "fleet-rollout-2026-11-10.json",
+  "previous_publication_attempts": [
+    {
+      "package": "tjik-desktop",
+      "version": "0.1.0",
+      "uploaded": false,
+      "result": "crates.io HTTP 400: verified account email required",
+      "registry_readback": {
+        "tjik-desktop": 404,
+        "tjik-gtk": 404
+      }
+    }
+  ]
 }

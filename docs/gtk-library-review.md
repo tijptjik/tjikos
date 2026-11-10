@@ -9,8 +9,9 @@ texts and notices have passed extracted-archive validation.
 Current publication scope is `tjik-desktop` and `tjik-gtk` only. The Tasktjik view
 library remains internal with `publish = false` until the applications have stabilised
 and the maintainer reconsiders. Historical three-crate release entries below are
-superseded by this decision. Initial publication is now authorised, with clean source
-tags and dry runs complete; crates.io account email verification is the remaining gate.
+superseded by this decision. Initial versions `tjik-desktop` 0.1.0 and `tjik-gtk` 0.1.0
+are published; registry metadata and downloaded archive hashes match the validated clean
+source candidates.
 
 The shared core now has public adapter boundaries and bounded background work:
 `tjik-desktop` owns toolkit-independent state/actions; `tjik-gtk` owns presentation
@@ -441,7 +442,7 @@ run logs, recovery directories and session follow-ups.
 Clean initial 0.1.0 candidates for `tjik-desktop` and `tjik-gtk` passed extracted
 archive checks and registry-resolved publication dry runs. Their source tags point to
 `a0c45a7029abd41a14d6bd61844f109adaf7603d` and were pushed and read back. Crates.io
-rejected the first real upload because the account email is unverified. Neither crate
-was uploaded; exact-name readback returned HTTP 404 for both. The managed token is
-already provisioned. Account email verification is required before retrying the
-publication already authorised by the maintainer. `tjik-task-gtk` stays internal.
+rejected the first real upload until the account email was verified. The retry published
+both crates as 0.1.0. Registry version metadata and downloaded archive SHA-256 checksums
+match the validated candidates exactly. The managed token is provisioned;
+`tjik-task-gtk` stays internal.

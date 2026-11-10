@@ -12,22 +12,24 @@ The maintainer selected the `tjik` prefix. Public release targets are `tjik-desk
 not create an exclusive crate-name namespace. Local source directories and dependency
 aliases remain unchanged.
 
-Initial publication is authorised. The clean source at
-`a0c45a7029abd41a14d6bd61844f109adaf7603d` passed extracted-archive tests and
-registry-resolved dry runs for both public crates. Source tags
+The initial releases are published:
+
+- [`tjik-desktop` 0.1.0](https://crates.io/crates/tjik-desktop/0.1.0)
+- [`tjik-gtk` 0.1.0](https://crates.io/crates/tjik-gtk/0.1.0)
+
+Both releases use the clean source at `a0c45a7029abd41a14d6bd61844f109adaf7603d`.
+Extracted-archive tests and registry-resolved dry runs passed before upload. Source tags
 [`tjik-desktop-v0.1.0`](https://github.com/tijptjik/tjikos/tree/tjik-desktop-v0.1.0) and
-[`tjik-gtk-v0.1.0`](https://github.com/tijptjik/tjikos/tree/tjik-gtk-v0.1.0) are
-published. Candidate archives retain that exact clean Git revision; their source, README
-and legal files match the validated checkout.
+[`tjik-gtk-v0.1.0`](https://github.com/tijptjik/tjikos/tree/tjik-gtk-v0.1.0) resolve to
+that exact commit. Registry metadata and downloaded archives were read back after
+publication; both SHA-256 checksums match their validated candidates.
 
-Crates.io rejected the first upload with HTTP 400 because the account email is not
-verified. Neither crate was uploaded; both exact names still returned HTTP 404 after the
-rejection. Verify the account email at <https://crates.io/settings/profile>, then retry
-publication from the clean tagged source. The managed Cargo token is already installed
-and verified on Fi and Li. See the [release receipt](library-release-receipt.json) for
-candidate hashes and the account gate. The earlier `1791bfa` candidate is historical.
+The initial account-email verification gate is resolved. Cargo credentials are managed
+through Dotjik and verified on Fi and Li. See the
+[release receipt](library-release-receipt.json) for hashes, publication timestamps and
+historical attempts. The earlier `1791bfa` candidate is historical.
 
-Resume the following procedure after the email is verified:
+For subsequent authorised releases, use the following procedure:
 
 1. Query crates.io for each exact name and version. An unused name is only an
    observation; it is not reserved until publication succeeds. If a name already exists,
