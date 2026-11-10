@@ -4,6 +4,8 @@
   "license": "GPL-3.0-or-later",
   "version": "0.1.0",
   "scripts": {
-    "test": "python3 -B tests/cache.py"
+    "build": "bash scripts/build.sh",
+    "check": "cargo fmt --check",
+    "test": "bash scripts/build.sh && cargo test --release --locked && python3 -B tests/integration.py"
   }
 }
