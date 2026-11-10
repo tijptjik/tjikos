@@ -31,18 +31,19 @@ for path in set(paths) - {""}:
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target, follow_symlinks=False)
 PYSTAGE
-for crate in tjik-desktop tjik-gtk tasktjik-gtk; do
-    manifest="$review_root/source/packages/$crate/Cargo.toml"
+for directory in tjik-desktop tjik-gtk tasktjik-gtk; do
+    manifest="$review_root/source/packages/$directory/Cargo.toml"
+    crate="$(python3 -c 'import sys,tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["package"]["name"])' "$manifest")"
     version="$(python3 -c 'import sys,tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["package"]["version"])' "$manifest")"
     config=()
-    if [[ "$crate" == tasktjik-gtk ]]; then
+    if [[ "$directory" == tasktjik-gtk ]]; then
         # Resolve the not-yet-published dependency from its extracted archive.
         # This proves archive isolation, not registry name/version availability.
-        config=(--config "patch.crates-io.tjik-gtk.path=\"$gtk_archive\"")
+        config=(--config "patch.crates-io.$gtk_name.path=\"$gtk_archive\"")
     fi
     # Packaging normalizes path dependencies and its temporary lockfile. Cargo
     # cannot do this with --locked when an unpublished dependency is patched.
-    cp "$review_root/source/packages/$crate/Cargo.lock" "$review_root/$crate.source.lock"
+    cp "$review_root/source/packages/$directory/Cargo.lock" "$review_root/$crate.source.lock"
     cargo package --manifest-path "$manifest" --offline --allow-dirty --no-verify "${config[@]}"
     tar -xzf "$CARGO_TARGET_DIR/package/$crate-$version.crate" -C "$review_root"
     archive="$review_root/$crate-$version"
@@ -55,13 +56,14 @@ source = Path(sys.argv[1]).parent
 archive = Path(sys.argv[2])
 with (archive / "Cargo.toml").open("rb") as stream:
     package = tomllib.load(stream)["package"]
-    expected = "MPL-2.0 AND BSD-3-Clause" if package["name"] == "tjik-desktop" else "MPL-2.0"
+    expected = "MPL-2.0 AND BSD-3-Clause" if source.name == "tjik-desktop" else "MPL-2.0"
     assert package["license"] == expected
 for name in ("LICENSE", "NOTICE"):
     assert (archive / name).read_bytes() == (source / name).read_bytes(), name
 PYLICENSE
-    if [[ "$crate" == tjik-gtk ]]; then
+    if [[ "$directory" == tjik-gtk ]]; then
         gtk_archive="$archive"
+        gtk_name="$crate"
     fi
     python3 - "$review_root/$crate.source.lock" "$archive/Cargo.lock" <<'PYLOCK'
 import sys
@@ -77,7 +79,7 @@ assert not extra, f"Archive introduced dependencies absent from source lock: {ex
 PYLOCK
     # Locked offline resolution prevents a dependency refresh during validation.
     cargo test --manifest-path "$archive/Cargo.toml" --locked --offline "${config[@]}"
-    if [[ "$crate" == tjik-desktop ]]; then
+    if [[ "$directory" == tjik-desktop ]]; then
         cargo test --manifest-path "$archive/Cargo.toml" --locked --offline --all-features
     fi
 done
