@@ -7,7 +7,7 @@ license = "MPL-2.0"
 description = "Tasktjik GTK views with host-owned commands and asynchronous preview providers"
 readme = "README.md"
 repository = "https://github.com/tijptjik/tjikos"
-publish = ["crates-io"]
+publish = false
 [dependencies]
 tjik-gtk = { path = "../tjik-gtk", version = "0.1.0" }
 serde_json = "1"

@@ -1,5 +1,5 @@
 {
-  "status": "publication-pending; recorded candidate superseded by author and README updates",
+  "status": "publication-pending; recorded candidate superseded; tjik-task-gtk internal until applications stabilise",
   "registry": "crates-io",
   "prefix": "tjik",
   "source_commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72",
@@ -22,7 +22,7 @@
       "version": "0.1.0",
       "sha256": "5740e6e087e2bb1d0cc9c16fbd2095b23fd4602febff61c604778ff8d823e21d",
       "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72",
-      "stage": "local-extracted-gtk-patch; registry dry run awaits GTK publication"
+      "stage": "historical local-extracted-gtk validation; excluded from publication"
     }
   ],
   "names_at_preflight": "all three exact names returned crates.io HTTP 404",
@@ -42,11 +42,17 @@
     "uploaded": false
   },
   "remaining": [
-    "regenerate and validate candidates from the updated author metadata and public README before publication",
-    "authenticate locally with cargo login when the maintainer wants publication",
+    "regenerate and validate desktop and GTK candidates from updated source before publication",
+    "provision Cargo credentials when the maintainer wants publication",
     "recheck exact names and ownership/version availability",
-    "publish independent desktop and GTK candidates from the recorded clean source",
-    "wait for GTK registry availability; run registry-resolved Task GTK dry run and publish",
+    "publish only independent desktop and GTK candidates from a newly validated clean source",
     "read back published metadata and archive hashes"
-  ]
+  ],
+  "publication_targets": [
+    "tjik-desktop",
+    "tjik-gtk"
+  ],
+  "deferred_packages": {
+    "tjik-task-gtk": "internal shared library; publish=false until applications stabilise and maintainer reconsiders"
+  }
 }

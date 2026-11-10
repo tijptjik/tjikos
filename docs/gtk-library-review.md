@@ -6,6 +6,11 @@ texts and notices have passed extracted-archive validation.
 
 ## Current assessment
 
+Current publication scope is `tjik-desktop` and `tjik-gtk` only. The Tasktjik view
+library remains internal with `publish = false` until the applications have stabilised
+and the maintainer reconsiders. Historical three-crate release entries below are
+superseded by this decision; publication remains pending.
+
 The shared core now has public adapter boundaries and bounded background work:
 `tjik-desktop` owns toolkit-independent state/actions; `tjik-gtk` owns presentation
 primitives; `tasktjik-gtk` is explicitly a Tasktjik-domain view, with commands and

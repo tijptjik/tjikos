@@ -1,9 +1,9 @@
 # Tasktjik GTK views
 
-The published crate is `tjik-task-gtk`. It presents Tasktjik task and reading snapshots.
-The host supplies commands and owns persistence, workflow execution, preview transport
-and installation paths. GTK objects stay on the main thread. This is a domain-specific
-view package; `tjik-gtk` contains the general presentation primitives.
+The `tjik-task-gtk` library presents Tasktjik task and reading snapshots. The host
+supplies commands and owns persistence, workflow execution, preview transport and
+installation paths. GTK objects stay on the main thread. This is a domain-specific view
+package; `tjik-gtk` contains the general presentation primitives.
 
 `TaskView::new(send, exit, previews)` accepts an optional `Rc<dyn PreviewProvider>`.
 Pass `None` for offline or synthetic views. A provider returns a `PreviewFuture` with

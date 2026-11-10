@@ -1,27 +1,30 @@
 # Shared library release
 
-The release consists of the desktop contract, GTK primitives and Tasktjik views under
-`packages/tjik-desktop`, `packages/tjik-gtk` and `packages/tasktjik-gtk`. These
-directory names and the applications' dependency aliases can remain stable when public
-Cargo package names change.
+The release targets are the desktop contract and GTK primitives under
+`packages/tjik-desktop` and `packages/tjik-gtk`. Tasktjik views under
+`packages/tasktjik-gtk` remain an internal shared library with `publish = false` until
+the applications have stabilised and the maintainer explicitly reconsiders publication.
+Its use by Tasktjik and Runtjik does not require a registry release.
 
-The maintainer selected the `tjik` prefix. Public package names are `tjik-desktop`,
-`tjik-gtk`, and `tjik-task-gtk`, initially at version `0.1.0`. Cargo package names are
-global; an account or GitHub organization does not create an exclusive crate-name
-namespace. Local source directories and dependency aliases remain unchanged.
+The maintainer selected the `tjik` prefix. Public release targets are `tjik-desktop` and
+`tjik-gtk`, initially at version `0.1.0`. The internal Tasktjik crate retains the name
+`tjik-task-gtk`. Cargo package names are global; an account or GitHub organization does
+not create an exclusive crate-name namespace. Local source directories and dependency
+aliases remain unchanged.
 
-Publication is pending at the maintainer's request. The clean candidate at
+Publication is pending at the maintainer's request. The historical candidate at
 `1791bfa8bce97236d0c60c2c0a8cc9023855dd72` passes extracted-archive checks for all three
 crates, public API examples and the Runtjik consumer check. Registry-resolved
 publication dry runs pass for `tjik-desktop` and `tjik-gtk`. The first upload command
 stopped at Cargo's authentication check because no crates.io token was configured;
 nothing was uploaded. See [the release receipt](library-release-receipt.json) for
-candidate hashes and the remaining publication steps. The Tasktjik candidate is
-validated against the extracted local GTK archive; its registry-resolved dry run follows
-GTK publication.
+candidate hashes and the remaining publication steps. That candidate is superseded by
+author/README updates and the decision to keep Tasktjik views internal. The historical
+Tasktjik archive was validated against the extracted local GTK archive; it is excluded
+from publication.
 
-When the maintainer requests publication, authenticate locally with `cargo login` and
-resume the following procedure:
+When the maintainer requests publication, provision Cargo credentials through Dotjik or
+authenticate locally with `cargo login`, then resume the following procedure:
 
 1. Query crates.io for each exact name and version. An unused name is only an
    observation; it is not reserved until publication succeeds. If a name already exists,
@@ -35,9 +38,8 @@ resume the following procedure:
    archive names from the manifests, packages staged copies, validates license/notice
    bytes and runs locked offline tests. Its local GTK patch establishes archive
    isolation; it does not prove that registry dependencies are available.
-4. Publish the independent desktop and GTK crates, and wait until the selected GTK
-   version is visible in the registry. Then run a registry-resolved dry run and publish
-   the dependent Tasktjik view crate. Use the crates.io registry explicitly.
+4. Publish only the independent desktop and GTK crates. Use the crates.io registry
+   explicitly. Do not publish the internal Tasktjik view crate.
 5. Read back the published version metadata and source archive; compare the released
    source and legal files with the validated candidate. Record package names, versions,
    archive hashes and registry URLs in the release receipt.
@@ -63,10 +65,9 @@ dev-check bash packages/tjik-gtk/scripts/test-packages.sh
 ```
 
 The image and motion runners provide their own isolated displays, with visible parent
-windows placed silently on workspace 7. The archive checker uses a local GTK dependency
-patch for the unpublished Tasktjik view crate; a registry-resolved dry run is still
-required after the GTK dependency is published. Publish `tjik-gtk` before
-`tjik-task-gtk`.
+windows placed silently on workspace 7. The archive checker also exercises the internal
+Tasktjik view crate with a local GTK dependency patch. Packaging it for an isolation
+check does not make it a publication target.
 
 The public `tjik-gtk` README contains a compilable consumer example, native dependency
 requirements and API/resource/lifecycle contracts. Release state and maintainer commands
