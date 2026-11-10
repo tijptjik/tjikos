@@ -81,6 +81,13 @@ fn position(window: &gtk::ApplicationWindow, r: Rect) {
 fn set_bar_mapped(window: &gtk::ApplicationWindow, visible: bool, input_active: bool) {
     window.set_visible(visible && input_active);
 }
+// Keep the normal allocation so the tray never jumps when other islands return.
+fn island_activity_visibility(island: &gtk::Box, recording_only: bool, is_recording: bool) {
+    let shown = !recording_only || is_recording;
+    island.set_opacity(if shown { 1. } else { 0. });
+    island.set_can_target(shown);
+    island.set_sensitive(shown);
+}
 fn input_regions(window: &gtk::ApplicationWindow, islands: &[gtk::Box]) {
     let weak = window.downgrade();
     let islands: Vec<_> = islands.iter().map(|w| w.downgrade()).collect();
@@ -91,6 +98,9 @@ fn input_regions(window: &gtk::ApplicationWindow, islands: &[gtk::Box]) {
         };
         let region = gtk::cairo::Region::create();
         for island in islands.iter().filter_map(|w| w.upgrade()) {
+            if !island.is_visible() || island.opacity() <= 0.01 {
+                continue;
+            }
             // A queued layout callback must not restore input after concealment.
             if window.opacity() <= 0.01 {
                 break;
@@ -167,6 +177,7 @@ struct Bar {
     fade_from: f64,
     fade_started: Instant,
     input_active: bool,
+    recording_only: bool,
     visible: bool,
 }
 impl Drop for Bar {
@@ -299,6 +310,7 @@ impl Bar {
             fade_from: 1.,
             fade_started: Instant::now(),
             input_active: true,
+            recording_only: false,
             visible: false,
         }
     }
@@ -482,6 +494,24 @@ impl Bar {
     }
     fn relayout(&mut self) {
         let _profile = crate::profile::span("bar.relayout");
+        for (index, island) in self.islands.iter().enumerate() {
+            let is_recording = arr(&self.definition["islands"][index]["modules"])
+                .iter()
+                .any(|name| {
+                    self.definition["moduleConfigs"][s(name)]["provider"]
+                        == crate::recording::PROVIDER
+                });
+            island_activity_visibility(island, self.recording_only, is_recording);
+            let mut child = island.first_child();
+            let mut populated = false;
+            while let Some(widget) = child {
+                populated |= widget.get_visible();
+                child = widget.next_sibling();
+            }
+            if is_recording {
+                island.set_visible(populated);
+            }
+        }
         let Some(output) = self.topology.clone() else {
             return;
         };
@@ -774,7 +804,7 @@ impl Ui {
     fn status(&self) -> Value {
         let mut status = json!({"workspaceScope":self.workspace_scope,"workspaceOutputs":self.snapshot.borrow().as_ref().map(|s|s.outputs.iter().filter(|o|layout::workspace_visible(o,self.workspace_scope.as_deref())).map(|o|o.name.clone()).collect::<Vec<_>>()),"panelDeck":self.panel_status(),"ok":true,"pid":std::process::id(),"nativeRuntime":self.runtime.is_some(),"backendReady":self.backend.borrow()["ready"],"intents":*self.intents.borrow(),"demo":self.demo,"reserve":self.reserve,"autoHideError":self.pointer.latest().1,"pointerSampling":self.edge_timer.borrow().is_some(),"clockProviders":self.clocks.count(),"comparison":std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some(),"error":self.error.borrow().as_str(),"revision":self.snapshot.borrow().as_ref().map(|s|s.revision),"bars":self.bars.borrow().iter().map(|(key,b)|{
             let mut children=vec![];let mut child=b.rows.first_child();while let Some(w)=child {child=w.next_sibling();if w.is::<gtk::Button>(){children.push(w);}}
-            json!({"key":key,"output":b.output,"side":b.definition["side"],"visible":b.visible,"mapped":b.window.is_mapped(),"concealed":self.edge_states.borrow().get(key).is_some_and(|s|s.concealed),"opacity":b.opacity,"inputActive":b.input_active,"geometry":b.geometry,"width":b.window.width(),"height":b.window.height(),"unsupported":b.unsupported,"panel":b.panel.is_visible(),"items":Self::inspect(children.into_iter(),&b.panel),"clocks":b.clocks.iter().map(|c|{let mut v=c.status();v["bounds"]=Self::inspect(std::iter::once(c.button.clone().upcast()),&b.window).first().cloned().unwrap_or(Value::Null);v}).collect::<Vec<_>>(),"workspaces":Self::inspect(b.workspace_buttons.iter().map(|w|w.clone().upcast()),&b.window),"motion":b.comparisons.iter().map(|(id,v)|json!({"id":id,"visible":v.root.is_visible(),"icons":v.icon_status(),"tray":v.tray_status(),"visuals":v.visuals().iter().map(|v|v.status()).collect::<Vec<_>>()})).collect::<Vec<_>>(),"islands":Self::inspect(b.islands.iter().map(|w|w.clone().upcast()),&b.window)})
+            json!({"key":key,"output":b.output,"side":b.definition["side"],"visible":b.visible,"mapped":b.window.is_mapped(),"concealed":edges::concealed(self.edge_states.borrow().get(key), &b.definition),"opacity":b.opacity,"inputActive":b.input_active,"geometry":b.geometry,"width":b.window.width(),"height":b.window.height(),"unsupported":b.unsupported,"panel":b.panel.is_visible(),"items":Self::inspect(children.into_iter(),&b.panel),"clocks":b.clocks.iter().map(|c|{let mut v=c.status();v["bounds"]=Self::inspect(std::iter::once(c.button.clone().upcast()),&b.window).first().cloned().unwrap_or(Value::Null);v}).collect::<Vec<_>>(),"workspaces":Self::inspect(b.workspace_buttons.iter().map(|w|w.clone().upcast()),&b.window),"motion":b.comparisons.iter().map(|(id,v)|json!({"id":id,"visible":v.root.is_visible(),"icons":v.icon_status(),"tray":v.tray_status(),"visuals":v.visuals().iter().map(|v|v.status()).collect::<Vec<_>>()})).collect::<Vec<_>>(),"islands":Self::inspect(b.islands.iter().map(|w|w.clone().upcast()),&b.window)})
         }).collect::<Vec<_>>()});
         status["renderer"] = json!("gtk");
         status["ready"] = self.backend.borrow()["ready"].clone();
@@ -926,6 +956,7 @@ impl Ui {
                     }
                 }
             }
+            crate::recording::add_island(&mut definition);
             let Some(output) = outputs.iter().find(|o| o.name == s(&definition["screen"])) else {
                 continue;
             };
@@ -1591,7 +1622,15 @@ impl Ui {
             self.started.elapsed().as_millis() as u64,
         );
         for (key, bar) in bars.iter_mut() {
-            bar.conceal(states.get(key).is_some_and(|s| s.concealed));
+            let concealed = edges::concealed(states.get(key), &bar.definition);
+            let normally_hidden = states.get(key).is_some_and(|s| s.concealed);
+            // Retain the mask through the final fade-out to avoid flashing other islands.
+            let recording_only = normally_hidden && (!concealed || bar.recording_only);
+            if bar.recording_only != recording_only {
+                bar.recording_only = recording_only;
+                bar.relayout();
+            }
+            bar.conceal(concealed);
         }
         // Match legacy reservation policy: concealed bars release their edge.
         for (key, reservation) in self.reservations.borrow().iter() {
@@ -1600,7 +1639,7 @@ impl Ui {
                 .filter(|(bar_key, b)| {
                     format!("{}/{}", b.output, s(&b.definition["side"])) == *key
                         && b.visible
-                        && !states.get(*bar_key).is_some_and(|s| s.concealed)
+                        && !edges::concealed(states.get(*bar_key), &b.definition)
                 })
                 .filter_map(|(_, b)| {
                     b.topology.as_ref().map(|o| {
@@ -2319,7 +2358,24 @@ mod input_region_tests {
             .default_width(240)
             .default_height(60)
             .build();
-        window.set_child(Some(&gtk::Label::new(Some("Synthetic bar"))));
+        let body = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        let tray = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        let (sender, _receiver) = async_channel::bounded(4);
+        let mut indicator_definition = json!({"provider":crate::recording::PROVIDER,"comparisonItems":[],"comparisonActivity":{"hyprvoice":"recording"}});
+        let style: Value =
+            serde_json::from_str(include_str!("../../themes/rose-punk.json")).unwrap();
+        let mut indicator = comparison::Module::new(
+            &indicator_definition,
+            &style,
+            gtk::Orientation::Horizontal,
+            sender,
+        );
+        tray.append(&indicator.root);
+        let other = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        other.append(&gtk::Button::with_label("Other island"));
+        body.append(&tray);
+        body.append(&other);
+        window.set_child(Some(&body));
         let settle = || {
             let until = Instant::now() + Duration::from_millis(1200);
             while Instant::now() < until {
@@ -2331,6 +2387,38 @@ mod input_region_tests {
         settle();
         assert!(window.is_mapped());
         eprintln!("INPUT_PHASE shown");
+        let original = tray.compute_bounds(&window).unwrap();
+        assert!(
+            original.width() <= 40.,
+            "Recording indicator must remain compact"
+        );
+        assert!(original.x() < other.compute_bounds(&window).unwrap().x());
+        indicator_definition["comparisonActivity"]["hyprvoice"] = json!("processing");
+        indicator.update(&indicator_definition);
+        assert_eq!(indicator.icon_status()[0]["state"]["pulsing"], true);
+        let mut ordinary = indicator_definition.clone();
+        ordinary["provider"] = json!("icontray");
+        let (sender, _receiver) = async_channel::bounded(4);
+        let normal_tray =
+            comparison::Module::new(&ordinary, &json!({}), gtk::Orientation::Horizontal, sender);
+        assert_eq!(normal_tray.icon_status(), json!([]));
+        island_activity_visibility(&other, true, false);
+        island_activity_visibility(&tray, true, true);
+        input_regions(&window, &[other.clone(), tray.clone()]);
+        settle();
+        assert_eq!(other.opacity(), 0.);
+        assert!(!other.can_target() && !other.is_sensitive());
+        assert_eq!(tray.opacity(), 1.);
+        assert_eq!(tray.compute_bounds(&window).unwrap(), original);
+        island_activity_visibility(&other, false, false);
+        input_regions(&window, &[other.clone(), tray.clone()]);
+        settle();
+        assert_eq!(other.opacity(), 1.);
+        assert!(other.can_target() && other.is_sensitive());
+        assert_eq!(tray.compute_bounds(&window).unwrap(), original);
+        indicator_definition["comparisonActivity"]["hyprvoice"] = json!("idle");
+        indicator.update(&indicator_definition);
+        assert!(!indicator.root.get_visible());
         window.set_opacity(0.);
         set_bar_mapped(&window, true, false);
         settle();

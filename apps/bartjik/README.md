@@ -234,6 +234,15 @@ Moving to another activation source restarts pending activation dwell. Disabled,
 CLI-hidden and non-auto-hiding copies do not participate. For independent screens, add
 `"syncMonitors": false` to the relevant object in `bars`.
 
+Recording activity temporarily reveals a small, separate indicator island immediately
+before the icon tray (to its left on horizontal bars), including while Hyprvoice
+processes the recording. The light stays steady during
+capture and pulses during processing. When activity finishes or becomes unavailable,
+the bar returns to its normal auto-hide state. Other islands stay transparent and
+click-through; a normal pointer or keyboard reveal
+restores the complete bar. This reveal does not propagate through
+`syncMonitors` or change an explicit CLI visibility setting.
+
 Hovering the bar or keeping its native tray menu open also prevents hiding. A shared
 Hyprland command-socket observer samples at 50ms without spawning polling processes.
 Detection has up to one sample of latency plus frame scheduling; `0` means no additional

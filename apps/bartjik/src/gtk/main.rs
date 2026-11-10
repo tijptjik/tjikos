@@ -54,6 +54,7 @@ mod panels;
 mod pointer;
 #[path = "../profile.rs"]
 mod profile;
+mod recording;
 mod runtime;
 #[path = "../status_events.rs"]
 mod status_events;

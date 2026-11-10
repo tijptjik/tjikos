@@ -279,7 +279,8 @@ impl Module {
         if let Some(v) = &ring {
             root.append(v);
         }
-        let tray = (module["provider"] == "icontray")
+        let tray = (module["provider"] == "icontray"
+            || module["provider"] == crate::recording::PROVIDER)
             .then(|| super::tray_motion::Tray::new(orientation == gtk::Orientation::Vertical));
         if let Some(t) = &tray {
             root.append(t);
@@ -312,14 +313,19 @@ impl Module {
             return;
         }
         self.last = presentation;
-        self.root.set_visible(module["comparisonHidden"] != true);
+        let activity = &module["comparisonActivity"];
+        let recording = module["provider"] == crate::recording::PROVIDER
+            && (activity["screenRecording"] == true
+                || ["recording", "processing"].contains(&s(&activity["hyprvoice"])));
+        self.root.set_visible(
+            module["comparisonHidden"] != true
+                && (module["provider"] != crate::recording::PROVIDER || recording),
+        );
         if let Some(tray) = &self.tray {
             let style = config::merge(&self.base, &module["style"]);
             let activity = &module["comparisonActivity"];
             let mut desired = vec![];
-            if activity["screenRecording"] == true
-                || ["recording", "processing"].contains(&s(&activity["hyprvoice"]))
-            {
+            if recording {
                 desired.push((
                     "__recording".into(),
                     Value::Null,

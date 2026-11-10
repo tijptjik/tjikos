@@ -19,6 +19,29 @@ pub struct Entry<'a> {
     pub hovered: bool,
     pub fading: bool,
 }
+// Activity is a local visibility override, never an input to synchronized edge state.
+// Keeping that state intact restores the user's reveal/hide choice when work ends.
+pub fn concealed(state: Option<&State>, definition: &Value) -> bool {
+    let active_tray = definition["islands"].as_array().is_some_and(|islands| {
+        islands.iter().any(|island| {
+            island["modules"].as_array().is_some_and(|names| {
+                names.iter().filter_map(Value::as_str).any(|name| {
+                    let module = &definition["moduleConfigs"][name];
+                    let activity = &module["comparisonActivity"];
+                    module["provider"] == crate::recording::PROVIDER
+                        && module["comparisonHidden"] != true
+                        && (activity["screenRecording"] == true
+                            || matches!(
+                                activity["hyprvoice"].as_str(),
+                                Some("recording" | "processing")
+                            ))
+                })
+            })
+        })
+    });
+    state.is_some_and(|s| s.concealed) && !active_tray
+}
+
 fn input(e: &Entry<'_>, pointer: Option<(f64, f64)>) -> (bool, bool) {
     let Some((x, y)) = pointer else {
         return (false, e.hovered);
@@ -138,6 +161,29 @@ mod tests {
     use super::*;
     use serde_json::json;
     use tjik_desktop::DesktopSession;
+    #[test]
+    fn activity_reveals_only_its_indicator_and_restores_concealment() {
+        let hidden = State {
+            concealed: true,
+            keyboard: Some(false),
+            ..State::default()
+        };
+        for phase in ["recording", "processing", "idle", "unavailable"] {
+            let active = matches!(phase, "recording" | "processing");
+            let tray = json!({"islands":[{"modules":["tray"]}],"moduleConfigs":{"tray":{"provider":"recording-indicator","comparisonActivity":{"hyprvoice":phase}}}});
+            assert_eq!(concealed(Some(&hidden), &tray), !active);
+            let mut other = tray.clone();
+            other["islands"] = json!([{"modules":["clock"]}]);
+            assert!(concealed(Some(&hidden), &other));
+            assert!(concealed(Some(&hidden), &json!({"moduleConfigs":{}})));
+            assert!(!concealed(Some(&State::default()), &tray));
+        }
+        let screen = json!({"islands":[{"modules":["tray"]}],"moduleConfigs":{"tray":{"provider":"recording-indicator","comparisonActivity":{"screenRecording":true}}}});
+        assert!(!concealed(Some(&hidden), &screen));
+        assert_eq!(hidden.keyboard, Some(false));
+        assert!(hidden.concealed);
+    }
+
     #[test]
     fn keyboard_reveal_and_hide_release_on_real_edge_contact() {
         let snapshot = tjik_desktop::fake::Fake::default().snapshot().unwrap();
