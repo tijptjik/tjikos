@@ -15,7 +15,7 @@ impl Drop for Running {
             deadline.remove();
         }
         if !self.complete {
-            // The helper handles TERM by unwinding its browser cleanup finally block.
+            // The native helper handles TERM by dropping its browser process-group guard.
             self.process.send_signal(15);
         }
     }
@@ -31,12 +31,7 @@ impl PreviewProvider for Helper {
         let helper = self.0.clone();
         Box::pin(async move {
             let Ok(process) = gio::Subprocess::newv(
-                &[
-                    "python3".as_ref(),
-                    "-B".as_ref(),
-                    helper.as_os_str(),
-                    "--batch".as_ref(),
-                ],
+                &[helper.as_os_str(), "--batch".as_ref()],
                 gio::SubprocessFlags::STDIN_PIPE
                     | gio::SubprocessFlags::STDOUT_PIPE
                     | gio::SubprocessFlags::STDERR_SILENCE,
@@ -96,7 +91,8 @@ mod tests {
         std::fs::write(
             &helper,
             format!(
-                r#"import json, signal, sys, time
+                r#"#!/usr/bin/env python3
+import json, signal, sys, time
 from pathlib import Path
 def stop(signum, frame):
     Path({stopped:?}).write_text('stopped')
@@ -114,6 +110,8 @@ else:
             ),
         )
         .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o700)).unwrap();
         let context = glib::MainContext::new();
         context
             .with_thread_default(|| {

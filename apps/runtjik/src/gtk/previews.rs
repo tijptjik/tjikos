@@ -7,6 +7,6 @@ pub fn provider(demo: bool) -> Option<Rc<dyn PreviewProvider>> {
     }
     let home = std::env::var_os("RUNTJIK_HOME")?;
     Some(tasktjik_gtk::preview_helper::provider(
-        PathBuf::from(home).join("helpers/page_preview.py"),
+        PathBuf::from(home).join("helpers/page-preview"),
     ))
 }

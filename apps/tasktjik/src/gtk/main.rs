@@ -87,7 +87,7 @@ fn main() -> glib::ExitCode {
             } else {
                 std::env::var_os("TASKTJIK_HOME").map(|home| {
                     tasktjik_gtk::preview_helper::provider(
-                        std::path::PathBuf::from(home).join("qml/page_preview.py"),
+                        std::path::PathBuf::from(home).join("qml/page-preview"),
                     )
                 })
             },

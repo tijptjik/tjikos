@@ -68,6 +68,7 @@ with private_compositor(isolate_pointer=True):
     legacy.write_text(json.dumps({'description': 'Old metadata only'}))
     home = temp / 'app'
     shutil.copytree(app / 'qml', home)
+    shutil.copy2(app / 'dist/qml/page-preview', home / 'page-preview')
     sites = [{'id': str(i), 'title': title, 'kind': 'reading', 'reference': url + '/' + str(i), 'group': group,
               'tags': tags, 'done': False, 'status': 'ready', 'createdAt': f'2026-11-0{i+1}', 'revision': 1}
              for i, (title, group, tags) in enumerate([

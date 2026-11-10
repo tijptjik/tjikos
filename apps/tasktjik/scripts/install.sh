@@ -7,17 +7,28 @@ target="$install_home/.local/lib/tasktjik"
 # Resource-only updates avoid replacing an independently developed native frontend.
 if [[ "${1:-}" == --preview-helper-only ]]; then
     [[ $# == 1 ]] || { echo 'Usage: install.sh [--preview-helper-only]' >&2; exit 2; }
-    test -f "$root/dist/qml/page_preview.py"
+    test -f "$root/dist/qml/page-preview"
     install -d "$target/qml" "$target/licenses/page-preview"
     pending="$(mktemp "$target/qml/.page-preview.XXXXXXXX")"
-    install -m 644 "$root/dist/qml/page_preview.py" "$pending"
-    mv -f -- "$pending" "$target/qml/page_preview.py"
+    install -m 755 "$root/dist/qml/page-preview" "$pending"
+    mv -f -- "$pending" "$target/qml/page-preview"
     install -m 644 "$root/dist/licenses/page-preview/"{LICENSE,NOTICE} "$target/licenses/page-preview/"
+    # A resource-only update may target an older host; full installation retires
+    # its legacy helper after updating both GTK and QML consumers.
     exit 0
 fi
 [[ $# == 0 ]] || { echo 'Usage: install.sh [--preview-helper-only]' >&2; exit 2; }
 install -d "$target" "$install_home/.local/bin" "$config_root/systemd/user" "$install_home/.local/share/applications" "$install_home/.local/share/icons/hicolor/scalable/apps"
-cp -R "$root/dist/qml" "$root/dist/web" "$target/"
+# Swap the packaged view/helper directory so a running preview keeps its inode.
+staging="$(mktemp -d "$target/.qml-install.XXXXXXXX")"
+cp -R "$root/dist/qml/." "$staging/"
+previous="$staging.previous"
+if [[ -e "$target/qml" || -L "$target/qml" ]]; then
+    mv -- "$target/qml" "$previous"
+fi
+mv -- "$staging" "$target/qml"
+rm -rf -- "$previous"
+cp -R "$root/dist/web" "$target/"
 install -d "$target/lib"
 new_library="$(mktemp "$target/lib/.layer-shell.XXXXXXXX")"
 install -m 755 "$root/dist/lib/libgtk4-layer-shell.so.0" "$new_library"

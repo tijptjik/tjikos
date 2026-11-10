@@ -35,7 +35,7 @@ KineticScrollView {
     Component.onCompleted: {ready=true;enqueue();}
     Process {
         id: fetcher
-        command: ['python3','-B',decodeURIComponent(Qt.resolvedUrl('page_preview.py').toString().replace('file://','')),'--batch']
+        command: [decodeURIComponent(Qt.resolvedUrl('page-preview').toString().replace('file://','')),'--batch']
         stdinEnabled: true
         onStarted: {write(JSON.stringify(root.loadingUrls));stdinEnabled=false;}
         stdout: SplitParser {
