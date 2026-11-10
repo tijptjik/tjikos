@@ -59,6 +59,10 @@ fn execute() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("serve");
     match cmd {
+        "expansions" => {
+            let request = serde_json::from_reader(std::io::stdin())?;
+            emit(&json!({"ok": expansions::request(request)?}))?;
+        }
         "desktop-status" => emit(&serde_json::to_value(
             tjik_desktop::selected().diagnostics(),
         )?)?,

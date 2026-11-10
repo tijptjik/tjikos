@@ -1,16 +1,30 @@
 """Synthetic Espanso CRUD, preservation, filtering and stale-editor checks."""
-import importlib.machinery
-import importlib.util
+import json
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 import yaml
 
 APP = Path(__file__).resolve().parents[1]
-loader = importlib.machinery.SourceFileLoader('expansions', str(APP / 'bin/runtjik-expansions'))
-spec = importlib.util.spec_from_loader(loader.name, loader)
-module = importlib.util.module_from_spec(spec)
-loader.exec_module(module)
+
+class NativeEditor:
+    def handle(self, request):
+        # No executable lookup is available to the native editor, including Python.
+        result = subprocess.run(
+            [str(APP / 'runtjik-core'), 'expansions'],
+            input=json.dumps(request), text=True, capture_output=True,
+            env={**os.environ, 'PATH': '/nonexistent'},
+        )
+        response = json.loads(result.stdout)
+        if result.returncode:
+            raise ValueError(response.get('message', response))
+        return response['ok']
+
+    def entries(self, root):
+        return self.handle({'action': 'list'})
+
+module = NativeEditor()
 
 with tempfile.TemporaryDirectory(prefix='runtjik-expansions-') as temporary:
     root = Path(temporary)
