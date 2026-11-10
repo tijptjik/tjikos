@@ -24,6 +24,8 @@ struct Mailbox {
     slot: Mutex<Slot>,
     wake: Condvar,
 }
+/// A bounded receiver. Dropping it unregisters the consumer lazily.
+/// Pending state is delivered before a closed-source error.
 pub struct Subscription {
     mailbox: Arc<Mailbox>,
 }
@@ -51,8 +53,17 @@ struct HubState {
     listeners: Vec<Weak<Mailbox>>,
 }
 #[derive(Default)]
-pub(crate) struct Hub(Mutex<HubState>);
-impl Hub {
+/// Adapter-owned source of ordered, full-state desktop events.
+///
+/// Keep one source for the lifetime of an adapter session. Subscribers immediately
+/// receive the latest state, if any. Slow consumers retain only the newest state,
+/// marked for resynchronization. Dropping the source wakes and closes receivers.
+/// No producer thread or async runtime is created by this type.
+pub struct EventSource(Mutex<HubState>);
+impl EventSource {
+    /// Publish a complete state and assign its sequence and snapshot revision.
+    /// Set `resync` after reconnecting or changing the adapter generation.
+    /// The returned event contains the assigned revision for adapter snapshot caches.
     pub fn publish(&self, mut state: DesktopState, resync: bool) -> DesktopEvent {
         let mut hub = self.0.lock().unwrap();
         hub.sequence += 1;
@@ -78,6 +89,7 @@ impl Hub {
         });
         event
     }
+    /// Subscribe without blocking or performing adapter I/O.
     pub fn subscribe(&self) -> Subscription {
         let mut hub = self.0.lock().unwrap();
         hub.listeners.retain(|listener| listener.strong_count() > 0);
@@ -90,7 +102,7 @@ impl Hub {
         Subscription { mailbox }
     }
 }
-impl Drop for Hub {
+impl Drop for EventSource {
     fn drop(&mut self) {
         for mailbox in self
             .0
@@ -110,7 +122,7 @@ mod tests {
     use super::*;
     #[test]
     fn slow_consumers_resync_and_teardown_wakes() {
-        let hub = Hub::default();
+        let hub = EventSource::default();
         let sub = hub.subscribe();
         for _ in 0..1000 {
             hub.publish(DesktopState::Unavailable(DesktopError::Timeout), false);

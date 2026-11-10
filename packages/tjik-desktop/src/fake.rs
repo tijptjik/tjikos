@@ -3,7 +3,7 @@ use crate::*;
 use std::sync::Mutex;
 pub struct Fake {
     state: Mutex<Snapshot>,
-    events: events::Hub,
+    events: events::EventSource,
     pub commands: Mutex<Vec<(String, WindowId)>>,
     pub capabilities: Capabilities,
     pub workspace_commands: Mutex<Vec<WorkspaceTarget>>,
@@ -52,6 +52,7 @@ impl Default for Fake {
                         name: Some("Blue".into()),
                     }),
                 }],
+                focused_window: None,
                 windows: vec![Window {
                     id: WindowId("fixture-one/window-fern".into()),
                     title: Some("Synthetic editor".into()),
@@ -70,7 +71,7 @@ impl Default for Fake {
                     focus_order: Some(0),
                 }],
             }),
-            events: events::Hub::default(),
+            events: events::EventSource::default(),
             commands: Mutex::new(vec![]),
             workspace_commands: Mutex::new(vec![]),
             capabilities: Capabilities {

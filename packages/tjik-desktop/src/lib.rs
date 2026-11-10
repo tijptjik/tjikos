@@ -7,7 +7,7 @@ mod events;
 pub mod fake;
 mod hyprland;
 mod session;
-pub use events::{DesktopEvent, DesktopState, Subscription};
+pub use events::{DesktopEvent, DesktopState, EventSource, Subscription};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, OnceLock};
 
@@ -101,6 +101,9 @@ pub struct Capabilities {
 pub struct Snapshot {
     pub generation: String,
     pub revision: u64,
+    /// Current keyboard-focused window, if reported by the adapter.
+    #[serde(default)]
+    pub focused_window: Option<WindowId>,
     pub windows: Vec<Window>,
     #[serde(default)]
     pub workspaces: Vec<WorkspaceState>,

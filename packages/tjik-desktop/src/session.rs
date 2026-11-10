@@ -1,5 +1,5 @@
 //! One event reader per process, pinned display discovery, bounded subscriber queues.
-use crate::{events::Hub, hyprland::Hyprland, *};
+use crate::{events::EventSource, hyprland::Hyprland, *};
 use std::{
     collections::BTreeMap,
     io::Read,
@@ -121,7 +121,7 @@ struct Inner {
     connector: Arc<dyn Connector>,
     state: Mutex<State>,
     refresh: Mutex<()>,
-    hub: Hub,
+    hub: EventSource,
     observers: Mutex<BTreeMap<(u32, String), Observer>>,
     shortcuts: Mutex<BTreeMap<u32, String>>,
 }
@@ -210,7 +210,7 @@ impl Session {
                 error: DesktopError::Unavailable("Connecting to compositor".into()),
             }),
             refresh: Mutex::new(()),
-            hub: Hub::default(),
+            hub: EventSource::default(),
             observers: Mutex::new(BTreeMap::new()),
             shortcuts: Mutex::new(BTreeMap::new()),
         });

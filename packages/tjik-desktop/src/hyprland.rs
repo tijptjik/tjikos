@@ -279,11 +279,18 @@ impl DesktopSession for Hyprland {
                 })
             })
             .collect();
+        let active = self.query("activewindow")?;
+        let active_id = self.id("window", s(&active["address"]));
+        let focused_window = windows
+            .iter()
+            .find(|w| w.id.0 == active_id)
+            .map(|w| w.id.clone());
         self.check()?;
         Ok(Snapshot {
             generation: self.generation.clone(),
             revision: self.revision.fetch_add(1, Ordering::Relaxed) + 1,
             windows,
+            focused_window,
             workspaces,
             outputs,
         })
@@ -741,8 +748,10 @@ mod transport_tests {
             ("j/monitors", monitor.to_string()),
             ("j/clients", clients.to_string()),
             ("j/workspaces", json!([{ "id":3,"name":"three","monitor":"fixture-output" },{"id":4,"name":"empty","monitor":"fixture-output"}]).to_string()),
+            ("j/activewindow", json!({"address":"0xabc"}).to_string()),
         ]);
         let s = d.snapshot().unwrap();
+        assert_eq!(s.focused_window.as_ref(), Some(&s.windows[0].id));
         assert_eq!(s.outputs[0].logical.width, 720.);
         assert_eq!(s.outputs[0].logical.height, 1280.);
         assert_eq!(s.windows[0].output.as_ref(), Some(&s.outputs[0].id));
@@ -753,6 +762,21 @@ mod transport_tests {
         t.join().unwrap();
         std::fs::remove_file(d.path).unwrap();
     }
+    #[test]
+    fn absent_or_racing_focus_never_invents_a_window() {
+        for active in [json!({}), json!({"address":"0xdead"})] {
+            let (desktop, worker) = fixture(vec![
+                ("j/monitors", "[]".into()),
+                ("j/clients", "[]".into()),
+                ("j/workspaces", "[]".into()),
+                ("j/activewindow", active.to_string()),
+            ]);
+            assert!(desktop.snapshot().unwrap().focused_window.is_none());
+            worker.join().unwrap();
+            std::fs::remove_file(desktop.path).unwrap();
+        }
+    }
+
     #[test]
     fn stale_generation_never_dispatches_and_error_ack_is_failure() {
         let (d, t) = fixture(vec![("/dispatch deliberate-test", "error: denied".into())]);
