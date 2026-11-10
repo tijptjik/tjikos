@@ -53,6 +53,7 @@
       "name": "@tjikos/runtjik",
       "version": "0.8.3",
       "dependencies": {
+        "@tjikos/page-preview": "workspace:*",
         "@tjikos/desktop": "workspace:*",
         "@tjikos/gtk": "workspace:*",
         "@tjikos/tasktjik": "workspace:*",
@@ -74,6 +75,7 @@
       "name": "@tjikos/tasktjik",
       "version": "0.1.0",
       "dependencies": {
+        "@tjikos/page-preview": "workspace:*",
         "@tjikos/notjik-sync": "workspace:*",
       },
     },
@@ -98,6 +100,10 @@
     },
     "packages/notjik-sync": {
       "name": "@tjikos/notjik-sync",
+      "version": "0.1.0",
+    },
+    "packages/page-preview": {
+      "name": "@tjikos/page-preview",
       "version": "0.1.0",
     },
     "packages/tasktjik-gtk": {
@@ -358,6 +364,8 @@
     "@tjikos/notjik-sync": ["@tjikos/notjik-sync@workspace:packages/notjik-sync"],
 
     "@tjikos/oo7-pam": ["@tjikos/oo7-pam@workspace:apps/oo7-pam"],
+
+    "@tjikos/page-preview": ["@tjikos/page-preview@workspace:packages/page-preview"],
 
     "@tjikos/runtjik": ["@tjikos/runtjik@workspace:apps/runtjik"],
 

@@ -6,7 +6,8 @@
     "build": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "../../scripts/package-notices.py"
+        "../../scripts/package-notices.py",
+        "../../packages/page-preview/**"
       ]
     }
   }

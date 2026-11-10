@@ -22,7 +22,8 @@
     "@tjikos/tasktjik": "workspace:*",
     "@tjikos/gtk": "workspace:*",
     "@tjikos/tasktjik-gtk": "workspace:*",
-    "@tjikos/desktop": "workspace:*"
+    "@tjikos/desktop": "workspace:*",
+    "@tjikos/page-preview": "workspace:*"
   },
   "devDependencies": {
     "web-ext": "10.2.0"

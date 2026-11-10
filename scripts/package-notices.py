@@ -7,8 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 COMPONENTS = {
     "bartjik": ("packages/tjik-desktop", "packages/tjik-gtk", "apps/notjik"),
     "notjik": ("packages/tjik-desktop", "packages/tjik-gtk"),
-    "runtjik": ("packages/tjik-desktop", "packages/tjik-gtk", "packages/tasktjik-gtk", "apps/tasktjik"),
-    "tasktjik": (),
+    "runtjik": ("packages/tjik-desktop", "packages/tjik-gtk", "packages/tasktjik-gtk", "apps/tasktjik", "packages/page-preview"),
+    "tasktjik": ("packages/page-preview",),
 }
 
 
