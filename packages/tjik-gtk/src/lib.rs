@@ -8,3 +8,5 @@ pub mod scroll;
 pub mod surface;
 pub mod theme;
 pub use gtk;
+
+mod result_row;

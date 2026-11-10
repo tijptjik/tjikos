@@ -1,7 +1,20 @@
 use gtk::{glib, prelude::*};
-use serde_json::Value;
-fn text<'a>(v: &'a Value, k: &str) -> &'a str {
-    v[k].as_str().unwrap_or("")
+/// Application-supplied presentation of one model item. No provider or transport schema
+/// is imposed by the widget factory. Text is escaped before use in markup.
+#[derive(Clone, Debug, Default)]
+pub struct Presentation {
+    pub id: String,
+    pub title: String,
+    pub subtitle: String,
+    pub image: String,
+    pub fallback_icon: String,
+    /// Nonempty text replaces the image (for example, a glyph or emoji).
+    pub text_preview: String,
+    /// Use thumbnail dimensions in list layout.
+    pub large_image: bool,
+    pub closing: bool,
+    /// Leading status dots, capped at eight to keep the title readable.
+    pub markers: u8,
 }
 #[derive(Clone, Copy)]
 pub enum Layout {
@@ -33,10 +46,23 @@ pub fn track_pointer(content: &impl IsA<gtk::Widget>) {
 }
 
 /// Factories are shared by launchers, history and pickers; GTK virtualizes their widgets.
+/// `present` runs on the GTK thread when an item is bound. Keep it free of blocking I/O.
+/// The adapter accepts any GObject model item, including application-defined types.
+///
+/// ```no_run
+/// use tjik_gtk::{gtk::{self, prelude::*}, results::{self, Layout, Presentation}};
+/// gtk::init().unwrap();
+/// let factory = results::factory(Layout::List, 40, |_| {}, |object| {
+///     let title = object.downcast_ref::<gtk::StringObject>()
+///         .map(|item| item.string().to_string()).unwrap_or_default();
+///     Presentation { title, fallback_icon: "text-x-generic".into(), ..Default::default() }
+/// });
+/// ```
 pub fn factory(
     layout: Layout,
     icon_size: i32,
     selected: impl Fn(u32) + 'static,
+    present: impl Fn(&glib::Object) -> Presentation + 'static,
 ) -> gtk::SignalListItemFactory {
     let selected = std::rc::Rc::new(selected);
     let factory = gtk::SignalListItemFactory::new();
@@ -47,7 +73,8 @@ pub fn factory(
         // activation otherwise schedules its own delayed hover selection.
         item.set_selectable(false);
         let vertical = !matches!(layout, Layout::List);
-        let row = gtk::Box::new(
+        let row = crate::result_row::ResultRow::new(
+            item,
             if vertical {
                 gtk::Orientation::Vertical
             } else {
@@ -162,7 +189,9 @@ pub fn factory(
     factory.connect_unbind(|_, object| {
         let item = object.downcast_ref::<gtk::ListItem>().unwrap();
         if let Some(row) = item.child() {
-            crate::motion::closing(&row, false);
+            if let Some(row) = row.downcast_ref::<crate::result_row::ResultRow>() {
+                row.set_closing(false);
+            }
             if let Some(icon) = row.first_child().and_then(|slot| slot.first_child()) {
                 icon.set_widget_name("");
             }
@@ -170,15 +199,14 @@ pub fn factory(
     });
     factory.connect_bind(move |_, object| {
         let item = object.downcast_ref::<gtk::ListItem>().unwrap();
-        let string = item
-            .item()
+        let value = item.item().as_ref().map(&present).unwrap_or_default();
+        let row = item
+            .child()
             .unwrap()
-            .downcast::<gtk::StringObject>()
+            .downcast::<crate::result_row::ResultRow>()
             .unwrap();
-        let value: Value = serde_json::from_str(&string.string()).unwrap_or(Value::Null);
-        let row = item.child().unwrap().downcast::<gtk::Box>().unwrap();
-        row.set_widget_name(text(&value, "id"));
-        crate::motion::closing(&row, value["closing"] == true);
+        row.set_widget_name(&value.id);
+        row.set_closing(value.closing);
         let icon = row
             .first_child()
             .unwrap()
@@ -191,8 +219,8 @@ pub fn factory(
             .unwrap()
             .downcast::<gtk::Label>()
             .unwrap();
-        let preview = text(&value, "preview");
-        let is_emoji = text(&value, "provider") == "Emoji" && !preview.is_empty();
+        let preview = &value.text_preview;
+        let is_emoji = !preview.is_empty();
         icon.set_visible(!is_emoji);
         emoji.set_visible(is_emoji);
         emoji.set_css_classes(&["emoji-preview"]);
@@ -206,57 +234,29 @@ pub fn factory(
             glib::markup_escape_text(preview)
         ));
         if matches!(layout, Layout::List) {
-            let image = !text(&value, "thumbnail").is_empty();
+            let image = value.large_image;
             icon.set_pixel_size(if image { 80 } else { 40 });
             row.set_height_request(if image { 104 } else { 64 });
         }
-        let clipboard_icon = std::env::var("RUNTJIK_HOME")
-            .map(|home| format!("{home}/qml/icons/commands/runtjik-cliphist.svg"))
-            .unwrap_or_default();
-        let source = if !text(&value, "thumbnail").is_empty() {
-            text(&value, "thumbnail")
-        } else if text(&value, "provider") == "Clipboard" && !clipboard_icon.is_empty() {
-            &clipboard_icon
-        } else if !text(&value, "favicon").is_empty() {
-            text(&value, "favicon")
-        } else {
-            text(&value, "icon")
-        };
-        crate::images::set(
-            &icon,
-            source,
-            if text(&value, "provider") == "Browser" {
-                "web-browser"
-            } else {
-                "application-x-executable"
-            },
-        );
+        crate::images::set(&icon, &value.image, &value.fallback_icon);
         let labels = row.last_child().unwrap().downcast::<gtk::Box>().unwrap();
         let title = labels
             .first_child()
             .unwrap()
             .downcast::<gtk::Label>()
             .unwrap();
-        let window_marker = if value["windows"].as_u64().unwrap_or(0) > 0 {
-            "<span foreground=\"#ff53a6\" size=\"8000\">●</span> "
-        } else {
-            ""
-        };
-        let tone_marker = if is_emoji && value["has_tones"] == true {
-            "<span foreground=\"#ff53a6\" size=\"8000\">●</span> "
-        } else {
-            ""
-        };
+        let markers = "<span foreground=\"#ff53a6\" size=\"8000\">●</span> "
+            .repeat(value.markers.min(8) as usize);
         title.set_markup(&format!(
-            "{window_marker}{tone_marker}{}",
-            glib::markup_escape_text(text(&value, "name"))
+            "{markers}{}",
+            glib::markup_escape_text(&value.title)
         ));
         let subtitle = labels
             .last_child()
             .unwrap()
             .downcast::<gtk::Label>()
             .unwrap();
-        subtitle.set_text(text(&value, "subtitle"));
+        subtitle.set_text(&value.subtitle);
         subtitle.set_visible(matches!(layout, Layout::List));
         // Informational rows remain readable; activation is guarded by the backend.
         row.set_sensitive(true);

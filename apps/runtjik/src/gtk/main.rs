@@ -5,6 +5,7 @@ mod control;
 mod countdown;
 mod desktop;
 mod recovery;
+mod result_adapter;
 mod views;
 mod worker;
 

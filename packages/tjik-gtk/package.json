@@ -1,1 +1,1 @@
-{"name":"@tjikos/gtk","private":true,"version":"0.1.0","scripts":{"build":"bash scripts/native.sh","check":"cargo fmt --check"}}
+{"name":"@tjikos/gtk","private":true,"version":"0.1.0","scripts":{"build":"bash scripts/native.sh","check":"cargo fmt --check","test":"bash scripts/test.sh"}}

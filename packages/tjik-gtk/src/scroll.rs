@@ -78,23 +78,11 @@ pub fn by_row(
                         let mut picked = scroll.pick(x, y, gtk::PickFlags::DEFAULT);
                         while let Some(widget) = picked {
                             if widget.has_css_class("result") {
-                                if let Some(model) = selection.model() {
-                                    for at in 0..model.n_items() {
-                                        let Some(item) =
-                                            model.item(at).and_downcast::<gtk::StringObject>()
-                                        else {
-                                            continue;
-                                        };
-                                        let value: serde_json::Value =
-                                            serde_json::from_str(&item.string())
-                                                .unwrap_or_default();
-                                        if value["id"].as_str()
-                                            == Some(widget.widget_name().as_str())
-                                        {
-                                            selection.set_selected(at);
-                                            break;
-                                        }
-                                    }
+                                if let Some(position) = widget
+                                    .downcast_ref::<crate::result_row::ResultRow>()
+                                    .and_then(|row| row.position())
+                                {
+                                    selection.set_selected(position);
                                 }
                                 break;
                             }

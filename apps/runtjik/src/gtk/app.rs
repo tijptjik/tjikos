@@ -1,3 +1,4 @@
+use crate::result_adapter::{self as results, Layout};
 use crate::{
     control, desktop, views,
     worker::{Request, Worker},
@@ -12,10 +13,7 @@ use std::{
     sync::atomic::Ordering,
     time::Duration,
 };
-use tjik_gtk::{
-    results::{self, Layout},
-    surface, theme,
-};
+use tjik_gtk::{surface, theme};
 
 fn s<'a>(v: &'a Value, k: &str) -> &'a str {
     v[k].as_str().unwrap_or("")
