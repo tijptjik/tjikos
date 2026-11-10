@@ -108,7 +108,10 @@ impl Worker {
                     if request.value["op"] == "remember-command" {
                         continue;
                     }
-                    let response = read(&mut output)?;
+                    let mut response = read(&mut output)?;
+                    if request.value["op"] == "app-action" && request.value["provider"] == "Todo" {
+                        response["task_request_id"] = request.value["request_id"].clone();
+                    }
                     events.send_blocking(Event::Response(request.generation, response))?;
                 }
                 Ok(())

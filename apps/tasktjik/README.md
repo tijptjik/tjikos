@@ -1,8 +1,8 @@
 # Tasktjik
 
 Standalone task app and authority for personal TODOs, reading items and agent work. Run
-`tasktjik` for the Quickshell window. Runtjik embeds the same view through `/todo` and
-`/reading`; Notjik sends actions through the Tasktjik CLI.
+`tasktjik` for the standalone GTK window. Runtjik embeds the same view through `/todo`
+and `/reading`; Notjik sends actions through the Tasktjik CLI.
 
 Build with `bun run build`; install with `bash scripts/install.sh tasktjik`.
 Configuration is `$XDG_CONFIG_HOME/tasktjik/tasktjik.conf` (normally
@@ -360,6 +360,32 @@ plan and its receipt file outside the repository as recovery evidence.
 
 ## License
 
-Application source by tijptjik is licensed under GPL-3.0-or-later; see `LICENSE`
-and `NOTICE`. Third-party source, assets and dependencies retain their existing licenses
-and notices.
+Application source by tijptjik is licensed under GPL-3.0-or-later; see `LICENSE` and
+`NOTICE`. Third-party source, assets and dependencies retain their existing licenses and
+notices.
+
+## Shared GTK application
+
+The standalone window and Runtjik's `/todo` and `/reading` use the same `tjik-task-gtk`
+application view, including its Tasktjik palette, typography, task editor, reading
+gallery, calendar filters and keyboard navigation. The host supplies backend commands,
+preview locations and the application-exit callback. Runtjik adds its own command
+envelope outside the view; the standalone host uses `CachedTodo` on a worker thread.
+Neither host duplicates task authority or recurrence rules.
+
+Escape first closes an editor, filter or local panel. At the application root it closes
+the standalone window or returns to Runtjik, keeping the launcher open. `/` focuses the
+filter; `n` opens New; `e` edits; `s` snoozes; `d` completes and double-D deletes;
+Shift-N, `w`, `m` and `l` select Today, This week, This month and All tasks. Existing
+`tasktjik/ui.ini` domain order, project placement and double-D timing are shared by both
+hosts. Synthetic demos do not read or write these personal preferences.
+
+`tasktjik --quickshell` retains the original renderer for comparison. GTK builds include
+both the API and standalone executable. After installation, reopen existing Tasktjik
+windows to use the new build. Validation uses synthetic fixtures:
+
+```sh
+dev-check bun run build --filter=@tjikos/tasktjik --filter=@tjikos/runtjik
+dev-check python3 -B packages/tasktjik-gtk/scripts/test-previews.py
+dev-check python3 -B apps/tasktjik/tests/gtk_application.py
+```

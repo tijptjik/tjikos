@@ -53,9 +53,9 @@
       "name": "@tjikos/runtjik",
       "version": "0.8.3",
       "dependencies": {
-        "@tjikos/page-preview": "workspace:*",
         "@tjikos/desktop": "workspace:*",
         "@tjikos/gtk": "workspace:*",
+        "@tjikos/page-preview": "workspace:*",
         "@tjikos/tasktjik": "workspace:*",
         "@tjikos/tasktjik-gtk": "workspace:*",
       },
@@ -75,8 +75,10 @@
       "name": "@tjikos/tasktjik",
       "version": "0.1.0",
       "dependencies": {
-        "@tjikos/page-preview": "workspace:*",
+        "@tjikos/gtk": "workspace:*",
         "@tjikos/notjik-sync": "workspace:*",
+        "@tjikos/page-preview": "workspace:*",
+        "@tjikos/tasktjik-gtk": "workspace:*",
       },
     },
     "apps/tjikos-sh": {

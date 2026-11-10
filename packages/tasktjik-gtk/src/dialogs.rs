@@ -1,5 +1,105 @@
 use super::*;
 impl TaskView {
+    pub(crate) fn settings(self: &Rc<Self>) {
+        let panel = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        panel.append(&gtk::Label::new(Some("Tasktjik Settings")));
+        for (key, label, values, labels) in [
+            (
+                "domainSort",
+                "Domain order",
+                vec!["manual", "alphabetical", "due"],
+                vec!["Manual", "Alphabetical", "Due"],
+            ),
+            (
+                "projectSort",
+                "Project placement",
+                vec!["first-due", "first", "last"],
+                vec!["First Due", "Always First", "Always Last"],
+            ),
+        ] {
+            panel.append(&gtk::Label::new(Some(label)));
+            let choice = gtk::DropDown::from_strings(&labels);
+            choice.set_selected(
+                values
+                    .iter()
+                    .position(|v| *v == s(&self.preferences.borrow(), key))
+                    .unwrap_or(0) as u32,
+            );
+            let weak = Rc::downgrade(self);
+            choice.connect_selected_notify(move |c| {
+                if let Some(v) = weak.upgrade() {
+                    v.preference(key, json!(values[c.selected() as usize]));
+                }
+            });
+            panel.append(&choice);
+        }
+        let mut names = self.domain_order.borrow().clone();
+        for name in self.state.borrow()["groups"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            if !names.iter().any(|n| n == name) {
+                names.push(name.into());
+            }
+        }
+        for (index, name) in names.iter().enumerate() {
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            let label = gtk::Label::builder()
+                .label(name)
+                .xalign(0.)
+                .hexpand(true)
+                .build();
+            row.append(&label);
+            for (label, delta) in [("↑", -1isize), ("↓", 1)] {
+                let weak = Rc::downgrade(self);
+                let enabled =
+                    index as isize + delta >= 0 && index as isize + delta < names.len() as isize;
+                let names = names.clone();
+                let button = button(label, move || {
+                    if let Some(v) = weak.upgrade() {
+                        let mut names = names.clone();
+                        let target = index as isize + delta;
+                        if target >= 0 && target < names.len() as isize {
+                            names.swap(index, target as usize);
+                            v.preference(
+                                "manualDomainOrderJson",
+                                json!(serde_json::to_string(&names).unwrap()),
+                            );
+                            v.preference("domainSort", json!("manual"));
+                            v.settings();
+                        }
+                    }
+                });
+                button.set_sensitive(enabled);
+                row.append(&button);
+            }
+            panel.append(&row);
+        }
+        panel.append(&gtk::Label::new(Some("Double-D interval (milliseconds)")));
+        let delay = gtk::SpinButton::with_range(150., 1000., 25.);
+        delay.set_value(
+            self.preferences.borrow()["doubleDInterval"]
+                .as_f64()
+                .unwrap_or(350.),
+        );
+        let weak = Rc::downgrade(self);
+        delay.connect_value_changed(move |d| {
+            if let Some(v) = weak.upgrade() {
+                v.preference("doubleDInterval", json!(d.value_as_int()));
+            }
+        });
+        panel.append(&delay);
+        let weak = Rc::downgrade(self);
+        panel.append(&button("Manage domains", move || {
+            if let Some(v) = weak.upgrade() {
+                v.groups();
+            }
+        }));
+        self.panel("settings", &panel);
+    }
+
     fn panel(self: &Rc<Self>, name: &str, panel: &gtk::Box) {
         let weak = Rc::downgrade(self);
         panel.append(&button("Cancel", move || {

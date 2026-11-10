@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@tjikos/notjik-sync": "workspace:*",
+    "@tjikos/gtk": "workspace:*",
+    "@tjikos/tasktjik-gtk": "workspace:*",
     "@tjikos/page-preview": "workspace:*"
   }
 }

@@ -95,11 +95,19 @@ fn base_url(value: &str) -> Result<url::Url> {
     );
     Ok(parsed)
 }
+#[derive(Debug)]
+pub struct Rejected(pub String);
+impl std::fmt::Display for Rejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for Rejected {}
 fn response(text: &str) -> Result<Value> {
     ensure!(text.len() <= 8 * 1024 * 1024, "Tasktjik response too large");
     let value: Value = serde_json::from_str(text)?;
     if let Some(error) = value.get("error") {
-        bail!("{}", error.as_str().unwrap_or("Tasktjik request failed"));
+        return Err(Rejected(error.as_str().unwrap_or("Tasktjik request failed").into()).into());
     }
     value
         .get("result")
@@ -197,14 +205,14 @@ pub fn http(options: &Value, endpoint: &str, request: Option<&Value>) -> Result<
     if code != "200" {
         if let Ok(v) = serde_json::from_str::<Value>(body) {
             if let Some(e) = v["error"].as_str() {
-                bail!("{e}");
+                return Err(Rejected(e.into()).into());
             }
         }
         bail!("Tasktjik HTTP status {code}");
     }
     let value: Value = serde_json::from_str(body)?;
     if let Some(error) = value.get("error") {
-        bail!("{}", error.as_str().unwrap_or("Tasktjik request failed"));
+        return Err(Rejected(error.as_str().unwrap_or("Tasktjik request failed").into()).into());
     }
     Ok(value)
 }

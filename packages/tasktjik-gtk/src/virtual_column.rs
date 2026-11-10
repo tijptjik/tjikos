@@ -78,6 +78,8 @@ mod imp {
         pub viewport: glib::WeakRef<gtk::ScrolledWindow>,
         pub outer: RefCell<Option<(gtk::Adjustment, glib::SignalHandlerId)>>,
         pub pending: Cell<bool>,
+        pub flip: RefCell<BTreeMap<String, (f32, f32)>>,
+        pub flip_start: Cell<Option<i64>>,
         pub width: Cell<i32>,
         pub reveal: Cell<Option<usize>>,
         pub pinned: Cell<Option<usize>>,
@@ -100,6 +102,33 @@ mod imp {
         }
     }
     impl WidgetImpl for VirtualColumn {
+        fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            let now = self.obj().frame_clock().map_or(0, |c| c.frame_time());
+            let start = self.flip_start.get().unwrap_or(now);
+            if !self.flip.borrow().is_empty() {
+                self.flip_start.set(Some(start));
+            }
+            let t = ((now - start) as f32 / 260_000.).clamp(0., 1.);
+            let remaining = (1. - t).powi(3);
+            for row in self.rows.borrow().values() {
+                snapshot.save();
+                if let Some((x, y)) = self.flip.borrow().get(row.widget_name().as_str()) {
+                    if let Some(bounds) =
+                        self.viewport.upgrade().and_then(|v| row.compute_bounds(&v))
+                    {
+                        snapshot.translate(&gtk::graphene::Point::new(
+                            (x - bounds.x()) * remaining,
+                            (y - bounds.y()) * remaining,
+                        ));
+                    }
+                }
+                self.obj().snapshot_child(row, snapshot);
+                snapshot.restore();
+            }
+            if t >= 1. {
+                self.flip.borrow_mut().clear();
+            }
+        }
         fn request_mode(&self) -> gtk::SizeRequestMode {
             gtk::SizeRequestMode::HeightForWidth
         }
@@ -233,6 +262,27 @@ glib::wrapper! {
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 impl VirtualColumn {
+    pub fn animate_from(&self, positions: BTreeMap<String, (f32, f32)>) {
+        if positions.is_empty() {
+            return;
+        }
+        // The old bottom row can begin below the shorter final column.
+        // The outer scroller still clips to the viewport during the translation.
+        self.set_overflow(gtk::Overflow::Visible);
+        *self.imp().flip.borrow_mut() = positions;
+        self.add_tick_callback(|column, _| {
+            column.queue_draw();
+            if column.imp().flip.borrow().is_empty() {
+                column.set_overflow(gtk::Overflow::Hidden);
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
+            }
+        });
+    }
+    pub fn row_offset(&self, index: usize) -> f32 {
+        self.imp().heights.borrow().offset(index) as f32
+    }
     pub fn new(
         viewport: &gtk::ScrolledWindow,
         count: usize,

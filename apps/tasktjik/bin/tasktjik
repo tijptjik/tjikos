@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ -x "$source_root/tasktjik-api" ]]; then
+if [[ -x "$source_root/dist/tasktjik-gtk" ]]; then
+    export TASKTJIK_HOME="$source_root/dist"
+elif [[ -x "$source_root/tasktjik-api" ]]; then
     export TASKTJIK_HOME="$source_root"
 else
     export TASKTJIK_HOME="${TASKTJIK_HOME:-$HOME/.local/lib/tasktjik}"
+fi
+if [[ "${1:-}" != --quickshell ]]; then
+    case "${1:-show}" in
+        show|--gtk|--demo) exec "$TASKTJIK_HOME/tasktjik-gtk" "${@:2}" "${1:-show}" ;;
+    esac
+else
+    shift
 fi
 case "${1:-show}" in
     show)

@@ -86,9 +86,16 @@ impl CachedTodo {
             };
         }
         let mutation = !["list", "refresh", "open-reference"].contains(&action);
+        let mut acknowledged = None;
         if mutation {
             let _lock = client::lock(&path.with_extension("lock"))?;
-            let result = client::api(&options, request.clone())?;
+            let result = match client::api(&options, request.clone()) {
+                Ok(result) => result,
+                Err(error) if error.downcast_ref::<client::Rejected>().is_some() => {
+                    return Err(error)
+                }
+                Err(error) => return Ok(json!({"retryable_error":format!("{error:#}")})),
+            };
             // Update the replica from the acknowledged task immediately; a complete
             // refresh follows to reconcile other devices and deletions.
             let mut snapshot = read(&path).unwrap_or_else(|_| json!({"tasks":[]}));
@@ -106,8 +113,9 @@ impl CachedTodo {
                 }
             }
             self.last_attempt = None;
+            acknowledged = Some(snapshot);
         }
-        let snapshot = match read(&path) {
+        let snapshot = match acknowledged.map(Ok).unwrap_or_else(|| read(&path)) {
             Ok(v) => v,
             Err(e) => {
                 self.error = format!("Rebuilding unreadable cache: {e}");

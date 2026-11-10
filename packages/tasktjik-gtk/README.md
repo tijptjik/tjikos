@@ -49,3 +49,16 @@ reading collections. It is an explicit rendered profile, not a latency guarantee
 Source by tijptjik in this package is licensed under MPL-2.0; see `LICENSE` and
 `NOTICE`. Standard MPL secondary-license compatibility is retained, allowing use in
 GPLv3 applications. Third-party components retain their own licenses and notices.
+
+## Application hosts
+
+Tasktjik's standalone GTK window and Runtjik embed the same `TaskView`; there is no
+mini-app presentation fork. The exit callback is the context boundary: the standalone
+host closes its window, while Runtjik returns to its launcher. Editors, filters and
+local dialogs consume Escape before that callback. View requests contain Tasktjik
+commands and revision guards; launcher routing fields belong to Runtjik's adapter.
+
+`style::CSS` owns Tasktjik's palette and typography in both hosts. `preferences` reads
+and preserves the existing INI format at a host-supplied location. `preview_helper`
+provides cancellable local-helper transport with a host-supplied executable path; the
+view continues to accept any `PreviewProvider` implementation.

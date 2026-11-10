@@ -34,7 +34,7 @@ pub struct Reading {
     filter: gtk::SearchEntry,
     grid: gtk::ToggleButton,
     categories: gtk::ToggleButton,
-    completed: gtk::ToggleButton,
+    completed: super::status_filter::StatusFilter,
     sort: gtk::DropDown,
     state: RefCell<Value>,
     selected: RefCell<String>,
@@ -69,14 +69,20 @@ impl Reading {
         let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         spacer.set_hexpand(true);
         options.append(&spacer);
-        let sort = gtk::DropDown::from_strings(&["Recently saved", "Title: A–Z", "Site: A–Z"]);
+        let sort = gtk::DropDown::from_strings(&[
+            "Recently saved",
+            "Title: A–Z",
+            "Site: A–Z",
+            "Recently completed",
+        ]);
         options.append(&sort);
         let search = gtk::ToggleButton::with_label("⌕");
+        search.set_child(Some(&super::icons::icon("search")));
+        search.add_css_class("icon-button");
         search.set_tooltip_text(Some("Filter saved pages"));
         options.append(&search);
-        let completed = gtk::ToggleButton::with_label("✓");
-        completed.set_tooltip_text(Some("Show read pages"));
-        options.append(&completed);
+        let completed = super::status_filter::StatusFilter::new("Read pages", "completed");
+        options.append(&completed.button);
         let categories = gtk::ToggleButton::with_label("☷");
         categories.set_tooltip_text(Some("Group by category"));
         options.append(&categories);
@@ -155,24 +161,19 @@ impl Reading {
                 }
             }
         });
-        for (title, action) in [
-            ("Reading", "collection"),
-            ("Open window", "window"),
-            ("+ Save page", "new"),
-        ] {
+        for (title, action) in [("Todo", "collection"), ("+ Save page", "new")] {
             let weak = Rc::downgrade(&v);
-            header.append(&button(title, move || {
+            let control = button(title, move || {
                 if let Some(v) = weak.upgrade() {
                     v.emit(action, json!({}));
                 }
-            }));
+            });
+            if action == "new" {
+                control.add_css_class("primary");
+            }
+            header.append(&control);
         }
-        for (title, action) in [
-            ("‹ Launcher", "exit"),
-            ("Edit", "edit"),
-            ("Mark read", "toggle"),
-            ("Undo", "undo"),
-        ] {
+        for (title, action) in [("Edit", "edit"), ("Mark read", "toggle"), ("Undo", "undo")] {
             let weak = Rc::downgrade(&v);
             footer.append(&button(title, move || {
                 if let Some(v) = weak.upgrade() {
@@ -180,7 +181,13 @@ impl Reading {
                 }
             }));
         }
-        for toggle in [&v.grid, &v.categories, &v.completed] {
+        let weak = Rc::downgrade(&v);
+        v.completed.button.connect_clicked(move |_| {
+            if let Some(v) = weak.upgrade() {
+                v.render();
+            }
+        });
+        for toggle in [&v.grid, &v.categories] {
             let weak = Rc::downgrade(&v);
             toggle.connect_toggled(move |_| {
                 if let Some(v) = weak.upgrade() {
@@ -191,6 +198,9 @@ impl Reading {
         let weak = Rc::downgrade(&v);
         v.sort.connect_selected_notify(move |_| {
             if let Some(v) = weak.upgrade() {
+                if v.sort.selected() == 3 && v.completed.mode() == 0 {
+                    v.completed.set_mode(1);
+                }
                 v.render();
             }
         });
@@ -214,22 +224,27 @@ impl Reading {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         let weak = Rc::downgrade(&v);
-        keys.connect_key_pressed(move |_, key, _, mods| {
+        keys.connect_key_pressed(move |_, key, _, _mods| {
             let Some(v) = weak.upgrade() else {
                 return glib::Propagation::Proceed;
             };
-            if v.filter.has_focus() {
+            if super::focus_within(&v.filter) {
+                if key == gtk::gdk::Key::Escape {
+                    v.filter.set_text("");
+                    v.filter.set_visible(false);
+                    v.root.grab_focus();
+                    return glib::Propagation::Stop;
+                }
                 return glib::Propagation::Proceed;
             }
             match key {
                 gtk::gdk::Key::Return => v.emit_selected("open-reference"),
-                gtk::gdk::Key::n if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK) => {
-                    v.emit("new", json!({}))
-                }
+                gtk::gdk::Key::n | gtk::gdk::Key::N => v.emit("new", json!({})),
                 gtk::gdk::Key::slash => {
                     v.filter.set_visible(true);
                     v.filter.grab_focus();
                 }
+                gtk::gdk::Key::e => v.emit_selected("edit"),
                 gtk::gdk::Key::Escape => v.emit("exit", json!({})),
                 gtk::gdk::Key::Down
                 | gtk::gdk::Key::Up
@@ -372,7 +387,7 @@ impl Reading {
             .filter(|t| {
                 s(t, "kind") == "reading"
                     && s(t, "status") != "cancelled"
-                    && (self.completed.is_active() || t["done"] != true)
+                    && self.completed.accepts(t["done"] == true)
                     && format!("{} {} {}", s(t, "title"), s(t, "reference"), t["tags"])
                         .to_lowercase()
                         .contains(&query)
@@ -382,6 +397,10 @@ impl Reading {
         sites.sort_by(|a, b| match self.sort.selected() {
             1 => s(a, "title").cmp(s(b, "title")),
             2 => s(a, "reference").cmp(s(b, "reference")),
+            3 => (b["done"] == true).cmp(&(a["done"] == true)).then_with(|| {
+                super::presentation::completion_time(b)
+                    .cmp(&super::presentation::completion_time(a))
+            }),
             _ => s(b, "createdAt").cmp(s(a, "createdAt")),
         });
         self.count.set_text(&format!("{} saved pages", sites.len()));

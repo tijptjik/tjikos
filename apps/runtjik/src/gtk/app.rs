@@ -346,7 +346,7 @@ impl Ui {
         } else {
             vec![]
         };
-        json!({"lastActivation":self.last_activation.borrow().as_str(),"selectedBounds":selected_bounds,"desktop_sequence":self.desktop_sequence.get(),"pinAngle":self.mark.angle(),"captureUi":if self.demo {views::inspect(&self.word_header,&self.results,&self.window)}else{Value::Null},"resultGeometry":result_geometry,"wordUi": if self.demo { views::inspect(&self.word_header, &self.rich, &self.window) } else { Value::Null }, "scrollY":scroll_y,"rowPitch":row_pitch,"input":self.search.text().as_str(),"composing":self.composing.get(),"startup":self.startup.is_visible(),"renderer":"gtk4","content_view":self.stack.visible_child_name().map(|s|s.to_string()),"surface":if self.layer{"layer"}else{"window"},"running":true,"pid":std::process::id(),"ready":self.ready.get(),"visible":self.window.is_visible(),"focused":self.window.is_active(),"hovered":self.pointer.contains_pointer(),"busy":self.busy.get(),"demo":self.demo,"query":self.query.borrow().as_str(),"resultQuery":self.display_query.borrow().as_str(),"total":self.total.get(),"indexed":self.indexed.get(),"view":self.view.borrow().as_str(),"columns":self.columns.get(),"pinned":self.pinned.get(),"app_state":self.tasks.state(),"rows":self.rows.borrow().clone(),"selected":self.selection.selected(),"backend_error":self.error.borrow().as_str(),"message":self.message.text().as_str()})
+        json!({"lastActivation":self.last_activation.borrow().as_str(),"selectedBounds":selected_bounds,"desktop_sequence":self.desktop_sequence.get(),"pinAngle":self.mark.angle(),"captureUi":if self.demo {views::inspect(&self.word_header,&self.results,&self.window)}else{Value::Null},"resultGeometry":result_geometry,"wordUi": if self.demo { views::inspect(&self.word_header, &self.rich, &self.window) } else { Value::Null }, "scrollY":scroll_y,"rowPitch":row_pitch,"input":self.search.text().as_str(),"composing":self.composing.get(),"startup":self.startup.is_visible(),"renderer":"gtk4","content_view":self.stack.visible_child_name().map(|s|s.to_string()),"surface":if self.layer{"layer"}else{"window"},"running":true,"pid":std::process::id(),"ready":self.ready.get(),"visible":self.window.is_visible(),"focused":self.window.is_active(),"hovered":self.pointer.contains_pointer(),"busy":self.busy.get() || self.tasks.has_queued_updates(),"demo":self.demo,"query":self.query.borrow().as_str(),"resultQuery":self.display_query.borrow().as_str(),"total":self.total.get(),"indexed":self.indexed.get(),"view":self.view.borrow().as_str(),"columns":self.columns.get(),"pinned":self.pinned.get(),"app_state":self.tasks.state(),"rows":self.rows.borrow().clone(),"selected":self.selection.selected(),"backend_error":self.error.borrow().as_str(),"message":self.message.text().as_str()})
     }
     fn message(&self, text: &str) {
         if let Some(label) = self.expansion_error.borrow().as_ref() {
@@ -802,8 +802,16 @@ impl Ui {
         self.word_header.set_visible(false);
         self.update_provider_header(value);
         let was_editor = self.stack.visible_child_name().as_deref() == Some("expansion-editor");
+        let was_tasks = self.stack.visible_child_name().as_deref() == Some("tasks");
         let app_mode = s(value, "app_mode") == "Todo";
         self.topbar.set_visible(!app_mode);
+        if let Some(shell) = self.stack.parent() {
+            if app_mode {
+                shell.add_css_class("task-host");
+            } else {
+                shell.remove_css_class("task-host");
+            }
+        }
         self.stack
             .set_visible_child_name(if app_mode { "tasks" } else { "launcher" });
         if was_editor {
@@ -811,6 +819,9 @@ impl Ui {
         }
         if app_mode {
             self.tasks.update(&value["app_state"]);
+            if !was_tasks {
+                self.tasks.focus();
+            }
             return;
         }
         let q = self.display_query.borrow().clone();
@@ -1009,6 +1020,16 @@ impl Ui {
         ));
     }
     fn response(self: &Rc<Self>, generation: u64, value: Value) {
+        if let Some(id) = value["task_request_id"].as_str() {
+            let result = if s(&value, "kind") == "error" {
+                Err(s(&value, "message").to_owned())
+            } else {
+                Ok(value["app_state"].clone())
+            };
+            self.tasks.response(id, result);
+            // Do not route this again as an unsolicited state update.
+            return;
+        }
         if generation == 0 || s(&value, "kind") == "fatal" {
             self.startup.set_visible(false);
         }
@@ -1401,14 +1422,48 @@ fn build(
     let events = send.clone();
     let exit = send.clone();
     let tasks = tasktjik_gtk::TaskView::new(
-        move |request| {
-            let _ = events.try_send(Event::Request(request));
+        move |mut request| {
+            request["op"] = json!("app-action");
+            request["provider"] = json!("Todo");
+            let events = events.clone();
+            glib::MainContext::default().spawn_local(async move {
+                let _ = events.send(Event::Request(request)).await;
+            });
         },
         move || {
             let _ = exit.try_send(Event::ExitView);
         },
         crate::previews::provider(demo),
     );
+    tasks.configure_mutations(tasktjik_api::optimistic::project);
+    if !demo {
+        let config = std::env::var_os("XDG_CONFIG_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
+                    .join(".config")
+            });
+        let path = config.join("tasktjik/ui.ini");
+        let weak = std::rc::Rc::downgrade(&tasks);
+        tasks.configure_preferences(tasktjik_gtk::preferences::load(&path), move |value| {
+            if let Err(message) = tasktjik_gtk::preferences::save(&path, value) {
+                if let Some(view) = weak.upgrade() {
+                    view.error(&message);
+                }
+            }
+        });
+    }
+    if !demo {
+        let state = std::env::var_os("XDG_STATE_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
+                    .join(".local/state")
+            });
+        if let Err(message) = tasks.configure_outbox(state.join("tasktjik/launcher-outbox.json")) {
+            tasks.error(&message);
+        }
+    }
     stack.add_named(&tasks.root, Some("tasks"));
     stack.set_visible_child_name("launcher");
     root.append(&stack);
@@ -1856,12 +1911,20 @@ pub fn run(demo: bool) -> Result<()> {
                             }
                             continue;
                         }
-                        if ui.busy.get() {
-                            ui.tasks
-                                .error("A request is still running. Try again when it finishes.");
-                        } else {
-                            ui.next_generation();
-                            ui.send(value);
+                        // The task view serializes writes. Launcher queries can remain
+                        // in the worker queue without rejecting a user's mutation.
+                        let id = s(&value, "request_id").to_owned();
+                        if ui
+                            .worker
+                            .send
+                            .try_send(Request {
+                                generation: ui.generation.get(),
+                                value,
+                            })
+                            .is_err()
+                        {
+                            let _ = id;
+                            ui.tasks.retry_later("Backend is unavailable");
                         }
                     }
                     Event::Control(command, reply) => {

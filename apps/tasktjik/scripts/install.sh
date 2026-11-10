@@ -18,6 +18,14 @@ fi
 [[ $# == 0 ]] || { echo 'Usage: install.sh [--preview-helper-only]' >&2; exit 2; }
 install -d "$target" "$install_home/.local/bin" "$config_root/systemd/user" "$install_home/.local/share/applications" "$install_home/.local/share/icons/hicolor/scalable/apps"
 cp -R "$root/dist/qml" "$root/dist/web" "$target/"
+install -d "$target/lib"
+new_library="$(mktemp "$target/lib/.layer-shell.XXXXXXXX")"
+install -m 755 "$root/dist/lib/libgtk4-layer-shell.so.0" "$new_library"
+mv -f -- "$new_library" "$target/lib/libgtk4-layer-shell.so.0"
+install -m 644 "$root/dist/lib/gtk4-layer-shell.LICENSE" "$target/lib/"
+new_gtk="$(mktemp "$target/.tasktjik-gtk.XXXXXXXX")"
+install -m 755 "$root/dist/tasktjik-gtk" "$new_gtk"
+mv -f -- "$new_gtk" "$target/tasktjik-gtk"
 new_binary="$(mktemp "$target/.tasktjik-api.XXXXXXXX")"
 install -m 755 "$root/dist/tasktjik-api" "$new_binary"
 mv -f -- "$new_binary" "$target/tasktjik-api"
@@ -29,6 +37,14 @@ if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
 fi
 install -m 644 "$root/dist/examples/tasktjik.desktop" "$install_home/.local/share/applications/"
 install -m 644 "$root/dist/tasktjik.svg" "$install_home/.local/share/icons/hicolor/scalable/apps/"
+# GTK's Wayland app ID must also resolve through icon-theme lookup, including
+# panels whose desktop-entry list was cached before this installation.
+for app_id in hk.type.tasktjik hk.type.tasktjik.demo; do
+    install -m 644 "$root/dist/tasktjik.svg" "$install_home/.local/share/icons/hicolor/scalable/apps/$app_id.svg"
+done
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t "$install_home/.local/share/icons/hicolor" >/dev/null
+fi
 
 # Use the unpadded app artwork even when an older icon theme is selected.
 python3 - "$install_home/.local/share/applications/tasktjik.desktop" "$install_home/.local/share/icons/hicolor/scalable/apps/tasktjik.svg" <<'PYICON'

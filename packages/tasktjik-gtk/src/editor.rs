@@ -6,14 +6,115 @@ pub(crate) struct Editor {
     pub saving: Rc<Cell<bool>>,
     pub task: Rc<RefCell<Value>>,
 }
+fn section(form: &gtk::Box, label: &str, content: &impl IsA<gtk::Widget>, visible: bool) {
+    content.set_visible(visible);
+    form.append(content);
+    if visible {
+        return;
+    }
+    let mut child = form.first_child();
+    let mut choices = None;
+    while let Some(widget) = child {
+        if widget.widget_name() == "editor-sections" {
+            choices = widget.clone().downcast::<gtk::FlowBox>().ok();
+            break;
+        }
+        child = widget.next_sibling();
+    }
+    let choices = choices.unwrap_or_else(|| {
+        let row = gtk::FlowBox::new();
+        row.set_widget_name("editor-sections");
+        row.set_selection_mode(gtk::SelectionMode::None);
+        row.set_max_children_per_line(12);
+        row.set_halign(gtk::Align::Start);
+        row.set_column_spacing(6);
+        row.set_row_spacing(6);
+        row.set_min_children_per_line(1);
+        let mut anchor = form.first_child();
+        while let Some(widget) = anchor.clone() {
+            if widget.widget_name() == "field-Title" {
+                break;
+            }
+            anchor = widget.next_sibling();
+        }
+        form.insert_child_after(&row, anchor.as_ref());
+        row
+    });
+    let short = match label {
+        "Tags (comma separated)" => "Tags",
+        "Reference or note" => "Note",
+        "Plan (vault-relative Markdown path)" => "Plan",
+        "Acceptance criteria (separate with semicolons)" => "Acceptance",
+        _ => label,
+    };
+    let reveal = gtk::Button::with_label(&format!("+ {short}"));
+    let target = content.as_ref().downgrade();
+    reveal.connect_clicked(move |button| {
+        if let Some(target) = target.upgrade() {
+            target.set_visible(true);
+            target.child_focus(gtk::DirectionType::TabForward);
+        }
+        if let Some(parent) = button.parent() {
+            parent.set_visible(false);
+        }
+    });
+    let rank = |text: &str| {
+        [
+            "+ Template",
+            "+ Project",
+            "+ Subtasks",
+            "+ Domain",
+            "+ Tags",
+            "+ Due date",
+            "+ Repeat",
+            "+ Note",
+            "+ Reminder",
+        ]
+        .iter()
+        .position(|s| *s == text)
+        .unwrap_or(99)
+    };
+    let mut at = 0;
+    let mut child = choices.first_child();
+    while let Some(c) = child {
+        let label = c
+            .downcast_ref::<gtk::FlowBoxChild>()
+            .and_then(|c| c.child())
+            .and_then(|c| c.downcast::<gtk::Button>().ok())
+            .and_then(|b| b.label())
+            .unwrap_or_default();
+        if rank(&label) > rank(&format!("+ {short}")) {
+            break;
+        }
+        at += 1;
+        child = c.next_sibling();
+    }
+    choices.insert(&reveal, at);
+}
 fn field(form: &gtk::Box, label: &str, value: &str) -> gtk::Entry {
     let row = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    row.set_widget_name(&format!("field-{label}"));
     let heading = gtk::Label::builder().label(label).xalign(0.0).build();
     heading.add_css_class("muted");
     row.append(&heading);
     let entry = gtk::Entry::builder().text(value).hexpand(true).build();
+    entry.set_widget_name(label);
+    if label == "Title" {
+        entry.add_css_class("task-editor-title");
+    }
     row.append(&entry);
-    form.append(&row);
+    // Step editors retain their explicit controls; progressive disclosure is for
+    // the main task form, matching the original application's optional sections.
+    if form.has_css_class("task-editor") {
+        section(
+            form,
+            label,
+            &row,
+            label == "Title" || (!value.is_empty() && !(label == "Domain" && value == "All")),
+        );
+    } else {
+        form.append(&row);
+    }
     entry
 }
 struct Nodes {
@@ -169,17 +270,58 @@ impl Nodes {
 }
 impl TaskView {
     pub fn edit(self: &Rc<Self>, task: Value) {
-        if self.pending.get() {
-            return;
-        }
+        let task = if task["_recovery"] == true {
+            task
+        } else {
+            self.state.borrow()["tasks"]
+                .as_array()
+                .and_then(|rows| {
+                    rows.iter()
+                        .find(|row| row["id"] == task["id"] && task["id"].is_string())
+                })
+                .cloned()
+                .unwrap_or(task)
+        };
+        self.message.set_visible(false);
         self.close_editor();
+        self.toolbar.set_visible(false);
+        self.options.set_visible(false);
+        self.footer.set_visible(false);
+        self.filter.set_visible(false);
         let form = gtk::Box::new(gtk::Orientation::Vertical, 10);
         form.add_css_class("pane");
+        form.add_css_class("task-editor");
+        let heading = gtk::Label::builder()
+            .label(match s(&task, "kind") {
+                "reading" => "Reading",
+                "project" => "Projects",
+                "template" => "Templates",
+                _ => "Tasks",
+            })
+            .xalign(0.)
+            .build();
+        heading.add_css_class("task-heading");
+        form.append(&heading);
+        let caption = gtk::Label::builder()
+            .label(if s(&task, "id").is_empty() {
+                "Add a new task"
+            } else {
+                "Edit details"
+            })
+            .xalign(0.)
+            .build();
+        caption.add_css_class("muted");
+        form.append(&caption);
         let tracked_task = Rc::new(RefCell::new(task.clone()));
         let title = field(&form, "Title", s(&task, "title"));
+        title.set_placeholder_text(Some("What needs to be done?"));
+        if let Some(row) = title.parent() {
+            row.set_margin_top(10);
+            row.set_margin_bottom(8);
+        }
         let group = field(
             &form,
-            "Group",
+            "Domain",
             if s(&task, "group").is_empty() {
                 "All"
             } else {
@@ -197,11 +339,7 @@ impl TaskView {
                 .collect::<Vec<_>>()
                 .join(", "),
         );
-        let due = field(
-            &form,
-            "Due date (YYYY-MM-DD, today or tomorrow)",
-            s(&task, "due"),
-        );
+        let due = field(&form, "Due date", s(&task, "due"));
         let reference = field(
             &form,
             if s(&task, "kind") == "reading" {
@@ -211,14 +349,15 @@ impl TaskView {
             },
             s(&task, "reference"),
         );
+        let advanced = gtk::Box::new(gtk::Orientation::Vertical, 10);
         let plan = field(
-            &form,
+            &advanced,
             "Plan (vault-relative Markdown path)",
             s(&task, "plan"),
         );
-        let assignee = field(&form, "Assignee", s(&task, "assignee"));
+        let assignee = field(&advanced, "Assignee", s(&task, "assignee"));
         let acceptance = field(
-            &form,
+            &advanced,
             "Acceptance criteria (separate with semicolons)",
             &task["acceptance"]
                 .as_array()
@@ -247,29 +386,22 @@ impl TaskView {
                 .position(|p| p["id"] == task["project"])
                 .unwrap_or(0) as u32,
         );
-        form.append(&gtk::Label::new(Some("Project")));
-        form.append(&project);
+        let project_section = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        project_section.append(&project);
         let only_project = gtk::CheckButton::with_label("Show only inside its project");
         only_project.set_active(task["onlyInProject"] == true);
-        form.append(&only_project);
-        let repeat = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let every = gtk::SpinButton::with_range(1.0, 10000.0, 1.0);
-        every.set_value(task["repeat"]["value"].as_f64().unwrap_or(1.));
-        let units = ["Never", "days", "weeks", "months", "years"];
-        let unit = gtk::DropDown::from_strings(&units);
-        unit.set_selected(
-            units
-                .iter()
-                .position(|v| *v == s(&task["repeat"], "unit"))
-                .unwrap_or(0) as u32,
+        project_section.append(&only_project);
+        section(
+            &form,
+            "Project",
+            &project_section,
+            !s(&task, "project").is_empty(),
         );
-        repeat.append(&gtk::Label::new(Some("Repeat every")));
-        repeat.append(&every);
-        repeat.append(&unit);
-        form.append(&repeat);
+        let repeat_text = field(&form, "Repeat", &input::repeat_label(&task["repeat"]));
+        repeat_text.set_placeholder_text(Some("Every two weeks, every Monday and Friday…"));
         let notify = gtk::CheckButton::with_label("Notify before due");
         notify.set_active(task["notifyBeforeDue"] != false);
-        form.append(&notify);
+
         let lead = gtk::SpinButton::with_range(0., 10000., 1.);
         lead.set_value(task["notifyBeforeDueLeadValue"].as_f64().unwrap_or(1.));
         let lead_units = ["minutes", "hours", "days", "weeks"];
@@ -281,13 +413,20 @@ impl TaskView {
                 .unwrap_or(2) as u32,
         );
         let reminder = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        reminder.append(&notify);
         reminder.append(&lead);
         reminder.append(&lead_unit);
-        form.append(&reminder);
+        section(
+            &form,
+            "Reminder",
+            &reminder,
+            task["notifyBeforeDue"] == true,
+        );
         let sequential = gtk::CheckButton::with_label("Complete workflow steps in order");
         sequential.set_active(task["workflow"] == true);
-        form.append(&sequential);
+
         let nodes = Nodes::new(&task["subtasks"], false);
+        nodes.root.prepend(&sequential);
         let templates: Vec<_> = self.state.borrow()["tasks"]
             .as_array()
             .into_iter()
@@ -295,7 +434,7 @@ impl TaskView {
             .filter(|t| s(t, "kind") == "template")
             .cloned()
             .collect();
-        if !templates.is_empty() && s(&task, "kind") != "template" {
+        if s(&task, "kind") != "template" {
             let mut names = vec!["Use a workflow template…"];
             names.extend(templates.iter().map(|t| s(t, "title")));
             let picker = gtk::DropDown::from_strings(&names);
@@ -343,9 +482,14 @@ impl TaskView {
                 }
                 sequential.set_active(template["workflow"] == true);
             });
-            form.append(&picker);
+            section(&form, "Template", &picker, false);
         }
-        form.append(&nodes.root);
+        section(
+            &form,
+            "Subtasks",
+            &nodes.root,
+            task["subtasks"].as_array().is_some_and(|a| !a.is_empty()),
+        );
         if !s(&task, "id").is_empty() {
             let weak = Rc::downgrade(self);
             let tracked = tracked_task.clone();
@@ -389,6 +533,14 @@ impl TaskView {
         }
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let save = gtk::Button::with_label("Save");
+        save.add_css_class("primary");
+        save.set_sensitive(!title.text().trim().is_empty());
+        let submit = save.downgrade();
+        title.connect_changed(move |entry| {
+            if let Some(save) = submit.upgrade() {
+                save.set_sensitive(!entry.text().trim().is_empty());
+            }
+        });
         buttons.append(&save);
         let keys = gtk::EventControllerKey::new();
         let save_key = save.clone();
@@ -398,7 +550,7 @@ impl TaskView {
                 save_key.emit_clicked();
             } else if key == gdk::Key::Escape {
                 if let Some(v) = weak.upgrade() {
-                    if !v.pending.get() {
+                    {
                         let draft = s(&v.state.borrow(), "draft_id").to_owned();
                         v.close_editor();
                         if !draft.is_empty() {
@@ -415,11 +567,8 @@ impl TaskView {
         });
         form.add_controller(keys);
         let weak = Rc::downgrade(self);
-        buttons.append(&button("Cancel", move || {
+        buttons.append(&button("Close", move || {
             if let Some(v) = weak.upgrade() {
-                if v.pending.get() {
-                    return;
-                }
                 let draft = s(&v.state.borrow(), "draft_id").to_owned();
                 v.close_editor();
                 if !draft.is_empty() {
@@ -429,7 +578,14 @@ impl TaskView {
                 }
             }
         }));
+        buttons.set_margin_top(14);
         form.append(&buttons);
+        let more = gtk::Expander::builder()
+            .label("More options")
+            .child(&advanced)
+            .build();
+        more.set_margin_top(12);
+        form.append(&more);
         let root = gtk::ScrolledWindow::builder()
             .child(&form)
             .vexpand(true)
@@ -445,11 +601,13 @@ impl TaskView {
         title.grab_focus();
         let tracked = tracked_task.clone();
         save.connect_clicked(move |_|{
-            let Some(view)=weak.upgrade()else{return};if view.pending.get(){return;}
+            let Some(view)=weak.upgrade()else{return};
             if title.text().trim().is_empty(){view.error("Title is required");title.grab_focus();return;}
-            let date=match due.text().trim(){"today"=>chrono::Local::now().date_naive().to_string(),"tomorrow"=>(chrono::Local::now().date_naive()+chrono::Duration::days(1)).to_string(),other=>other.to_owned()};
-            if !date.is_empty() && chrono::NaiveDate::parse_from_str(&date,"%Y-%m-%d").is_err(){view.error("Use a date such as 2026-11-09");return;}
-            let mut recurrence=task["repeat"].clone();if unit.selected()==0{recurrence=json!({});}else{if !recurrence.is_object(){recurrence=json!({});}recurrence["unit"]=json!(units[unit.selected()as usize]);recurrence["value"]=json!(every.value_as_int());}
+            let date=match input::date(due.text().as_str(),chrono::Local::now().date_naive()) {Ok(date)=>date,Err(message)=>{view.error(&message);return;}};
+            let mut recurrence=task["repeat"].clone();if !recurrence.is_object(){recurrence=json!({});}
+            if repeat_text.text().as_str()!=input::repeat_label(&recurrence) {
+                recurrence=match input::repeat(repeat_text.text().as_str()) {Ok(rule)=>rule,Err(message)=>{view.error(&message);return;}};
+            }
             let fields=json!({"title":title.text().trim(),"plan":plan.text().as_str(),"assignee":assignee.text().as_str(),"acceptance":acceptance.text().split(';').map(str::trim).filter(|v|!v.is_empty()).collect::<Vec<_>>(),"kind":if s(&task,"kind").is_empty(){"todo"}else{s(&task,"kind")},"group":group.text().trim(),"tags":tags.text().split(',').map(str::trim).filter(|v|!v.is_empty()).collect::<Vec<_>>(),"due":date,"reference":reference.text().as_str(),"project":projects[project.selected()as usize]["id"],"onlyInProject":only_project.is_active(),"repeat":recurrence,"notifyBeforeDue":notify.is_active(),"notifyBeforeDueLeadValue":lead.value_as_int(),"notifyBeforeDueLeadUnit":lead_units[lead_unit.selected()as usize],"subtasks":nodes.value(),"workflow":sequential.is_active()});
             let draft=s(&view.state.borrow(),"draft_id").to_owned();saving_clone.set(true);form_clone.set_sensitive(false);
             view.request(json!({"action":if !draft.is_empty(){"reading-save"}else if s(&task,"id").is_empty(){"create"}else{"edit"},"id":task["id"],"revision":tracked.borrow()["revision"],"draft_id":draft,"request_id":request_id,"fields":fields}));

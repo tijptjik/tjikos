@@ -16,7 +16,7 @@ command = ["cargo", "test", "--manifest-path", str(ROOT / "packages/tasktjik-gtk
 subprocess.run([*command, "--no-run"], env=env, check=True)
 subprocess.run(command, env=env, check=True)
 with rendering_display():
-    for test in ("previews_bound_batches_reject_stale_results_and_cancel_on_drop",
+    for test in ("optimistic_actions_queue_without_waiting_for_server", "completion_draws_then_fades_then_reflows", "task_application_keyboard_and_host_boundary", "previews_bound_batches_reject_stale_results_and_cancel_on_drop",
                  "media_workers_preserve_responsiveness_and_reject_stale_completion",
                  "reading_virtualization_preserves_navigation_groups_and_resize",
                  "virtual_columns_share_scroll_and_bound_widgets",
