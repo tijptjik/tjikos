@@ -14,7 +14,7 @@ fn row(id: &str, name: &str, subtitle: &str, icon: &str, data: Value) -> Entry {
         provider: "Voice".into(),
         icon: if icon.starts_with("voice-") {
             crate::paths::root()
-                .join("qml/icons")
+                .join("assets/icons")
                 .join(format!("{icon}.svg"))
                 .to_string_lossy()
                 .into_owned()

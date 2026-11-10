@@ -159,7 +159,7 @@ fn row(name: &str, key: &str, title: &str, subtitle: &str, mut data: Value) -> E
         },
     );
     let icon = paths::root().join(format!(
-        "qml/icons/capture-{}-{action}.svg",
+        "assets/icons/capture-{}-{action}.svg",
         if name == "Recorder" { "record" } else { "shot" }
     ));
     Entry {
@@ -759,18 +759,8 @@ pub(crate) fn countdown(spec: &Value) -> Result<bool> {
         .prefix("runtjik-countdown-")
         .tempdir()?;
     let success = temp.path().join("complete");
-    let mut command = if std::env::var("RUNTJIK_FRONTEND").as_deref() == Ok("gtk") {
-        let mut command = Command::new(paths::root().join("runtjik-gtk"));
-        command.arg("countdown");
-        command
-    } else {
-        let mut command = Command::new("quickshell");
-        command.args([
-            "--path",
-            &paths::root().join("qml/countdown").to_string_lossy(),
-        ]);
-        command
-    };
+    let mut command = Command::new(paths::root().join("runtjik-gtk"));
+    command.arg("countdown");
     let mut child = command
         .env("RUNTJIK_COUNTDOWN_SECONDS", seconds.to_string())
         .env("RUNTJIK_COUNTDOWN_OUTPUT", output)

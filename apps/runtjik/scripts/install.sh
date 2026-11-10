@@ -12,7 +12,6 @@ fi
 
 # Stop only this installed launcher before replacing a resident UI/backend pair.
 if [[ "$install_home" == "$HOME" && -n "${WAYLAND_DISPLAY:-}" && -n "${XDG_RUNTIME_DIR:-}" && -x "$install_home/.local/bin/runtjik" ]]; then
-    quickshell ipc --path "$target/qml" call runtjik quit >/dev/null 2>&1 || true
     if ! RUNTJIK_HOME="$target" "$install_home/.local/bin/runtjik" quit >/dev/null 2>&1; then
         RUNTJIK_HOME="$target" "$install_home/.local/bin/runtjik" close >/dev/null 2>&1 || true
     fi
@@ -22,7 +21,7 @@ if [[ "$install_home" == "$HOME" && -n "${XDG_RUNTIME_DIR:-}" && -x "$target/run
     "$target/runtjik-gtk" quit --demo
 fi
 install -d -m 755 "$install_home/.local/bin" "$target" "$config_root/runtjik"
-for directory in bin qml examples docs browser-extension browser-release lib; do
+for directory in bin assets helpers examples docs browser-extension browser-release lib; do
     staging="$(mktemp -d "$target/.install.XXXXXXXX")"
     cp -R "$root_dir/dist/$directory/." "$staging/"
     previous="$staging.previous"
@@ -42,7 +41,7 @@ install -m 755 "$root_dir/dist/runtjik-gtk" "$new_gtk"
 mv -f -- "$new_gtk" "$target/runtjik-gtk"
 rm -f -- "$target"/{todo,browser,browser_host,image_viewer,runtjik,words,desktop_plugins,capture_worker,capture_countdown,capture_trash,control,compat_host}.py
 "$target/runtjik-core" register-browser-host --runtjik-dir "$target" --manifest-dir "$install_home/.mozilla/native-messaging-hosts"
-rm -rf -- "$target/__pycache__"
+rm -rf -- "$target/__pycache__" "$target/qml"
 install -m 755 "$root_dir/dist/bin/runtjik" "$install_home/.local/bin/runtjik"
 bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" runtjik
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 && ! -e "$config_root/runtjik/runtjik.conf" ]]; then

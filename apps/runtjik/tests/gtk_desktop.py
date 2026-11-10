@@ -1,4 +1,4 @@
-"""Synthetic IME protocol, scaled outputs, startup motion and comparison lifecycle."""
+"""Synthetic IME protocol, scaled outputs, startup motion and lifecycle."""
 import json
 import os
 from pathlib import Path
@@ -110,39 +110,7 @@ def main():
                 hypr("eval", f'hl.monitor({{output="{name}",disabled=true}})')
             config.write_text('[theme]\nicon_theme="Adwaita"\n[ui]\nauto_launch_applications=false\nauto_launch_commands=false\n')
             run("close"); run("show"); settled("")
-            normal_pid = status()["pid"]
-            run("close")
-            compare = APP / "dist/bin/runtjik-compare"
-            subprocess.run([str(compare)], check=True)
-            comparison = json.loads(subprocess.check_output([str(compare), "status"], text=True))
-            assert comparison["gtk"]["pid"] != normal_pid
-            assert comparison["gtk"]["ready"] and comparison["quickshell"]["ready"]
-            clients = [c for c in json.loads(hypr("-j", "clients")) if c["initialTitle"].startswith("Runtjik comparison ")]
-            assert all(0 <= c["at"][0] and c["at"][0]+c["size"][0] <= 1700 for c in clients), clients
-            assert len(clients) == 2 and all(c["workspace"]["id"] == 7 for c in clients)
-            assert status()["pid"] == normal_pid and not status()["visible"]
-            # Switch only the private compositor for the synthetic artifact.
-            hypr("eval", 'hl.dispatch(hl.dsp.focus({workspace="7"}))')
-            time.sleep(.8)
-            x, y = min(c["at"][0] for c in clients), min(c["at"][1] for c in clients)
-            right = max(c["at"][0]+c["size"][0] for c in clients)
-            bottom = max(c["at"][1]+c["size"][1] for c in clients)
-            subprocess.run(["grim", "-g", f"{x},{y} {right-x}x{bottom-y}", str(root / "gtk-comparison.png")], check=True)
-            # Focus is blocked only on launch, not during interaction.
-            for client in clients:
-                hypr("eval", 'hl.dispatch(hl.dsp.focus({window="address:'+client["address"]+'"}))')
-                wait_for(lambda: json.loads(hypr("-j", "activewindow")).get("address") == client["address"])
-                subprocess.run(["wtype", "fire"], check=True)
-                frontend = "gtk" if " GTK " in client["initialTitle"] else "quickshell"
-                def searched():
-                    state = json.loads(subprocess.check_output([str(compare), "status"], text=True))[frontend]
-                    return state.get("query") == "fire" if frontend == "gtk" else state.get("results") == 1
-                wait_for(searched)
-                subprocess.run(["wtype", "-M", "ctrl", "-k", "a", "-m", "ctrl", "-k", "BackSpace"], check=True)
-            subprocess.run([str(compare), "close"], check=True)
-            assert status()["pid"] == normal_pid
-            wait_for(lambda: not [c for c in json.loads(hypr("-j", "clients")) if c["initialTitle"].startswith("Runtjik comparison ")])
-            print("PASS: Wayland IME preedit/commit/cancel, Unicode input, 1.5x/2x logical dimensions, startup, comparison isolation")
+            print("PASS: Wayland IME preedit/commit/cancel, Unicode input, 1.5x/2x logical dimensions and startup")
             print("Artifacts:", root)
         finally:
             run("quit")

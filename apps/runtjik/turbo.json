@@ -14,7 +14,8 @@
         "../../packages/tasktjik-gtk/LICENSE",
         "../../packages/tasktjik-gtk/NOTICE",
         "../../apps/tasktjik/LICENSE",
-        "../../apps/tasktjik/NOTICE"
+        "../../apps/tasktjik/NOTICE",
+        "../../packages/page-preview/**"
       ]
     }
   }

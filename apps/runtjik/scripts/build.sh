@@ -12,7 +12,7 @@ cp "${CARGO_TARGET_DIR:-target}/release/runtjik-core" runtjik-core
 cp "${CARGO_TARGET_DIR:-target}/release/runtjik-gtk" runtjik-gtk
 rm -rf -- dist
 mkdir -p dist
-cp -RL bin qml examples docs browser-extension browser-release systemd dist/
+cp -RL bin assets helpers examples docs browser-extension browser-release systemd dist/
 cp README.md dist/
 rm -f dist/browser-extension/install-host.py
 cp runtjik-core dist/

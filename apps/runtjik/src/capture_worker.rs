@@ -144,7 +144,7 @@ fn recording_artwork(file: &str) -> Option<PathBuf> {
     let root = std::env::var_os("NOTJIK_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home().join(".local/lib/notjik"));
-    let mut images: Vec<_> = fs::read_dir(root.join("qml/icons/bonsai"))
+    let mut images: Vec<_> = fs::read_dir(root.join("assets/icons/bonsai"))
         .ok()?
         .filter_map(Result::ok)
         .map(|entry| entry.path())

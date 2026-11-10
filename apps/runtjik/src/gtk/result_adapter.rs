@@ -48,7 +48,7 @@ pub fn factory(
     selected: impl Fn(u32) + 'static,
 ) -> gtk::SignalListItemFactory {
     let clipboard_icon = std::env::var("RUNTJIK_HOME")
-        .map(|home| format!("{home}/qml/icons/commands/runtjik-cliphist.svg"))
+        .map(|home| format!("{home}/assets/icons/commands/runtjik-cliphist.svg"))
         .unwrap_or_default();
     tjik_gtk::results::factory(layout, icon_size, selected, move |object| {
         let value = object

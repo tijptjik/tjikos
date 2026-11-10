@@ -44,7 +44,7 @@ def silent_compositor():
         print("Host workspace changed during test; synthetic window placement/focus checks passed")
 
 
-def main(compare_quickshell=False):
+def main():
     with silent_compositor():
         root = Path(os.environ["XDG_RUNTIME_DIR"]).parent
         private_runtime = Path(os.environ["XDG_RUNTIME_DIR"])
@@ -407,50 +407,6 @@ def main(compare_quickshell=False):
             print("PASS: GTK search, stale results, commands, launch/window actions, real keyboard input, warm reopen and isolated control")
             print("Synthetic screenshot: " + str(image))
             run("close")
-            if not compare_quickshell:
-                return
-            qml_config = root / "runtjik.conf"
-            qml_config.write_text(qml_config.read_text().replace("[ui]", "[ui]\nclose_on_outside_click=false\nwidth=500\nheight=480\ncolumns=3"))
-            qml_env = {**os.environ, "RUNTJIK_DEMO":"1", "QT_QUICK_BACKEND":"software", "QT_QUICK_CONTROLS_STYLE":"Basic"}
-            with (root / "quickshell.log").open("w") as log:
-                qml = subprocess.Popen(["quickshell", "--path", str(target / "qml")], env=qml_env, stdout=log, stderr=log)
-                def ipc(action, *args):
-                    return subprocess.check_output(["quickshell", "ipc", "--path", str(target / "qml"), "call", "runtjik", action, *args], env=qml_env, text=True, stderr=subprocess.DEVNULL)
-                try:
-                    def qml_ready():
-                        try:
-                            return json.loads(ipc("status"))["ready"]
-                        except (subprocess.CalledProcessError, json.JSONDecodeError):
-                            return False
-                    wait_for(qml_ready)
-                    ipc("capture", str(root / "quickshell-launcher.png"))
-                    wait_for(lambda: (root / "quickshell-launcher.png").exists())
-                    print("Quickshell comparison:", root / "quickshell-launcher.png")
-                    time.sleep(.2)
-                    def qml_pointer(commands):
-                        subprocess.run([str(root / "pointer"), "GTK"], input=commands, text=True, stdout=subprocess.DEVNULL, check=True)
-                    bounds = json.loads(ipc("status"))["geometry"]
-                    qml_pointer(f'm {int((bounds["x"]+130)*10)} {int((bounds["y"]+140)*10000/680)}\ns -150\n')
-                    wait_for(lambda: abs(json.loads(ipc("testState"))["scrollY"]) < 1)
-                    qml_pointer("s 15\n")
-                    wait_for(lambda: abs(json.loads(ipc("testState"))["scrollY"]-122) < 1)
-                    qml_pointer("s -15\n")
-                    wait_for(lambda: abs(json.loads(ipc("testState"))["scrollY"]) < 1)
-                    qml_pointer("m 50 50\nb 1\nb 0\n")
-                    wait_for(lambda: not json.loads(ipc("status"))["keyboardOwned"])
-                    assert json.loads(ipc("status"))["visible"] and not json.loads(ipc("status"))["pinned"]
-                    bounds = json.loads(ipc("status"))["geometry"]
-                    qml_pointer(f'm {int((bounds["x"]+130)*10)} {int((bounds["y"]+42)*10000/680)}\nb 1\nb 0\n')
-                    wait_for(lambda: json.loads(ipc("status"))["keyboardOwned"])
-                    time.sleep(.1)  # Complete the compositor keyboard handoff.
-                    subprocess.run(["wtype", "fire"], check=True)
-                    wait_for(lambda: json.loads(ipc("testState"))["resultQuery"] == "fire")
-                    subprocess.run(["wtype", "-k", "Escape"], check=True)
-                    wait_for(lambda: qml.poll() is not None)
-                    print("PASS: both frontends stay open unpinned, release/reacquire typing focus, and still close on Escape")
-                finally:
-                    qml.terminate()
-                    qml.wait(timeout=10)
 
         except Exception:
             failed = status()
@@ -471,6 +427,4 @@ def main(compare_quickshell=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--compare-quickshell", action="store_true", help="Also exercise the legacy comparison renderer")
-    main(parser.parse_args().compare_quickshell)
+    main()

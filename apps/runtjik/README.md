@@ -9,10 +9,9 @@ surfaces and Rose Punk accents match Bartjik and Notjik.
 
 ## Rust + GTK frontend
 
-`runtjik --gtk` opens the GTK4 implementation; `show`, `close`, `quit`, and `status`
-control that instance. `runtjik --gtk --demo` uses synthetic fixtures in its own
-instance. GTK is the default; `runtjik --quickshell` selects the legacy frontend while
-migration parity is reviewed.
+`runtjik` opens the GTK4 implementation; `show`, `close`, `quit`, and `status` control
+that instance. `runtjik --demo` uses synthetic fixtures in its own instance. GTK is the
+sole frontend; `--gtk` remains a compatibility alias.
 
 GTK now provides the themed grid/list launcher, window picker, paging, command history,
 rich dictionary cards, statistics, capture menus/galleries and a native countdown. Enter
@@ -34,22 +33,22 @@ and full visual/interaction parity still require verification.
 
 The GTK executable uses the existing warm Rust backend over its versioned JSON protocol.
 This is a transitional boundary: the backend icon resolver links GTK3, which cannot
-safely share a process with GTK4. Neither frontend nor backend uses JavaScript. The
-legacy frontend requires Quickshell; GTK capture uses its native countdown.
+safely share a process with GTK4. Neither frontend nor backend uses JavaScript. Capture
+uses its native GTK countdown.
 
 Build dependencies include GTK 4.12+ development libraries, in addition to the existing
 GTK3 icon/theme dependencies. `bun run build --filter=@tjikos/runtjik` builds and
-packages both frontends; `scripts/install.sh` installs the GTK binary atomically
-alongside the core. `dev-check python3 -B apps/runtjik/tests/gtk_ui.py` checks synthetic
-search/actions, real keyboard input, stale-result handling, concurrent startup, atomic
-installation and warm reopen on a private compositor whose parent window is placed
-silently on workspace 7 before launch. Its timing and PSS samples describe that fixture
-and renderer, not a toolkit comparison.
+packages the GTK frontend and Rust backend; `scripts/install.sh` installs the GTK binary
+atomically alongside the core. `dev-check python3 -B apps/runtjik/tests/gtk_ui.py`
+checks synthetic search/actions, real keyboard input, stale-result handling, concurrent
+startup, atomic installation and warm reopen on a private compositor whose parent window
+is placed silently on workspace 7 before launch. Its timing and PSS samples describe
+that fixture and renderer, not a toolkit comparison.
 
 ## Native backend
 
-Runtjik runs a Rust launcher core behind the existing QML interface. Native code handles
-the controller, configuration validation/editing/migration, command menus and general
+Runtjik runs a Rust launcher core behind its GTK4 interface. Native code handles the
+controller, configuration validation/editing/migration, command menus and general
 command search, Gio discovery, Fish-history filtering, index/icon caches, fuzzy ranking,
 pagination, SQLite history, application launches, Hyprland window selection/focusing,
 and graceful-close escalation using process identities and pidfds. GTK/GdkPixbuf still
@@ -62,10 +61,10 @@ library. HTTPS, Unix sockets and native SSH authorities are supported. The SSH e
 is `tasktjik-api serve`; no Python fallback exists.
 
 The Firefox native-messaging bridge, recorder worker, desktop Trash/undo and
-image-viewer helper are native too. The cancellable countdown uses Quickshell/QML.
-Dictionary requests use bounded curl HTTPS requests; clipboard and recording previews
-use two background workers. Active recorder socket compatibility is preserved across
-this migration.
+image-viewer helper are native too. The cancellable countdown uses GTK4. Dictionary
+requests use bounded curl HTTPS requests; clipboard and recording previews use two
+background workers. Active recorder socket compatibility is preserved across this
+migration.
 
 The installed runtime and build have no Python dependency. Python backend selection and
 API-v1 plugins have been removed; unsupported provider names are rejected. Python files
@@ -74,7 +73,7 @@ enrollment, device queries, notifications, CLI actions and browser-host registra
 native too.
 
 [Native-only release and installation](docs/native-only.md) ·
-[Previous migration measurements](docs/native-runtime.md)
+[Acceptance coverage](docs/acceptance.md)
 
 Build with Cargo/Rust (including rustfmt), a C linker, pkg-config and development
 headers for GTK 3, Gio, GdkPixbuf and SQLite, in addition to the workspace tools.
@@ -84,107 +83,27 @@ headers for GTK 3, Gio, GdkPixbuf and SQLite, in addition to the workspace tools
 parity checks after a build. Native focus-command tests run with
 `cargo test --release --locked`.
 
-## Motivation and historical measurements
+## Startup and warm reopening
 
-Runtjik keeps the launcher focused on application/command discovery and switching. The
-original Python implementation used one Quickshell process and one helper to replace a
-resident UI, daemon and plugin processes. Since 0.6.0, Quickshell and its backend stay
-resident after the first opening so subsequent requests can reuse the UI and index.
-Dismissal unmaps the layer, removes outside-click bindings and stops periodic index
-queries. The tradeoff is idle RAM in exchange for faster reopening. `runtjik quit`
-releases that RAM; `/config ui.keep_alive false` restores exit-on-dismissal behavior.
+The native frontend and Rust backend remain resident after first opening. Dismissal
+unmaps the layer, releases outside-click observation and stops periodic searches.
+`runtjik quit` releases that memory; `/config ui.keep_alive false` requests exit on
+dismissal. Cold initial results wait briefly for icons to decode and bind a stable,
+ranked grid. Warm reopening reuses existing images without a fade.
 
-Measured on Fi on 2026-10-27, Hamr 1.1.0 (the installed GTK layout build) versus Runtjik
-0.2.0 / Quickshell 0.3.2, with the real 3,355-entry Runtjik index. This historical
-baseline predates the Fish-history filter and top-layer presentation:
-
-| Measurement                   |                 Hamr |                Runtjik |
-| ----------------------------- | -------------------: | ---------------------: |
-| Fresh-process startup, median |              0.195 s |                0.315 s |
-| Startup range, 5 trials       |        0.192–0.661 s |          0.308–0.323 s |
-| Open PSS, median              |            274.6 MiB |              102.0 MiB |
-| Open PSS range                |      273.5–276.3 MiB |        101.0–102.5 MiB |
-| Open summed RSS, median       |            518.5 MiB |              242.1 MiB |
-| Hidden/closed PSS, median     | 274.6 MiB (resident) |  No launcher processes |
-| Resident hide/show, median    |              0.029 s | Starts fresh each time |
-
-This run used **63% less PSS while open**. Hamr mapped faster in these measurements;
-Runtjik's motivation is reduced scope and resident memory, not a universal speed claim.
-An earlier long-running Hamr snapshot was 445 MiB PSS, and an early Runtjik opening was
-about 122 MiB including temporary image decoders. Those observations had different
-lifetimes and sampling points; they are not the paired benchmark.
-
-The five paired trials used a private nested Hyprland compositor on Fi, the normal user
-D-Bus, existing user configuration and icon/index caches, and direct process starts for
-both apps. OS caches were warm and were not dropped. Timing begins before process launch
-and ends at the first compositor-mapped visible surface (Runtjik also completes initial
-placement). Hamr receives one show request after GTK logs its daemon connection. Polling
-is every 10 ms plus command overhead. This measures mapping, not fully painted pixels or
-completion of every plugin's indexing; nested-compositor results are not
-physical-display latency guarantees.
-
-Memory is sampled three seconds after mapping from `/proc/*/smaps_rollup`, summing only
-the newly started launcher roots and their descendants. Hamr has its configured plugins
-enabled; this is a comparison of the installed workflows, not identical features. PSS
-apportions shared pages; summed RSS double-counts them. Applications historically
-launched into Hamr's service cgroup are excluded, as are shared session services and the
-compositor. Hamr's hidden sample follows `hide` by 300 ms. Runtjik's root exits on close
-in every trial. Hamr services remain stopped after the benchmark. The desktop was in
-use, so these are local observations, not a controlled laboratory performance claim.
-
-[Raw trial data](docs/benchmark-fi.json) · [Measurement script](scripts/benchmark.py)
-
-## Startup optimization (0.4.2)
-
-On Fi, five full process restarts measured **382 ms → 279 ms median** from CLI
-invocation to confirmed UI/input readiness: about **27% faster** than 0.4.1. All samples
-are retained in [the startup comparison](docs/startup-0.4.2.json). Caches were not
-cleared and the desktop remained in use; this is a local latency comparison, not a
-first-painted-pixel measurement. First openings after cache or theme changes can still
-take longer.
-
-Cached openings reuse resolved icon paths and rasterized artwork without loading GTK.
-The lookup manifest validates icon-theme directories, inheritance files and source-image
-metadata, so additions, replacements and edits invalidate it. New or uncached icons
-still use GTK/GdkPixbuf for correct theme resolution and SVG rendering. The two fixed 40
-ms UI delays were replaced with event-loop scheduling and explicit completion tracking
-for the input bounds. These are historical fresh-process measurements; 0.6.0 adds
-resident reopening as described below.
-
-## Warm reopening (0.6.0)
-
-Five trials on Fi on 2026-10-28, with the 305-entry Fish-filtered index:
-
-| Path                                        | Median to layer/input readiness |
-| ------------------------------------------- | ------------------------------: |
-| Fresh process (`runtjik show` after `quit`) |                          288 ms |
-| Resident synchronous `runtjik show`         |                          115 ms |
-| Resident hotkey path (`runtjik toggle`)     |                       **67 ms** |
-
-The hotkey path was about **77% faster** than a fresh process in this run. It retained
-the same PID throughout all warm samples. Hidden memory was **89 MiB PSS** (207 MiB
-summed RSS), across Quickshell and its Python helper; open memory was 83 MiB PSS before
-the repeated cycles. These are different sampling points, not evidence that hiding
-itself allocates memory. Render/cache allocations and shared-page accounting vary during
-a process's lifetime.
-
-Timing starts before CLI invocation and includes polling until the surface and
-outside-click observer are ready; it is not a first-painted-pixel measurement. The live
-desktop remained in use and OS caches were retained. Memory sums the root process and
-descendants three seconds after opening/hiding. One earlier run was discarded because an
-opening was dismissed during measurement. The historical Hamr table above uses a
-different index and timing setup and should not be read as a new paired comparison.
-
-[All samples](docs/warm-0.6.0.json) · [Measurement script](scripts/benchmark_warm.py)
+Measured on 2026-11-10 with 3,001 synthetic entries and 100 displayed results, median
+process-cold readiness was 113.93 ms and visible idle PSS was 81.37 MiB. Caches were
+retained; these are ordinary-window, off-workspace measurements, not first-frame latency
+or active GPU cost. See [acceptance coverage](docs/acceptance.md).
 
 ## Install and run
 
-Requires Quickshell 0.3+, Wayland, Gio, GTK 3, GdkPixbuf with SVG support, and curl.
-Python 3.11+ and PyGObject are used only by development/reference tests. Fish supplies
-`fish_indent` for history parsing. Hyprland with its Lua API supplies layer rules and
-passive outside-click dismissal; Hyprland supplies window switching (Lua and legacy
-dispatch APIs); systemd user services isolate launched applications. The default
-terminal is Kitty.
+Requires Wayland, GTK4, the bundled layer-shell library, Gio, GTK3 for the separate
+backend icon resolver, GdkPixbuf with SVG support, and curl. Python 3.11+ and PyGObject
+are used only by development/reference tests. Fish supplies `fish_indent` for history
+parsing. Hyprland with its Lua API supplies layer rules and passive outside-click
+dismissal; Hyprland supplies window switching (Lua and legacy dispatch APIs); systemd
+user services isolate launched applications. The default terminal is Kitty.
 
 ```sh
 cd apps/runtjik
@@ -202,15 +121,15 @@ and installs if needed, then opens the launcher. See the
 [local development workflow](../../README.md#local-development-and-installation).
 
 The shared `scripts/install.sh runtjik` entry point is also supported. Installation
-preserves an existing config. There is no startup service: the first request starts
-Quickshell and the Rust helper, which remain warm until `runtjik quit`, logout, or a
-runtime failure. Installation stops the old resident pair before replacing its files.
+preserves an existing config. There is no startup service: the first request starts GTK
+and the Rust helper, which remain warm until `runtjik quit`, logout, or a runtime
+failure. Installation stops the old resident pair before replacing its files.
 Index/history files remain on disk. Cold starts and explicit `show`/`close` requests use
 a short-lived Rust controller with a per-display lock. Concurrent cold requests cannot
 start duplicate instances; `show` is idempotent and waits for UI readiness. Resident
-`toggle` requests go directly to Quickshell IPC and return after submitting the action,
-avoiding Python controller startup on the hotkey path. No controller process remains
-resident. Each reopening resets search, pin state, instance selection, view and
+`toggle` requests go directly to the native control socket and return after submitting
+the action, avoiding Python controller startup on the hotkey path. No controller process
+remains resident. Each reopening resets search, pin state, instance selection, view and
 position, uses the currently focused/configured monitor, rereads TOML and refreshes
 discovery and running-window information. Invalid edited config is shown as an error
 while the last valid settings stay usable. Hidden instances perform no periodic
@@ -262,11 +181,11 @@ scrolling preserves the keyboard selection.
 | `/define word`, `/synonym word`                 | Look up definitions/examples or synonyms; Results appear inline after a typing pause; Enter opens a source while retaining results.                   |
 | `/config`                                       | Browse and edit featured settings                                                                                                                     |
 | `/timer set 10 minutes`                         | Start a countdown; `/timer` lists active timers. Accepts durations or date phrases such as `tomorrow at 9am`; Ctrl+Enter cancels a selected timer.    |
-| `/file search`, `/find search`                 | Search files below the selected root; Ctrl+R or the header changes it. Enter opens, Ctrl+Enter moves the file to Trash.                                |
+| `/file search`, `/find search`                  | Search files below the selected root; Ctrl+R or the header changes it. Enter opens, Ctrl+Enter moves the file to Trash.                               |
 | `/dir search`                                   | Search familiar directories from zoxide; Enter opens the directory in the file manager.                                                               |
-| `/emoji search`                                 | Preview emoji glyphs; Enter copies and closes, Shift+Enter opens skin-tone variants (marked with a dot).                                               |
+| `/emoji search`                                 | Preview emoji glyphs; Enter copies and closes, Shift+Enter opens skin-tone variants (marked with a dot).                                              |
 | `/note`                                         | Create scratch notes, browse history, delete to Trash, and promote into an Obsidian vault.                                                            |
-| `/monitor search`, `/cpu`, `/mem`               | Browse the process tree, sorted by the selected metric; Ctrl+Enter sends SIGTERM, then SIGKILL on a second request.                                    |
+| `/monitor search`, `/cpu`, `/mem`               | Browse the process tree, sorted by the selected metric; Ctrl+Enter sends SIGTERM, then SIGKILL on a second request.                                   |
 | `/bw search`                                    | Search Bitwarden items; Enter copies the password, Shift+Enter copies TOTP, Alt+Enter copies username, Ctrl+Enter opens the item in Bitwarden.        |
 | `/shortcuts`, `/bindings`                       | Show this shortcut guide inside the launcher                                                                                                          |
 
@@ -279,31 +198,31 @@ the folder chooser. The selected root is saved to `file_search.root` in `runtjik
 an empty value uses `$HOME`. It uses `fd` to enumerate paths and `fzf` to rank fuzzy
 matches, then applies `file_search.preferred_extensions` and
 `file_search.deprioritized_extensions` from that same config. All three settings are
-also editable with `/config file_search.*`. Documents and media rank
-ahead of source files by default. The path list stays in memory for the current launcher
-session; file contents are not indexed. A sole file or directory result opens directly.
-Enter opens the file with its default handler; Ctrl+Enter moves it to desktop Trash.
-`/dir` reads ranked directory paths from
-`zoxide query --list` and opens a selected path in the default file manager. Fish must
-load `zoxide init fish` so its directory history is the same source.
+also editable with `/config file_search.*`. Documents and media rank ahead of source
+files by default. The path list stays in memory for the current launcher session; file
+contents are not indexed. A sole file or directory result opens directly. Enter opens
+the file with its default handler; Ctrl+Enter moves it to desktop Trash. `/dir` reads
+ranked directory paths from `zoxide query --list` and opens a selected path in the
+default file manager. Fish must load `zoxide init fish` so its directory history is the
+same source.
 
 `/emoji` uses the system Unicode emoji catalog, previews the glyph, and copies selected
 emoji to the clipboard before closing. A dot marks emoji with skin-tone variants;
-Shift+Enter opens those variants. `/note` stores scratch Markdown outside
-the repo in Runtjik's private state directory, opens it with `obsidian-viewer`, and
-offers history, Trash deletion, and a vault folder tree for copying notes into an
-Obsidian vault. Set `RUNTJIK_NOTES_DIR` and `RUNTJIK_OBSIDIAN_VAULT` to choose the
-scratch directory and initial vault; the header also lets you choose a vault.
+Shift+Enter opens those variants. `/note` stores scratch Markdown outside the repo in
+Runtjik's private state directory, opens it with `obsidian-viewer`, and offers history,
+Trash deletion, and a vault folder tree for copying notes into an Obsidian vault. Set
+`RUNTJIK_NOTES_DIR` and `RUNTJIK_OBSIDIAN_VAULT` to choose the scratch directory and
+initial vault; the header also lets you choose a vault.
 
 `/monitor` samples `/proc` for a process tree and offers CPU and memory ordering; its
-header names the active sort. `/cpu` and `/mem` open the same view with that sort selected.
-Ctrl+Enter sends SIGTERM, pulses the row while the process remains, and sends SIGKILL if
-requested again. It checks both PID and process start time before signaling. `/bw`
-requires an unlocked Bitwarden CLI session. Result rows contain item names and account
-metadata only; secret lookups honor item reprompt and are excluded from command history.
-Password and TOTP clipboard owners release the value after one paste. Ctrl+Enter uses
-the Bitwarden desktop URI when available, then opens the matching web-vault item. Set
-`RUNTJIK_BITWARDEN_VAULT_URL` for a self-hosted vault.
+header names the active sort. `/cpu` and `/mem` open the same view with that sort
+selected. Ctrl+Enter sends SIGTERM, pulses the row while the process remains, and sends
+SIGKILL if requested again. It checks both PID and process start time before signaling.
+`/bw` requires an unlocked Bitwarden CLI session. Result rows contain item names and
+account metadata only; secret lookups honor item reprompt and are excluded from command
+history. Password and TOTP clipboard owners release the value after one paste.
+Ctrl+Enter uses the Bitwarden desktop URI when available, then opens the matching
+web-vault item. Set `RUNTJIK_BITWARDEN_VAULT_URL` for a self-hosted vault.
 
 ### Text expansion
 
@@ -319,8 +238,8 @@ triggers in alphabetical order. Filter with `/expand {text}` to search both trig
 expansions. Enter opens the selected entry; Ctrl+Enter deletes it. The inline editor
 provides Trigger, multiline Expansion, Save and Cancel. Ctrl+S or Ctrl+Enter saves from
 either field; Escape cancels. Edits preserve other match fields (including dynamic
-variables) and refuse stale writes. Espanso
-watches the files and reloads changes automatically.
+variables) and refuse stale writes. Espanso watches the files and reloads changes
+automatically.
 
 The editor reads `~/.config/espanso/match` (honoring `XDG_CONFIG_HOME`), or
 `RUNTJIK_EXPANSIONS_DIR`. It requires Python 3 and PyYAML. New matches are written to
@@ -328,8 +247,8 @@ individual `runtjik-*.yml` files. Entries with a single `trigger` and text `repl
 supported; flow-style and aliased YAML must be edited with a YAML editor.
 
 Espanso can provide system-wide text expansion. The sample match file in
-[`examples/espanso/match/runtjik.yml`](examples/espanso/match/runtjik.yml) uses `;` as its
-trigger prefix and defines `;gca` for the atomic-commit request. Install it under
+[`examples/espanso/match/runtjik.yml`](examples/espanso/match/runtjik.yml) uses `;` as
+its trigger prefix and defines `;gca` for the atomic-commit request. Install it under
 `~/.config/espanso/match/` and restart or reload Espanso after editing matches.
 
 `/stats` shows up to 26 weeks of launcher opens in seven Monday–Sunday rows, with fewer
@@ -518,8 +437,9 @@ additions, removals, edits and executable-permission changes each time the launc
 opens and at the configured interval while it remains open. `/refresh` forces a rebuild;
 `runtjik refresh` does the same from a terminal. No watcher runs while closed. Reopen to
 apply external config edits; `/config` saves apply immediately. Icons use the configured
-theme, with SVGs rasterized through GdkPixbuf/librsvg into the icon cache so Qt SVG Tiny
-limitations do not lose artwork. Only returned search results have artwork resolved.
+theme, with SVGs rasterized through GdkPixbuf/librsvg into the icon cache so the
+renderer limitations do not lose artwork. Only returned search results have artwork
+resolved.
 
 ## Configuration
 
@@ -811,21 +731,17 @@ python3 -B tests/rust_migration.py
 bash scripts/check.sh
 bin/runtjik --demo
 # Optional live regression, with synthetic Kitty windows in a private Hyprland:
-python3 tests/native_smoke.py
 # Pointer passthrough, drag and observer-lifecycle check (Wayland build tools required):
-python3 tests/outside_click.py
 # Pinned focus handoff and typing in other windows:
-python3 tests/pin_focus.py
 # Repeated/concurrent requests and failed-start recovery:
 python3 tests/control_smoke.py
 ```
 
 The synthetic demo has no launch side effects and no history. Its Firefox fixture has
 two windows for keyboard testing. Documentation screenshots are captured from the real
-demo renderer with
-`quickshell ipc --path apps/runtjik/qml call runtjik capture /absolute/path.png`;
-capture IPC is restricted to demo mode. The demo uses the installed icon theme, but
-every app/window label is a fixed fixture.
+demo renderer using its synthetic test controls; tests must be placed on workspace 7
+before launch. The demo uses the installed icon theme, but every app/window label is a
+fixed fixture.
 
 ## Progressive results and command aliases
 
@@ -878,7 +794,7 @@ the private Runtjik thumbnail cache outside the repository.
 selecting a region/screen/workspace, white countdown numerals appear in the center of
 that monitor, without a panel or labels. Escape cancels before any recorder is started;
 the overlay disappears before capture begins. Window recording counts down before
-opening the portal picker. The countdown is a native Quickshell/QML overlay.
+opening the portal picker. The countdown is a native GTK overlay.
 
 `!ss` and `!snap` also open the screenshot plugin. Screen and window choices are sorted
 by name. Ctrl+Up / Ctrl+Down browse previously used launcher commands and restore the
@@ -964,29 +880,23 @@ Reminder ownership/claims continue to use the live Tasktjik client. Existing
 HTTPS/Tailscale authentication and certificate checks are unchanged; configure the
 canonical HTTPS URL when using a redirect alias.
 
-### Compare the frontends before switching
+### Native acceptance
 
-`runtjik compare` opens GTK on the left and Quickshell on the right, silently on
-workspace 7. Both use synthetic data with the same private configuration and history
-disabled. Your normal launcher and default frontend remain unchanged. Use
-`runtjik compare status` to inspect them and `runtjik compare close` to close the
-comparison. Switch to workspace 7 yourself when ready to review.
-
-See [GTK migration](docs/gtk-migration.md) for input-method, scale and gesture
-verification, animation behavior and the remaining physical-device review boundary.
+See [acceptance checks](docs/acceptance.md) for automated coverage, the workspace-7
+fixture and the remaining physical-device review boundary.
 
 To keep the launcher visible when clicking another window, enter
-`/config ui.close_on_outside_click false` and confirm it. This persistent setting works
-in both frontends. Outside clicks still release keyboard focus; click the search field
-to resume typing. Set it to `true` to restore dismissal. Escape, explicit close/toggle,
-and action-specific dismissal continue to work normally.
+`/config ui.close_on_outside_click false` and confirm it. This persistent setting
+controls the native frontend. Outside clicks still release keyboard focus; click the
+search field to resume typing. Set it to `true` to restore dismissal. Escape, explicit
+close/toggle, and action-specific dismissal continue to work normally.
 
 ### Desktop adapters
 
 The Rust core and GTK frontend share
 [the desktop adapter boundary](docs/desktop-adapter.md). Use `runtjik desktop-status`
 for capabilities and `TJIK_COMPOSITOR=hyprland|fake` for explicit selection before
-opening the launcher. Legacy Quickshell remains available.
+opening the launcher.
 
 Desktop events now update visible window counts and pickers. Runtjik automatically
 reconnects on the same runtime/Wayland display and restores launcher state after a
@@ -1027,6 +937,6 @@ deleted. Demo mode uses synthetic entries and never accesses real voice history.
 
 ## License
 
-Application source by tijptjik is licensed under GPL-3.0-or-later; see `LICENSE`
-and `NOTICE`. Third-party source, assets and dependencies retain their existing licenses
-and notices.
+Application source by tijptjik is licensed under GPL-3.0-or-later; see `LICENSE` and
+`NOTICE`. Third-party source, assets and dependencies retain their existing licenses and
+notices.

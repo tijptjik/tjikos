@@ -54,7 +54,7 @@ with socket.socket(socket.AF_UNIX) as server:
                 reply.update(result='error', data='No recording is running')
             client.sendall((json.dumps(reply) + '\\n').encode())
 ''')
-    countdown = bindir / 'quickshell'
+    countdown = bindir / 'runtjik-gtk'
     countdown.write_text('''#!/usr/bin/python3
 import os, pathlib, time
 log = pathlib.Path(os.environ['EVENTS'])
@@ -84,13 +84,14 @@ print('83.25')
         (bindir / name).write_text(contents)
     for executable in bindir.iterdir():
         executable.chmod(0o700)
+    (bindir / 'runtjik-core').symlink_to(APP / 'runtjik-core')
     for cancellation in ('', 'CANCEL_PICKER', 'CANCEL_COUNTDOWN', 'FAIL_STARTUP'):
         case = root / (cancellation or 'success')
         case.mkdir()
         events = case / 'events'
         env = {**os.environ, 'PATH': str(bindir) + ':' + os.environ['PATH'],
                'XDG_RUNTIME_DIR': str(case), 'XDG_STATE_HOME': str(case), 'EVENTS': str(events),
-               'NOTJIK_HOME': str(APP.parent / 'notjik')}
+               'TJIK_COMPOSITOR': 'fake', 'RUNTJIK_HOME': str(bindir), 'NOTJIK_HOME': str(APP.parent / 'notjik')}
         env.pop('HYPRLAND_INSTANCE_SIGNATURE', None)
         if cancellation:
             env[cancellation] = '1'
@@ -136,8 +137,8 @@ print('83.25')
                 actions = json.loads(notice[notice.index('--actions') + 1])
                 assert [action['label'] for action in actions] == ['View video', 'Share on Telegram']
                 assert actions[0]['identifier'] == 'default'
-                assert actions[0]['command'] == [str(APP / 'runtjik-core'), 'view-recording', str(output)]
-                assert actions[1]['command'] == [str(APP / 'runtjik-core'), 'share-recording-telegram', str(output)]
+                assert actions[0]['command'] == [str(bindir / 'runtjik-core'), 'view-recording', str(output)]
+                assert actions[1]['command'] == [str(bindir / 'runtjik-core'), 'share-recording-telegram', str(output)]
             if cancellation:
                 assert not notification.exists(), 'Cancelled/failed capture advertised a saved video'
             assert not (case / 'runtjik-capture/recorder.sock').exists()

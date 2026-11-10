@@ -94,12 +94,10 @@ capability and error information. Changing to a different runtime or Wayland dis
 a new session selection and requires a new launch; recovery deliberately does not guess
 across that boundary.
 
-The legacy `--quickshell` frontend and compositor-specific comparison/test harnesses
-retain their own Hyprland integration. The Rust source dependency check covers
-application/controller/widget code; it does not claim the legacy QML frontend is
-portable. Niri, workspace selection for Bartjik, output transactions and capture
-transport negotiation are follow-up adapter work. Desktop-service and
-recording/file/history policy remain in their existing owners.
+The Rust source dependency check covers application/controller/widget code. Hyprland
+transport belongs in `tjik-desktop`; widgets consume normalized models and capabilities.
+Niri and broader capture transport negotiation remain follow-up adapter work.
+Desktop-service and recording/file/history policy remain in their existing owners.
 
 ## Validation and recovery
 

@@ -27,7 +27,7 @@ pub fn provider(demo: bool) -> Option<Rc<dyn PreviewProvider>> {
     }
     let home = std::env::var_os("RUNTJIK_HOME")?;
     Some(Rc::new(Helper(
-        PathBuf::from(home).join("qml/page_preview.py"),
+        PathBuf::from(home).join("helpers/page_preview.py"),
     )))
 }
 

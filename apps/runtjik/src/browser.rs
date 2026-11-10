@@ -65,7 +65,7 @@ pub fn favicon_overrides(value: &Value) -> Result<Vec<(regex::Regex, String)>> {
             if !["overture.png", "hkgov.png"].contains(&name) {
                 bail!("Unknown bundled favicon: {name}");
             }
-            Some(crate::paths::root().join("qml/icons/sites").join(name))
+            Some(crate::paths::root().join("assets/icons/sites").join(name))
         } else if let Some(rest) = icon.strip_prefix("~/") {
             Some(home().join(rest))
         } else if std::path::Path::new(icon).is_absolute() {

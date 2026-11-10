@@ -138,7 +138,7 @@ pub fn commands(settings: &Value) -> Vec<Command> {
             }
         );
         let path = paths::root()
-            .join("qml/icons/commands")
+            .join("assets/icons/commands")
             .join(format!("{name}.svg"));
         if path.is_file() {
             c.icon = path.to_string_lossy().into();
@@ -147,7 +147,7 @@ pub fn commands(settings: &Value) -> Vec<Command> {
     for command in &mut rows {
         if command.id == "/voice" {
             command.icon = paths::root()
-                .join("qml/icons/voice-record.svg")
+                .join("assets/icons/voice-record.svg")
                 .to_string_lossy()
                 .into_owned();
         }
@@ -170,7 +170,7 @@ pub fn entries(settings: &Value) -> Vec<Entry> {
 }
 fn control_icon(name: &str) -> String {
     let path = paths::root()
-        .join("qml/icons/commands")
+        .join("assets/icons/commands")
         .join(format!("{name}.svg"));
     if path.is_file() {
         path.to_string_lossy().into()

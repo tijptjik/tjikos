@@ -1,1 +1,0 @@
-../../tasktjik/qml/SnoozePicker.qml

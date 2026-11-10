@@ -362,7 +362,7 @@ pub fn words(
             _ => "dictionary",
         };
         let icon = gtk::Image::from_file(format!(
-            "{}/qml/icons/providers/{icon_name}.svg",
+            "{}/assets/icons/providers/{icon_name}.svg",
             std::env::var("RUNTJIK_HOME").unwrap_or_default()
         ));
         icon.set_pixel_size(20);

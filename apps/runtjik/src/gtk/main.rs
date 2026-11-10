@@ -1,4 +1,4 @@
-//! Opt-in GTK frontend. The GTK3 icon resolver stays in the existing core process.
+//! Native GTK frontend. The GTK3 icon resolver stays in the existing core process.
 mod app;
 mod completion;
 mod control;

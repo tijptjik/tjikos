@@ -1,1 +1,0 @@
-../../tasktjik/qml/ReadingView.qml

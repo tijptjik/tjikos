@@ -2924,7 +2924,7 @@
           "/rec"
         ]
       ],
-      "icon": "@app/qml/icons/capture-record-screen.svg",
+      "icon": "@app/assets/icons/capture-record-screen.svg",
       "mode": ""
     },
     {
@@ -2953,7 +2953,7 @@
           "/grab"
         ]
       ],
-      "icon": "@app/qml/icons/capture-shot-screen.svg",
+      "icon": "@app/assets/icons/capture-shot-screen.svg",
       "mode": ""
     },
     {

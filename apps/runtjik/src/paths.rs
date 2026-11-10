@@ -6,14 +6,14 @@ pub fn root() -> PathBuf {
             let exe = std::env::current_exe()
                 .ok()
                 .and_then(|p| p.parent().map(PathBuf::from));
-            exe.filter(|p| p.join("qml").is_dir())
+            exe.filter(|p| p.join("assets").is_dir())
                 .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         })
 }
 
 pub fn command_icon(name: &str) -> String {
     let path = root()
-        .join("qml/icons/commands")
+        .join("assets/icons/commands")
         .join(format!("runtjik-{name}.svg"));
     if path.is_file() {
         path.to_string_lossy().into_owned()
