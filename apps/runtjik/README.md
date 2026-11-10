@@ -1024,3 +1024,9 @@ if pasting fails. History is stored as private JSON files in
 `$XDG_STATE_HOME/hyprvoice/history` (default `~/.local/state/hyprvoice/history`),
 outside the repository. Only new recordings are saved; history is retained until
 deleted. Demo mode uses synthetic entries and never accesses real voice history.
+
+## License
+
+The Tjik-authored application source is licensed under GPL-3.0-or-later; see `LICENSE`
+and `NOTICE`. Third-party source, assets and dependencies retain their existing licenses
+and notices.

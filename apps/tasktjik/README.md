@@ -357,3 +357,9 @@ retains the shorter non-English flow. Review the plan before running
 survivors before removing duplicates, and journals acknowledged requests. A batch is
 resumable, but not atomic; stop and replan if another client changes a record. Keep the
 plan and its receipt file outside the repository as recovery evidence.
+
+## License
+
+The Tjik-authored application source is licensed under GPL-3.0-or-later; see `LICENSE`
+and `NOTICE`. Third-party source, assets and dependencies retain their existing licenses
+and notices.

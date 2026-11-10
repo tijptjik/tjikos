@@ -1000,3 +1000,9 @@ automatically retried. Snapshots live privately under
 Unconfirmed snapshots are retained, including across bridge restarts. A durable
 `claimed` marker prevents resubmitting the same snapshot after a restart; inspect Saved
 Messages before retrying and remove abandoned snapshots manually.
+
+## License
+
+The Tjik-authored application source is licensed under GPL-3.0-or-later; see `LICENSE`
+and `NOTICE`. Third-party source, assets and dependencies retain their existing licenses
+and notices.

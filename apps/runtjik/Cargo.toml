@@ -2,6 +2,7 @@
 name = "runtjik-core"
 version = "0.8.3"
 edition = "2021"
+license = "GPL-3.0-or-later"
 
 [features]
 gtk-ui = ["dep:gtk", "dep:async-channel", "dep:tjik-gtk", "dep:tasktjik-gtk"]

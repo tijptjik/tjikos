@@ -1,6 +1,7 @@
 {
   "name": "@tjikos/bartjik",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "version": "0.1.0",
   "scripts": {
     "build": "bash scripts/build.sh",

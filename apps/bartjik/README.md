@@ -1194,3 +1194,9 @@ the prepared stacked comparison layout. These synthetic visible fixtures require
 workspace-7 placement before launch; do not run them on another active workspace. Close
 the comparison first and run them through `dev-check`. It neither moves the host pointer
 nor launches a nested compositor.
+
+## License
+
+The Tjik-authored application source is licensed under GPL-3.0-or-later; see `LICENSE`
+and `NOTICE`. Third-party source, assets and dependencies retain their existing licenses
+and notices.
