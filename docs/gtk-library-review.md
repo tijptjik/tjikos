@@ -32,24 +32,33 @@ been performed.
 The validation record below is chronological. Later entries supersede earlier open
 findings and intermediate performance measurements.
 
-## Remaining work after the commit audit
+## Follow-up status
 
-- Reconcile image burst loading with the bounded-work contract. The reviewed loader caps
-  pending requests at 64 and drops the oldest; a later concurrent fixture shows that a
-  grid can bind more rows in one main-loop turn, leaving early visible icons at their
-  fallback. The concurrent working-tree change removes that cap and adds a 100-image
-  regression. It remains outside this commit series and needs a design that avoids
-  starvation while keeping an explicit resource bound.
-- Include application `LICENSE`/`NOTICE` files and applicable shared-library notices in
-  build/install distributions, then verify the installed notices. Source declarations
-  are complete, but current application build/install scripts do not copy these new
-  source-root legal files.
-- Review and commit the separate Bartjik performance, tray-menu and theme work. Those
-  concurrent changes were preserved; the selected synthetic checks in this review are
-  not blanket validation of that evolving diff.
-- Before registry publication, check package name/version availability and publish the
-  dependency crates in order (`tjik-gtk` before `tasktjik-gtk`). Registry publication
-  and pushing commits have not been requested.
+- Image burst loading is fixed in `d71d842`. Waiting requests hold one weak reference
+  per live widget, without copied source strings or textures. Rebinding coalesces
+  requests and prunes dead targets; one decoder runs at a time. This replaces the
+  64-entry eviction policy that could lose early grid icons. The isolated committed
+  regression passes 100 simultaneous binds, repeated rebinds and 200 discarded widgets.
+- Application notice distribution is implemented in `17866be`. All four builds bundle
+  their own license/notice files and the reviewed linked Tjik components. Full supported
+  installers and Bartjik's GTK/artwork/notice-only modes pass isolated-home readback.
+  The actual installed notices match the distributions (8 Bartjik, 6 Notjik, 10 Runtjik
+  and 2 Tasktjik files). Installed Runtjik, Notjik and Tasktjik binaries match their
+  builds. Bartjik received notices through `--licenses-only`, preserving its binary and
+  running service.
+- Registry publication awaits the maintainer's chosen crate-name prefix. Archive checks
+  now derive package names from metadata, and
+  [the release procedure](library-release.md) records the name/ownership checks,
+  dependency order and readback requirements. No registry names have been changed,
+  reserved or published.
+- The separate Bartjik performance/tray/theme work and icon-fade changes remain
+  uncommitted and outside this follow-up's scope.
+
+The four-application Bun build and full Runtjik GTK fixture pass at `/tmp/bc-dlx3etdj`.
+Supported installer tests and all three extracted archive suites pass in
+`/tmp/tjik-followup-installer-test.log`; the exact committed image-loader tests pass in
+`/tmp/tjik-followup-committed-images.log`. Reopen Runtjik to load the image-loader
+update; Notjik can load its replacement binary at its next normal restart.
 
 The isolated committed implementation at `71e6665` passes all three extracted-library
 archive suites (including desktop capture and public adapter examples), release

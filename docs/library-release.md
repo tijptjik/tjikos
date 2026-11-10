@@ -18,7 +18,9 @@ For the selected names:
 2. Update the package names, self-referencing tests/examples and versioned dependency
    declarations. Application dependency keys can keep their existing names by setting
    Cargo's `package` field. Keep third-party dependency versions pinned.
-3. Run `dev-check bash packages/tjik-gtk/scripts/test-packages.sh`. The checker derives
+3. Create a clean detached worktree for the selected release commit. Publish from that
+   worktree so unrelated local edits cannot enter a registry archive. Run
+   `dev-check bash packages/tjik-gtk/scripts/test-packages.sh`. The checker derives
    archive names from the manifests, packages staged copies, validates license/notice
    bytes and runs locked offline tests. Its local GTK patch establishes archive
    isolation; it does not prove that registry dependencies are available.
