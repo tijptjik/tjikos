@@ -238,7 +238,7 @@ pub fn factory(
             icon.set_pixel_size(if image { 80 } else { 40 });
             row.set_height_request(if image { 104 } else { 64 });
         }
-        crate::images::set(&icon, &value.image, &value.fallback_icon);
+        crate::images::set_initial(&icon, &value.image, &value.fallback_icon);
         let labels = row.last_child().unwrap().downcast::<gtk::Box>().unwrap();
         let title = labels
             .first_child()

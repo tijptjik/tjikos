@@ -21,6 +21,7 @@ struct Loader {
     pending: VecDeque<Job>,
     running: bool,
     cache: Cache,
+    active: Option<glib::WeakRef<gtk::Widget>>,
 }
 thread_local! {
     static LOADER: RefCell<Loader> = RefCell::new(Loader::default());
@@ -111,7 +112,9 @@ async fn drain() {
     loop {
         let job = LOADER.with(|loader| {
             let mut loader = loader.borrow_mut();
+            loader.active = None;
             let job = loader.pending.pop_front();
+            loader.active = job.as_ref().map(|job| job.widget.clone());
             if job.is_none() {
                 loader.running = false;
             }
@@ -153,10 +156,13 @@ async fn drain() {
                 loaded
             }
         };
-        if let (Some(image), Some(texture)) = (
-            job.target().filter(|widget| widget.widget_name() == source),
-            loaded,
-        ) {
+        if let Some(image) = job.target().filter(|widget| widget.widget_name() == source) {
+            let Some(texture) = loaded else {
+                // A failed decode must reveal the fallback, not leave an empty slot.
+                image.set_opacity(1.);
+                continue;
+            };
+            image.set_opacity(1.);
             if let Some(image) = image.downcast_ref::<gtk::Image>() {
                 image.set_paintable(Some(&texture));
             } else if let Some(picture) = image.downcast_ref::<gtk::Picture>() {
@@ -166,6 +172,34 @@ async fn drain() {
     }
 }
 pub fn set(image: &gtk::Image, source: &str, fallback: &str) {
+    set_image(image, source, fallback, false);
+}
+
+/// Keep result placeholders transparent; the result view owns its coordinated reveal.
+pub fn set_initial(image: &gtk::Image, source: &str, fallback: &str) {
+    set_image(image, source, fallback, true);
+}
+
+/// Whether this subtree still has image work. Does not wait on unrelated views.
+pub fn pending_within(root: &impl IsA<gtk::Widget>) -> bool {
+    LOADER.with(|loader| {
+        let loader = loader.borrow();
+        loader
+            .pending
+            .iter()
+            .map(|job| &job.widget)
+            .chain(loader.active.iter())
+            .filter_map(|weak| weak.upgrade())
+            .any(|widget| widget.is_ancestor(root))
+    })
+}
+
+fn set_image(image: &gtk::Image, source: &str, fallback: &str, fade: bool) {
+    // A warm bind of the same result retains its already loaded artwork.
+    if fade && image.widget_name() == source && image.paintable().is_some() {
+        return;
+    }
+    image.set_opacity(1.);
     image.set_widget_name(source);
     if source.starts_with('/') || source.starts_with("file://") || source.starts_with("data:image/")
     {
@@ -173,7 +207,12 @@ pub fn set(image: &gtk::Image, source: &str, fallback: &str) {
         if source.len() > MAX_SOURCE {
             return;
         }
-        enqueue(image.upcast_ref());
+        // Keep the slot, but never flash the bright generic fallback before
+        // the real icon arrives. Failed loads reveal that fallback in drain().
+        if fade {
+            image.set_opacity(0.);
+        }
+        enqueue(image.upcast_ref(), fade);
     } else {
         image.set_icon_name(Some(if source.is_empty() || source.contains("://") {
             fallback
@@ -193,10 +232,10 @@ pub fn set_picture(picture: &gtk::Picture, source: &str) {
             || source.starts_with("file://")
             || source.starts_with("data:image/"))
     {
-        enqueue(picture.upcast_ref());
+        enqueue(picture.upcast_ref(), false);
     }
 }
-fn enqueue(widget: &gtk::Widget) {
+fn enqueue(widget: &gtk::Widget, _fade: bool) {
     let start = LOADER.with(|loader| {
         let mut loader = loader.borrow_mut();
         loader
@@ -318,6 +357,40 @@ mod lifecycle_tests {
                 }
                 glib::timeout_future(std::time::Duration::from_millis(20)).await;
             }
+            let initial = gtk::Image::new();
+            set_initial(&initial, p.to_str().unwrap(), "application-x-executable");
+            assert_eq!(initial.opacity(), 0., "cold placeholder must not flash");
+            for _ in 0..100 {
+                if initial.paintable().is_some() {
+                    break;
+                }
+                glib::timeout_future(std::time::Duration::from_millis(20)).await;
+            }
+            let loaded = initial.paintable().expect("cold icon loaded");
+            assert_eq!(initial.opacity(), 1., "unmapped icon needs no animation");
+            set_initial(&initial, p.to_str().unwrap(), "application-x-executable");
+            assert_eq!(
+                initial.paintable().as_ref(),
+                Some(&loaded),
+                "warm bind retains artwork"
+            );
+            assert_eq!(initial.opacity(), 1.);
+            set_initial(
+                &initial,
+                "/nonexistent/tjik-icon-fixture.png",
+                "application-x-executable",
+            );
+            for _ in 0..100 {
+                if initial.opacity() == 1. {
+                    break;
+                }
+                glib::timeout_future(std::time::Duration::from_millis(20)).await;
+            }
+            assert_eq!(initial.opacity(), 1., "failed decode restores fallback");
+            assert_eq!(
+                initial.icon_name().as_deref(),
+                Some("application-x-executable")
+            );
             std::fs::remove_file(p).unwrap();
             assert!(
                 images.iter().all(|image| image.paintable().is_some()),
