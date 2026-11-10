@@ -319,7 +319,10 @@ impl Module {
                 || ["recording", "processing"].contains(&s(&activity["hyprvoice"])));
         self.root.set_visible(
             module["comparisonHidden"] != true
-                && (module["provider"] != crate::recording::PROVIDER || recording),
+                && (recording
+                    || arr(&module["comparisonItems"])
+                        .iter()
+                        .any(|row| row["visible"] != false)),
         );
         if let Some(tray) = &self.tray {
             let style = config::merge(&self.base, &module["style"]);

@@ -508,9 +508,7 @@ impl Bar {
                 populated |= widget.get_visible();
                 child = widget.next_sibling();
             }
-            if is_recording {
-                island.set_visible(populated);
-            }
+            island.set_visible(populated);
         }
         let Some(output) = self.topology.clone() else {
             return;
@@ -530,6 +528,7 @@ impl Bar {
         );
         position(&self.window, self.geometry);
         let visible = self.definition["visible"] != false
+            && self.islands.iter().any(|island| island.get_visible())
             && self.geometry.width > 0.
             && self.geometry.height > 0.;
         self.visible = visible;
@@ -2020,9 +2019,22 @@ impl Ui {
                         self.runtime.as_ref(),
                     ) {
                         self.menu.borrow_mut().take();
+                        let module_id = s(&value["context"]["module"]);
+                        let island_style = arr(&bar.definition["islands"])
+                            .iter()
+                            .find(|island| {
+                                arr(&island["modules"]).iter().any(|id| s(id) == module_id)
+                            })
+                            .map(|island| &island["style"])
+                            .unwrap_or(&Value::Null);
+                        let style = config::merge(
+                            &config::merge(&bar.definition["style"], island_style),
+                            &bar.definition["moduleConfigs"][module_id]["style"],
+                        );
                         let menu = crate::tray_menu::Menu::new(
                             bar.body.upcast_ref(),
                             &value,
+                            &style,
                             runtime.clone(),
                         );
                         *self.menu.borrow_mut() = Some(menu);
