@@ -55,6 +55,12 @@ fn position(window: &gtk::ApplicationWindow, r: Rect) {
         r.height.ceil().max(1.) as i32,
     );
 }
+// A zero-opacity GTK window can skip the render that commits an empty input
+// region. Unmap fully concealed bars so the compositor releases input reliably;
+// logical visibility remains separate so edge tracking can reveal them again.
+fn set_bar_mapped(window: &gtk::ApplicationWindow, visible: bool, input_active: bool) {
+    window.set_visible(visible && input_active);
+}
 fn input_regions(window: &gtk::ApplicationWindow, islands: &[gtk::Box]) {
     let weak = window.downgrade();
     let islands: Vec<_> = islands.iter().map(|w| w.downgrade()).collect();
@@ -141,6 +147,7 @@ struct Bar {
     fade_from: f64,
     fade_started: Instant,
     input_active: bool,
+    visible: bool,
 }
 impl Drop for Bar {
     fn drop(&mut self) {
@@ -272,6 +279,7 @@ impl Bar {
             fade_from: 1.,
             fade_started: Instant::now(),
             input_active: true,
+            visible: false,
         }
     }
     fn refresh(
@@ -474,7 +482,8 @@ impl Bar {
         let visible = self.definition["visible"] != false
             && self.geometry.width > 0.
             && self.geometry.height > 0.;
-        self.window.set_visible(visible);
+        self.visible = visible;
+        set_bar_mapped(&self.window, visible, self.input_active);
         if visible && self.input_active {
             input_regions(&self.window, &self.islands);
         } else if !visible {
@@ -573,6 +582,7 @@ impl Bar {
         let active = self.opacity > 0.01;
         if active != self.input_active {
             self.input_active = active;
+            set_bar_mapped(&self.window, self.visible, active);
             if active {
                 input_regions(&self.window, &self.islands);
             } else if let Some(surface) = self.window.surface() {
@@ -744,7 +754,7 @@ impl Ui {
     fn status(&self) -> Value {
         let mut status = json!({"workspaceScope":self.workspace_scope,"workspaceOutputs":self.snapshot.borrow().as_ref().map(|s|s.outputs.iter().filter(|o|layout::workspace_visible(o,self.workspace_scope.as_deref())).map(|o|o.name.clone()).collect::<Vec<_>>()),"panelDeck":self.panel_status(),"ok":true,"pid":std::process::id(),"nativeRuntime":self.runtime.is_some(),"backendReady":self.backend.borrow()["ready"],"intents":*self.intents.borrow(),"demo":self.demo,"reserve":self.reserve,"autoHideError":self.pointer.latest().1,"pointerSampling":self.edge_timer.borrow().is_some(),"clockProviders":self.clocks.count(),"comparison":std::env::var_os("BARTJIK_GTK_COMPARE_FILE").is_some(),"error":self.error.borrow().as_str(),"revision":self.snapshot.borrow().as_ref().map(|s|s.revision),"bars":self.bars.borrow().iter().map(|(key,b)|{
             let mut children=vec![];let mut child=b.rows.first_child();while let Some(w)=child {child=w.next_sibling();if w.is::<gtk::Button>(){children.push(w);}}
-            json!({"key":key,"output":b.output,"side":b.definition["side"],"visible":b.window.is_visible(),"concealed":self.edge_states.borrow().get(key).is_some_and(|s|s.concealed),"opacity":b.opacity,"inputActive":b.input_active,"geometry":b.geometry,"width":b.window.width(),"height":b.window.height(),"unsupported":b.unsupported,"panel":b.panel.is_visible(),"items":Self::inspect(children.into_iter(),&b.panel),"clocks":b.clocks.iter().map(|c|{let mut v=c.status();v["bounds"]=Self::inspect(std::iter::once(c.button.clone().upcast()),&b.window).first().cloned().unwrap_or(Value::Null);v}).collect::<Vec<_>>(),"workspaces":Self::inspect(b.workspace_buttons.iter().map(|w|w.clone().upcast()),&b.window),"motion":b.comparisons.iter().map(|(id,v)|json!({"id":id,"visible":v.root.is_visible(),"icons":v.icon_status(),"tray":v.tray_status(),"visuals":v.visuals().iter().map(|v|v.status()).collect::<Vec<_>>()})).collect::<Vec<_>>(),"islands":Self::inspect(b.islands.iter().map(|w|w.clone().upcast()),&b.window)})
+            json!({"key":key,"output":b.output,"side":b.definition["side"],"visible":b.visible,"mapped":b.window.is_mapped(),"concealed":self.edge_states.borrow().get(key).is_some_and(|s|s.concealed),"opacity":b.opacity,"inputActive":b.input_active,"geometry":b.geometry,"width":b.window.width(),"height":b.window.height(),"unsupported":b.unsupported,"panel":b.panel.is_visible(),"items":Self::inspect(children.into_iter(),&b.panel),"clocks":b.clocks.iter().map(|c|{let mut v=c.status();v["bounds"]=Self::inspect(std::iter::once(c.button.clone().upcast()),&b.window).first().cloned().unwrap_or(Value::Null);v}).collect::<Vec<_>>(),"workspaces":Self::inspect(b.workspace_buttons.iter().map(|w|w.clone().upcast()),&b.window),"motion":b.comparisons.iter().map(|(id,v)|json!({"id":id,"visible":v.root.is_visible(),"icons":v.icon_status(),"tray":v.tray_status(),"visuals":v.visuals().iter().map(|v|v.status()).collect::<Vec<_>>()})).collect::<Vec<_>>(),"islands":Self::inspect(b.islands.iter().map(|w|w.clone().upcast()),&b.window)})
         }).collect::<Vec<_>>()});
         status["renderer"] = json!("gtk");
         status["ready"] = self.backend.borrow()["ready"].clone();
@@ -978,7 +988,7 @@ impl Ui {
                     }
                 });
             }
-            if self.reserve && bar.window.is_visible() {
+            if self.reserve && bar.visible {
                 let depth = layout::reserve(
                     &definition,
                     bar.geometry,
@@ -1043,7 +1053,7 @@ impl Ui {
             self.bars
                 .borrow()
                 .values()
-                .filter(|b| b.window.is_visible())
+                .filter(|b| b.visible)
                 .flat_map(|b| b.clocks.iter().map(|c| c.module.clone())),
         );
         self.clock();
@@ -1130,7 +1140,7 @@ impl Ui {
             .bars
             .borrow()
             .iter()
-            .filter(|(_, b)| b.window.is_visible() && b.input_active)
+            .filter(|(_, b)| b.visible && b.input_active)
         {
             let Some(output) = &bar.topology else {
                 continue;
@@ -1457,7 +1467,7 @@ impl Ui {
     }
     fn tracking_needed(&self) -> bool {
         self.bars.borrow().values().any(|b| {
-            b.window.is_visible()
+            b.visible
                 && (b.definition["autoHide"] == true || (self.runtime.is_some() && b.hovered.get()))
         }) || (self.local_pointer.get().is_some()
             && self.local_updated.borrow().elapsed() < Duration::from_millis(100))
@@ -1499,7 +1509,7 @@ impl Ui {
         let mut bars = self.bars.borrow_mut();
         let entries: Vec<_> = bars
             .iter()
-            .filter(|(_, b)| b.window.is_visible())
+            .filter(|(_, b)| b.visible)
             .filter_map(|(key, b)| {
                 Some(edges::Entry {
                     key,
@@ -1533,7 +1543,7 @@ impl Ui {
                 .iter()
                 .filter(|(bar_key, b)| {
                     format!("{}/{}", b.output, s(&b.definition["side"])) == *key
-                        && b.window.is_visible()
+                        && b.visible
                         && !states.get(*bar_key).is_some_and(|s| s.concealed)
                 })
                 .filter_map(|(_, b)| {
@@ -2005,11 +2015,7 @@ impl Ui {
                             .iter()
                             .filter(|(_, b)| selected == "all" || b.definition["id"] == selected)
                             .map(|(key, b)| {
-                                (
-                                    key.clone(),
-                                    s(&b.definition["id"]).to_owned(),
-                                    b.window.is_visible(),
-                                )
+                                (key.clone(), s(&b.definition["id"]).to_owned(), b.visible)
                             })
                             .collect();
                         if ids.is_empty() {
@@ -2073,8 +2079,7 @@ impl Ui {
                             self.configure_edges();
                         }
                         for b in self.bars.borrow().values() {
-                            b.panel
-                                .set_visible(value["action"] == "panel" && b.window.is_visible());
+                            b.panel.set_visible(value["action"] == "panel" && b.visible);
                             if value["action"] == "hide-panel" {
                                 for c in &b.clocks {
                                     c.hide();
@@ -2213,4 +2218,52 @@ pub(super) fn exercise_detached_ownership(
         "second",
         "closing detached window closed the active panel"
     );
+}
+
+#[cfg(test)]
+mod input_region_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires a compositor and workspace-7 fixture placement"]
+    fn hidden_bar_input_protocol() {
+        gtk::init().unwrap();
+        let window = gtk::ApplicationWindow::builder()
+            .title("Bartjik Input Region Fixture")
+            .decorated(false)
+            .default_width(240)
+            .default_height(60)
+            .build();
+        window.set_child(Some(&gtk::Label::new(Some("Synthetic bar"))));
+        let settle = || {
+            let until = Instant::now() + Duration::from_millis(1200);
+            while Instant::now() < until {
+                while glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        };
+        set_bar_mapped(&window, true, true);
+        settle();
+        assert!(window.is_mapped());
+        eprintln!("INPUT_PHASE shown");
+        window.set_opacity(0.);
+        set_bar_mapped(&window, true, false);
+        settle();
+        assert!(!window.is_mapped());
+        eprintln!("INPUT_PHASE hidden");
+        window.set_default_size(380, 90);
+        set_bar_mapped(&window, true, false);
+        settle();
+        assert!(!window.is_mapped());
+        eprintln!("INPUT_PHASE hidden-resized");
+        window.set_opacity(1.);
+        set_bar_mapped(&window, true, true);
+        settle();
+        assert!(window.is_mapped());
+        eprintln!("INPUT_PHASE restored");
+        // Explicitly disabled bars must stay hidden even if their fade ends.
+        set_bar_mapped(&window, false, true);
+        assert!(!window.is_mapped());
+        window.destroy();
+    }
 }
