@@ -55,9 +55,9 @@ fn one(v: &Value, choices: &[&str], n: &str) -> Result<()> {
     Ok(())
 }
 fn identifier(v: &Value) -> Result<()> {
+    static ID: OnceLock<regex::Regex> = OnceLock::new();
     ensure!(
-        regex::Regex::new(r"^[A-Za-z0-9_.:-]{1,100}$")
-            .unwrap()
+        ID.get_or_init(|| regex::Regex::new(r"^[A-Za-z0-9_.:-]{1,100}$").unwrap())
             .is_match(s(v)),
         "invalid identifier"
     );
@@ -104,11 +104,12 @@ fn actions(v: &Value) -> Result<()> {
     Ok(())
 }
 fn dimension(v: &Value, n: &str, signed: bool) -> Result<()> {
+    static DIMENSION: OnceLock<regex::Regex> = OnceLock::new();
     let lo = if signed { -100000. } else { 0. };
     if let Some(t) = v.as_str() {
         ensure!(
-            regex::Regex::new(r"^-?\d+(?:\.\d+)?(?:px|%)$")
-                .unwrap()
+            DIMENSION
+                .get_or_init(|| regex::Regex::new(r"^-?\d+(?:\.\d+)?(?:px|%)$").unwrap())
                 .is_match(t),
             "{n}: use pixels or a percentage"
         );

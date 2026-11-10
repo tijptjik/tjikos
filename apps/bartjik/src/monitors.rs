@@ -55,7 +55,10 @@ fn read_settings() -> Result<Value> {
     Ok(v)
 }
 fn mode(value: &str) -> Option<(u64, u64, f64)> {
-    let re = regex::Regex::new(r"^(\d+)x(\d+)@(\d+(?:\.\d+)?)(?:Hz)?$").unwrap();
+    static RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"^(\d+)x(\d+)@(\d+(?:\.\d+)?)(?:Hz)?$").unwrap()
+    });
+    let re = &*RE;
     let c = re.captures(value)?;
     Some((c[1].parse().ok()?, c[2].parse().ok()?, c[3].parse().ok()?))
 }
