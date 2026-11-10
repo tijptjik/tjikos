@@ -387,3 +387,28 @@ Bartjik, Notjik, Runtjik and Tasktjik. Their source package manifests now declar
 license, with full GPLv3 license texts and explicit “version 3 or later” notices.
 Third-party source and asset notices remain in place. The shared libraries retain
 MPL-2.0 (plus the desktop package's bundled BSD protocol notice).
+
+## Public documentation and hotfix maintenance
+
+The public GTK README now addresses third-party developers: native dependencies,
+consumer API examples, styling, image loading and lifecycle contracts. Maintainer
+validation and release ordering live in `docs/library-release.md`, and the repository
+instructions keep publication status out of public package READMEs. Cargo author
+metadata and source notices identify `tijptjik`; third-party copyright notices remain
+unchanged. Updated archive checks and the README's compiled example pass at
+`/tmp/tjik-author-readme-check.log`.
+
+Bartjik was rebuilt from the latest worktree after hotfix `208f857`, passed 29 core and
+42 GTK non-display tests, and was installed through its supported GTK installer. The
+existing service was restarted and read back as active with a ready backend and three
+bars. Running and installed GTK bytes match SHA-256
+`3f94013656f6771e854423fb1b1efcfa0d5329e2e7b654d9cea1243fe1294103`. The installed core,
+launcher and layer-shell library also match the build. Author notices were refreshed and
+verified for all four installed applications without restarting the other applications.
+The concurrent Bartjik work remains separately owned.
+
+Cargo secret provisioning is prepared in Dotjik as a sensitive mode-0600 managed
+credential file for clients, with synthetic tests for Fi, Li, Si and portable devices.
+Actual bws storage and enrollment remain pending the real Cargo API token; no token was
+found in Cargo credentials, the environment or matching bws metadata, and no placeholder
+secret was created. Registry publication remains pending as previously requested.
