@@ -1,14 +1,16 @@
 //! Private, bounded native request transport. Never retry a submitted mutation.
-use anyhow::{ensure, Context, Result};
+use anyhow::{ensure, Result};
+use notjik_sync::native::read_frame;
+pub use notjik_sync::native::{path, request, request_at, LIMIT};
 use serde_json::Value;
 use std::{
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Write},
+    io::Write,
     os::{
         fd::AsRawFd,
         unix::{
             fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt},
-            net::{UnixListener, UnixStream},
+            net::UnixListener,
         },
     },
     path::PathBuf,
@@ -18,64 +20,6 @@ use std::{
     },
     time::Duration,
 };
-pub const LIMIT: usize = 131072;
-pub fn path() -> Result<PathBuf> {
-    if let Some(path) = std::env::var_os("NOTJIK_SOCKET") {
-        return Ok(PathBuf::from(path));
-    }
-    Ok(
-        PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR").context("XDG_RUNTIME_DIR is required")?)
-            .join("notjik.sock"),
-    )
-}
-fn read(stream: &mut UnixStream, limit: usize) -> Result<Vec<u8>> {
-    use std::io::Read;
-    let mut bytes = vec![];
-    let n = BufReader::new(stream)
-        .take(limit as u64 + 1)
-        .read_until(b'\n', &mut bytes)?;
-    ensure!(
-        n > 0 && n <= limit + 1 && bytes.last() == Some(&b'\n'),
-        "Invalid or oversized IPC message"
-    );
-    Ok(bytes)
-}
-pub fn request(value: &Value) -> Result<Option<Value>> {
-    if std::env::var_os("XDG_RUNTIME_DIR").is_none() && std::env::var_os("NOTJIK_SOCKET").is_none()
-    {
-        return Ok(None);
-    }
-    request_at(&path()?, value)
-}
-pub fn request_at(path: &std::path::Path, value: &Value) -> Result<Option<Value>> {
-    let mut stream = match UnixStream::connect(path) {
-        Ok(s) => s,
-        Err(e)
-            if matches!(
-                e.kind(),
-                std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
-            ) =>
-        {
-            return Ok(None)
-        }
-        Err(e) => return Err(e.into()),
-    };
-    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-    let bytes = serde_json::to_vec(value)?;
-    ensure!(bytes.len() <= LIMIT, "Request exceeds 128 KiB");
-    stream.write_all(&bytes)?;
-    stream.write_all(b"\n")?;
-    let response: Value = serde_json::from_slice(&read(&mut stream, 16 * 1024 * 1024)?)?;
-    ensure!(
-        response["ok"] == true,
-        "{}",
-        response["error"]
-            .as_str()
-            .unwrap_or("Native request failed")
-    );
-    Ok(Some(response))
-}
 pub struct Request {
     pub value: Value,
     pub reply: mpsc::SyncSender<Value>,
@@ -120,7 +64,8 @@ impl Server {
                         let result = (|| -> Result<Value> {
                             stream.set_read_timeout(Some(Duration::from_secs(2)))?;
                             stream.set_write_timeout(Some(Duration::from_secs(2)))?;
-                            let value: Value = serde_json::from_slice(&read(&mut stream, LIMIT)?)?;
+                            let value: Value =
+                                serde_json::from_slice(&read_frame(&mut stream, LIMIT)?)?;
                             ensure!(value.is_object(), "Request must be an object");
                             let (reply, result) = mpsc::sync_channel(1);
                             tx.try_send(Request { value, reply })?;

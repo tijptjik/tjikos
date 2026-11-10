@@ -1,4 +1,5 @@
 pub mod client;
+pub mod native;
 pub mod store;
 use anyhow::{ensure, Result};
 use serde_json::Value;

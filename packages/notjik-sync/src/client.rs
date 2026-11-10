@@ -447,22 +447,7 @@ pub fn local(n: &Value) -> Result<String> {
     Ok(handle)
 }
 pub fn ipc(v: &Value) -> Result<Value> {
-    let mut f = tempfile::NamedTempFile::new()?;
-    serde_json::to_writer(&mut f, v)?;
-    f.flush()?;
-    let root = std::env::var_os("NOTJIK_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home().join(".local/lib/notjik"));
-    let o = Command::new("timeout")
-        .args(["3", "quickshell", "ipc", "--path"])
-        .arg(root.join("qml"))
-        .args(["call", "notjik", "requestFile"])
-        .arg(f.path())
-        .output()?;
-    ensure!(o.status.success(), "Notjik IPC unavailable");
-    let v: Value = serde_json::from_slice(&o.stdout)?;
-    ensure!(v["ok"] == true, "Notjik IPC rejected request");
-    Ok(v)
+    crate::native::request(v)?.context("Native Notjik unavailable")
 }
 pub fn tick() -> Result<Value> {
     let cfg = config()?;

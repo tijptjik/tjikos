@@ -636,9 +636,6 @@ pub fn connect(url: &str, notifications: bool) -> Result<Value> {
 }
 
 fn send_notice(task: &Value) -> Result<()> {
-    let root = std::env::var_os("NOTJIK_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home().join(".local/lib/notjik"));
     let mut payload = json!({"op":"send","notice":{
         "title":task["title"],"body":"","app":"tasktjik","type":"todo","urgency":"normal","timeout":0,
         "id":task["id"],"icon":"","image":"","resident":false,"transient":false,"actions":[],
@@ -670,30 +667,7 @@ fn send_notice(task: &Value) -> Result<()> {
         notjik_sync::client::publish(notice, "active", true)?;
         return Ok(());
     }
-    let bytes = serde_json::to_vec(&payload)?;
-    ensure!(bytes.len() <= 131072, "Notification exceeds 128 KiB");
-    let directory = tempfile::Builder::new()
-        .prefix("tasktjik-notice-")
-        .tempdir()?;
-    let path = directory.path().join("request.json");
-    atomic(&path, &bytes)?;
-    let result: Value = serde_json::from_str(&command(&[
-        "quickshell",
-        "ipc",
-        "--path",
-        &root.join("qml").to_string_lossy(),
-        "call",
-        "notjik",
-        "requestFile",
-        &path.to_string_lossy(),
-    ])?)?;
-    ensure!(
-        result["ok"] == true,
-        "{}",
-        result["error"]
-            .as_str()
-            .unwrap_or("Notification delivery failed")
-    );
+    notjik_sync::client::ipc(&payload)?;
     Ok(())
 }
 
