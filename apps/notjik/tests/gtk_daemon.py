@@ -91,6 +91,17 @@ def motion_acceptance(request, send, config, env, work, daemon):
         subprocess.run(["grim","-o","NOTJIK",str(work/"motion-settled.png")],check=True,capture_output=True)
         # Drag plain card text; the live preview must move before button release.
         def layers():
+            # Detached cards become native toplevels after drop. Their stack trace
+            # coordinates are local; compositor geometry is the global authority.
+            clients = json.loads(subprocess.check_output(["hyprctl", "-j", "clients"], text=True))
+            native = next((c for c in clients if c.get("pid") == daemon.pid and c.get("title", "").startswith("notjik-detached:")), None)
+            if native:
+                frame = next((f for f in reversed(frames()) if row(f, old) and f['surface'].startswith('floating:')), None)
+                if frame:
+                    monitors = json.loads(subprocess.check_output(["hyprctl", "-j", "monitors"], text=True))
+                    monitor = next((m['name'] for m in monitors if m['id'] == native['monitor']), None)
+                    return [{**frame, 'x': native['at'][0], 'y': native['at'][1],
+                             'monitor': monitor, 'nativeAddress': native['address']}]
             result = []
             for frame in frames()[-150:]:
                 card = row(frame, old)
@@ -143,7 +154,8 @@ def motion_acceptance(request, send, config, env, work, daemon):
         time.sleep(.2)
         # Re-drag a detached card. Offsets are relative to its stationary grab
         # surface, not accumulated again after each window movement.
-        move(moved['x']+180,moved['y']+24)
+        moved = wait_for(lambda: next((f for f in layers() if f.get('nativeAddress')), None))
+        move(moved['x']+8,moved['y']+8)
         event("b 1"); time.sleep(.04); event("r 45 -35")
         again=wait_for(lambda: next((c for c in layers() if abs(c['x']-(moved['x']+45))<3 and abs(c['y']-(moved['y']-35))<3),None))
         event("b 0"); time.sleep(.2)
@@ -160,10 +172,16 @@ def motion_acceptance(request, send, config, env, work, daemon):
         expanded_height = row(settled, old)['height']
         move(10, 10)
         wait_for(lambda: row(layers()[-1], old)['height'] < expanded_height)
+        collapsed = layers()[-1]
+        assert abs(collapsed['x']-settled['x'])<3 and abs(collapsed['y']-settled['y'])<3, (settled, collapsed)
         def popup_count():
             outputs = json.loads(subprocess.check_output(["hyprctl", "-j", "layers"], text=True))
-            return sum(1 for output in outputs.values() for entries in output['levels'].values()
-                       for entry in entries if entry.get('namespace') == 'notjik')
+            layers_count = sum(1 for output in outputs.values() for entries in output['levels'].values()
+                               for entry in entries if entry.get('namespace') == 'notjik')
+            clients = json.loads(subprocess.check_output(["hyprctl", "-j", "clients"], text=True))
+            workspace = json.loads(subprocess.check_output(["hyprctl", "-j", "activeworkspace"], text=True))['id']
+            return layers_count + sum(c.get('pid') == daemon.pid and c.get('title', '').startswith('notjik-detached:')
+                                      and c['workspace']['id'] == workspace and c.get('mapped', True) for c in clients)
         original_workspace = json.loads(subprocess.check_output(["hyprctl", "-j", "activeworkspace"], text=True))['id']
         visible_count = popup_count()
         subprocess.run(["hyprctl", "eval", 'hl.dispatch(hl.dsp.focus({workspace="98"}))'], check=True, capture_output=True)
@@ -177,17 +195,17 @@ def motion_acceptance(request, send, config, env, work, daemon):
         subprocess.run(["hyprctl","eval",'hl.monitor({output="NOTJIK2",mode="1600x1200@60",position="1000x0",scale=1.25})'],check=True,capture_output=True)
         wait_for(lambda: any(m['name']=='NOTJIK2' and m['x']==1000 and m['width']==1280 and m['height']==960 for m in request({"op":"status"})['monitors']))
         def latest_card():
-            return next(f for f in reversed(frames()) if row(f,old))
+            return layers()[-1]
         def global_move(x,y):
             cursor=json.loads(subprocess.check_output(["hyprctl","-j","cursorpos"],text=True))
             event(f"r {x-cursor['x']} {y-cursor['y']}")
             time.sleep(.12)
         position=latest_card()
-        global_move(position['x']+180,position['y']+24)
+        global_move(position['x']+8,position['y']+8)
         subprocess.run(['grim','-o','NOTJIK',str(work/'cross-before-pickup.png')],check=True,capture_output=True)
         event('b 1'); time.sleep(.04); event('r 900 -80')
         try:
-            crossed=wait_for(lambda: next((f for f in reversed(frames()[-100:]) if row(f,old) and f.get('monitor')=='NOTJIK2' and f['surface']!=position['surface']),None),timeout=5)
+            crossed=wait_for(lambda: (f if f.get('monitor') == 'NOTJIK2' and f.get('nativeAddress') == position.get('nativeAddress') else None) if (f := latest_card()) else None, timeout=5)
         except ValueError:
             raise AssertionError({"position":position,"status":request({"op":"status"}),"cursor":json.loads(subprocess.check_output(["hyprctl","-j","cursorpos"],text=True)),"outputs":json.loads(subprocess.check_output(["hyprctl","-j","monitors"],text=True)),"layers":json.loads(subprocess.check_output(["hyprctl","-j","layers"],text=True)),"frames":frames()[-4:]})
         assert row(crossed,old)['widget']==row(final,old)['widget']
@@ -200,16 +218,24 @@ def motion_acceptance(request, send, config, env, work, daemon):
         time.sleep(.2)
         released=latest_card()
         assert abs(released['x']-position['x'])<2 and abs(released['y']-position['y'])<2, 'Cross-output drop did not release the card'
-        global_move(1000+position['x']+180,position['y']+24)
+        global_move(position['x']+8,position['y']+8)
         event('b 1'); time.sleep(.04); event('r -900 80')
-        returned=wait_for(lambda: next((f for f in reversed(frames()[-60:]) if row(f,old) and f.get('monitor')=='NOTJIK' and f['surface']!=position['surface'] and f['time']>crossed['time']+300),None),timeout=5)
+        returned=wait_for(lambda: (f if f.get('monitor') == 'NOTJIK' and f.get('nativeAddress') == position.get('nativeAddress') else None) if (f := latest_card()) else None, timeout=5)
         event('b 0'); time.sleep(.3)
         assert row(returned,old)['widget']==row(final,old)['widget']
         # Removing an output during a drag cancels the grab without dropping data.
         position=latest_card()
-        global_move(position['x']+180,position['y']+24)
+        # Re-enter after the compositor-owned grab before starting another one.
+        global_move(position['x']+24,position['y']+8)
+        global_move(position['x']+8,position['y']+8)
         event('b 1'); time.sleep(.04); event('r 900 -80')
-        wait_for(lambda: latest_card().get('monitor')=='NOTJIK2',timeout=5)
+        try:
+            wait_for(lambda: latest_card().get('monitor')=='NOTJIK2',timeout=5)
+        except ValueError:
+            raise AssertionError({"pickup": position, "latest": latest_card(),
+                                  "cursor": json.loads(subprocess.check_output(["hyprctl", "-j", "cursorpos"], text=True)),
+                                  "clients": json.loads(subprocess.check_output(["hyprctl", "-j", "clients"], text=True)),
+                                  "outputs": json.loads(subprocess.check_output(["hyprctl", "-j", "monitors"], text=True))})
         subprocess.run(["hyprctl","output","remove","NOTJIK2"],check=True,capture_output=True)
         wait_for(lambda: len(request({"op":"status"})['monitors'])==1)
         event('b 0'); time.sleep(.3)

@@ -203,6 +203,30 @@ pub struct Card {
     notches: notches::Notches,
 }
 impl Card {
+    /// Reserve hidden controls before mapping a detached native window. The stack
+    /// still clips its input region to the visible card, so this slack is click-through.
+    pub(super) fn detached_height(&self, width: i32) -> i32 {
+        let visible = self.widget.measure(gtk::Orientation::Vertical, width).1;
+        let hidden: i32 = self
+            .context
+            .revealers
+            .borrow()
+            .iter()
+            .filter_map(|r| r.upgrade())
+            .filter_map(|r| r.child().map(|child| (r, child)))
+            .map(|(r, child)| {
+                let full = child.measure(gtk::Orientation::Vertical, width).1;
+                let shown = if r.is_visible() {
+                    r.measure(gtk::Orientation::Vertical, width).1
+                } else {
+                    0
+                };
+                (full - shown).max(0)
+            })
+            .sum();
+        (visible + hidden).max(1)
+    }
+
     pub fn new(
         notice: Notice,
         state: ViewState,

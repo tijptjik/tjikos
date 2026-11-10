@@ -299,7 +299,7 @@ mod imp {
                     let _ = writeln!(
                         file,
                         "{}",
-                        serde_json::json!({"groupDepartures":self.faces.borrow().iter().map(|f|serde_json::json!({"y":f.y,"height":f.height,"progress":f.at.elapsed().as_secs_f64()/duration.max(0.001)})).collect::<Vec<_>>(),"scroll":self.scroll.get(),"surface":self.obj().widget_name().as_str(),"monitor":self.obj().root().and_then(|r| r.downcast::<gtk::Window>().ok()).and_then(|w| w.monitor()).and_then(|m|m.connector()).map(|s|s.to_string()),"time":super::super::host::now(),"width":width,"height":height,"x":self.offset.get().0,"y":self.offset.get().1,"rows":rows})
+                        serde_json::json!({"groupDepartures":self.faces.borrow().iter().map(|f|serde_json::json!({"y":f.y,"height":f.height,"progress":f.at.elapsed().as_secs_f64()/duration.max(0.001)})).collect::<Vec<_>>(),"scroll":self.scroll.get(),"surface":self.obj().widget_name().as_str(),"monitor":self.obj().root().and_then(|r| r.downcast::<gtk::Window>().ok()).and_then(|w| if w.is_layer_window() { w.monitor() } else { w.surface().and_then(|surface| surface.display().monitor_at_surface(&surface)) }).and_then(|m|m.connector()).map(|s|s.to_string()),"time":super::super::host::now(),"width":width,"height":height,"x":self.offset.get().0,"y":self.offset.get().1,"rows":rows})
                     );
                 }
             }

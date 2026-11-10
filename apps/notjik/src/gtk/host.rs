@@ -58,7 +58,7 @@ impl Surface {
         let height = self
             .cards
             .values()
-            .map(|c| c.widget.measure(gtk::Orientation::Vertical, width).1)
+            .map(|c| c.detached_height(width))
             .max()
             .unwrap_or(1)
             .max(1);
@@ -186,7 +186,7 @@ impl Drop for PreparedWindow {
 struct Detached {
     preparation: Option<mpsc::Receiver<tjik_desktop::Result<PreparedWindow>>>,
     monitor: String,
-    workspace: Option<i64>,
+    workspace: Option<String>,
     id: String,
     x: i32,
     y: i32,
@@ -238,8 +238,9 @@ struct Host {
     style: Value,
     last: Instant,
     monitor_tick: Instant,
-    desktop: mpsc::Receiver<Value>,
-    workspaces: HashMap<String, i64>,
+    desktop: mpsc::Receiver<tjik_desktop::Subscription>,
+    desktop_events: Option<tjik_desktop::Subscription>,
+    workspaces: HashMap<String, String>,
     all_monitors: Vec<Value>,
     retained: HashMap<String, Rc<Card>>,
     pointer: Rc<RefCell<Option<PointerPress>>>,
@@ -270,26 +271,13 @@ impl Host {
         let (event_tx, events) = mpsc::channel();
         let recording_id = Rc::new(RefCell::new(None));
         let (desktop_tx, desktop) = mpsc::sync_channel(2);
-        std::thread::spawn(move || loop {
-            let mut v = crate::util::run(
-                std::process::Command::new("hyprctl").args(["-j", "activewindow"]),
-                Duration::from_secs(2),
-            )
-            .ok()
-            .and_then(|v| serde_json::from_slice::<Value>(&v).ok())
-            .unwrap_or(json!({}));
-            if let Ok(bytes) = crate::util::run(
-                std::process::Command::new("hyprctl").args(["-j", "monitors"]),
-                Duration::from_secs(2),
-            ) {
-                if let Ok(monitors) = serde_json::from_slice::<Value>(&bytes) {
-                    v["monitors"] = monitors;
-                }
+        // Resolve/connect on a worker; the UI receives the bounded subscription once.
+        // EventSource already coalesces full snapshots, so no second event queue or
+        // polling worker is needed for the lifetime of the host.
+        std::thread::spawn(move || {
+            if let Ok(events) = tjik_desktop::selected().subscribe() {
+                let _ = desktop_tx.send(events);
             }
-            if desktop_tx.send(v).is_err() {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(500));
         });
         let host = Rc::new(RefCell::new(Self {
             showcase: (std::env::var_os("NOTJIK_SYNTHETIC").is_some()
@@ -317,6 +305,7 @@ impl Host {
             last: Instant::now(),
             monitor_tick: Instant::now() - Duration::from_secs(2),
             desktop,
+            desktop_events: None,
             workspaces: HashMap::new(),
             all_monitors: vec![],
             retained: HashMap::new(),
@@ -344,6 +333,7 @@ impl Host {
     }
     fn stop(&mut self) {
         self.stopped = true;
+        self.desktop_events.take();
         self.executor.stop_audio();
         self.executor.discard();
         self.bus.take();
@@ -379,23 +369,39 @@ impl Host {
                 }
             }
         }
-        while let Ok(desktop) = self.desktop.try_recv() {
-            if let Some(monitors) = desktop["monitors"].as_array() {
-                self.workspaces = monitors
-                    .iter()
-                    .filter_map(|m| {
-                        let special = m["specialWorkspace"]["id"].as_i64().unwrap_or(0);
-                        let workspace = if special != 0 {
-                            Some(special)
-                        } else {
-                            m["activeWorkspace"]["id"].as_i64()
-                        };
-                        Some((m["name"].as_str()?.to_string(), workspace?))
-                    })
-                    .collect();
+        if let Ok(events) = self.desktop.try_recv() {
+            self.desktop_events = Some(events);
+        }
+        let desktop_event = self
+            .desktop_events
+            .as_ref()
+            .map(|events| events.recv_timeout(Duration::ZERO));
+        if let Some(Err(_)) = desktop_event {
+            self.desktop_events.take();
+            self.workspaces.clear();
+            self.controller.borrow_mut().focused_app.clear();
+        } else if let Some(Ok(Some(event))) = desktop_event {
+            match event.state {
+                tjik_desktop::DesktopState::Ready(snapshot) => {
+                    self.workspaces = snapshot
+                        .outputs
+                        .iter()
+                        .filter_map(|output| {
+                            Some((output.name.clone(), output.workspace.as_ref()?.id.clone()))
+                        })
+                        .collect();
+                    self.controller.borrow_mut().focused_app = snapshot
+                        .windows
+                        .iter()
+                        .find(|window| Some(&window.id) == snapshot.focused_window.as_ref())
+                        .and_then(|window| window.app_id.clone())
+                        .unwrap_or_default();
+                }
+                tjik_desktop::DesktopState::Unavailable(_) => {
+                    self.workspaces.clear();
+                    self.controller.borrow_mut().focused_app.clear();
+                }
             }
-            self.controller.borrow_mut().focused_app =
-                desktop["class"].as_str().unwrap_or("").into();
         }
         if self.monitor_tick.elapsed() >= Duration::from_secs(1) {
             self.monitors();
@@ -866,7 +872,7 @@ impl Host {
                         preview.clone(),
                         Detached {
                             preparation: None,
-                            workspace: self.workspaces.get(&monitor_name).copied(),
+                            workspace: self.workspaces.get(&monitor_name).cloned(),
                             monitor: monitor_name.clone(),
                             id: id.clone(),
                             x,
@@ -943,7 +949,7 @@ impl Host {
                     d.y = drag.monitor_y + drag.origin_y + dy.round() as i32
                         - m["y"].as_i64().unwrap_or(0) as i32;
                     if finished {
-                        d.workspace = self.workspaces.get(&d.monitor).copied();
+                        d.workspace = self.workspaces.get(&d.monitor).cloned();
                         d.x = d.x.clamp(
                             0,
                             (m["width"].as_i64().unwrap_or(1920) as i32
@@ -961,10 +967,12 @@ impl Host {
                     self.windows[&drag.preview].cards[&id].set_drag_preview(false);
                     if let Some(detached) = self.detached.get_mut(&drag.preview) {
                         let monitor = detached.monitor.clone();
-                        let workspace = detached.workspace.map(|w| w.to_string());
+                        let workspace = detached.workspace.clone();
                         let (x, y) = (detached.x, detached.y);
                         let width = c.config["style"]["width"].as_f64().unwrap_or(420.);
-                        let height = drag.height.max(1) as f64;
+                        let height = self.windows[&drag.preview].cards[&id]
+                            .detached_height(width as i32)
+                            as f64;
                         let title = format!("notjik-detached:{}:{}", std::process::id(), now());
                         let (tx, rx) = mpsc::channel();
                         detached.preparation = Some(rx);
@@ -982,7 +990,7 @@ impl Host {
                                     .iter()
                                     .find(|w| {
                                         w.output.as_ref() == Some(&output.id)
-                                            && w.workspace.name == workspace
+                                            && Some(&w.workspace.id) == workspace.as_ref()
                                     })
                                     .ok_or(tjik_desktop::DesktopError::StaleTarget)?;
                                 desktop.prepare_toplevel(
@@ -1189,7 +1197,7 @@ impl Host {
             surface.list.grab(capture);
             if !surface.native
                 && detached.is_some_and(|d| {
-                    d.workspace.is_some() && self.workspaces.get(&d.monitor).copied() != d.workspace
+                    d.workspace.is_some() && self.workspaces.get(&d.monitor).cloned() != d.workspace
                 })
                 && !self.drag.as_ref().is_some_and(|d| d.preview == *name)
             {
@@ -1497,7 +1505,11 @@ impl Host {
                         .max(1);
                     surface.list.configure(card_width, height, 0, 0., 0, 0);
                     surface.list.position(0, 0, true);
-                    surface.window.set_default_size(card_width, height);
+                    // Preserve the native origin during footer animation. Native
+                    // compositors may center client-requested resizes; reserve the
+                    // controls at map time and retain that allocation when hidden.
+                    let reserved = surface.window.default_height().max(height);
+                    surface.window.set_default_size(card_width, reserved);
                 }
                 surface.window.set_visible(true);
             }
@@ -2196,6 +2208,7 @@ mod tests {
             last: Instant::now(),
             monitor_tick: Instant::now(),
             desktop,
+            desktop_events: None,
             workspaces: HashMap::new(),
             all_monitors: vec![],
             retained: HashMap::new(),
