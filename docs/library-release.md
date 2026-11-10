@@ -50,3 +50,25 @@ dependencies with their own licenses.
 Application builds bundle their own `LICENSE`/`NOTICE` and the reviewed linked Tjik
 components under `dist/licenses/`. Supported installers copy those files into the
 application directory. The pinned native layer-shell license remains in `dist/lib/`.
+
+## Repository development checks
+
+On managed development machines, run heavy checks through `dev-check`. These commands
+are repository-maintenance tools, not requirements for third-party library consumers:
+
+```sh
+dev-check python3 -B packages/tjik-gtk/scripts/test-images.py
+dev-check python3 -B packages/tjik-gtk/scripts/test-motion.py
+dev-check bash packages/tjik-gtk/scripts/test-packages.sh
+```
+
+The image and motion runners provide their own isolated displays, with visible parent
+windows placed silently on workspace 7. The archive checker uses a local GTK dependency
+patch for the unpublished Tasktjik view crate; a registry-resolved dry run is still
+required after the GTK dependency is published. Publish `tjik-gtk` before
+`tjik-task-gtk`.
+
+The public `tjik-gtk` README contains a compilable consumer example, native dependency
+requirements and API/resource/lifecycle contracts. Release state and maintainer commands
+belong here instead of that README. The corrected source author is `tijptjik`; archived
+candidates recorded before this attribution update must be regenerated before upload.

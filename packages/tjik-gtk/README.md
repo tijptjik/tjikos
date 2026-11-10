@@ -1,85 +1,120 @@
-# Shared GTK presentation
+# tjik-gtk
 
-`tjik-gtk` contains GTK4 styling, virtualized result factories, and layer-shell surface
-behavior. It reads the existing Tjik theme tokens and font settings. Applications retain
-their own commands, state, persistence and desktop-specific integration. GTK widgets
-stay on the main thread; application I/O belongs on workers.
+GTK4 components for Linux desktop applications: themed surfaces, virtualized result
+lists and grids, asynchronous image loading, drag/resize controls and animation helpers.
 
-The layer uses a brief exclusive keyboard handoff followed by on-demand focus, without
-reserving desktop space. Standalone consumers can set `TJIK_GTK_WINDOWED`. The launcher
-shares drag, resize and monitor primitives without imposing Hyprland IPC on other
-applications.
+Application state, commands and persistence stay in your application. Result adapters
+accept ordinary GObject models, and desktop pointer integration is supplied through
+callbacks rather than a compositor-specific dependency.
 
-The native layer-shell library is built from the pinned upstream revision in
-`scripts/native.sh`. Runtjik packages it in `lib/` and uses an executable-relative
-RPATH, so installations do not depend on a developer's build directory. Build through
-`dev-check bun run build --filter=@tjikos/runtjik` on managed desktops.
+## Requirements
 
-Keep backend GTK3 icon resolution in a separate process from GTK4. This avoids mixing
-incompatible GTK versions and permits migration one frontend at a time.
+- Rust and GTK 4.12 or newer.
+- GTK4 and gtk4-layer-shell development libraries, discoverable through `pkg-config`.
+- A Wayland compositor with layer-shell support for layer surfaces. Ordinary GTK windows
+  can use the presentation components without layer-shell surface behavior.
 
-`motion` owns mapped-only startup pulses, finite feedback fades and pending-close
-pulses. `removal` captures only confirmed deletions into logical GTK render nodes, with
-app shrink/fade and gallery fragment dissolve. Both honor GTK's animation setting.
-Applications cancel removal overlays on new result snapshots and hide.
-`draggable_with_position` accepts an optional desktop global-pointer adapter; this
-avoids moving-surface coordinate feedback without coupling the shared crate to Hyprland.
+The Rust package links against these native libraries; it does not bundle them. Install
+them through your distribution or configure `PKG_CONFIG_PATH` for a custom installation.
+Keep GTK3 and GTK4 in separate processes when integrating with older software.
 
-`scroll::by_row` works with rows created by `results::factory`. Hover selection resolves
-the current GTK list-item position directly through a weak reference; it does not scan
-or parse the model, retain list items, or rely on stable row IDs after recycling.
+## Add the dependency
 
-`images::set` resolves themed icons immediately and decodes local/embedded images on a
-worker. `images::set_picture` uses the same queue and limits for `GtkPicture`, leaving
-unsupported sources empty. Each GTK thread runs at most one decode. Pending work holds
-one weak request per live widget and reads the widget's current source only when it is
-admitted to the decoder. Rebinding coalesces requests, dead widgets are pruned on
-enqueue, and stale completions are rejected. Waiting requests retain no copied image
-strings or textures. The metadata bound is proportional to live widgets; there is no
-fixed queue cap that can silently discard a one-time grid bind. No timers or network
-fetches are used.
+```toml
+[dependencies]
+tjik-gtk = "0.1"
+```
 
-Embedded source strings are limited to 128 KiB and local encoded files to 4 MiB. Decoded
-textures preserve aspect ratio, never enlarge small images, and fit within 256×256
-pixels. At most 32 embedded textures are cached (up to 8 MiB of pixel storage). Local
-files are not cached because their contents can change at the same path. Platform image
-decoders can use additional intermediate memory; this is not a sandbox for hostile
-media. Applications should provide thumbnail-sized local sources.
+Use the re-exported `tjik_gtk::gtk` types to match the library's GTK bindings.
 
-`results::factory` accepts a callback from any GObject model item to `Presentation`. The
-application owns provider naming, model serialization, asset paths, icon priority, and
-status interpretation. The library owns escaping, widget layout, recycling, selection
-mechanics, and image loading. The callback runs during bind on the main thread and must
-not perform blocking I/O. A plain-string adapter is included in the API documentation;
-Runtjik's JSON adapter lives in its application source.
+## Create a result view
 
-The shared theme styles primitives only. Applications append their own view styles via
-`theme::apply_with_css`; the extra CSS can reference validated named palette colors
-`@tjik_background`, `@tjik_surface`, `@tjik_text`, `@tjik_muted`, `@tjik_accent`, and
-`@tjik_border`. Runtjik owns word/capture styles, and `tjik_task_gtk::style::CSS` owns
-task and reading styles. Reapply the composed stylesheet when theme settings change.
+`results::factory` maps each GObject model item to a `Presentation`. Your adapter
+supplies text, icons and status; the factory handles layout, escaping and widget
+recycling.
 
-The current supported platform is Linux with GTK 4.12+ and gtk4-layer-shell development
-libraries. Rust crate packaging does not bundle those native libraries. The repository's
-native setup script supplies a pinned gtk4-layer-shell build for local validation.
+```rust
+use tjik_gtk::{
+    gtk::{self, prelude::*},
+    results::{self, Layout, Presentation},
+};
 
-`motion::ClosingPulse` owns the lifetime of a closing animation. Keep its controller
-with the view, call `set_pending` on state changes, and drop it when the view is
-disposed. It holds widgets weakly, cancels callbacks on unmap, and resumes pending work
-on map. The result factory manages this ownership automatically for recycled rows. The
-display regression can be run in this repository with
-`dev-check python3 -B packages/tjik-gtk/scripts/test-motion.py`.
+fn main() {
+    gtk::init().expect("GTK initialization failed");
 
-Repository maintainers can validate distribution boundaries with
-`dev-check bash packages/tjik-gtk/scripts/test-packages.sh`. It builds local archives
-for `tjik-desktop`, `tjik-gtk` and `tjik-task-gtk`, extracts them outside the checkout,
-and runs their non-display tests and public API examples offline. The Tasktjik archive
-uses the extracted GTK archive through a Cargo patch until that version is published.
-This does not check registry name availability or replace the display regressions. No
-packages are uploaded. Publish `tjik-gtk` before its dependent `tjik-task-gtk` crate.
+    let factory = results::factory(
+        Layout::List,
+        40,
+        |position| println!("Selected item {position}"),
+        |object| {
+            let title = object
+                .downcast_ref::<gtk::StringObject>()
+                .map(|item| item.string().to_string())
+                .unwrap_or_default();
+            Presentation {
+                title,
+                fallback_icon: "text-x-generic".into(),
+                ..Default::default()
+            }
+        },
+    );
+
+    let model = gtk::StringList::new(&["First result", "Second result"]);
+    let selection = gtk::SingleSelection::new(Some(model));
+    let list = gtk::ListView::new(Some(selection), Some(factory));
+    list.set_vexpand(true);
+    // Attach `list` to your application's window or scrolled container.
+}
+```
+
+The adapter callback runs on the GTK thread during binding. Keep blocking I/O and
+expensive computations outside it. `scroll::by_row` provides row-based scrolling and
+hover selection for factory-created rows without scanning the model.
+
+## Theme your application
+
+`theme::Theme` defines the palette. `theme::apply` installs the primitive stylesheet;
+`theme::apply_with_css` appends your application CSS. The styles apply below a widget
+with the `tjik` CSS class.
+
+Application CSS can use `@tjik_background`, `@tjik_surface`, `@tjik_text`,
+`@tjik_muted`, `@tjik_accent` and `@tjik_border`. Reapply the stylesheet when the
+palette or font changes.
+
+## Load images asynchronously
+
+`images::set` displays a themed icon or loads a local/embedded image with a fallback.
+`images::set_picture` provides the same loading behavior for `GtkPicture`. Remote URLs
+are not fetched.
+
+Each GTK thread runs one decode at a time. Waiting requests hold one weak reference per
+live widget, with no copied source strings or textures. Rebinding coalesces requests,
+dead targets are pruned, and results for a different widget binding are discarded.
+
+Embedded images are limited to 128 KiB and local encoded files to 4 MiB. Output textures
+preserve aspect ratio, do not enlarge small images and fit within 256 × 256 pixels. The
+embedded-image cache holds at most 32 textures, up to 8 MiB of pixel storage. Local
+files are not cached because their contents can change. Native decoders can allocate
+additional intermediate memory; use thumbnail-sized sources for predictable resource
+usage.
+
+## Surfaces and animation
+
+`surface` provides layer-shell setup, keyboard handoff, monitor placement and
+drag/resize helpers. `draggable_with_position` accepts a global-pointer callback from
+your desktop adapter. Set `TJIK_GTK_WINDOWED` to use an ordinary window instead of a
+layer surface.
+
+`motion::ClosingPulse` owns a pending-close animation. Retain the controller with your
+view, call `set_pending` when state changes and drop it when the view is disposed. It
+holds widgets weakly and cancels callbacks on unmap. The result factory manages this
+lifetime for recycled rows automatically.
+
+`motion` and `removal` effects respect GTK's animation preference. Use
+`removal::animate` only for confirmed deletions, and cancel outstanding removal effects
+when replacing a snapshot or hiding the view.
 
 ## License
 
-The Tjik-authored source in this package is licensed under MPL-2.0; see `LICENSE` and
-`NOTICE`. Standard MPL secondary-license compatibility is retained, allowing use in
-GPLv3 applications. Third-party components retain their own licenses and notices.
+Authored by **tijptjik** and licensed under [MPL-2.0](LICENSE). See [NOTICE](NOTICE) for
+source notices. Third-party components retain their own licenses.
