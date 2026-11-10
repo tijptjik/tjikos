@@ -2,6 +2,10 @@
 name = "tjik-desktop"
 version = "0.1.0"
 edition = "2021"
+description = "Toolkit-independent desktop state and action contracts with compositor adapters"
+readme = "README.md"
+license = "MPL-2.0 AND BSD-3-Clause"
+repository = "https://github.com/tijptjik/tjikos"
 
 [features]
 capture = ["dep:wayland-client", "dep:wayland-scanner", "dep:wayland-protocols-wlr", "dep:memmap2", "dep:tempfile", "dep:libc", "dep:bitflags", "dep:wayland-backend"]
