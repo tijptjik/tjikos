@@ -8,4 +8,4 @@ with the built-in image tool.
 
 `contact-sheet.jpg` previews all 24 images in manifest order, using the same four-column
 layout as the fish collection. The collection lives alongside `fish/` and `robots/` in
-Notjik's `qml/icons/`.
+Notjik's `assets/icons/`.

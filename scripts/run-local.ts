@@ -153,6 +153,15 @@ async function refreshResident(context: Context, app: App, run: Run, env: NodeJS
     if (!process.env.WAYLAND_DISPLAY || !['notjik', 'bartjik', 'tasktjik'].includes(app)) return;
     if (serviceActive(app)) {
         await run(['systemctl', '--user', 'restart', `${app}.service`], env);
+    } else if (app === 'bartjik') {
+        const binary = join(context.home, '.local/bin/bartjik');
+        const live = spawnSync(binary, ['status'], { stdio: 'ignore', env });
+        if (live.status === 0) await run([binary, 'quit'], env);
+    } else if (app === 'notjik') {
+        // Preserve a manually started notification authority and any active drafts.
+        const ctl = join(context.home, '.local/bin/notjikctl');
+        const live = spawnSync(ctl, ['status'], { stdio: 'ignore', env });
+        if (live.status === 0) throw new Error('Installed Notjik; restart the manually launched notification daemon to use the new build.');
     } else {
         const qml = join(context.home, '.local/lib', app, 'qml');
         const live = spawnSync('quickshell', ['ipc', '--path', qml, 'show'], { stdio: 'ignore', env });

@@ -1,7 +1,7 @@
 # Card types and calling Notjik
 
 Notjik accepts ordinary desktop notifications and richer cards from `notjikctl`. The CLI
-uses Quickshell IPC; a running Notjik session is required.
+uses the native Unix control socket; a running Notjik session is required.
 
 ```sh
 notify-send 'Flight recorder secured' 'Black box synced.'

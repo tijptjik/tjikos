@@ -201,10 +201,10 @@ their legacy aliases, and application/desktop-entry icons. Symbolic icons ending
 Drag a non-interactive part of a popup to place it anywhere, including another monitor.
 The detached card stays until you dismiss it with **×**, invoke a normal non-resident
 action, or remove it through `notjikctl`. Focus changes, Telegram read updates and
-sender close requests do not close detached cards. Drag its background again to move it. Clicking its background does not
-dismiss it. This works for ordinary notifications as well as Telegram photos and voice
-notes; pinned cards leave the popup stack and do not expire or get evicted by queue
-pressure. Positions are session-only.
+sender close requests do not close detached cards. Drag its background again to move it.
+Clicking its background does not dismiss it. This works for ordinary notifications as
+well as Telegram photos and voice notes; pinned cards leave the popup stack and do not
+expire or get evicted by queue pressure. Positions are session-only.
 
 Voice playback and unsent reply text survive the move. Detached cards hide while locked
 or notifications are paused; locking stops playback, which resumes only when you press
@@ -587,7 +587,7 @@ the media, timer and inline-action features that are specific to Notjik.
 ![Rose-punk notification demo](docs/demo.gif)
 
 The recording uses synthetic cards only: arrivals, solid settled cards, an upload
-updated in place, and animated removal. Regenerate with Quickshell, Pillow and an active
+updated in place, and animated removal. Regenerate with GTK4, Pillow and an active
 Wayland session:
 
 ```sh
@@ -1003,6 +1003,6 @@ Messages before retrying and remove abandoned snapshots manually.
 
 ## License
 
-Application source by tijptjik is licensed under GPL-3.0-or-later; see `LICENSE`
-and `NOTICE`. Third-party source, assets and dependencies retain their existing licenses
-and notices.
+Application source by tijptjik is licensed under GPL-3.0-or-later; see `LICENSE` and
+`NOTICE`. Third-party source, assets and dependencies retain their existing licenses and
+notices.
