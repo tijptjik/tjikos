@@ -461,3 +461,8 @@ direct `/health` now returns HTTP 200 and reports “Byparr is working!”. Dock
 label was still `starting` at readback because its configured interval is fifteen
 minutes. Shelfmark remains healthy and was not restarted. The fleet receipt records
 recovery evidence and the completed Li reboot.
+
+A subsequent scheduled Docker health readback confirmed both Byparr and Shelfmark as
+`healthy`. The initial release uploads, Li reboot and Byparr recovery are complete. The
+two image-update warnings remain historical; the retained current images are healthy.
+Fi/Li captured-template divergence remains preserved for a separate review.

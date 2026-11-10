@@ -91,7 +91,8 @@
         "application_version": "3.0.4",
         "docker_health_at_readback": "starting; waiting for the configured 15-minute probe interval",
         "shelfmark": "healthy; unchanged",
-        "prowlarr_to_byparr_http": 200
+        "prowlarr_to_byparr_http": 200,
+        "docker_health_after_scheduled_check": "healthy"
       }
     }
   },
@@ -107,5 +108,10 @@
   },
   "pinned_archive_workers": "not interrupted or replaced",
   "application_follow_up": "Reopen updated Chrome and Discord processes to load the new versions; active sessions were preserved.",
-  "follow_up_recorded_at": "2026-11-10T11:28:58.946423+00:00"
+  "follow_up_recorded_at": "2026-11-10T11:28:58.946423+00:00",
+  "final_container_health_readback": {
+    "recorded_at": "2026-11-10T12:12:09.224519+00:00",
+    "byparr": "healthy",
+    "shelfmark": "healthy"
+  }
 }
