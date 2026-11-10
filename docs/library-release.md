@@ -10,7 +10,18 @@ The maintainer selected the `tjik` prefix. Public package names are `tjik-deskto
 global; an account or GitHub organization does not create an exclusive crate-name
 namespace. Local source directories and dependency aliases remain unchanged.
 
-For the selected names:
+Publication is pending at the maintainer's request. The clean candidate at
+`1791bfa8bce97236d0c60c2c0a8cc9023855dd72` passes extracted-archive checks for all three
+crates, public API examples and the Runtjik consumer check. Registry-resolved
+publication dry runs pass for `tjik-desktop` and `tjik-gtk`. The first upload command
+stopped at Cargo's authentication check because no crates.io token was configured;
+nothing was uploaded. See [the release receipt](library-release-receipt.json) for
+candidate hashes and the remaining publication steps. The Tasktjik candidate is
+validated against the extracted local GTK archive; its registry-resolved dry run follows
+GTK publication.
+
+When the maintainer requests publication, authenticate locally with `cargo login` and
+resume the following procedure:
 
 1. Query crates.io for each exact name and version. An unused name is only an
    observation; it is not reserved until publication succeeds. If a name already exists,

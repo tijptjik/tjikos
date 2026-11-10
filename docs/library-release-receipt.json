@@ -1,0 +1,51 @@
+{
+  "status": "publication-pending-at-maintainer-request",
+  "registry": "crates-io",
+  "prefix": "tjik",
+  "source_commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72",
+  "receipt_created_at": "2026-11-10T08:12:27.785080+00:00",
+  "packages": [
+    {
+      "name": "tjik-desktop",
+      "version": "0.1.0",
+      "sha256": "d0eacf3205f1b4aefb1b422da2a9d8dc5062baf8f003c0873db48539ceec8d2b",
+      "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72"
+    },
+    {
+      "name": "tjik-gtk",
+      "version": "0.1.0",
+      "sha256": "1d5b4198e2e5b2e255206b40babc4af42ad4ce485e1e8c51d2a643e5bb79b077",
+      "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72"
+    },
+    {
+      "name": "tjik-task-gtk",
+      "version": "0.1.0",
+      "sha256": "5740e6e087e2bb1d0cc9c16fbd2095b23fd4602febff61c604778ff8d823e21d",
+      "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72",
+      "stage": "local-extracted-gtk-patch; registry dry run awaits GTK publication"
+    }
+  ],
+  "names_at_preflight": "all three exact names returned crates.io HTTP 404",
+  "validation": {
+    "clean_extracted_archives": "passed, all three crates",
+    "desktop_all_features": "passed",
+    "public_api_examples": "passed",
+    "runtjik_consumer_alias": "passed",
+    "registry_dry_runs": [
+      "tjik-desktop",
+      "tjik-gtk"
+    ]
+  },
+  "publication_attempt": {
+    "package": "tjik-desktop",
+    "result": "Cargo stopped before upload: no token found",
+    "uploaded": false
+  },
+  "remaining": [
+    "authenticate locally with cargo login when the maintainer wants publication",
+    "recheck exact names and ownership/version availability",
+    "publish independent desktop and GTK candidates from the recorded clean source",
+    "wait for GTK registry availability; run registry-resolved Task GTK dry run and publish",
+    "read back published metadata and archive hashes"
+  ]
+}

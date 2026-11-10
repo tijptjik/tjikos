@@ -46,11 +46,12 @@ findings and intermediate performance measurements.
   and 2 Tasktjik files). Installed Runtjik, Notjik and Tasktjik binaries match their
   builds. Bartjik received notices through `--licenses-only`, preserving its binary and
   running service.
-- Registry publication awaits the maintainer's chosen crate-name prefix. Archive checks
-  now derive package names from metadata, and
-  [the release procedure](library-release.md) records the name/ownership checks,
-  dependency order and readback requirements. No registry names have been changed,
-  reserved or published.
+- The maintainer selected `tjik-desktop`, `tjik-gtk` and `tjik-task-gtk` for initial
+  `0.1.0` releases. Namespace metadata and consumer aliases are committed at `1791bfa`.
+  Clean archive tests and the independent crates' registry dry runs pass. Cargo's first
+  publication command stopped before upload because no token was configured, and the
+  maintainer requested that publication remain pending. See
+  [the release receipt](library-release-receipt.json). No crate was uploaded.
 - The separate Bartjik performance/tray/theme work and icon-fade changes remain
   uncommitted and outside this follow-up's scope.
 
