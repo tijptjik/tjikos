@@ -679,8 +679,63 @@ fn send_notice(task: &Value) -> Result<()> {
     Ok(())
 }
 
-pub fn notify() -> Result<Value> {
+fn reminder_at(task: &Value) -> Result<Option<chrono::DateTime<chrono::Local>>> {
     use chrono::{Duration, Local, TimeZone};
+    if task["status"] == "cancelled" {
+        return Ok(None);
+    }
+    if task["done"] != true {
+        if let Ok(until) = chrono::DateTime::parse_from_rfc3339(s(&task["snoozedUntil"])) {
+            // A snooze is itself a reminder, including for an undated task.
+            // Never apply the original due-date lead time to an explicit snooze.
+            return Ok(Some(until.with_timezone(&Local)));
+        }
+    }
+    if s(&task["due"]).is_empty() && s(&task["repeat"]["unit"]).is_empty() {
+        return Ok(None);
+    }
+    let day = chrono::NaiveDate::parse_from_str(s(&task["period"]), "%Y-%m-%d")?;
+    let due = Local
+        .from_local_datetime(&day.and_hms_opt(0, 0, 0).unwrap())
+        .earliest()
+        .context("Invalid local due date")?;
+    let value = task["notifyBeforeDueLeadValue"].as_i64().unwrap_or(1);
+    ensure!((0..=10000).contains(&value), "Invalid notification lead");
+    let lead = if task["notifyBeforeDue"] != true {
+        Duration::zero()
+    } else {
+        match s(&task["notifyBeforeDueLeadUnit"]) {
+            "hours" => Duration::hours(value),
+            "days" => Duration::days(value),
+            "weeks" => Duration::weeks(value),
+            _ => bail!("Invalid notification lead unit"),
+        }
+    };
+    Ok(Some(due - lead))
+}
+#[cfg(test)]
+mod snooze_reminder_tests {
+    use super::*;
+    #[test]
+    fn undated_snoozes_wake_at_requested_instant_without_due_lead() {
+        let task = json!({"period":"once","due":"","repeat":{},"snoozedUntil":"2026-11-10T20:00:00+08:00","notifyBeforeDue":true,"notifyBeforeDueLeadValue":7,"notifyBeforeDueLeadUnit":"days"});
+        assert_eq!(
+            reminder_at(&task).unwrap().unwrap().to_utc().to_rfc3339(),
+            "2026-11-10T12:00:00+00:00"
+        );
+        let mut plain = task.clone();
+        plain["snoozedUntil"] = Value::Null;
+        assert!(reminder_at(&plain).unwrap().is_none());
+        plain = task.clone();
+        plain["status"] = json!("cancelled");
+        assert!(reminder_at(&plain).unwrap().is_none());
+        plain = task;
+        plain["done"] = json!(true);
+        assert!(reminder_at(&plain).unwrap().is_none());
+    }
+}
+pub fn notify() -> Result<Value> {
+    use chrono::Local;
     let mut todo = Todo::default();
     let settings = json!({});
     let state = todo.state(json!({}), &settings, false)?;
@@ -711,35 +766,16 @@ pub fn notify() -> Result<Value> {
         }
     }
     for mut task in candidates {
-        if (s(&task["due"]).is_empty() && s(&task["repeat"]["unit"]).is_empty())
-            || task["status"] == "cancelled"
-        {
-            continue;
-        }
         if task["done"] == true {
             if s(&task["repeat"]["unit"]).is_empty() {
                 continue;
             }
             task["period"] = json!(model::next_period(&task, s(&task["period"]))?);
         }
-        let date = chrono::NaiveDate::parse_from_str(s(&task["period"]), "%Y-%m-%d")?;
-        let due = Local
-            .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
-            .earliest()
-            .context("Invalid local due date")?;
-        let value = task["notifyBeforeDueLeadValue"].as_i64().unwrap_or(1);
-        ensure!((0..=10000).contains(&value), "Invalid notification lead");
-        let lead = if task["notifyBeforeDue"] != true {
-            Duration::zero()
-        } else {
-            match s(&task["notifyBeforeDueLeadUnit"]) {
-                "hours" => Duration::hours(value),
-                "days" => Duration::days(value),
-                "weeks" => Duration::weeks(value),
-                _ => bail!("Invalid notification lead unit"),
-            }
+        let Some(ready_at) = reminder_at(&task)? else {
+            continue;
         };
-        if Local::now() < due - lead {
+        if Local::now() < ready_at {
             continue;
         }
         let base = json!({"id":task["id"],"period":task["period"],"device":device,"subtask_id":task["subtaskId"]});
