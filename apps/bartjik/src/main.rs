@@ -18,6 +18,7 @@ mod native;
 mod navigation;
 mod network;
 mod nightlight;
+mod profile;
 mod providers;
 mod screen_record;
 mod session_lock;

@@ -450,6 +450,7 @@ pub fn load() -> Result<Value> {
     load_path(path())
 }
 fn load_path(p: PathBuf) -> Result<Value> {
+    let _profile = crate::profile::span("config.load");
     let patch = if p.exists() { read(p)? } else { json!({}) };
     object(&patch, "config")?;
     let mut cfg = merge(&contract()["DEFAULTS"], &patch);

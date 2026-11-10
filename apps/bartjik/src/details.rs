@@ -170,6 +170,7 @@ pub fn quota(rows: &[Value], summary: Vec<Value>) -> Value {
     result
 }
 pub fn query_quota(path: &std::path::Path) -> Result<(Vec<Value>, Vec<Value>)> {
+    let _profile = crate::profile::span("provider.codex_sql");
     let con =
         rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     con.busy_timeout(std::time::Duration::from_secs(2))?;

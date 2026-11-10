@@ -453,6 +453,7 @@ impl Bar {
         self.relayout();
     }
     fn relayout(&mut self) {
+        let _profile = crate::profile::span("bar.relayout");
         let Some(output) = self.topology.clone() else {
             return;
         };
@@ -751,6 +752,7 @@ impl Ui {
         status
     }
     pub fn render(self: &Rc<Self>, snapshot: &Snapshot) {
+        let _profile = crate::profile::span("ui.render");
         let display = gdk::Display::default().unwrap();
         let monitors: Vec<_> = display
             .monitors()
@@ -1223,6 +1225,7 @@ impl Ui {
         json!({"detached":self.detached_panels.borrow().iter().map(|(title,d)|json!({"title":title,"provider":d.target.provider,"key":d.target.key,"surface":d.surface.as_ref().map(|s|s.status())})).collect::<Vec<_>>(),"network":self.network_card.diagnostics(),"detachedWorkspace":*self.detached_workspace.borrow(),"active":deck.active.as_ref().map(|t|&t.key),"pinned":deck.pinned,"pending":deck.pending_key(),"surface":self.panel_surface.borrow().as_ref().map(|p|p.status()),"targets":self.panel_targets().iter().map(|t|json!({"key":t.key,"bar":t.bar,"module":t.module,"item":t.item,"output":t.output,"side":t.side,"bounds":t.bounds,"source":t.source,"screen":t.screen,"enabled":t.enabled,"delay":t.options["delay"]})).collect::<Vec<_>>()})
     }
     fn update_panels(&self) {
+        let _profile = crate::profile::span("ui.panels");
         // Mirror comparison is presentation-only; it never opens native panels.
         if self.runtime.is_none() {
             return;
@@ -1491,6 +1494,7 @@ impl Ui {
         self.update_edges();
     }
     fn update_edges(&self) {
+        let _profile = crate::profile::span("ui.edges");
         let (pointer, _) = self.pointer.latest();
         let mut bars = self.bars.borrow_mut();
         let entries: Vec<_> = bars

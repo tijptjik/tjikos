@@ -52,6 +52,8 @@ mod panel_reveal;
 mod panel_view;
 mod panels;
 mod pointer;
+#[path = "../profile.rs"]
+mod profile;
 mod runtime;
 mod system_card;
 mod thumbnail;

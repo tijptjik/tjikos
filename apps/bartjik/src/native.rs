@@ -128,6 +128,7 @@ impl Bus {
         });
     }
     fn refresh(&self) -> Result<()> {
+        let _profile = crate::profile::span("native.refresh");
         ensure!(!self.connection.is_closed(), "Session bus disconnected");
         let c = &self.connection;
         let mut players = vec![];

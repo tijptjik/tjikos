@@ -7,6 +7,8 @@ persistent desktop services are deliberately excluded and should be reported sep
 import argparse
 import json
 import os
+import statistics
+import subprocess
 from pathlib import Path
 import time
 
@@ -50,14 +52,52 @@ def snapshot(root):
     return rows
 
 
+def measure_unit(unit, seconds):
+    def property(name):
+        return subprocess.check_output(['systemctl', '--user', 'show', unit, '-p', name,
+                                        '--value'], text=True).strip()
+    root = int(property('MainPID'))
+    group = Path('/sys/fs/cgroup') / property('ControlGroup').lstrip('/')
+    def cpu():
+        return int(dict(line.split() for line in (group / 'cpu.stat').read_text().splitlines())['usage_usec'])
+    before = snapshot(root)
+    identity = next(row['start_ticks'] for row in before if row['pid'] == root)
+    initial = cpu()
+    start = time.monotonic()
+    samples = []
+    while time.monotonic() - start < seconds:
+        rows = snapshot(root)
+        if not any(row['pid'] == root and row['start_ticks'] == identity for row in rows):
+            raise RuntimeError('Service restarted during measurement; discard sample')
+        samples.append(rows)
+        time.sleep(min(1., max(0., seconds - (time.monotonic() - start))))
+    elapsed = time.monotonic() - start
+    usage = cpu() - initial
+    if property('MainPID') != str(root) or usage < 0:
+        raise RuntimeError('Service changed during measurement; discard sample')
+    return {'elapsed_seconds': elapsed,
+            'scope': 'entire service cgroup CPU, including exited helpers; owned process PSS',
+            'unit': unit, 'pid': root,
+            'cpu_percent_one_core': usage / 1e6 / elapsed * 100,
+            'pss_mib_median': statistics.median(sum(r['pss_kib'] for r in rows) / 1024 for rows in samples),
+            'processes': samples[-1]}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--root', action='append', required=True, help='label=pid')
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument('--root', action='append', help='label=pid')
+    source.add_argument('--unit', help='User service unit; counts exited helpers in CPU')
     parser.add_argument('--seconds', type=float, default=30)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if args.seconds <= 0:
         parser.error('--seconds must be positive')
+    if args.unit:
+        result = measure_unit(args.unit, args.seconds)
+        args.output.write_text(json.dumps(result, indent=2) + '\n')
+        print(json.dumps(result, indent=2))
+        return
     roots = dict((label, int(pid)) for label, pid in (value.split('=', 1) for value in args.root))
     before = {label: snapshot(pid) for label, pid in roots.items()}
     start = time.monotonic()

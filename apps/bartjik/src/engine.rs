@@ -106,7 +106,20 @@ fn worker(
                 .await
                 .map(|_| vec![])
             } else {
-                providers::poll(&spec).await
+                let name = match s(&spec["provider"]) {
+                    "audio" => "provider.audio",
+                    "network" => "provider.network",
+                    "caffeine" => "provider.caffeine",
+                    "nightlight" => "provider.nightlight",
+                    "monitor-layout" => "provider.monitors",
+                    "datetime" => "provider.clock",
+                    "locale" => "provider.locale",
+                    "DND" => "provider.dnd",
+                    "mullvad" => "provider.mullvad",
+                    "tailscale" => "provider.tailscale",
+                    _ => "provider.other",
+                };
+                crate::profile::future(name, providers::poll(&spec)).await
             };
             let state = match result.and_then(|r| {
                 providers::validate(&r)?;
@@ -303,6 +316,7 @@ struct Engine {
 }
 impl Engine {
     fn publish(&self) {
+        let _profile = crate::profile::span("engine.publish");
         let Some(cfg) = &self.cfg else {
             crate::emit(&json!({"error":self.error,"ready":false}));
             return;
