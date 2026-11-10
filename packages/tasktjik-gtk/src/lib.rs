@@ -3,6 +3,7 @@
 mod dialogs;
 mod editor;
 mod media;
+mod mutations;
 #[cfg(test)]
 mod performance;
 pub mod preview_helper;
