@@ -123,3 +123,82 @@ No bar or notification service was restarted. Runtjik uses the installed payload
 next invocation; Tasktjik loads the helper on its next helper invocation. The physical
 acceptance and active-workload measurement limits above remain unchanged. No commits
 were created by this follow-up.
+
+## Follow-up recovery pass — 2026-11-10
+
+The same-session follow-up passed private MPRIS/SNI/DBusMenu owner-loss and stale-target
+checks, private network authorization failures, audio route events (61 ms in this run),
+recording save/cancellation/failure paths, stable launcher cold/warm ordering,
+notification replacement/pause/dismissal, clipped panel transitions and hidden-bar input
+release. Both Bartjik and Notjik ordinary detached-window tests passed. Notjik's test is
+in the library target: filtering its binary target selects zero tests and is not
+evidence.
+
+Bartjik was restarted with no open panels and became ready with three bars. PID 2265204
+matched the installed `bartjik-gtk` bytes. Notjik had 11 paused queued notices and was
+left running: pause preference and history persist, but the live queue is in memory.
+Restart authorization does not make loss of that queue a successful recovery check.
+
+Workspace rendering passed with OpenGL and Cairo, including a nonblank capture of the
+fixture's own Wayland window and rejection of a stale window ID. Synthetic 1920×900
+thumbnail downsampling took about 8–9 ms at 1×, 11–12 ms at 1.5× and 17 ms at 2×. The
+comparison artwork showed no obvious sharpening halos. These synthetic pixel ratios do
+not establish physical mixed-DPI sharpness; both attached displays were 1×.
+
+A finite workspace-panel job (three resamples, snapshots, one real window capture and
+interaction assertions) used 0.32 CPU seconds through OpenGL and 0.22 through Cairo.
+Median sampled renderer PSS was 45.24 MiB and 22.74 MiB respectively. Wall time was 3.49
+s and 3.22 s, including deliberate fixture waits. CPU includes child processes; these
+PSS samples cover the renderer, and shared compositor costs are excluded. This is one
+trial per renderer, not sustained preview utilization or a matched historical frontend
+comparison. No renderer default was changed from these measurements.
+
+Logs, synthetic images and measurement scripts are under `/tmp/gtk-final-acceptance/`.
+Physical input/reconnect, real authorization-agent interaction, pointer-driven flicker
+review and matched historical active-workload comparison remain distinct from the
+successful synthetic checks. Workspace 7 stayed inactive; permission to make it visible
+for sustained frame-driven tests was requested separately.
+
+The notification gallery now has a same-session background runner:
+`dev-check python3 -B apps/notjik/tests/gtk_cards.py`. It owns a private bus, installs
+its workspace-7 rule before launch and verifies placement/no focus theft. It snapshots
+allocated widget trees directly instead of depending on cached frames from an inactive
+workspace. `--full` retains the action/interaction suite but requires a visible
+workspace for frame-driven action pagination. Background rendering is not a substitute
+for that suite, keyboard input or physical IME composition.
+
+All 19 synthetic variants passed media readiness/frame-progression and snapshot checks
+in four combinations: rose-punk at 460 px and monochrome at 380 px, each with OpenGL and
+Cairo. The four jobs each took about 21.3–21.5 seconds including deliberate waits and
+used 0.81–0.90 CPU seconds. Median sampled renderer-plus-descendant PSS ranged from
+149.63 to 153.33 MiB with the 19-card media gallery loaded. These are finite synthetic
+media workloads, not idle memory or sustained visible GPU utilization. They must not be
+compared directly to the earlier empty-notification daemon benchmark. Reports and 76
+individual card images (plus their revealed variants) are under
+`/tmp/gtk-final-acceptance/background-media/`.
+
+Notjik's gallery changes were built and statically checked through `dev-check`,
+installed with the supported managed-config installer, and 205 installed files were
+byte-verified. The final CLI also rejects `--render-test` without a snapshot directory.
+At the final live check the notification queue was empty; no fixture cleared it. Notjik
+could then be restarted safely. PID 2350797 matched the installed binary, retained the
+paused state and preserved all 209 history entries present immediately before the
+restart. Receipts are `install.json` and `notjik-restart.json` in the follow-up artifact
+directory. Both production services are ready. No new commits were created in this pass.
+
+## Visible-workspace attempt
+
+A subsequent authorized visible-workspace pass reran Bartjik's clipped-transition and
+tray-menu assertions successfully. The first Notjik full-gallery run exposed a capture
+harness allocation mismatch: manual snapshot width differed from the live parent's
+width. The gallery now preserves an existing allocation when capturing; the change was
+built, statically checked, installed and its native binaries byte-verified.
+
+The full notification interaction pass remains **incomplete**. Workspace 7 became hidden
+during execution, starving frame-driven action pagination. A continuous visibility guard
+now reports this interruption explicitly instead of allowing it to appear as a
+missing-action/render failure. A guarded retry confirmed the workspace interruption. No
+full Notjik interaction or live pointer/flicker acceptance is claimed. The test
+coordinator requested an uninterrupted two-minute visible-workspace interval; user
+navigation is preserved if workspace 7 is hidden mid-run. Logs are under
+`/tmp/gtk-visible-acceptance/`. No production notification state was changed.
