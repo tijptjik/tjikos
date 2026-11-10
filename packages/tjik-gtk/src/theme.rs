@@ -34,12 +34,31 @@ fn color(value: &str, fallback: &str) -> String {
         .to_string()
 }
 pub fn apply(provider: &gtk::CssProvider, theme: &Theme, font: &str, size: i32) {
+    apply_with_css(provider, theme, font, size, "");
+}
+
+/// Compose trusted application CSS after the primitive stylesheet. Named colors
+/// `tjik_background`, `tjik_surface`, `tjik_text`, `tjik_muted`, `tjik_accent`, and
+/// `tjik_border` expose validated palette values to extensions.
+pub fn apply_with_css(
+    provider: &gtk::CssProvider,
+    theme: &Theme,
+    font: &str,
+    size: i32,
+    extra: &str,
+) {
     let t = theme;
     let font = font
         .replace('\\', "\\\\")
         .replace('"', "\\\"")
         .replace(['\n', '\r'], " ");
     provider.load_from_string(&format!(r#"
+@define-color tjik_background {background};
+@define-color tjik_surface {surface};
+@define-color tjik_text {text};
+@define-color tjik_muted {muted};
+@define-color tjik_accent {accent};
+@define-color tjik_border {border};
 window.tjik {{ background: transparent; color: {text}; font-family: "{font}"; font-size: {size}px; }}
 .tjik * {{ font-family: "{font}"; }}
 .tjik .shell {{ background: {surface}; border: 1px solid {border}; border-radius: 22px; padding: 19px 19px 23px; }}
@@ -62,41 +81,11 @@ window.tjik {{ background: transparent; color: {text}; font-family: "{font}"; fo
 .tjik button.flat {{ border-color: transparent; }}
 .tjik textview, .tjik textview text {{ background: {background}; color: {text}; }}
 .tjik .card {{ background: {background}; border: 1px solid {border}; border-radius: 12px; padding: 12px; }}
-.tjik .task-selected {{ border-color: {accent}; }}
 .tjik .error {{ color: {accent}; padding: 8px; }}
 .tjik scrollbar, .tjik scrollbar trough {{ background: transparent; border: 0; outline: none; box-shadow: none; }}
 .tjik scrollbar slider {{ border: 0; box-shadow: none; min-width: 3px; min-height: 24px; background: alpha({muted}, .4); border-radius: 3px; }}
-.tjik .word-caption {{ color: {muted}; font-size: {title_size}px; }}
-.tjik .word-heading {{ font-weight: bold; font-size: {search_size}px; }}
-.tjik .word-locale {{ border: 1px solid {border}; border-radius: 5px; padding: 2px 5px; color: {muted}; font-size: 10px; }}
-.tjik .word-watermark {{ color: {surface}; font-size: 72px; }}
-.tjik .word-example {{ color: {muted}; font-style: italic; }}
-.tjik .word-sense {{ padding: 16px 16px 16px 8px; border-radius: 10px; }}
-.tjik .word-stripe {{ background: transparent; border-radius: 1px; }}
-.tjik .word-selected .word-stripe {{ background: {accent}; }}
-.tjik .word-selected {{ background: {surface}; }}
-.tjik .recent-word.word-sense {{ padding: 10px 14px; border: 1px solid transparent; border-radius: 9px; min-height: 24px; }}
-.tjik .recent-word:hover {{ background: alpha({surface}, .5); }}
-.tjik .recent-word.word-selected {{ background: {surface}; border-color: {accent}; }}
-.tjik .recent-action {{ opacity: 0; color: {accent}; }}
-.tjik .recent-word.word-selected .recent-action {{ opacity: 1; }}
-.tjik button.word-provider {{ background: transparent; opacity: .5; padding: 6px 10px; }}
-.tjik button.word-provider:checked {{ background: {surface}; border-color: {border}; opacity: 1; }}
-.tjik button.word-term, .tjik button.word-source {{ border: 0; background: transparent; color: {accent}; padding: 4px 7px; }}
-.tjik button.word-source {{ color: {muted}; }}
-.tjik .capture-choice {{ border: 1px solid transparent; border-radius: 12px; padding: 8px; }}
-.tjik .capture-choice .word-caption {{ font-size: 11px; }}
-.tjik .capture-choice.word-selected {{ border-color: {accent}; background: {surface}; }}
-.tjik .reading {{ padding: 14px; }}
-.tjik .reading, .tjik .reading * {{ font-family: sans-serif; }}
-.tjik .reading .muted {{ font-size: 12px; }}
-.tjik .reading .accent {{ font-size: 11px; }}
-.tjik .reading-heading {{ font-size: 24px; font-weight: bold; }}
-.tjik .reading-title {{ font-size: 16px; font-weight: bold; }}
-.tjik .reading-card {{ background: {surface}; border: 1px solid {border}; border-radius: 12px; padding: 8px; }}
-.tjik .reading-card.task-selected {{ border-color: {accent}; }}
-.tjik .reading-art {{ background: {background}; border-radius: 8px; }}
 .tjik .grip {{ color: {muted}; }}
+{extra}
 "#, background=color(&t.background,"#191724"), surface=color(&t.surface,"#26233a"), text=color(&t.text,"#e0def4"), muted=color(&t.muted,"#908caa"), accent=color(&t.accent,"#ff53a6"), border=color(&t.border,"#403a52"), size=size.clamp(8,32), search_size=size.clamp(8,32)+1, title_size=size.clamp(8,32)-1));
     if let Some(display) = gdk::Display::default() {
         gtk::Settings::for_display(&display).set_gtk_icon_theme_name(Some(&theme.icon_theme));

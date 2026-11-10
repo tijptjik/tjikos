@@ -3,6 +3,7 @@
 mod dialogs;
 mod editor;
 mod reading;
+pub mod style;
 use serde_json::{json, Value};
 use std::{
     cell::{Cell, RefCell},

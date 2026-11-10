@@ -6,6 +6,7 @@ mod countdown;
 mod desktop;
 mod recovery;
 mod result_adapter;
+mod style;
 mod views;
 mod worker;
 
