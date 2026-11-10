@@ -446,3 +446,18 @@ rejected the first real upload until the account email was verified. The retry p
 both crates as 0.1.0. Registry version metadata and downloaded archive SHA-256 checksums
 match the validated candidates exactly. The managed token is provisioned;
 `tjik-task-gtk` stays internal.
+
+## Li reboot and Byparr recovery
+
+Li was rebooted at the maintainer's request and reconnected with a new boot session; its
+system reports running and managed Cargo credentials remain unchanged.
+
+Byparr's unhealthy status was a real browser-worker failure: Xvfb repeatedly timed out
+while an empty temporary display lock survived container restarts. Two other display
+locks referenced PIDs that no longer existed. No active non-zombie Xvfb processes were
+present before cleanup. Private before-images were retained, exactly those three stale
+locks were removed, and only Byparr was restarted on its existing container/image. Its
+direct `/health` now returns HTTP 200 and reports “Byparr is working!”. Docker's health
+label was still `starting` at readback because its configured interval is fifteen
+minutes. Shelfmark remains healthy and was not restarted. The fleet receipt records
+recovery evidence and the completed Li reboot.

@@ -42,7 +42,15 @@
         "bartjik": "active",
         "notjik": "active"
       },
-      "session_follow_up": "Hyprland package updated to 0.57.2; log out and in later to load the new compositor"
+      "session_follow_up": "Requested reboot completed; host reconnected and system reports running.",
+      "reboot": {
+        "requested": true,
+        "completed": true,
+        "boot_started_local": "2026-11-10 19:16:21",
+        "boot_id": "26600e97-4bfe-4f7f-b3c4-d80b09a8afb8",
+        "system_state": "running",
+        "cargo_managed_check_after_boot": "unchanged"
+      }
     },
     "si": {
       "status": "completed with warnings",
@@ -60,7 +68,31 @@
         "lazylibrarian",
         "lidarr",
         "plex-rewind"
-      ]
+      ],
+      "byparr_recovery": {
+        "cause": "stale X-server locks, including empty .tX101-lock; display startup repeatedly timed out",
+        "evidence": [
+          "direct Xvfb display :101 failed to become ready",
+          "temporary lock .tX101-lock was empty",
+          "other lock PIDs no longer existed",
+          "no active non-zombie Xvfb processes before cleanup"
+        ],
+        "removed_stale_artifacts": [
+          "/tmp/.X99-lock",
+          "/tmp/.X100-lock",
+          "/tmp/.tX101-lock"
+        ],
+        "recovery_metadata": "/home/m/.local/state/tjikup/recovery/byparr-before-restart-5xxaapk2.json",
+        "lock_before_images": "/home/m/.local/state/tjikup/recovery/byparr-stale-display-locks-dx9z168x.json",
+        "image_changed": false,
+        "image_id": "sha256:c6dc8e0e49d7d2668aee1879dedade605d50afe322164ee70f1e22f3d6b3695f",
+        "direct_health_http": 200,
+        "direct_health_message": "Byparr is working!",
+        "application_version": "3.0.4",
+        "docker_health_at_readback": "starting; waiting for the configured 15-minute probe interval",
+        "shelfmark": "healthy; unchanged",
+        "prowlarr_to_byparr_http": 200
+      }
     }
   },
   "reviewed_recovery": {
@@ -74,5 +106,6 @@
     "state": "both captured-settings commits preserved; Fi and origin differ by one commit each; no automatic preference merge"
   },
   "pinned_archive_workers": "not interrupted or replaced",
-  "application_follow_up": "Reopen updated Chrome and Discord processes to load the new versions; active sessions were preserved."
+  "application_follow_up": "Reopen updated Chrome and Discord processes to load the new versions; active sessions were preserved.",
+  "follow_up_recorded_at": "2026-11-10T11:28:58.946423+00:00"
 }
