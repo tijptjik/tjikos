@@ -1,8 +1,8 @@
 # GTK library review
 
 The technical review and application validation are complete for the scope below. The
-maintainer selected MPL-2.0 for the reviewed shared libraries. Final archive
-verification of the new license files is in progress.
+final commit audit identified release follow-ups listed below. Shared-library license
+texts and notices have passed extracted-archive validation.
 
 ## Current assessment
 
@@ -26,10 +26,38 @@ off-thread.
 Linux with GTK 4.12+ and gtk4-layer-shell is the supported native target. No claim is
 made for other compositors, platforms or toolkits. Explicit legacy renderer paths and
 asset directories still exist; the default native routes do not require the Quickshell
-renderer. No commit, push or publication has been performed.
+renderer. This thread is committed as a signed atomic series. No push or publication has
+been performed.
 
 The validation record below is chronological. Later entries supersede earlier open
 findings and intermediate performance measurements.
+
+## Remaining work after the commit audit
+
+- Reconcile image burst loading with the bounded-work contract. The reviewed loader caps
+  pending requests at 64 and drops the oldest; a later concurrent fixture shows that a
+  grid can bind more rows in one main-loop turn, leaving early visible icons at their
+  fallback. The concurrent working-tree change removes that cap and adds a 100-image
+  regression. It remains outside this commit series and needs a design that avoids
+  starvation while keeping an explicit resource bound.
+- Include application `LICENSE`/`NOTICE` files and applicable shared-library notices in
+  build/install distributions, then verify the installed notices. Source declarations
+  are complete, but current application build/install scripts do not copy these new
+  source-root legal files.
+- Review and commit the separate Bartjik performance, tray-menu and theme work. Those
+  concurrent changes were preserved; the selected synthetic checks in this review are
+  not blanket validation of that evolving diff.
+- Before registry publication, check package name/version availability and publish the
+  dependency crates in order (`tjik-gtk` before `tasktjik-gtk`). Registry publication
+  and pushing commits have not been requested.
+
+The isolated committed implementation at `71e6665` passes all three extracted-library
+archive suites (including desktop capture and public adapter examples), release
+`cargo check --all-targets --features gtk-ui` for Runtjik/Notjik/Bartjik, and all 40
+Tasktjik tests. These checks exclude the concurrent working-tree changes above. The
+subsequent documentation commit changes no implementation. Every commit path list and
+the final contents of all 85 thread-owned paths were verified; concurrent changes remain
+unstaged. Validation log: `/tmp/tjik-thread-commits/validation.log`.
 
 ## Scope and completion evidence
 
