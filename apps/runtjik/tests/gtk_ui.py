@@ -1,6 +1,7 @@
 """GTK fixtures on an isolated display, with its parent silently on workspace 7."""
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+import argparse
 import json
 import base64
 import os
@@ -43,7 +44,7 @@ def silent_compositor():
         print("Host workspace changed during test; synthetic window placement/focus checks passed")
 
 
-def main():
+def main(compare_quickshell=False):
     with silent_compositor():
         root = Path(os.environ["XDG_RUNTIME_DIR"]).parent
         private_runtime = Path(os.environ["XDG_RUNTIME_DIR"])
@@ -406,6 +407,8 @@ def main():
             print("PASS: GTK search, stale results, commands, launch/window actions, real keyboard input, warm reopen and isolated control")
             print("Synthetic screenshot: " + str(image))
             run("close")
+            if not compare_quickshell:
+                return
             qml_config = root / "runtjik.conf"
             qml_config.write_text(qml_config.read_text().replace("[ui]", "[ui]\nclose_on_outside_click=false\nwidth=500\nheight=480\ncolumns=3"))
             qml_env = {**os.environ, "RUNTJIK_DEMO":"1", "QT_QUICK_BACKEND":"software", "QT_QUICK_CONTROLS_STYLE":"Basic"}
@@ -468,4 +471,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--compare-quickshell", action="store_true", help="Also exercise the legacy comparison renderer")
+    main(parser.parse_args().compare_quickshell)
