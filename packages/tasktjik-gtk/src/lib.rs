@@ -5,6 +5,7 @@ mod editor;
 mod media;
 #[cfg(test)]
 mod performance;
+pub mod preview_helper;
 pub mod previews;
 mod reading;
 pub mod style;
