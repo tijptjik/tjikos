@@ -2,6 +2,7 @@
 name = "tjik-task-gtk"
 version = "0.1.0"
 edition = "2021"
+authors = ["tijptjik"]
 license = "MPL-2.0"
 description = "Tasktjik GTK views with host-owned commands and asynchronous preview providers"
 readme = "README.md"

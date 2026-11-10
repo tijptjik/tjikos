@@ -1,5 +1,5 @@
 {
-  "status": "publication-pending-at-maintainer-request",
+  "status": "publication-pending; recorded candidate superseded by author and README updates",
   "registry": "crates-io",
   "prefix": "tjik",
   "source_commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72",
@@ -42,6 +42,7 @@
     "uploaded": false
   },
   "remaining": [
+    "regenerate and validate candidates from the updated author metadata and public README before publication",
     "authenticate locally with cargo login when the maintainer wants publication",
     "recheck exact names and ownership/version availability",
     "publish independent desktop and GTK candidates from the recorded clean source",

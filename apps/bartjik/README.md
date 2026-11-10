@@ -1197,6 +1197,6 @@ nor launches a nested compositor.
 
 ## License
 
-The Tjik-authored application source is licensed under GPL-3.0-or-later; see `LICENSE`
+Application source by tijptjik is licensed under GPL-3.0-or-later; see `LICENSE`
 and `NOTICE`. Third-party source, assets and dependencies retain their existing licenses
 and notices.

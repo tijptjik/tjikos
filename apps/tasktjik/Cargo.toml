@@ -2,9 +2,21 @@
 name = "tasktjik-api"
 version = "0.1.0"
 edition = "2021"
+authors = ["tijptjik"]
 license = "GPL-3.0-or-later"
 
+[features]
+gtk-ui = ["dep:tjik-gtk", "dep:tasktjik-gtk", "dep:async-channel"]
+
+[[bin]]
+name = "tasktjik-gtk"
+path = "src/gtk/main.rs"
+required-features = ["gtk-ui"]
+
 [dependencies]
+tjik-gtk = { path = "../../packages/tjik-gtk", optional = true }
+tasktjik-gtk = { package = "tjik-task-gtk", path = "../../packages/tasktjik-gtk", optional = true }
+async-channel = { version = "2", optional = true }
 notjik-sync = { path = "../../packages/notjik-sync" }
 anyhow = "1"
 base64 = "0.22"

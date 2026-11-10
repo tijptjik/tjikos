@@ -44,6 +44,6 @@ consumers must not parse them as numbers or substitute workspace names for ident
 
 ## License
 
-The Tjik-authored source in this package is licensed under MPL-2.0; see `LICENSE` and
+Source by tijptjik in this package is licensed under MPL-2.0; see `LICENSE` and
 `NOTICE`. Standard MPL secondary-license compatibility is retained, allowing use in
 GPLv3 applications. Third-party components retain their own licenses and notices.

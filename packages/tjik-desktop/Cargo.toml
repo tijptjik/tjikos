@@ -2,6 +2,7 @@
 name = "tjik-desktop"
 version = "0.1.0"
 edition = "2021"
+authors = ["tijptjik"]
 description = "Toolkit-independent desktop state and action contracts with compositor adapters"
 readme = "README.md"
 license = "MPL-2.0 AND BSD-3-Clause"
