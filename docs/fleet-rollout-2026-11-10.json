@@ -1,0 +1,78 @@
+{
+  "recorded_at": "2026-11-10T11:09:39.265631+00:00",
+  "requested_scope": [
+    "fi",
+    "li",
+    "si"
+  ],
+  "credential_policy_commit": "d8b1a0126c318e0a5975538fc1d75941f381f126",
+  "hosts": {
+    "fi": {
+      "status": "ALL SYSTEMS GO",
+      "exit_code": 0,
+      "recipes": 118,
+      "final_log": "/tmp/tjikup-fleet-fi-initial-release-retry.log",
+      "repository_sync": "skipped to preserve concurrent TjikOS work",
+      "dotjik_head": "7eda595003eca80ddfe9b107666df268077a35c5",
+      "cargo_credentials": {
+        "managed_check": "unchanged",
+        "mode": "0600",
+        "exact_bws_value": "verified"
+      },
+      "resident_services": {
+        "bartjik": "active",
+        "notjik": "active"
+      }
+    },
+    "li": {
+      "status": "ALL SYSTEMS GO",
+      "exit_code": 0,
+      "recipes": 111,
+      "final_log": "/tmp/tjikup-initial-release-final.log",
+      "run_directory": "/home/io/.local/state/tjikup/logs/run-86D4gs",
+      "dotjik_head": "d941acea15cadefb8e492268820b0f1838704b60",
+      "cargo_credentials": {
+        "managed_check": "unchanged",
+        "mode": "0600",
+        "exact_bws_value": "verified with private one-time challenge"
+      },
+      "runner_sha256": "621f545f62291549b027857c5cd502e52b5f3abb5bc665d81322c103242bda44",
+      "runner_source": "e771e78db19dfb218bed76b9fb7e6e356dfaf08b",
+      "resident_services": {
+        "bartjik": "active",
+        "notjik": "active"
+      },
+      "session_follow_up": "Hyprland package updated to 0.57.2; log out and in later to load the new compositor"
+    },
+    "si": {
+      "status": "completed with warnings",
+      "exit_code": 0,
+      "recipes": 57,
+      "final_log": "/tmp/tjikup-initial-release.log",
+      "run_directory": "/home/m/.local/state/tjikup/logs/run-HgKhsp",
+      "dotjik_head": "d8b1a012",
+      "cargo_credentials": "server role excluded; no Cargo credential file",
+      "warnings": {
+        "byparr": "image preparation failed; existing container retained; existing container reported unhealthy",
+        "shelfmark": "image preparation failed; existing healthy container retained"
+      },
+      "updated_containers": [
+        "lazylibrarian",
+        "lidarr",
+        "plex-rewind"
+      ]
+    }
+  },
+  "reviewed_recovery": {
+    "fi_telegram_launcher": "/home/io/.local/state/tjikup/recovery/reviewed-launcher-nxvsspss",
+    "li_zapzap_launcher": "/home/io/.local/state/tjikup/recovery/reviewed-launcher-clez5jfi",
+    "reason": "adopt only reviewed Mullvad launcher overrides; exact originals retained and verified"
+  },
+  "repository_captures": {
+    "fi": "7eda595003eca80ddfe9b107666df268077a35c5",
+    "origin_main_from_li": "d941acea15cadefb8e492268820b0f1838704b60",
+    "state": "both captured-settings commits preserved; Fi and origin differ by one commit each; no automatic preference merge"
+  },
+  "pinned_archive_workers": "not interrupted or replaced",
+  "application_follow_up": "Reopen updated Chrome and Discord processes to load the new versions; active sessions were preserved."
+}

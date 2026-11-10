@@ -99,5 +99,6 @@
       "uploaded": false
     }
   },
-  "receipt_updated_at": "2026-11-10T11:02:50.483067+00:00"
+  "receipt_updated_at": "2026-11-10T11:02:50.483067+00:00",
+  "fleet_rollout_receipt": "fleet-rollout-2026-11-10.json"
 }

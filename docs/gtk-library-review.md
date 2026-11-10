@@ -421,3 +421,27 @@ excluded. All 410 Dotjik tests passed with nine skips using synthetic credential
 the local Cargo credential group was applied: the file is mode 0600, its value matches
 bws, and the managed check converges. Other eligible systems receive it on their next
 Dotjik apply; no remote application or registry publication was performed.
+
+## Fleet credential rollout and initial publication
+
+The requested Tjikup runs completed on Fi, Li and Si. Fi and Li finished with
+`ALL SYSTEMS GO`; both managed Cargo credentials are mode 0600 and match bws. Li's old
+runner was replaced through the checksum-pinned installer before its final retry. Si
+remains excluded from Cargo credentials by its server role. Si's application update
+completed with warnings for Byparr and Shelfmark and retained their existing images;
+Byparr's existing container reported unhealthy. Pinned archive workers were preserved.
+
+The first Fi/Li runs encountered launcher drift. Review showed only the declared Mullvad
+bypass changes; exact originals were backed up and verified before adoption. The normal
+capture steps created different Fi/Li settings commits. Both are preserved; their
+remaining shared-template divergence was not resolved by choosing one host's
+preferences. See [the fleet receipt](fleet-rollout-2026-11-10.json) for exact revisions,
+run logs, recovery directories and session follow-ups.
+
+Clean initial 0.1.0 candidates for `tjik-desktop` and `tjik-gtk` passed extracted
+archive checks and registry-resolved publication dry runs. Their source tags point to
+`a0c45a7029abd41a14d6bd61844f109adaf7603d` and were pushed and read back. Crates.io
+rejected the first real upload because the account email is unverified. Neither crate
+was uploaded; exact-name readback returned HTTP 404 for both. The managed token is
+already provisioned. Account email verification is required before retrying the
+publication already authorised by the maintainer. `tjik-task-gtk` stays internal.
