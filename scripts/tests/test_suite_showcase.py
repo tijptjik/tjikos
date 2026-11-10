@@ -40,28 +40,23 @@ class FilmTests(unittest.TestCase):
                 self.assertEqual(existing.read_text(),'original')
 
 
-class CooperativeFixtureTests(unittest.TestCase):
-    def test_native_discovery_is_limited_to_manifest_pids_and_classes(self):
-        import os
-        import showcase_close
-        sys.path.insert(0,str(film.ROOT/'apps/runtjik'))
-        import runtjik
-        allowed=showcase_close.CLASSES['firefox']
-        windows=[{'pid':10,'class':allowed},{'pid':11,'class':allowed},{'pid':10,'class':'unrelated'}]
-        with tempfile.TemporaryDirectory() as directory:
-            manifest=Path(directory)/'fixtures.json';manifest.write_text('[{"pid":10}]')
-            with (patch.dict(os.environ,{'RUNTJIK_SHOWCASE_FIXTURES':str(manifest)}),patch.object(runtjik,'windows',return_value=windows)):
-                self.assertEqual(showcase_close.clients(),windows[:1])
+class RetiredRendererTests(unittest.TestCase):
+    def test_desktop_apps_are_not_terminal_recording_targets(self):
+        self.assertEqual(set(film.STORIES), {'mailtjik', 'tjikup', 'greetjik'})
+        for tool in ('runtjik', 'bartjik', 'notjik'):
+            with (self.subTest(tool=tool),
+                  patch.object(sys, 'argv', ['film', tool, '/tmp/unused-showcase.mp4']),
+                  patch.object(film, 'record') as record,
+                  contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit)):
+                film.main()
+            record.assert_not_called()
 
-    def test_missing_fixture_never_reaches_a_native_close(self):
-        import showcase_close
-        from types import SimpleNamespace
-        sys.path.insert(0,str(film.ROOT/'apps/runtjik'))
-        import runtjik
-        launcher=SimpleNamespace(settings={'overrides':{}},close_app=unittest.mock.Mock())
-        entry=runtjik.Entry('apps:firefox.desktop','Firefox',data={'classes':[showcase_close.CLASSES['firefox']]})
-        with patch.object(showcase_close,'clients',return_value=[]),self.assertRaises(ValueError):
-            showcase_close.close(launcher,entry)
-        launcher.close_app.assert_not_called()
+    def test_pointer_protocol_is_owned_by_showcase_tooling(self):
+        import showcase_runtime
+        with tempfile.TemporaryDirectory() as directory, patch.object(showcase_runtime, 'checked', return_value='') as command:
+            showcase_runtime.build_pointer(Path(directory))
+        protocol = Path(command.call_args_list[0].args[0][2])
+        self.assertTrue(protocol.is_file())
+        self.assertEqual(protocol.parent, film.ROOT / 'scripts/protocols')
 
 if __name__=='__main__':unittest.main()

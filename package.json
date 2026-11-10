@@ -17,7 +17,8 @@
     "dev": "bun scripts/run-local.ts",
     "test:local-run": "bun test scripts/tests/run-local.test.ts",
     "lint": "bun run format:markdown:check",
-    "test:markdown": "bun test scripts/checks/markdown.test.ts"
+    "test:markdown": "bun test scripts/checks/markdown.test.ts",
+    "check:native-desktop": "python3 -B scripts/check-native-desktop.py"
   },
   "devDependencies": {
     "turbo": "2.5.8",

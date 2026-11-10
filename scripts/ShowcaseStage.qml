@@ -6,17 +6,17 @@ PanelWindow {
     id: stage
     required property var controller
     property string mode: "intro"
-    property string heading: "Notifications with flair"
-    property string introHeading: "Notifications with flair"
-    property string introCaption: "Live updates. Telegram integration. Replies in place."
-    property string caption: "Live updates. Telegram integration. Replies in place."
+    property string heading: "TjikOS"
+    property string introHeading: "TjikOS"
+    property string introCaption: "Tools for your desktop."
+    property string caption: "Tools for your desktop."
     property bool coverWindows:false
     property int chapter: 0
     property int chapterCount: 3
     property real reveal: 1
-    property string toolName: "Notjik"
-    property string toolId: "notjik"
-    property string repository: "github.com/tijptjik/tjikos/tree/main/apps/notjik"
+    property string toolName: "TjikOS"
+    property string toolId: ""
+    property string repository: "github.com/tijptjik/tjikos"
     property string iconRoot: ""
     screen: Quickshell.screens[0]
     visible: controller.ready
