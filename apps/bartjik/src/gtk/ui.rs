@@ -15,6 +15,26 @@ use std::{
 };
 use tjik_desktop::{Output, Rect, Snapshot};
 use tjik_gtk::gtk::{self, gdk, glib, prelude::*};
+// Provider poll counters/timestamps are diagnostic data, not a presentation update.
+fn presentation_changed(previous: &Value, next: &Value) -> bool {
+    for key in ["config", "bars", "ready", "error"] {
+        if previous[key] != next[key] {
+            return true;
+        }
+    }
+    let (Some(a), Some(b)) = (
+        previous["providers"].as_object(),
+        next["providers"].as_object(),
+    ) else {
+        return previous["providers"] != next["providers"];
+    };
+    a.len() != b.len()
+        || b.iter().any(|(key, value)| {
+            a.get(key)
+                .is_none_or(|old| old["items"] != value["items"] || old["error"] != value["error"])
+        })
+}
+
 fn clear(container: &gtk::Box) {
     while let Some(child) = container.first_child() {
         container.remove(&child);
@@ -556,14 +576,6 @@ impl Bar {
             self.target_opacity = target;
             self.fade_started = Instant::now();
         }
-        if !concealed {
-            for (_, view) in &self.comparisons {
-                view.wake_icons();
-                for visual in view.visuals() {
-                    visual.wake();
-                }
-            }
-        }
         let duration = num(&self.definition["fadeDuration"]);
         let t = if duration <= 0. {
             1.
@@ -582,8 +594,15 @@ impl Bar {
         let active = self.opacity > 0.01;
         if active != self.input_active {
             self.input_active = active;
-            set_bar_mapped(&self.window, self.visible, active);
             if active {
+                // Wake after the fade becomes visible: a tick at opacity zero
+                // would immediately suspend the marquee again.
+                for (_, view) in &self.comparisons {
+                    view.wake_icons();
+                    for visual in view.visuals() {
+                        visual.wake();
+                    }
+                }
                 input_regions(&self.window, &self.islands);
             } else if let Some(surface) = self.window.surface() {
                 surface.set_input_region(&gtk::cairo::Region::create());
@@ -1240,17 +1259,6 @@ impl Ui {
         if self.runtime.is_none() {
             return;
         }
-        let targets: Vec<_> = self
-            .panel_targets()
-            .into_iter()
-            .filter(|t| {
-                !self
-                    .detached_panels
-                    .borrow()
-                    .values()
-                    .any(|d| panel_owner(&d.target.provider) == panel_owner(&t.provider))
-            })
-            .collect();
         let recent = self.local_updated.borrow().elapsed() < Duration::from_millis(100);
         let point = self.fixture_pointer.get().or(if recent {
             self.local_pointer.get().or(self.pointer.latest().0)
@@ -1264,6 +1272,53 @@ impl Ui {
                     .flatten()
             })
         });
+        // A closed deck cannot acquire a target outside a bar's surface. Avoid
+        // cloning every provider row/style and querying widget bounds at 40 Hz
+        // while the pointer is elsewhere. Still step the deck to clear dismissal
+        // suppression, and retain normal tracking for pending/detached panels.
+        let over_bar = self.bars.borrow().values().any(|bar| {
+            bar.window.is_visible()
+                && bar.input_active
+                && (bar.hovered.get()
+                    || point.is_some_and(|point| {
+                        bar.topology.as_ref().is_some_and(|output| {
+                            panels::contains(
+                                Rect {
+                                    x: output.logical.x + bar.geometry.x,
+                                    y: output.logical.y + bar.geometry.y,
+                                    width: bar.geometry.width,
+                                    height: bar.geometry.height,
+                                },
+                                point,
+                            )
+                        })
+                    }))
+        });
+        if !over_bar
+            && !self.deck.borrow().busy()
+            && self.detached_panels.borrow().is_empty()
+            && self.panel_surface.borrow().is_none()
+        {
+            self.deck.borrow_mut().step(
+                None,
+                point,
+                None,
+                false,
+                self.started.elapsed().as_millis() as u64,
+            );
+            return;
+        }
+        let targets: Vec<_> = self
+            .panel_targets()
+            .into_iter()
+            .filter(|t| {
+                !self
+                    .detached_panels
+                    .borrow()
+                    .values()
+                    .any(|d| panel_owner(&d.target.provider) == panel_owner(&t.provider))
+            })
+            .collect();
         let hit = point.and_then(|p| panels::nearest(&targets, p));
         let (rect, inside) = self
             .panel_surface
@@ -1967,13 +2022,18 @@ impl Ui {
                     if menu_removed {
                         self.menu.borrow_mut().take();
                     }
+                    let changed = presentation_changed(&self.backend.borrow(), &value);
                     *self.backend.borrow_mut() = value;
+                    if !changed {
+                        return;
+                    }
                     if let Some(snapshot) = self.snapshot.borrow().as_ref() {
                         self.render(snapshot);
                     }
                 }
             }
             Event::Activity(kind, value) => {
+                let previous = self.activity.borrow().clone();
                 if kind == "hyprvoice-status" {
                     self.activity.borrow_mut()["hyprvoice"] = if value["available"] == true {
                         value["state"].clone()
@@ -1983,6 +2043,9 @@ impl Ui {
                 } else {
                     self.activity.borrow_mut()["screenRecording"] =
                         json!(value["available"] == true && value["recording"] == true);
+                }
+                if *self.activity.borrow() == previous {
+                    return;
                 }
                 if let Some(snapshot) = self.snapshot.borrow().as_ref() {
                     self.render(snapshot);
@@ -2265,5 +2328,26 @@ mod input_region_tests {
         set_bar_mapped(&window, false, true);
         assert!(!window.is_mapped());
         window.destroy();
+    }
+}
+
+#[cfg(test)]
+mod idle_tests {
+    use super::*;
+    #[test]
+    fn poll_bookkeeping_does_not_refresh_but_content_and_errors_do() {
+        let initial = json!({"providers":{"audio":{"items":[{"id":"sink","text":{"value":"50%"}}],"error":"","polls":1,"updated":1}}});
+        let mut next = initial.clone();
+        next["providers"]["audio"]["polls"] = json!(2);
+        next["providers"]["audio"]["updated"] = json!(2);
+        assert!(!presentation_changed(&initial, &next));
+        next["providers"]["audio"]["items"][0]["text"]["value"] = json!("60%");
+        assert!(presentation_changed(&initial, &next));
+        next = initial.clone();
+        next["providers"]["audio"]["error"] = json!("Device disconnected");
+        assert!(presentation_changed(&initial, &next));
+        next = initial.clone();
+        next["providers"] = json!({});
+        assert!(presentation_changed(&initial, &next));
     }
 }

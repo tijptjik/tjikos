@@ -226,12 +226,21 @@ impl Icon {
                 let _ = cr.fill();
             }
         });
+        let ticking = Rc::new(Cell::new(false));
+        let map_state = state.clone();
+        let map_art = art.downgrade();
+        let map_ticking = ticking.clone();
+        draw.connect_map(move |draw| {
+            if let Some(art) = map_art.upgrade() {
+                Self::wake_animation(draw, &art, &map_state, &map_ticking);
+            }
+        });
         Self {
             root,
             art,
             draw,
             state,
-            ticking: Rc::new(Cell::new(false)),
+            ticking,
         }
     }
     pub fn update(
@@ -313,13 +322,27 @@ impl Icon {
         self.wake();
     }
     pub fn wake(&self) {
-        if self.ticking.replace(true) {
+        Self::wake_animation(&self.draw, &self.art, &self.state, &self.ticking);
+    }
+    fn wake_animation(
+        draw: &gtk::DrawingArea,
+        art: &gtk::Box,
+        state: &Rc<RefCell<State>>,
+        ticking: &Rc<Cell<bool>>,
+    ) {
+        let m = state.borrow();
+        art.set_opacity(if m.active() { 0. } else { 1. });
+        if !draw.is_mapped() || !(m.active() || m.pulse || m.dots_moving()) {
             return;
         }
-        let state = self.state.clone();
-        let art = self.art.clone();
-        let ticking = self.ticking.clone();
-        self.draw.add_tick_callback(move |w, _| {
+        drop(m);
+        if ticking.replace(true) {
+            return;
+        }
+        let state = state.clone();
+        let art = art.clone();
+        let ticking = ticking.clone();
+        draw.add_tick_callback(move |w, _| {
             let m = state.borrow();
             let active = m.active();
             art.set_opacity(if active { 0. } else { 1. });

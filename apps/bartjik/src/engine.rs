@@ -819,6 +819,47 @@ impl Engine {
         Ok(op == "panelAction")
     }
 }
+// Poll bookkeeping remains observable, but does not justify serializing the full
+// desktop snapshot immediately. Content, health and unknown fields stay urgent.
+fn provider_changed(previous: &Value, next: &Value) -> bool {
+    let (Some(previous), Some(next)) = (previous.as_object(), next.as_object()) else {
+        return previous != next;
+    };
+    let relevant = |key: &str| !matches!(key, "polls" | "updated");
+    previous.keys().filter(|key| relevant(key)).count()
+        != next.keys().filter(|key| relevant(key)).count()
+        || next
+            .iter()
+            .filter(|(key, _)| relevant(key))
+            .any(|(key, value)| previous.get(key) != Some(value))
+}
+
+#[cfg(test)]
+mod idle_tests {
+    use super::*;
+    #[test]
+    fn only_poll_bookkeeping_can_wait_for_diagnostic_flush() {
+        let initial =
+            json!({"items":[],"error":"","state":"ready","failures":0,"polls":1,"updated":1});
+        let mut next = initial.clone();
+        next["polls"] = json!(2);
+        next["updated"] = json!(2);
+        assert!(!provider_changed(&initial, &next));
+        for (key, value) in [
+            ("items", json!([{"id":"changed"}])),
+            ("error", json!("offline")),
+            ("state", json!("stale")),
+            ("failures", json!(1)),
+            ("extension", json!(true)),
+        ] {
+            let mut changed = next.clone();
+            changed[key] = value;
+            assert!(provider_changed(&initial, &changed), "{key}");
+            assert!(provider_changed(&changed, &initial), "removed {key}");
+        }
+    }
+}
+
 pub async fn serve(demo: bool) -> Result<()> {
     let (tx, mut rx) = mpsc::channel(256);
     let gtk = std::env::var("BARTJIK_FRONTEND").as_deref() == Ok("gtk");
@@ -858,9 +899,11 @@ pub async fn serve(demo: bool) -> Result<()> {
     let mut raw = Vec::new();
     let mut reload = tokio::time::interval(Duration::from_secs(1));
     let mut publish = tokio::time::interval(Duration::from_millis(30));
+    publish.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut dirty = false;
+    let mut diagnostics_dirty = false;
     loop {
-        tokio::select! {read=async {ensure!(raw.len()<=1048576,"helper input limit exceeded");Ok::<_,anyhow::Error>((&mut reader).take(1048577-raw.len() as u64).read_until(b'\n',&mut raw).await?)}=>{let n=read?;if n==0{break;}ensure!(raw.len()<=1048576,"helper input limit exceeded");if let Ok(msg)=serde_json::from_slice::<Value>(&raw){match engine.message(msg).await{Ok(changed)=>dirty|=changed,Err(e)=>{engine.error=e.to_string();dirty=true;}}}raw.clear();},Some(event)=rx.recv()=>{match event{Event::Native(value)=>{if value["kind"]=="menuChanged"{crate::emit(&value);}else if engine.native!=value{engine.native=value;dirty=true;}},Event::Provider(key,state)=>{if let Some(w)=engine.workers.get_mut(&key){w.state=state;dirty=true;}},Event::Compositor(data,error)=>{engine.compositor=data;engine.compositor_error=error;dirty=true;},Event::Emit(v)=>crate::emit(&v),Event::Action(error,feedback)=>{engine.action_error=error;if truth(&feedback){engine.feedback=feedback;}dirty=true;}}},_=reload.tick()=>{if !demo {let pending=crate::monitors::pending();if pending!=engine.monitor_change {engine.monitor_change=pending;dirty=true;}}match engine.reload(false).await{Ok(changed)=>dirty|=changed,Err(e)=>{let error=e.to_string();dirty|=engine.error!=error;engine.error=error;}}},_=publish.tick()=>{if dirty{engine.publish();dirty=false;}}}
+        tokio::select! {read=async {ensure!(raw.len()<=1048576,"helper input limit exceeded");Ok::<_,anyhow::Error>((&mut reader).take(1048577-raw.len() as u64).read_until(b'\n',&mut raw).await?)}=>{let n=read?;if n==0{break;}ensure!(raw.len()<=1048576,"helper input limit exceeded");if let Ok(msg)=serde_json::from_slice::<Value>(&raw){match engine.message(msg).await{Ok(changed)=>dirty|=changed,Err(e)=>{engine.error=e.to_string();dirty=true;}}}raw.clear();},Some(event)=rx.recv()=>{match event{Event::Native(value)=>{if value["kind"]=="menuChanged"{crate::emit(&value);}else if engine.native!=value{engine.native=value;dirty=true;}},Event::Provider(key,state)=>{if let Some(w)=engine.workers.get_mut(&key){dirty |= provider_changed(&w.state, &state);diagnostics_dirty=true;w.state=state;}},Event::Compositor(data,error)=>{engine.compositor=data;engine.compositor_error=error;dirty=true;},Event::Emit(v)=>crate::emit(&v),Event::Action(error,feedback)=>{engine.action_error=error;if truth(&feedback){engine.feedback=feedback;}dirty=true;}}},_=reload.tick()=>{dirty |= diagnostics_dirty;if !demo {let pending=crate::monitors::pending();if pending!=engine.monitor_change {engine.monitor_change=pending;dirty=true;}}match engine.reload(false).await{Ok(changed)=>dirty|=changed,Err(e)=>{let error=e.to_string();dirty|=engine.error!=error;engine.error=error;}}},_=publish.tick(), if dirty=>{engine.publish();dirty=false;diagnostics_dirty=false;}}
     }
     engine.tasks.clear();
     engine.panels.cancel();
