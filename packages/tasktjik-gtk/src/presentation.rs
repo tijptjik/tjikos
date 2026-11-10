@@ -165,3 +165,42 @@ fn completion_sort_uses_latest_period_and_handles_timezones() {
     let b = json!({"completedAt":"2026-11-10T02:30:00Z"});
     assert!(completion_time(&a) > completion_time(&b));
 }
+
+/// Snooze timestamps remain in task history; only future instants are active.
+pub(crate) fn active_snooze(
+    task: &serde_json::Value,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(task["snoozedUntil"].as_str()?)
+        .ok()
+        .filter(|until| *until > now)
+}
+pub(crate) fn display_date(task: &serde_json::Value, now: chrono::DateTime<chrono::Utc>) -> String {
+    if let Some(until) = active_snooze(task, now) {
+        return until.with_timezone(&chrono::Local).date_naive().to_string();
+    }
+    task["effectiveDue"]
+        .as_str()
+        .filter(|v| !v.is_empty())
+        .or_else(|| task["due"].as_str())
+        .unwrap_or("")
+        .to_owned()
+}
+#[cfg(test)]
+mod snooze_tests {
+    use super::*;
+    #[test]
+    fn expires_at_instant_and_restores_original_due_date() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-11-10T12:00:00Z")
+            .unwrap()
+            .to_utc();
+        let mut task =
+            serde_json::json!({"snoozedUntil":"2026-11-10T20:00:01+08:00","due":"2026-11-01"});
+        assert!(active_snooze(&task, now).is_some());
+        task["snoozedUntil"] = serde_json::json!("2026-11-10T20:00:00+08:00");
+        assert!(active_snooze(&task, now).is_none());
+        assert_eq!(display_date(&task, now), "2026-11-01");
+        task["due"] = serde_json::json!("");
+        assert_eq!(display_date(&task, now), "");
+    }
+}

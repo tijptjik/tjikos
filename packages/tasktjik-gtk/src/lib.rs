@@ -151,6 +151,7 @@ pub struct TaskView {
     pending_action: RefCell<String>,
     mutations: RefCell<mutations::Mutations>,
     motion_epoch: Cell<u64>,
+    wake_at: Cell<Option<i64>>,
     outbox: RefCell<Option<std::path::PathBuf>>,
     recover: gtk::Button,
     media_busy: Cell<bool>,
@@ -332,6 +333,7 @@ impl TaskView {
             pending_action: RefCell::new(String::new()),
             mutations: RefCell::new(mutations::Mutations::default()),
             motion_epoch: Cell::new(0),
+            wake_at: Cell::new(None),
             outbox: RefCell::new(None),
             recover: recover.clone(),
             media_busy: Cell::new(false),
@@ -579,6 +581,21 @@ Ctrl+Z  Undo     Escape  Back",
             }
             child = w.next_sibling();
         }
+        let weak = Rc::downgrade(&view);
+        glib::timeout_add_seconds_local(1, move || {
+            let Some(view) = weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+            if view
+                .wake_at
+                .get()
+                .is_some_and(|deadline| chrono::Utc::now().timestamp() >= deadline)
+            {
+                *view.rendered.borrow_mut() = Value::Null;
+                view.render();
+            }
+            glib::ControlFlow::Continue
+        });
         let weak = Rc::downgrade(&view);
         view.root.add_tick_callback(move |_, _| {
             if let Some(v) = weak.upgrade() {
@@ -1221,6 +1238,16 @@ Ctrl+Z  Undo     Escape  Back",
         if self.dragging.get() {
             return;
         }
+        let now = chrono::Utc::now();
+        self.wake_at.set(
+            self.state.borrow()["tasks"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|t| presentation::active_snooze(t, now))
+                .map(|until| until.timestamp() + 1)
+                .min(),
+        );
         let signature = json!([
             visual_tasks(&self.state.borrow()["tasks"]),
             *self.move_projection.borrow(),
@@ -1296,16 +1323,12 @@ Ctrl+Z  Undo     Escape  Back",
             {
                 continue;
             }
-            let due = if !s(task, "effectiveDue").is_empty() {
-                s(task, "effectiveDue")
-            } else {
-                s(task, "due")
-            };
+            let due = presentation::display_date(task, now);
             if kind != "project"
                 && kind != "template"
                 && self.dates.selected() > 0
                 && !due.is_empty()
-                && due > horizon.as_str()
+                && due.as_str() > horizon.as_str()
             {
                 continue;
             }
@@ -1393,8 +1416,7 @@ Ctrl+Z  Undo     Escape  Back",
                     groups[group]
                         .iter()
                         .filter_map(|t| {
-                            let d = s(t, "effectiveDue");
-                            let d = if d.is_empty() { s(t, "due") } else { d };
+                            let d = presentation::display_date(t, now);
                             (!d.is_empty()).then(|| d.to_owned())
                         })
                         .min()
@@ -1468,8 +1490,8 @@ Ctrl+Z  Undo     Escape  Back",
                 }
                 let sort_value = |t: &Value| {
                     let v = s(t, key);
-                    if v.is_empty() && key == "effectiveDue" {
-                        s(t, "due").to_owned()
+                    if key == "effectiveDue" {
+                        presentation::display_date(t, now)
                     } else {
                         v.to_owned()
                     }
@@ -1787,20 +1809,17 @@ Ctrl+Z  Undo     Escape  Back",
         }
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         row.add_css_class("task-title-row");
-        let snoozed_date = chrono::DateTime::parse_from_rfc3339(s(&task, "snoozedUntil"))
-            .map(|date| date.with_timezone(&chrono::Local).date_naive().to_string())
-            .unwrap_or_default();
-        let due = if !snoozed_date.is_empty() {
-            snoozed_date.as_str()
-        } else if s(&task, "effectiveDue").is_empty() {
-            s(&task, "due")
-        } else {
-            s(&task, "effectiveDue")
-        };
+        let now = chrono::Utc::now();
+        let snoozed = presentation::active_snooze(&task, now).is_some();
+        let due = presentation::display_date(&task, now);
         let weak = Rc::downgrade(self);
         let t = task.clone();
         let marker = marker::Marker::new(
-            &presentation::date_code(due, s(&self.state.borrow(), "today"), self.dates.selected()),
+            &presentation::date_code(
+                &due,
+                s(&self.state.borrow(), "today"),
+                self.dates.selected(),
+            ),
             task["done"] == true,
             21,
             move || {
@@ -1821,7 +1840,7 @@ Ctrl+Z  Undo     Escape  Back",
         marker
             .button
             .set_sensitive(!["project", "template"].contains(&s(&task, "kind")));
-        if !snoozed_date.is_empty() {
+        if snoozed {
             marker.set_snoozed(s(&task, "snoozedUntil"));
         }
         marker.set_selected(s(&task, "id") == *self.selected.borrow());

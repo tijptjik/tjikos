@@ -477,3 +477,42 @@ fn optimistic_actions_queue_without_waiting_for_server() {
     assert_eq!(view.state()["tasks"][0]["title"], "A");
     window.close();
 }
+
+#[test]
+#[ignore = "requires an isolated rendering display"]
+fn snooze_expires_without_server_refresh() {
+    gtk::init().unwrap();
+    let view = TaskView::new(
+        |_| panic!("expiry must not mutate server data"),
+        || {},
+        None,
+    );
+    let until = (chrono::Utc::now() + chrono::Duration::seconds(2)).to_rfc3339();
+    view.update(&json!({"tasks":[{"id":"wake","kind":"todo","title":"Wake fixture","group":"All","snoozedUntil":until,"due":""}]}));
+    let window = gtk::Window::builder()
+        .default_width(860)
+        .default_height(680)
+        .child(&view.root)
+        .build();
+    window.present();
+    let settle = |ms| {
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(ms)))
+    };
+    settle(200);
+    assert!(view.markers.borrow()["wake"]
+        .button
+        .tooltip_text()
+        .unwrap()
+        .contains("Snoozed until"));
+    settle(4000);
+    assert_eq!(
+        view.markers.borrow()["wake"]
+            .button
+            .tooltip_text()
+            .as_deref(),
+        Some("Complete")
+    );
+    assert_eq!(view.state()["tasks"][0]["snoozedUntil"], until);
+    window.close();
+}
