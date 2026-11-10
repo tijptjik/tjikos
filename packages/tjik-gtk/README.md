@@ -56,7 +56,7 @@ Runtjik's JSON adapter lives in its application source.
 The shared theme styles primitives only. Applications append their own view styles via
 `theme::apply_with_css`; the extra CSS can reference validated named palette colors
 `@tjik_background`, `@tjik_surface`, `@tjik_text`, `@tjik_muted`, `@tjik_accent`, and
-`@tjik_border`. Runtjik owns word/capture styles, and `tasktjik-gtk::style::CSS` owns
+`@tjik_border`. Runtjik owns word/capture styles, and `tjik_task_gtk::style::CSS` owns
 task and reading styles. Reapply the composed stylesheet when theme settings change.
 
 The current supported platform is Linux with GTK 4.12+ and gtk4-layer-shell development
@@ -72,11 +72,11 @@ display regression can be run in this repository with
 
 Repository maintainers can validate distribution boundaries with
 `dev-check bash packages/tjik-gtk/scripts/test-packages.sh`. It builds local archives
-for `tjik-desktop`, `tjik-gtk` and `tasktjik-gtk`, extracts them outside the checkout,
+for `tjik-desktop`, `tjik-gtk` and `tjik-task-gtk`, extracts them outside the checkout,
 and runs their non-display tests and public API examples offline. The Tasktjik archive
 uses the extracted GTK archive through a Cargo patch until that version is published.
 This does not check registry name availability or replace the display regressions. No
-packages are uploaded. Publish `tjik-gtk` before its dependent `tasktjik-gtk` crate.
+packages are uploaded. Publish `tjik-gtk` before its dependent `tjik-task-gtk` crate.
 
 ## License
 

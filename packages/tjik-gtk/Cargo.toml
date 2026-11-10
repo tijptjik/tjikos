@@ -5,6 +5,7 @@ edition = "2021"
 description = "Reusable GTK4 desktop presentation primitives with bounded image loading"
 readme = "README.md"
 repository = "https://github.com/tijptjik/tjikos"
+publish = ["crates-io"]
 license = "MPL-2.0"
 
 [dependencies]

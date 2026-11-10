@@ -17,7 +17,7 @@ pub type PreviewFuture = Pin<Box<dyn Future<Output = Vec<PagePreview>>>>;
 ///
 /// A downstream adapter needs only the public trait and value types:
 /// ```
-/// use tasktjik_gtk::previews::{PagePreview, PreviewFuture, PreviewProvider};
+/// use tjik_task_gtk::previews::{PagePreview, PreviewFuture, PreviewProvider};
 /// use std::rc::Rc;
 ///
 /// struct Offline;

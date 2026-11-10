@@ -38,7 +38,7 @@ scraper = "0.24"
 gtk = { package = "gtk4", version = "0.10", features = ["v4_12"], optional = true }
 async-channel = { version = "2.5", optional = true }
 tjik-gtk = { path = "../../packages/tjik-gtk", optional = true }
-tasktjik-gtk = { path = "../../packages/tasktjik-gtk", optional = true }
+tasktjik-gtk = { package = "tjik-task-gtk", path = "../../packages/tasktjik-gtk", optional = true }
 
 [profile.release]
 lto = "thin"

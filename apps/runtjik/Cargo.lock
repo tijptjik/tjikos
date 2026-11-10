@@ -1634,10 +1634,10 @@ dependencies = [
  "sha2",
  "shlex 1.3.0",
  "tasktjik-api",
- "tasktjik-gtk",
  "tempfile",
  "tjik-desktop",
  "tjik-gtk",
+ "tjik-task-gtk",
  "toml 0.8.23",
  "toml_edit 0.22.27",
  "url",
@@ -2025,17 +2025,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tasktjik-gtk"
-version = "0.1.0"
-dependencies = [
- "base64",
- "chrono",
- "serde_json",
- "tjik-gtk",
- "uuid",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2084,6 +2073,17 @@ dependencies = [
  "gtk4",
  "gtk4-layer-shell",
  "serde",
+]
+
+[[package]]
+name = "tjik-task-gtk"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "chrono",
+ "serde_json",
+ "tjik-gtk",
+ "uuid",
 ]
 
 [[package]]

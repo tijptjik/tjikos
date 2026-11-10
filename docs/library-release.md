@@ -5,10 +5,10 @@ The release consists of the desktop contract, GTK primitives and Tasktjik views 
 directory names and the applications' dependency aliases can remain stable when public
 Cargo package names change.
 
-The maintainer chooses the public crate-name prefix before registry names are changed or
-reserved. Cargo package names are global; an account or GitHub organization does not
-create an exclusive crate-name namespace. The intended pattern is `<prefix>-desktop`,
-`<prefix>-gtk`, and `<prefix>-task-gtk`.
+The maintainer selected the `tjik` prefix. Public package names are `tjik-desktop`,
+`tjik-gtk`, and `tjik-task-gtk`, initially at version `0.1.0`. Cargo package names are
+global; an account or GitHub organization does not create an exclusive crate-name
+namespace. Local source directories and dependency aliases remain unchanged.
 
 For the selected names:
 
