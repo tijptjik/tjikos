@@ -118,7 +118,6 @@ pub struct TaskView {
     body: gtk::Box,
     column_count: Cell<i32>,
     scroll: gtk::ScrolledWindow,
-    footer: gtk::Box,
     toolbar: gtk::Box,
     heading: RefCell<gtk::Label>,
     count: gtk::Label,
@@ -268,20 +267,32 @@ impl TaskView {
             .vexpand(true)
             .hscrollbar_policy(gtk::PolicyType::Never)
             .build();
-        stack.add_named(&scroll, Some("tasks"));
+        let task_surface = gtk::Overlay::new();
+        task_surface.set_widget_name("task-surface");
+        task_surface.set_child(Some(&scroll));
+        // Only the small islands cover content; the space between them belongs
+        // to the scroller, including pointer picking and scroll gestures.
+        body.set_margin_bottom(64);
+        stack.add_named(&task_surface, Some("tasks"));
         let reading = reading::Reading::new(previews);
         stack.add_named(&reading.root, Some("reading"));
         let footer = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-        footer.set_hexpand(true);
+        footer.set_halign(gtk::Align::End);
+        footer.set_valign(gtk::Align::End);
+        footer.set_margin_bottom(16);
+        footer.set_widget_name("task-footer-actions");
         footer.add_css_class("task-footer");
-        let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        spacer.set_hexpand(true);
-        footer.append(&spacer);
+        let edit_island = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        edit_island.add_css_class("task-footer");
+        edit_island.set_widget_name("task-footer-edit");
+        edit_island.set_halign(gtk::Align::Start);
+        edit_island.set_valign(gtk::Align::End);
+        edit_island.set_margin_bottom(16);
+        task_surface.add_overlay(&edit_island);
         footer.append(&undo);
-        root.append(&footer);
+        task_surface.add_overlay(&footer);
         let view = Rc::new(Self {
             column_count: Cell::new(2),
-            footer: footer.clone(),
             root,
             stack,
             body,
@@ -409,7 +420,7 @@ impl TaskView {
         edit_selected.set_child(Some(&icons::icon("edit")));
         edit_selected.add_css_class("icon-button");
         edit_selected.set_tooltip_text(Some("Edit selected task"));
-        footer.prepend(&edit_selected);
+        edit_island.append(&edit_selected);
         let dates_help = gtk::MenuButton::new();
         dates_help.set_child(Some(&icons::icon("details")));
         dates_help.set_tooltip_text(Some("Due dates and snoozing"));
@@ -1225,7 +1236,6 @@ Ctrl+Z  Undo     Escape  Back",
         let reading = self.collection.borrow().as_str() == "reading";
         self.toolbar.set_visible(!reading);
         self.options.set_visible(!reading);
-        self.footer.set_visible(!reading);
         if reading {
             self.reading.update(&self.state.borrow());
             self.stack.set_visible_child_name("reading");

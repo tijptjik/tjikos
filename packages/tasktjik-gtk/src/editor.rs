@@ -286,7 +286,6 @@ impl TaskView {
         self.close_editor();
         self.toolbar.set_visible(false);
         self.options.set_visible(false);
-        self.footer.set_visible(false);
         self.filter.set_visible(false);
         let form = gtk::Box::new(gtk::Orientation::Vertical, 10);
         form.add_css_class("pane");

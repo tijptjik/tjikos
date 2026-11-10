@@ -136,6 +136,18 @@ with rendering_display():
             time.sleep(2)
             hypr("dismissnotify")
             move(990, 670)
+            left = item("task-footer-edit")
+            right = item("task-footer-actions")
+            surface = item("task-surface")
+            assert left["width"] < 60 and right["width"] < 220
+            assert left["y"] == right["y"]
+            assert surface["y"] + surface["height"] > left["y"] + left["height"]
+            footer_icons = [g for g in inspect()["geometry"] if "stroke-icon" in g["classes"] and g["y"] >= left["y"]]
+            assert len(footer_icons) == 5, footer_icons
+            centers = [g["y"] + g["height"] / 2 for g in footer_icons]
+            assert max(centers) - min(centers) <= 1, centers
+            assert all(g["width"] == 22 and g["height"] == 22 for g in footer_icons)
+            shot("gtk-footer-islands")
             fixture = json.loads((root / "fixture.json").read_text())
             statuses = [
                 dict(

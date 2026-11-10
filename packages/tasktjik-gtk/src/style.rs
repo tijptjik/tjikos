@@ -2,7 +2,7 @@
 //! must not silently turn the embedded application into a different presentation.
 pub const CSS: &str = r#"
 .tjik .shell.task-host { padding: 0; background: #26233a; }
-.tjik .tasktjik { background: #26233a; color: #f5f5f7; padding: 32px; border-radius: 12px; font-size: 14px; }
+.tjik .tasktjik { background: #26233a; color: #f5f5f7; padding: 32px 32px 0; border-radius: 12px; font-size: 14px; }
 .tjik .tasktjik * { font-family: sans-serif; }
 .tjik .tasktjik .muted { color: #aaa5ba; font-size: 12px; }
 .tjik .tasktjik .accent { color: #a8c7a0; }
@@ -52,7 +52,9 @@ pub const CSS: &str = r#"
 .tjik .tasktjik flowboxchild { padding: 0; }
 .tjik .tasktjik .empty-drop-target { padding: 12px 20px; border: 1px dashed #555169; border-radius: 8px; color: #aaa5ba; }
 .tjik .tasktjik .drop-target { box-shadow: inset 0 2px #a8c7a0; }
-.tjik .tasktjik .task-footer button { border: 0; outline: none; box-shadow: none; background: transparent; min-width: 26px; min-height: 26px; padding: 6px; border-radius: 8px; }
+.tjik .tasktjik .task-footer { background: #26233a; border-radius: 12px; padding: 3px; }
+.tjik .tasktjik .task-footer menubutton { padding: 0; margin: 0; min-width: 0; min-height: 0; }
+.tjik .tasktjik .task-footer button { border: 0; outline: none; box-shadow: none; background: transparent; min-width: 22px; min-height: 22px; padding: 8px; margin: 0; border-radius: 8px; }
 .tjik .tasktjik .task-footer button:hover { background: #555169; }
 .tjik .tasktjik .task-footer button:focus-visible { background: #39354b; color: #a8c7a0; }
 .tjik .tasktjik button.completion-marker, .tjik .tasktjik button.completion-marker:hover, .tjik .tasktjik button.completion-marker:active { min-width: 28px; min-height: 0; padding: 0; margin: 0; border: 0; background: transparent; box-shadow: none; }

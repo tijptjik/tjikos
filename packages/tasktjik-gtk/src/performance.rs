@@ -250,6 +250,18 @@ fn task_application_keyboard_and_host_boundary() {
         settle();
     };
     settle();
+    let picked = window
+        .pick(
+            window.width() as f64 / 2.,
+            window.height() as f64 - 30.,
+            gtk::PickFlags::DEFAULT,
+        )
+        .expect("bottom gap is pickable");
+    assert!(
+        picked == view.scroll || picked.is_ancestor(&view.scroll),
+        "the footer gap must pass input to task content: {}",
+        picked.type_().name()
+    );
     view.focus();
     key("n");
     assert!(

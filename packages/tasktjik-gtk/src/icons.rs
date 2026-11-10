@@ -2,10 +2,14 @@
 use tjik_gtk::gtk::{self, prelude::*};
 pub fn icon(name: &'static str) -> gtk::DrawingArea {
     let area = gtk::DrawingArea::builder()
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
         .content_width(22)
         .content_height(22)
         .build();
-    area.set_draw_func(move |area, c, _, _| {
+    area.add_css_class("stroke-icon");
+    area.set_draw_func(move |area, c, width, height| {
+        c.translate((width as f64 - 22.) / 2., (height as f64 - 22.) / 2.);
         let ink = area.color();
         c.set_source_rgba(
             ink.red() as f64,
@@ -55,6 +59,7 @@ pub fn icon(name: &'static str) -> gtk::DrawingArea {
                 c.line_to(11., 16.);
             }
             "undo" => {
+                c.translate(-0.5, -1.);
                 c.move_to(9., 4.);
                 c.line_to(3., 10.);
                 c.line_to(9., 15.);
@@ -63,6 +68,7 @@ pub fn icon(name: &'static str) -> gtk::DrawingArea {
                 c.curve_to(23., 10., 22., 20., 13., 20.);
             }
             "edit" => {
+                c.translate(0.5, -1.5);
                 c.move_to(4., 15.);
                 c.line_to(14., 5.);
                 c.line_to(18., 9.);
