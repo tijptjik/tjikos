@@ -68,8 +68,8 @@ migration.
 
 The core and expansion editor run natively in Rust. Python backend selection and API-v1
 plugins have been removed; unsupported provider names are rejected. The shared
-link-preview helper still uses Python, as do build tooling and development tests.
-Tasktjik enrollment, device queries, notifications, CLI actions and browser-host
+link-preview helper is also native Rust. Python is used by build tooling and development
+tests. Tasktjik enrollment, device queries, notifications, CLI actions and browser-host
 registration are native too.
 
 [Native-only release and installation](docs/native-only.md) ·

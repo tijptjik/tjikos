@@ -33,7 +33,7 @@ regenerated on the next load. Pages without an available image retain a domain
 placeholder and their link. Previews with no usable image retry after five minutes on
 the next load; legacy cache entries are refreshed automatically. Rendering requires
 Chrome or Chromium; without it, site-provided images remain available. Run
-`python3 -B tests/page_preview.py` for the cache regression checks. Run
+`bun run --filter @tjikos/page-preview test` for the cache regression checks. Run
 `python3 -B tests/reading_ui.py` for the isolated synthetic renderer check.
 
 Select a task in the desktop overview and press **Ctrl+V** to attach an image from the
