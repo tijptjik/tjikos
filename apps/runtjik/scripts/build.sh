@@ -20,3 +20,5 @@ cp runtjik-gtk dist/
 cp -R lib dist/
 cp ../../packages/tjik-gtk/target/layer-shell-source/LICENSE dist/lib/gtk4-layer-shell.LICENSE
 bash scripts/browser-extension.sh build
+
+python3 -B ../../scripts/package-notices.py bundle runtjik "$PWD/dist"

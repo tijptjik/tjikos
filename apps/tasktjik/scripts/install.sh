@@ -25,3 +25,5 @@ import sys
 path = Path(sys.argv[1])
 path.write_text(path.read_text().replace("Icon=tasktjik", "Icon=" + sys.argv[2]))
 PYICON
+
+python3 -B "$root/../../scripts/package-notices.py" install "$root/dist" "$target"

@@ -9,3 +9,5 @@ cp -R bin qml web systemd examples README.md dist/
 cp ../../docs/icons/tasktjik-app.svg dist/tasktjik.svg
 cp "${CARGO_TARGET_DIR:-target}/release/tasktjik-api" tasktjik-api
 cp tasktjik-api dist/
+
+python3 -B ../../scripts/package-notices.py bundle tasktjik "$PWD/dist"

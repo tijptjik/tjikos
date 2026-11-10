@@ -48,12 +48,14 @@ for app in "$@"; do
             bash "$root_dir/scripts/install-completions.sh" "$HOME/.local" mailtjik
             ;;
         notjik)
+            notjik_home="${NOTJIK_INSTALL_HOME:-$HOME}"
+            notjik_config="${NOTJIK_INSTALL_CONFIG:-${XDG_CONFIG_HOME:-$notjik_home/.config}}"
             if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
-                bash "$root_dir/apps/tasktjik/scripts/install.sh"
+                TASKTJIK_INSTALL_HOME="$notjik_home" TASKTJIK_INSTALL_CONFIG="$notjik_config" bash "$root_dir/apps/tasktjik/scripts/install.sh"
             fi
             source_dir="$root_dir/apps/notjik/dist"
-            target_dir="$HOME/.local/lib/notjik"
-            install -d -m 755 "$HOME/.local/bin" "$target_dir" "$HOME/.config/systemd/user"
+            target_dir="$notjik_home/.local/lib/notjik"
+            install -d -m 755 "$notjik_home/.local/bin" "$target_dir" "$notjik_config/systemd/user"
             cp -R "$source_dir"/assets "$source_dir"/themes "$source_dir"/examples "$target_dir/"
             rm -rf "$target_dir/qml"
             rm -f "$target_dir/examples/DemoStage.qml" "$target_dir/examples/Issue.qml" "$target_dir/examples/demo-patches.json" "$target_dir/examples/reference-artwork.js"
@@ -65,27 +67,28 @@ for app in "$@"; do
             install -m 644 "$source_dir/lib/gtk4-layer-shell.LICENSE" "$target_dir/lib/"
             install -d -m 755 "$target_dir/docs"
             install -m 644 "$source_dir"/docs/*.md "$target_dir/docs/"
-            install -m 755 "$source_dir/bin/notjik-sync" "$HOME/.local/bin/.notjik-sync.pending"
-            mv -f "$HOME/.local/bin/.notjik-sync.pending" "$HOME/.local/bin/notjik-sync"
+            install -m 755 "$source_dir/bin/notjik-sync" "$notjik_home/.local/bin/.notjik-sync.pending"
+            mv -f "$notjik_home/.local/bin/.notjik-sync.pending" "$notjik_home/.local/bin/notjik-sync"
             install -m 755 "$source_dir/bin/notjik-core" "$target_dir/bin/.notjik-core.pending"
             mv -f "$target_dir/bin/.notjik-core.pending" "$target_dir/bin/notjik-core"
             install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$target_dir/bin/"
             install -m 644 "$source_dir/install-telegram.sh" "$source_dir/README.md" "$target_dir/"
             rm -f "$target_dir"/{notjik,lock_watch,telegram_bridge,telegram_clipboard,telegram_recording,telegram_media_render,comparison,demo,demo_cycle}.py "$target_dir/requirements-telegram.txt"
             rm -rf "$target_dir/__pycache__"
-            install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$HOME/.local/bin/"
-            bash "$root_dir/scripts/install-completions.sh" "$HOME/.local" notjik
+            install -m 755 "$source_dir/bin/notjik" "$source_dir/bin/notjikctl" "$notjik_home/.local/bin/"
+            bash "$root_dir/scripts/install-completions.sh" "$notjik_home/.local" notjik
             if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then
-                install -m 644 "$source_dir/systemd/notjik-sync.service" "$HOME/.config/systemd/user/notjik-sync.service"
-                install -m 644 "$source_dir/systemd/notjik.service" "$HOME/.config/systemd/user/notjik.service"
-                install -m 644 "$source_dir/systemd/notjik-telegram.service" "$HOME/.config/systemd/user/notjik-telegram.service"
-                activation_dir="${XDG_DATA_HOME:-$HOME/.local/share}/dbus-1/services"
+                install -m 644 "$source_dir/systemd/notjik-sync.service" "$notjik_config/systemd/user/notjik-sync.service"
+                install -m 644 "$source_dir/systemd/notjik.service" "$notjik_config/systemd/user/notjik.service"
+                install -m 644 "$source_dir/systemd/notjik-telegram.service" "$notjik_config/systemd/user/notjik-telegram.service"
+                activation_dir="${XDG_DATA_HOME:-$notjik_home/.local/share}/dbus-1/services"
                 install -d -m 755 "$activation_dir"
                 printf '%s\n' '# Activate the notjik desktop notification service.' '[D-BUS Service]' 'Name=org.freedesktop.Notifications' \
-                    "Exec=$HOME/.local/bin/notjik" 'SystemdService=notjik.service' \
+                    "Exec=$notjik_home/.local/bin/notjik" 'SystemdService=notjik.service' \
                     > "$activation_dir/org.freedesktop.Notifications.service"
                 chmod 644 "$activation_dir/org.freedesktop.Notifications.service"
             fi
+            python3 -B "$root_dir/scripts/package-notices.py" install "$source_dir" "$target_dir"
             ;;
     esac
 done

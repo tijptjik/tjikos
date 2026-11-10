@@ -20,3 +20,5 @@ install -m 755 "${CARGO_TARGET_DIR:-target}/release/bartjik-core" dist/bin/bartj
 cp README.md dist/
 rm -f dist/bartjik.py dist/qml/{audio_controls,audio_levels,network_controls,media_play,media_navigate,tray_attention,tray_focus}.py
 rm -rf dist/bartjik_core dist/qml/__pycache__ dist/__pycache__
+
+python3 -B ../../scripts/package-notices.py bundle bartjik "$PWD/dist"

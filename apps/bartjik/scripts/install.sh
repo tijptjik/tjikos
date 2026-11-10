@@ -5,6 +5,14 @@ source_dir="$root_dir/dist"
 install_home="${BARTJIK_INSTALL_HOME:-$HOME}"
 target_dir="$install_home/.local/lib/bartjik"
 config_dir="${BARTJIK_INSTALL_CONFIG:-${XDG_CONFIG_HOME:-$install_home/.config}}"
+install_notices() {
+    python3 -B "$root_dir/../../scripts/package-notices.py" install "$source_dir" "$target_dir"
+}
+if [[ "${1:-}" == --licenses-only ]]; then
+    [[ $# == 1 ]] || { echo 'Usage: install.sh --licenses-only' >&2; exit 2; }
+    install_notices
+    exit 0
+fi
 test -x "$source_dir/bin/bartjik-core"
 test -x "$source_dir/bin/bartjik-gtk"
 test -f "$source_dir/qml/IconFonts.qml"
@@ -12,6 +20,7 @@ test -f "$source_dir/qml/fonts/MaterialSymbolsRounded.ttf"
 install_notification_assets() {
     install -d -m 755 "$target_dir/lib/notification-cards/assets"
     cp -R "$source_dir/lib/notification-cards/assets/." "$target_dir/lib/notification-cards/assets/"
+    install_notices
 }
 install_gtk() {
     install -d -m 755 "$target_dir/bin" "$target_dir/lib"
@@ -39,7 +48,7 @@ if [[ "${1:-}" == --gtk-only ]]; then
     printf 'Installed opt-in Bartjik GTK; existing bar and services were not restarted\n'
     exit 0
 fi
-[[ $# == 0 ]] || { echo 'Usage: install.sh [--gtk-only|--notification-assets-only]' >&2; exit 2; }
+[[ $# == 0 ]] || { echo 'Usage: install.sh [--gtk-only|--notification-assets-only|--licenses-only]' >&2; exit 2; }
 install -d -m 755 "$install_home/.local/bin" "$target_dir" "$config_dir/systemd/user"
 cp -R "$source_dir"/qml "$source_dir"/themes "$source_dir"/examples "$source_dir"/docs "$source_dir"/hypr "$target_dir/"
 install -m 644 "$source_dir/README.md" "$target_dir/"

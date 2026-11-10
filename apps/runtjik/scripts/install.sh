@@ -56,3 +56,5 @@ install -m 644 "$root_dir/dist/examples/runtjik-image.desktop" "$install_home/.l
 
 install -d -m 755 "$config_root/systemd/user"
 install -m 644 "$root_dir/dist/systemd/"* "$config_root/systemd/user/"
+
+python3 -B "$root_dir/../../scripts/package-notices.py" install "$root_dir/dist" "$target"

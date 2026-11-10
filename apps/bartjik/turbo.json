@@ -7,7 +7,14 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "../../packages/notification-history/**",
-        "../notjik/assets/**"
+        "../notjik/assets/**",
+        "../../scripts/package-notices.py",
+        "../../packages/tjik-desktop/LICENSE",
+        "../../packages/tjik-desktop/NOTICE",
+        "../../packages/tjik-gtk/LICENSE",
+        "../../packages/tjik-gtk/NOTICE",
+        "../../apps/notjik/LICENSE",
+        "../../apps/notjik/NOTICE"
       ]
     }
   }

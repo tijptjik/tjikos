@@ -5,7 +5,12 @@
   "tasks": {
     "build": {
       "inputs": [
-        "$TURBO_DEFAULT$"
+        "$TURBO_DEFAULT$",
+        "../../scripts/package-notices.py",
+        "../../packages/tjik-desktop/LICENSE",
+        "../../packages/tjik-desktop/NOTICE",
+        "../../packages/tjik-gtk/LICENSE",
+        "../../packages/tjik-gtk/NOTICE"
       ]
     }
   }

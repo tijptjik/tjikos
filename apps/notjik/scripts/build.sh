@@ -23,3 +23,5 @@ cp scripts/install-telegram.sh dist/install-telegram.sh
 # Pre-release: the distribution contains no interpreter runtime or fallbacks.
 rm -f dist/*.py dist/requirements-telegram.txt
 rm -rf dist/__pycache__
+
+python3 -B ../../scripts/package-notices.py bundle notjik "$PWD/dist"
