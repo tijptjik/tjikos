@@ -66,11 +66,11 @@ requests use bounded curl HTTPS requests; clipboard and recording previews use t
 background workers. Active recorder socket compatibility is preserved across this
 migration.
 
-The installed runtime and build have no Python dependency. Python backend selection and
-API-v1 plugins have been removed; unsupported provider names are rejected. Python files
-in the source checkout are test/reference oracles only and are not packaged. Tasktjik
-enrollment, device queries, notifications, CLI actions and browser-host registration are
-native too.
+The core and expansion editor run natively in Rust. Python backend selection and API-v1
+plugins have been removed; unsupported provider names are rejected. The shared
+link-preview helper still uses Python, as do build tooling and development tests.
+Tasktjik enrollment, device queries, notifications, CLI actions and browser-host
+registration are native too.
 
 [Native-only release and installation](docs/native-only.md) ·
 [Acceptance coverage](docs/acceptance.md)
@@ -242,7 +242,7 @@ variables) and refuse stale writes. Espanso watches the files and reloads change
 automatically.
 
 The editor reads `~/.config/espanso/match` (honoring `XDG_CONFIG_HOME`), or
-`RUNTJIK_EXPANSIONS_DIR`. It requires Python 3 and PyYAML. New matches are written to
+`RUNTJIK_EXPANSIONS_DIR`. The editor runs natively in Rust. New matches are written to
 individual `runtjik-*.yml` files. Entries with a single `trigger` and text `replace` are
 supported; flow-style and aliased YAML must be edited with a YAML editor.
 
