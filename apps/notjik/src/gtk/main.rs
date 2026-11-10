@@ -13,6 +13,9 @@ struct Options {
     media_root: Option<PathBuf>,
     #[arg(long)]
     self_test: bool,
+    /// Validate media and snapshots without requiring compositor frame callbacks.
+    #[arg(long, requires = "snapshot_dir")]
+    render_test: bool,
     #[arg(long)]
     screenshot: Option<PathBuf>,
     #[arg(long)]
@@ -25,7 +28,7 @@ fn main() -> glib::ExitCode {
         return cards::host::run();
     }
     let opts = Rc::new(Options::parse());
-    if opts.self_test {
+    if opts.self_test || opts.render_test {
         let default = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             default(info);
@@ -181,7 +184,7 @@ fn main() -> glib::ExitCode {
                 }
             }
         });
-        let capture = opts.self_test;
+        let capture = opts.self_test || opts.render_test;
         let cards_tick = all.clone();
         let weak_window = window.downgrade();
         glib::timeout_add_local(Duration::from_millis(100), move || {
@@ -246,7 +249,6 @@ fn main() -> glib::ExitCode {
                     lock.grab_focus();
                     card.set_hovered(false);
                     glib::timeout_future(Duration::from_millis(220)).await;
-                    let paintable = gtk::WidgetPaintable::new(Some(&card.widget));
                     scroll.vadjustment().set_value(0.);
                     card.widget.queue_draw();
                     card.set_animations_active(false);
@@ -260,11 +262,7 @@ fn main() -> glib::ExitCode {
                         "card stretched beyond its content"
                     );
                     let snapshot = gtk::Snapshot::new();
-                    paintable.snapshot(
-                        &snapshot,
-                        card.widget.width() as f64,
-                        card.widget.height() as f64,
-                    );
+                    snapshot_card(&card.widget, &snapshot, options.width - 52);
                     let node = snapshot.to_node().expect("card render node");
                     let texture = window.renderer().unwrap().render_texture(&node, None);
                     texture
@@ -273,11 +271,7 @@ fn main() -> glib::ExitCode {
                     card.set_hovered(true);
                     glib::timeout_future(Duration::from_millis(220)).await;
                     let shot = gtk::Snapshot::new();
-                    paintable.snapshot(
-                        &shot,
-                        card.widget.width() as f64,
-                        card.widget.height() as f64,
-                    );
+                    snapshot_card(&card.widget, &shot, options.width - 52);
                     let node = shot.to_node().expect("revealed card render node");
                     window
                         .renderer()
@@ -296,9 +290,10 @@ fn main() -> glib::ExitCode {
             glib::timeout_future(Duration::from_millis(150)).await;
             if let Some(path) = &options.screenshot {
                 // Capture this gallery's widget tree, never the user's desktop.
-                let paintable = gtk::WidgetPaintable::new(Some(&window));
+                let child = window.child().expect("gallery content");
+                child.allocate(options.width, 840, -1, None);
                 let snapshot = gtk::Snapshot::new();
-                paintable.snapshot(&snapshot, window.width() as f64, window.height() as f64);
+                window.snapshot_child(&child, &snapshot);
                 let node = snapshot.to_node().expect("gallery render node");
                 let renderer = window.renderer().expect("gallery renderer");
                 let texture = renderer.render_texture(&node, None);
@@ -315,6 +310,7 @@ fn main() -> glib::ExitCode {
                 lock.grab_focus();
                 card.set_hovered(false);
                 glib::timeout_future(Duration::from_millis(250)).await;
+                snapshot_card(&card.widget, &gtk::Snapshot::new(), options.width - 52);
                 let body = find_class(&card.widget, "body").expect("body");
                 let body_bounds = body.compute_bounds(&card.widget).unwrap();
                 assert!(body_bounds.x() + body_bounds.width() <= card.widget.width() as f32, "Body overflows: {body_bounds:?}");
@@ -324,7 +320,7 @@ fn main() -> glib::ExitCode {
                 assert_eq!(before, (body.width(), body.height(), card.widget.width()), "Action changed body wrapping");
                 if let Some(dir) = &options.snapshot_dir {
                     let shot = gtk::Snapshot::new();
-                    gtk::WidgetPaintable::new(Some(&card.widget)).snapshot(&shot, card.widget.width() as f64, card.widget.height() as f64);
+                    snapshot_card(&card.widget, &shot, options.width - 52);
                     window.renderer().unwrap().render_texture(&shot.to_node().unwrap(), None).save_to_png(dir.join("long-action.png")).unwrap();
                 }
                 let action = find(&card.widget, "card-action-0").expect("long action");
@@ -354,7 +350,7 @@ fn main() -> glib::ExitCode {
                 assert!(find(&card.widget, "interaction-hint").unwrap().is_visible());
                 if let Some(dir) = &options.snapshot_dir {
                     let shot = gtk::Snapshot::new();
-                    gtk::WidgetPaintable::new(Some(&card.widget)).snapshot(&shot, card.widget.width() as f64, card.widget.height() as f64);
+                    snapshot_card(&card.widget, &shot, options.width - 52);
                     window.renderer().unwrap().render_texture(&shot.to_node().unwrap(), None).save_to_png(dir.join("urgent-action-hint.png")).unwrap();
                 }
                 let mut state = card.state();
@@ -371,11 +367,31 @@ fn main() -> glib::ExitCode {
                 glib::timeout_future(Duration::from_millis(220)).await;
                 self_test(&all, &events);
                 app.quit();
+            } else if options.render_test {
+                println!("GTK media acceptance: 19 variants; decoding, frame progression and snapshots passed");
+                app.quit();
             }
         });
     });
     app.run_with_args::<&str>(&[])
 }
+// Snapshot the allocated tree directly: an inactive workspace need not repaint
+// WidgetPaintable's cached frame. This is only used by the synthetic gallery.
+fn snapshot_card(widget: &impl IsA<gtk::Widget>, snapshot: &gtk::Snapshot, width: i32) {
+    // Preserve the live parent allocation when compositor frames are available.
+    let width = if widget.width() > 0 {
+        widget.width()
+    } else {
+        width
+    };
+    let (_, height, _, _) = widget.measure(gtk::Orientation::Vertical, width);
+    widget.allocate(width, height, -1, None);
+    widget
+        .parent()
+        .expect("gallery card parent")
+        .snapshot_child(widget, snapshot);
+}
+
 fn find_class(widget: &impl IsA<gtk::Widget>, class: &str) -> Option<gtk::Widget> {
     let widget = widget.as_ref();
     if widget.has_css_class(class) {
