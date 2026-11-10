@@ -330,7 +330,6 @@ struct Engine {
     serial: String,
     tx: mpsc::Sender<Event>,
     alert: Arc<Mutex<battery::Alert>>,
-    panels: Arc<actions::Panels>,
     artwork: Arc<cache::Artwork>,
     history: Arc<cache::History>,
     lyrics: Arc<lyrics::Lyrics>,
@@ -436,8 +435,6 @@ impl Engine {
         } else if !need_pointer {
             self.pointer = None;
         }
-        self.panels.cancel();
-        self.panels.close(None).await;
         self.cfg = Some(cfg);
         self.bars = bars;
         self.serial = serial;
@@ -524,18 +521,6 @@ impl Engine {
             worker.state["state"] = json!("refreshing");
             worker.wake.notify_one();
             return Ok(true);
-        }
-        if op == "externalLeave" {
-            if let Ok((_, m, _)) = self.context(&msg) {
-                if ["audio", "network"].contains(&s(&m["provider"])) {
-                    self.panels.leave(s(&m["provider"]));
-                }
-            }
-            return Ok(false);
-        }
-        if op == "closeExternalPanels" {
-            self.panels.close(None).await;
-            return Ok(false);
         }
         self.tasks.retain(|t| !t.0.is_finished());
         if self.tasks.len() >= 32 {
@@ -663,7 +648,6 @@ impl Engine {
                         .map(|w| arr(&w.state["items"]).to_vec())
                         .unwrap_or_default()
                 };
-                let panels = self.panels.clone();
                 let wake = self.workers.get(&key).map(|w| w.wake.clone());
                 let panel_action = op == "panelAction";
                 let media_action = op == "mediaAction";
@@ -777,13 +761,11 @@ impl Engine {
                             } else {
                                 actions::choose(&m, row, s(&context["part"]), s(&context["event"]))
                             };
-                            if s(&action).ends_with(".panel") {
-                                panels
-                                    .open(s(&action).split('.').next().unwrap(), &context, &m)
-                                    .await?;
-                            } else {
-                                actions::execute(&action, &context, &m, row, &rows).await?;
-                            }
+                            ensure!(
+                                !s(&action).ends_with(".panel"),
+                                "Panel intents must be handled by the GTK frontend"
+                            );
+                            actions::execute(&action, &context, &m, row, &rows).await?;
                         }
                         Ok::<_, anyhow::Error>(())
                     }
@@ -889,7 +871,6 @@ pub async fn serve(demo: bool) -> Result<()> {
         serial: String::new(),
         tx,
         alert: Arc::new(Mutex::new(battery::Alert::new())),
-        panels: Arc::new(actions::Panels::default()),
         artwork: Arc::new(cache::Artwork::new()),
         history: Arc::new(cache::History::new()),
         lyrics: Arc::new(lyrics::Lyrics::new()),
@@ -906,7 +887,5 @@ pub async fn serve(demo: bool) -> Result<()> {
         tokio::select! {read=async {ensure!(raw.len()<=1048576,"helper input limit exceeded");Ok::<_,anyhow::Error>((&mut reader).take(1048577-raw.len() as u64).read_until(b'\n',&mut raw).await?)}=>{let n=read?;if n==0{break;}ensure!(raw.len()<=1048576,"helper input limit exceeded");if let Ok(msg)=serde_json::from_slice::<Value>(&raw){match engine.message(msg).await{Ok(changed)=>dirty|=changed,Err(e)=>{engine.error=e.to_string();dirty=true;}}}raw.clear();},Some(event)=rx.recv()=>{match event{Event::Native(value)=>{if value["kind"]=="menuChanged"{crate::emit(&value);}else if engine.native!=value{engine.native=value;dirty=true;}},Event::Provider(key,state)=>{if let Some(w)=engine.workers.get_mut(&key){dirty |= provider_changed(&w.state, &state);diagnostics_dirty=true;w.state=state;}},Event::Compositor(data,error)=>{engine.compositor=data;engine.compositor_error=error;dirty=true;},Event::Emit(v)=>crate::emit(&v),Event::Action(error,feedback)=>{engine.action_error=error;if truth(&feedback){engine.feedback=feedback;}dirty=true;}}},_=reload.tick()=>{dirty |= diagnostics_dirty;if !demo {let pending=crate::monitors::pending();if pending!=engine.monitor_change {engine.monitor_change=pending;dirty=true;}}match engine.reload(false).await{Ok(changed)=>dirty|=changed,Err(e)=>{let error=e.to_string();dirty|=engine.error!=error;engine.error=error;}}},_=publish.tick(), if dirty=>{engine.publish();dirty=false;diagnostics_dirty=false;}}
     }
     engine.tasks.clear();
-    engine.panels.cancel();
-    engine.panels.close(None).await;
     Ok(())
 }

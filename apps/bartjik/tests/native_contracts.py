@@ -4,7 +4,7 @@
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
-_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/helpers"))
 import json, os, select, subprocess, tempfile, time, unittest, sys
 from pathlib import Path
 APP=Path(__file__).resolve().parents[1]

@@ -1,4 +1,4 @@
-"""Provider registry. Async I/O never blocks QML. Native MPRIS/tray live in QML."""
+"""Provider registry. Test-only provider oracle; production services are native Rust."""
 
 import asyncio
 import configparser
@@ -95,7 +95,7 @@ ASSETS = [
 
 def cmc_config(m):
     # Temporary compatibility: only read this optional external credential/config file.
-    # No credential is copied to effective config or emitted to QML.
+    # No credential is copied to effective config or emitted to the frontend.
     c = configparser.ConfigParser(interpolation=None)
     if m.get("legacyConfig"):
         c.read(Path(m["legacyConfig"]).expanduser())

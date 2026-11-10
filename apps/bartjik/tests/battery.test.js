@@ -2,8 +2,8 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const B=vm.createContext({});
-vm.runInContext(readFileSync(new URL('../qml/BatteryLogic.js',import.meta.url),'utf8'),B);
-vm.runInContext(readFileSync(new URL('../qml/MorphLogic.js',import.meta.url),'utf8'),B);
+vm.runInContext(readFileSync(new URL('./reference/logic/BatteryLogic.js',import.meta.url),'utf8'),B);
+vm.runInContext(readFileSync(new URL('./reference/logic/MorphLogic.js',import.meta.url),'utf8'),B);
 for(const [percent,count,tone] of [[0,9,'red'],[1,9,'red'],[2,9,'red'],[4.99,9,'red'],[5,1,'red'],[11,1,'red'],[12,2,'red'],[21,2,'red'],[22,3,'yellow'],[51,5,'yellow'],[52,6,'green'],[81,8,'green'],[82,9,'green'],[91,9,'green'],[100,9,'green']]) {
     assert.equal(B.pips(percent),count,`${percent}%`);
     assert.equal(B.tone(count,percent),tone);

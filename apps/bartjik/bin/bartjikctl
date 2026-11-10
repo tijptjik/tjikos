@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
-if [[ ! -f "$root/qml/shell.qml" ]]; then root="${BARTJIK_HOME:-$HOME/.local/lib/bartjik}"; fi
+if [[ ! -d "$root/assets" ]]; then root="${BARTJIK_HOME:-$HOME/.local/lib/bartjik}"; fi
 export BARTJIK_HOME="$root"
 if [[ -x "$root/bin/bartjik-core" ]]; then exec "$root/bin/bartjik-core" "$@"; fi
 exec "$root/target/release/bartjik-core" "$@"

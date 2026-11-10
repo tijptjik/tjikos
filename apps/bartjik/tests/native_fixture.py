@@ -4,7 +4,7 @@
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
-_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/helpers"))
 
 import json, os, sys
 from pathlib import Path
@@ -217,7 +217,7 @@ class Player(Properties):
             Metadata=dbus.Dictionary(
                 {
                     "mpris:trackid": dbus.ObjectPath("/track/1"),
-                    "mpris:artUrl": (Path(__file__).resolve().parents[1] / "qml/icons/demo-album.png").as_uri(),
+                    "mpris:artUrl": (Path(__file__).resolve().parents[1] / "assets/icons/demo-album.png").as_uri(),
                     "xesam:album": "Synthetic album",
                     "xesam:title": self.title,
                     "xesam:artist": dbus.Array(["Synthetic artist"], signature="s"),

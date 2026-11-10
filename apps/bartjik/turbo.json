@@ -6,7 +6,6 @@
     "build": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "../../packages/notification-history/**",
         "../notjik/assets/**",
         "../../scripts/package-notices.py",
         "../../packages/tjik-desktop/LICENSE",
@@ -14,7 +13,9 @@
         "../../packages/tjik-gtk/LICENSE",
         "../../packages/tjik-gtk/NOTICE",
         "../../apps/notjik/LICENSE",
-        "../../apps/notjik/NOTICE"
+        "../../apps/notjik/NOTICE",
+        "../notjik/src/**",
+        "../notjik/Cargo.toml"
       ]
     }
   }

@@ -57,53 +57,6 @@ try:
     if TRANSITION:
         print('PASS: fixed destination allocation, clipping, shrink, interrupted/equal-size handoff; /tmp/bartjik-panel-transition-mid.png')
         sys.exit(0)
-    with tempfile.TemporaryDirectory(prefix='bartjik-panel-reference-') as directory:
-        root = Path(directory)
-        components = root / 'components'
-        components.mkdir()
-        for name in ['PanelHeader', 'PanelHandle', 'PanelButton', 'PanelToolTip', 'StatusDetails', 'BatteryDetails', 'CodexDetails', 'OpenRouterDetails', 'NetworkDetails', 'NetworkConnection', 'NetworkTraffic', 'NetworkAddresses', 'MullvadLocations', 'CountryButton', 'AudioDetails', 'AudioGroup', 'IdleDetails', 'NightlightDetails', 'MonitorDetails', 'PowerConfirmation']:
-            shutil.copy2(APP / 'qml' / (name + '.qml'), components)
-        shutil.copy2(APP / 'qml/CodexTimeline.js', components)
-        shutil.copy2(APP / 'qml/MonitorGeometry.js', components)
-        if SYSTEM:
-            # The offscreen reference never opens the separate power dialog.
-            (components / 'PowerConfirmation.qml').write_text('import QtQuick\nItem { property var theme; property var screen; signal cancelled(); signal accepted() }\n')
-        (components / 'icons').mkdir()
-        shutil.copy2(APP / ('qml/icons/' + ('openrouter' if ROUTER else 'codex') + '.svg'), components / 'icons')
-        source = (APP / 'tests' / ('PolicyCard.qml' if SYSTEM else 'AudioCard.qml' if AUDIO else 'ConnectivityCard.qml' if VPN else 'NetworkCard.qml' if NETWORK else 'OpenRouterCard.qml' if ROUTER else 'CodexCard.qml' if CODEX else 'PanelPrimitives.qml')).read_text().replace('../qml', 'components')
-        row = json.loads((APP / ('tests/fixtures/' + (SYSTEM if SYSTEM else 'audio' if AUDIO else 'connectivity' if VPN else 'network' if NETWORK else 'openrouter' if ROUTER else 'codex') + '-card.json')).read_text())
-        if ROUTER and '--empty' in sys.argv:
-            row['panel']['rows'] = []
-            row['state']['stale'] = False
-            row['panel']['activityNote'] = 'Daily usage isn’t available for this key.'
-        source = source.replace('FIXTURE_ROW', json.dumps(row))
-        if SYSTEM:
-            source = source.replace('FIXTURE_PROVIDER', SYSTEM)
-            (components / 'icons/proicons').mkdir(parents=True, exist_ok=True)
-            shutil.copy2(APP / 'qml/icons/proicons/moon.svg', components / 'icons/proicons')
-        if VPN:
-            shutil.copytree(APP / 'qml/icons/flags', components / 'icons/flags')
-            (components / 'icons/tray').mkdir()
-            shutil.copy2(APP / 'qml/icons/tray/mullvad.svg', components / 'icons/tray')
-            shutil.copy2(APP / 'qml/icons/tailscale.svg', components / 'icons')
-        if AUDIO:
-            (components / "icons/proicons").mkdir(parents=True, exist_ok=True)
-            shutil.copy2(APP / "qml/icons/proicons/volume.svg", components / "icons/proicons")
-        if NETWORK:
-            (components / 'icons/proicons').mkdir(parents=True)
-            shutil.copy2(APP / 'qml/icons/proicons/wi-fi.svg', components / 'icons/proicons')
-        (root / 'shell.qml').write_text(source)
-        artifact = Path(f'/tmp/bartjik-{STEM}-reference.png')
-        artifact.unlink(missing_ok=True)
-        reference = subprocess.Popen(['quickshell', '-p', str(root / 'shell.qml')], env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen', 'QT_QUICK_BACKEND': 'software'})
-        try:
-            reference.wait(timeout=15)
-            assert reference.returncode == 0
-            assert artifact.exists()
-        finally:
-            if reference.poll() is None:
-                reference.terminate()
-                reference.wait(timeout=5)
     print('PASS: rendered synthetic primitives on workspace 7 without focus; ' + env['BARTJIK_PANEL_ARTIFACT'])
 finally:
     result = hypr('eval', f'if _G.{rule} then _G.{rule}:set_enabled(false); _G.{rule}=nil end')

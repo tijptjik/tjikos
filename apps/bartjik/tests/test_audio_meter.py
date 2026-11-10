@@ -4,13 +4,13 @@
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
-_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/helpers"))
 import importlib.util
 from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
 
-spec=importlib.util.spec_from_file_location('audio_meter',Path(__file__).resolve().parents[1]/'tests/reference/qml/audio_levels.py')
+spec=importlib.util.spec_from_file_location('audio_meter',Path(__file__).resolve().parents[1]/'tests/reference/helpers/audio_levels.py')
 meter=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(meter)
 

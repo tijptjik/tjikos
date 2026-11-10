@@ -222,7 +222,7 @@ pub fn item(
     v
 }
 pub fn icon(name: &str) -> String {
-    format!("{}/qml/icons/{name}.svg", root().display())
+    format!("{}/assets/icons/{name}.svg", root().display())
 }
 pub fn field(label: &str, value: Value, detail: &str) -> Value {
     json!({"label":label,"value":st(&value),"detail":detail})

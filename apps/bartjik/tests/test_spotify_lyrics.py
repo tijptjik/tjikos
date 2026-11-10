@@ -3,7 +3,7 @@
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
-_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/helpers"))
 import asyncio
 from contextlib import redirect_stdout, redirect_stderr
 import hashlib
@@ -19,7 +19,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from unittest.mock import patch
 
-import bartjik
+import subprocess
 from bartjik_core import lyrics, spotify_lyrics as spotify
 
 TRACK_ID = '1234567890abcdefghijkl'
@@ -148,12 +148,11 @@ class CredentialTests(unittest.TestCase):
             path = spotify.credential_path()
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             self.assertEqual(spotify.read_cookie(), COOKIE)
-            output = io.StringIO()
-            with redirect_stdout(output), patch.object(spotify, 'request') as fetch:
-                self.assertEqual(bartjik.main(['spotify', 'status']), 0)
-                fetch.assert_not_called()
-            self.assertTrue(json.loads(output.getvalue())['configured'])
-            self.assertNotIn(COOKIE, output.getvalue())
+            output = subprocess.check_output([
+                str(Path(__file__).resolve().parents[1] / 'target/release/bartjik-core'),
+                'spotify', 'status'], text=True, timeout=5)
+            self.assertTrue(json.loads(output)['configured'])
+            self.assertNotIn(COOKIE, output)
             self.assertFalse(spotify.configure('logout')['configured'])
             self.assertFalse(path.exists())
 

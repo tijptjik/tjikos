@@ -3,7 +3,7 @@
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
-_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/helpers"))
 import asyncio
 import json
 import os
@@ -653,37 +653,6 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                         writer.close()
                     server.close()
                     await server.wait_closed()
-
-    async def test_panel_receives_actual_anchor_without_waybar(self):
-        with tempfile.TemporaryDirectory() as td:
-            (Path(td) / "shell.qml").touch()
-            context = {
-                "monitor": "DP-2",
-                "anchor": {"x": 40, "y": 900, "width": 20, "height": 24},
-                "event": "leftClick",
-            }
-            with patch(
-                "bartjik_core.actions.command", AsyncMock(side_effect=["false", ""])
-            ) as run:
-                await Executor().panel("audio", context, {"panelPath": td})
-                args = run.call_args.args[0]
-                self.assertIn("toggleAt", args)
-                self.assertEqual(
-                    json.loads(args[-1]), {"screen": "DP-2", "x": 50, "bottom": 900}
-                )
-            # Crossing from the icon to the number must not toggle the mixer shut.
-            with patch("bartjik_core.actions.command", AsyncMock(return_value="true")) as run:
-                await Executor().panel("audio", dict(context, event="hoverEnter"), {"panelPath": td})
-                run.assert_awaited_once()
-                self.assertEqual(run.call_args.args[0][-1], "isOpen")
-            with patch(
-                "bartjik_core.actions.command",
-                AsyncMock(side_effect=[Unavailable("not running"), "", "true"]),
-            ) as run:
-                await Executor().panel("network", context, {"panelPath": td})
-                launch = run.call_args_list[1]
-                self.assertIn("-n", launch.args[0])
-                self.assertIn("NETWORK_WIDGET_ANCHOR", launch.kwargs["env"])
 
     async def test_gui_launch_is_detached(self):
         with patch("bartjik_core.actions.subprocess.Popen") as popen:

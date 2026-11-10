@@ -3,7 +3,7 @@
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
-_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/helpers"))
 import asyncio
 import json
 from pathlib import Path
@@ -122,40 +122,3 @@ class ConnectivityTests(unittest.IsolatedAsyncioTestCase):
     async def test_stdin_transport_does_not_interpret_text(self):
         value='100.64.0.1;$(not-a-command)'
         self.assertEqual(await command(['python3','-c','import sys; print(sys.stdin.read())'],input_text=value),value)
-
-
-class ExternalPanelTests(unittest.IsolatedAsyncioTestCase):
-    async def test_hover_retains_pointer_then_closes_and_click_pins(self):
-        with tempfile.TemporaryDirectory() as td:
-            (Path(td)/'shell.qml').touch()
-            ctx=dict(monitor='DP-2',anchor=dict(x=40,y=900,width=20,height=24),event='hoverEnter')
-            hovered=True
-            calls=[]
-            async def run(args,**kw):
-                calls.append(args)
-                if args[-1]=='isOpen': return 'false'
-                if args[-1]=='geometry': return json.dumps({'hovered':hovered})
-                return ''
-            ex=Executor()
-            with patch('bartjik_core.actions.command',side_effect=run):
-                await ex.panel('network',ctx,{'panelPath':td})
-                self.assertIn('network',ex.hover_panels)
-                ex.leave_panel('network')
-                await asyncio.sleep(.7)
-                self.assertFalse(any(a[-1]=='close' for a in calls))
-                hovered=False
-                await asyncio.sleep(.3)
-                self.assertTrue(any(a[-1]=='close' for a in calls))
-                await ex.panel('network',ctx,{'panelPath':td})
-                await ex.panel('network',{**ctx,'event':'leftClick'},{'panelPath':td})
-                self.assertNotIn('network',ex.hover_panels)
-                before=len(calls)
-                await ex.close()
-                self.assertEqual(len(calls),before)
-
-    async def test_switching_closes_only_hover_owned_panel(self):
-        ex=Executor();ex.hover_panels['audio']=['quickshell','ipc','call','audio']
-        with patch('bartjik_core.actions.command',AsyncMock(return_value='')) as run:
-            await ex.close_hover_panels()
-            run.assert_awaited_once_with(['quickshell','ipc','call','audio','close'],timeout=2)
-            self.assertFalse(ex.hover_panels)

@@ -1,7 +1,8 @@
 # GTK idle CPU profiling, 2026-11-10
 
 The initial whole-service idle measurement was 8.4% of one CPU core. That was excessive;
-relative improvement over Quickshell was not a sufficient acceptance criterion.
+relative improvement over the earlier renderer was not a sufficient acceptance
+criterion.
 
 ## Identified work and changes
 
@@ -91,7 +92,7 @@ and must not be presented as an exact percentage improvement. The remaining cost
 nonzero: provider reconciliation, pointer sampling for auto-hide, state updates and
 rendering continue. No animations or interaction features were disabled to manufacture
 an idle result. This pass does not establish active-preview performance or a new matched
-Quickshell comparison.
+historical renderer comparison.
 
 Latest validation: supported build passed, 42 GTK tests passed (four gated fixtures
 ignored), and the private-bus services fixture passed with fatal GLib criticals enabled.

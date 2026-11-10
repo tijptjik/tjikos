@@ -153,6 +153,7 @@ pub fn style(v: &Value) -> Result<()> {
         "surface",
         "border",
         "panelBorder",
+        "menuBackground",
         "text",
         "muted",
         "accent",
@@ -656,7 +657,7 @@ pub fn check_assets() -> Result<()> {
             read(path)?;
         }
     }
-    let fonts = root().join("qml/fonts");
+    let fonts = root().join("assets/fonts");
     let provenance = read(fonts.join("provenance.json"))?;
     let bytes = std::fs::read(fonts.join(s(&provenance["file"])))?;
     ensure!(

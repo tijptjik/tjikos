@@ -15,8 +15,7 @@ if [[ "${1:-}" == --licenses-only ]]; then
 fi
 test -x "$source_dir/bin/bartjik-core"
 test -x "$source_dir/bin/bartjik-gtk"
-test -f "$source_dir/qml/IconFonts.qml"
-test -f "$source_dir/qml/fonts/MaterialSymbolsRounded.ttf"
+test -f "$source_dir/assets/fonts/MaterialSymbolsRounded.ttf"
 install_notification_assets() {
     install -d -m 755 "$target_dir/lib/notification-cards/assets"
     cp -R "$source_dir/lib/notification-cards/assets/." "$target_dir/lib/notification-cards/assets/"
@@ -29,11 +28,13 @@ install_gtk() {
     install -m 755 "$source_dir/lib/libgtk4-layer-shell.so.0" "$target_dir/lib/.layer-shell.pending"
     mv -f "$target_dir/lib/.layer-shell.pending" "$target_dir/lib/libgtk4-layer-shell.so.0"
     install -m 644 "$source_dir/lib/gtk4-layer-shell.LICENSE" "$target_dir/lib/"
+    cp -R "$source_dir/assets" "$target_dir/"
     install_notification_assets
     install -m 755 "$source_dir/bin/bartjik-gtk" "$target_dir/bin/.bartjik-gtk.pending"
     mv -f "$target_dir/bin/.bartjik-gtk.pending" "$target_dir/bin/bartjik-gtk"
 }
 if [[ "${1:-}" == --notification-assets-only ]]; then
+    cp -R "$source_dir/assets" "$target_dir/"
     install_notification_assets
     printf 'Installed BarTjik notification artwork; binaries and services were not changed\n'
     exit 0
@@ -43,21 +44,24 @@ if [[ "${1:-}" == --gtk-only ]]; then
     install -d -m 755 "$install_home/.local/bin" "$target_dir/docs"
     install -m 755 "$source_dir/bin/bartjik" "$target_dir/bin/bartjik"
     install -m 755 "$source_dir/bin/bartjik" "$install_home/.local/bin/bartjik"
-    cp -R "$source_dir/docs/." "$target_dir/docs/"
+    rm -rf "$target_dir/docs" "$target_dir/qml"
+    cp -R "$source_dir/docs" "$target_dir/"
+    cp -R "$source_dir/themes" "$target_dir/"
     install -m 644 "$source_dir/README.md" "$target_dir/"
-    printf 'Installed opt-in Bartjik GTK; existing bar and services were not restarted\n'
+    printf 'Installed Bartjik GTK; existing bar and services were not restarted\n'
     exit 0
 fi
 [[ $# == 0 ]] || { echo 'Usage: install.sh [--gtk-only|--notification-assets-only|--licenses-only]' >&2; exit 2; }
 install -d -m 755 "$install_home/.local/bin" "$target_dir" "$config_dir/systemd/user"
-cp -R "$source_dir"/qml "$source_dir"/themes "$source_dir"/examples "$source_dir"/docs "$source_dir"/hypr "$target_dir/"
+rm -rf "$target_dir/docs"
+cp -R "$source_dir"/assets "$source_dir"/themes "$source_dir"/examples "$source_dir"/docs "$source_dir"/hypr "$target_dir/"
 install -m 644 "$source_dir/README.md" "$target_dir/"
 install_gtk
 install -m 755 "$source_dir/bin/bartjik-core" "$target_dir/bin/.bartjik-core.pending"
 mv -f "$target_dir/bin/.bartjik-core.pending" "$target_dir/bin/bartjik-core"
 install -m 755 "$source_dir/bin/bartjik" "$source_dir/bin/bartjikctl" "$target_dir/bin/"
-rm -f "$target_dir/bartjik.py" "$target_dir"/qml/{audio_controls,audio_levels,network_controls,media_play,media_navigate,tray_attention,tray_focus}.py
-rm -rf "$target_dir/bartjik_core" "$target_dir/__pycache__" "$target_dir/qml/__pycache__"
+rm -f "$target_dir/bartjik.py"
+rm -rf "$target_dir/bartjik_core" "$target_dir/__pycache__" "$target_dir/qml"
 install -m 755 "$source_dir/bin/bartjik" "$source_dir/bin/bartjikctl" "$install_home/.local/bin/"
 bash "$root_dir/../../scripts/install-completions.sh" "$install_home/.local" bartjik
 if [[ "${TJIKUP_MANAGED_CONFIG:-0}" != 1 ]]; then

@@ -3,7 +3,7 @@ Description=bartjik GTK bar
 After=graphical-session.target
 PartOf=graphical-session.target
 [Service]
-ExecStart=%h/.local/bin/bartjik --gtk serve --reserve
+ExecStart=%h/.local/bin/bartjik
 Restart=on-failure
 RestartSec=2
 [Install]

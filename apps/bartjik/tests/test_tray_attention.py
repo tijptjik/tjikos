@@ -3,12 +3,12 @@
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
-_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/helpers"))
 import importlib.util
 from pathlib import Path
 import unittest
 
-spec = importlib.util.spec_from_file_location('tray_attention', Path(__file__).resolve().parents[1] / 'tests/reference/qml/tray_attention.py')
+spec = importlib.util.spec_from_file_location('tray_attention', Path(__file__).resolve().parents[1] / 'tests/reference/helpers/tray_attention.py')
 tray = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tray)
 

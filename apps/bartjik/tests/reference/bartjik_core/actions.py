@@ -121,73 +121,6 @@ class Executor:
         await asyncio.gather(*tasks, return_exceptions=True)
         await self.close_hover_panels()
 
-    async def panel(self, kind, context, module):
-        root = Path(
-            module.get(
-                "panelPath",
-                str(
-                    Path(
-                        os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
-                    )
-                    / "quickshell"
-                    / kind
-                ),
-            )
-        ).expanduser()
-        if not (root / "shell.qml").exists():
-            raise Unavailable(f"{kind} panel is not installed")
-        anchor = context["anchor"]
-        payload = json.dumps(
-            dict(
-                screen=context["monitor"],
-                x=anchor["x"] + anchor["width"] / 2,
-                bottom=anchor["y"],
-            )
-        )
-        base = ["quickshell", "ipc", "-p", str(root), "call", kind]
-        closer = self.panel_closers.pop(kind, None)
-        if closer:
-            closer.cancel()
-        await self.close_hover_panels(except_kind=kind)
-        hovering = context.get("event") == "hoverEnter"
-        if hovering:
-            self.hover_active.add(kind)
-        else:
-            self.hover_active.discard(kind)
-        async with self.lock(kind + ".panel"):
-            if not hovering and kind in self.hover_panels:
-                self.hover_panels.pop(kind, None)  # Clicking keeps an already-hovered panel pinned.
-                return
-            try:
-                opened = await command([*base, "isOpen"], timeout=2)
-                if hovering and opened.strip() == "true":
-                    return
-                await command([*base, "toggleAt", payload], timeout=2)
-                if hovering:
-                    self.hover_panels[kind] = base
-                    if kind not in self.hover_active:
-                        self.leave_panel(kind)
-                return
-            except Unavailable:
-                pass
-            env = os.environ.copy()
-            env[kind.upper() + "_WIDGET_ANCHOR"] = payload
-            await command(
-                ["quickshell", "-d", "-n", "-p", str(root)], env=env, timeout=5
-            )
-            for _ in range(30):
-                try:
-                    if (await command([*base, "isOpen"], timeout=1)).strip() == "true":
-                        if hovering:
-                            self.hover_panels[kind] = base
-                            if kind not in self.hover_active:
-                                self.leave_panel(kind)
-                        return
-                except Unavailable:
-                    pass
-                await asyncio.sleep(0.1)
-            raise Unavailable(f"{kind} panel did not become ready")
-
     async def execute(self, action, context, module, row, items):
         if action is None:
             return
@@ -216,7 +149,7 @@ class Executor:
         if action not in config.INTERNAL:
             raise ValueError("unknown internal action")
         if action.endswith(".panel"):
-            return await self.panel(action.split(".")[0], context, module)
+            raise Unavailable("Panel intents are owned by the frontend")
         if action.startswith("workspace."):
             eligible = [
                 i
@@ -368,4 +301,4 @@ class Executor:
                 timeout=15,
             )
         else:
-            raise ValueError("native action must be handled by QML")
+            raise ValueError("native action must be handled by the frontend")

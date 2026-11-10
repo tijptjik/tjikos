@@ -4,7 +4,7 @@
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference"))
-_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/qml"))
+_sys.path.insert(0, str(_Path(__file__).resolve().parent / "reference/helpers"))
 import os
 from pathlib import Path
 import sys
@@ -15,7 +15,7 @@ from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / 'qml'))
+sys.path.insert(0, str(ROOT / 'tests/reference/helpers'))
 from bartjik_core import spotify_navigation as nav
 import media_navigate as helper
 

@@ -6,9 +6,10 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "check": "bash scripts/check.sh",
-    "test": "cargo test --release --locked && python3 -B tests/native_contracts.py -v && python3 -B -m unittest discover -s tests -v && bun tests/logic.test.js && bun tests/codex_timeline.test.js && bun tests/battery.test.js && bun tests/monitor_geometry.test.js",
+    "test": "python3 -B tests/native_launch.py && cargo test --release --locked && python3 -B tests/native_contracts.py -v && python3 -B -m unittest discover -s tests -v && bun tests/logic.test.js && bun tests/codex_timeline.test.js && bun tests/battery.test.js && bun tests/monitor_geometry.test.js",
     "demo": "bin/bartjik --demo --config examples/demo.json",
-    "test:gtk": "python3 -B tests/gtk_host.py"
+    "test:gtk": "python3 -B tests/gtk_panel_primitives.py --transition && python3 -B tests/gtk_input_region.py",
+    "test:native": "python3 -B tests/native_services.py && python3 -B tests/network_adapter.py && python3 -B tests/audio_tools.py"
   },
   "dependencies": {
     "@tjikos/gtk": "workspace:*",

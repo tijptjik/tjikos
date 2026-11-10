@@ -1,4 +1,4 @@
-"""Optional Spotify lyrics. Credentials stay local and never reach QML or logs."""
+"""Optional Spotify lyrics. Credentials stay local and never reach presentation payloads or logs."""
 
 import getpass
 import hashlib

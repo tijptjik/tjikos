@@ -1,4 +1,4 @@
-//! GTK gestures resolve to the same configured intent vocabulary as Quickshell.
+//! GTK gestures resolve to the same configured intent vocabulary as the bar input contract.
 use super::Event;
 use crate::{action_choice, util::s};
 use serde_json::{json, Value};

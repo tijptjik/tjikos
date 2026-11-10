@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
 const T=vm.createContext({});
-vm.runInContext(readFileSync(new URL('../qml/CodexTimeline.js',import.meta.url),'utf8'),T);
+vm.runInContext(readFileSync(new URL('./reference/logic/CodexTimeline.js',import.meta.url),'utf8'),T);
 const now=1000000;
 const reset=now+(6*24+18)*3600;
 const hours=T.countdown(reset,now).hours;

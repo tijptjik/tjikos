@@ -38,7 +38,7 @@ fn artwork(provider: &str, size: i32) -> gtk::Widget {
         _ => ("symbol", "info"),
     };
     let widget: gtk::Widget = if kind == "image" {
-        let image = gtk::Image::from_file(crate::util::root().join("qml").join(value));
+        let image = gtk::Image::from_file(crate::util::root().join("assets").join(value));
         image.set_pixel_size(size);
         image.upcast()
     } else {
@@ -1704,7 +1704,7 @@ mod render_tests {
                 if let Some(old) = header.first_child() {
                     header.remove(&old);
                 }
-                let path = crate::util::root().join("qml/icons/bitcoin.svg");
+                let path = crate::util::root().join("assets/icons/bitcoin.svg");
                 header.prepend(&crate::icons::artwork(
                     &json!({"kind":"image","value":path}),
                     &style,

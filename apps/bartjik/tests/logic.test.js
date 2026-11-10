@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const L=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/Logic.js',import.meta.url),'utf8'),L);
+const L=vm.createContext({});vm.runInContext(readFileSync(new URL('./reference/logic/Logic.js',import.meta.url),'utf8'),L);
 const base={side:'b',position:'l',alignment:'r',layout:{},padding:0,offsetX:0,offsetY:0};
 let count=0;function test(name,f){f();count++;}
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-6,`${a} != ${b}`);
@@ -223,8 +223,8 @@ test('gutter pressure borrows centre before clipping',()=>{
  }
 });
 test('ProIcons semantic mapping and Material fallback',()=>{
- const icons=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/IconRegistry.js',import.meta.url),'utf8'),icons);
- for(const name of Object.keys(icons.proicons)){const path=icons.resolve(name,'proicons');assert.ok(readFileSync(new URL('../qml/'+path,import.meta.url),'utf8').includes('<svg'));assert.equal(icons.resolve(name,'material'),'');}
+ const icons=vm.createContext({});vm.runInContext(readFileSync(new URL('./reference/logic/IconRegistry.js',import.meta.url),'utf8'),icons);
+ for(const name of Object.keys(icons.proicons)){const path=icons.resolve(name,'proicons');assert.ok(readFileSync(new URL('../assets/'+path,import.meta.url),'utf8').includes('<svg'));assert.equal(icons.resolve(name,'material'),'');}
  assert.equal(icons.resolve('unmapped_symbol','proicons'),'');
 });
 test('shared hover partitions padding and every gap without dead zones',()=>{
@@ -234,7 +234,7 @@ test('shared hover partitions padding and every gap without dead zones',()=>{
  assert.equal(L.nearestTarget([],0,0),null);
 });
 test('notification slash never displaces the bell or clapper, including reversal',()=>{
- const m=vm.createContext({}),d=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/MorphLogic.js',import.meta.url),'utf8'),m);vm.runInContext(readFileSync(new URL('../qml/MorphData.js',import.meta.url),'utf8'),d);
+ const m=vm.createContext({}),d=vm.createContext({});vm.runInContext(readFileSync(new URL('./reference/logic/MorphLogic.js',import.meta.url),'utf8'),m);vm.runInContext(readFileSync(new URL('./reference/logic/MorphData.js',import.meta.url),'utf8'),d);
  const on=d.shapes.notifications,off=d.shapes.notifications_off;
  for(const [a,b] of [[on,off],[off,on],[m.interpolate(on,off,.4),on]]){
   for(const t of [0,.25,.5,.75,1]){
@@ -249,7 +249,7 @@ test('notification slash never displaces the bell or clapper, including reversal
  assert.equal(JSON.stringify(on.at(-2).points),JSON.stringify(off.at(-2).points));
 });
 test('body morphs minimize contour travel and keep unrelated details stationary',()=>{
- const m=vm.createContext({}),d=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/MorphLogic.js',import.meta.url),'utf8'),m);vm.runInContext(readFileSync(new URL('../qml/MorphData.js',import.meta.url),'utf8'),d);
+ const m=vm.createContext({}),d=vm.createContext({});vm.runInContext(readFileSync(new URL('./reference/logic/MorphLogic.js',import.meta.url),'utf8'),m);vm.runInContext(readFileSync(new URL('./reference/logic/MorphData.js',import.meta.url),'utf8'),d);
  const cost=(a,b)=>a.reduce((sum,p,i)=>sum+p.reduce((n,v,j)=>n+(v-b[i][j])**2,0),0);
  const isClosed=p=>JSON.stringify(p[0])===JSON.stringify(p.at(-1));
  for(const [a,b] of m.groups.slice(1)){
@@ -270,7 +270,7 @@ test('body morphs minimize contour travel and keep unrelated details stationary'
  }
 });
 test('morph endpoints and interrupted transition remain finite and continuous',()=>{
- const m=vm.createContext({}),d=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/MorphLogic.js',import.meta.url),'utf8'),m);vm.runInContext(readFileSync(new URL('../qml/MorphData.js',import.meta.url),'utf8'),d);
+ const m=vm.createContext({}),d=vm.createContext({});vm.runInContext(readFileSync(new URL('./reference/logic/MorphLogic.js',import.meta.url),'utf8'),m);vm.runInContext(readFileSync(new URL('./reference/logic/MorphData.js',import.meta.url),'utf8'),d);
  for(const [a,b] of m.groups){assert.ok(m.compatible(a,b));const first=d.shapes[a],last=d.shapes[b],mid=m.interpolate(first,last,.4),back=m.interpolate(mid,first,0);
   assert.equal(JSON.stringify(mid),JSON.stringify(back));
   for(const t of [0,.25,.5,1])for(const path of m.interpolate(first,last,t))for(const p of path.points)assert.ok(p.every(Number.isFinite));
@@ -280,7 +280,7 @@ test('morph endpoints and interrupted transition remain finite and continuous',(
 });
 
 
-const T=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/TrayIcons.js',import.meta.url),'utf8'),T);
+const T=vm.createContext({});vm.runInContext(readFileSync(new URL('./reference/logic/TrayIcons.js',import.meta.url),'utf8'),T);
 test('tray override matching is case insensitive, deterministic and literal',()=>{
  assert.equal(T.override({'chrome_status_icon_*':'chrome'},'Chrome_Status_Icon_1',''),'chrome');
  assert.equal(T.override({'zapzap':'whatsapp'},'something','ZapZap'),'whatsapp');
@@ -291,7 +291,7 @@ test('tray override matching is case insensitive, deterministic and literal',()=
 
 
 
-const M=vm.createContext({});vm.runInContext(readFileSync(new URL('../qml/Media.js',import.meta.url),'utf8'),M);
+const M=vm.createContext({});vm.runInContext(readFileSync(new URL('./reference/logic/Media.js',import.meta.url),'utf8'),M);
 test('Spotify artist and playlist destinations are typed and safe',()=>{
  assert.equal(M.spotifyUri('https://open.spotify.com/artist/abc123?si=test','artist'),'spotify:artist:abc123');
  assert.equal(M.playlistDestination({'spotify:contextUrl':'spotify:playlist:abc123'}),'spotify:playlist:abc123');

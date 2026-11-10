@@ -282,7 +282,7 @@ pub fn items(module: &Value, native: &Value) -> Vec<Value> {
  let urgent=crate::tray::unread(s(&p["Id"]),&{let mut props=p.clone();props["IconPixmap"]=json!([p["IconPixmap"]]);props});
  let mut row=item(s(&t["id"]),None,Some(s(&p["IconName"])),"theme",json!({"urgent":urgent}),&format!("{}\n{}",s(&p["ToolTip"][2]),s(&p["ToolTip"][3])).trim(),json!({"leftClick":"tray.activate","rightClick":"tray.menu","middleClick":"tray.secondary","scrollUp":"tray.up","scrollDown":"tray.down"}));
  let override_=module["iconOverrides"].as_object().and_then(|o|o.iter().find(|(key,_)|matches(key,&names))).map(|(_,v)|s(v).to_owned());
- if let Some(path)=override_ {row["icon"]["kind"]=json!("image");row["icon"]["value"]=json!(path.strip_prefix("builtin:").map(|n|crate::util::root().join(format!("qml/icons/tray/{n}.svg")).to_string_lossy().into_owned()).unwrap_or(path));}
+ if let Some(path)=override_ {row["icon"]["kind"]=json!("image");row["icon"]["value"]=json!(path.strip_prefix("builtin:").map(|n|crate::util::root().join(format!("assets/icons/tray/{n}.svg")).to_string_lossy().into_owned()).unwrap_or(path));}
  else{let attention=urgent && (!s(&p["AttentionIconName"]).is_empty()||!p["AttentionIconPixmap"].is_null());let pix=if attention{&p["AttentionIconPixmap"]}else{&p["IconPixmap"]};let name=if attention{s(&p["AttentionIconName"])}else{s(&p["IconName"])};row["icon"]["value"]=json!(name);if name.starts_with('/') {row["icon"]["kind"]=json!("image");}else if !pix.is_null(){row["icon"]["kind"]=json!("pixmap");row["icon"]["pixmap"]=pix.clone();}row["icon"]["overlay"]=p["OverlayIconPixmap"].clone();row["icon"]["overlayName"]=p["OverlayIconName"].clone();}
  row["native"]=t.clone();Some(row)
  }).collect();

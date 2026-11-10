@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const context=vm.createContext({});
-vm.runInContext(fs.readFileSync(new URL('../qml/MonitorGeometry.js',import.meta.url),'utf8'),context);
+vm.runInContext(fs.readFileSync(new URL('./reference/logic/MonitorGeometry.js',import.meta.url),'utf8'),context);
 const m=(name,x,y,mode='1920x1080@60.00',scale=1,transform=0)=>({name,connected:true,settings:{x,y,mode,scale,transform,enabled:true}});
 const monitors=[m('TV',-3840,-360,'3840x2160@60.00'),m('wide',0,0,'3440x1440@119.96'),m('HP',3440,720)];
 const plain=v=>JSON.parse(JSON.stringify(v));

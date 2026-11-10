@@ -26,15 +26,8 @@ fn smooth(t: f64) -> f64 {
 fn shapes() -> &'static Value {
     static DATA: OnceLock<Value> = OnceLock::new();
     DATA.get_or_init(|| {
-        serde_json::from_str(
-            include_str!("../../qml/MorphData.js")
-                .split_once("var shapes=")
-                .unwrap()
-                .1
-                .trim()
-                .trim_end_matches(';'),
-        )
-        .expect("generated morph data")
+        serde_json::from_str(include_str!("../../assets/morph-shapes.json"))
+            .expect("generated morph data")
     })
 }
 fn compatible(a: &str, b: &str) -> bool {
@@ -430,25 +423,16 @@ pub(crate) fn artwork(part: &Value, style: &Value, size: i32) -> gtk::Widget {
     let value = s(&part["value"]);
     let mut path = value.trim_start_matches("file://").to_owned();
     if part["kind"] == "symbol" && style["iconSet"] != "material" {
-        let source = include_str!("../../qml/IconRegistry.js");
-        let mapping: Value = serde_json::from_str(
-            source
-                .split_once("var proicons = ")
-                .unwrap()
-                .1
-                .split_once(';')
-                .unwrap()
-                .0,
-        )
-        .unwrap();
+        let mapping: Value =
+            serde_json::from_str(include_str!("../../assets/icon-registry.json")).unwrap();
         if let Some(name) = mapping[value].as_str() {
             path = crate::util::root()
-                .join(format!("qml/icons/proicons/{name}.svg"))
+                .join(format!("assets/icons/proicons/{name}.svg"))
                 .to_string_lossy()
                 .into();
         } else if value == "hotel" {
             path = crate::util::root()
-                .join("qml/icons/bed.svg")
+                .join("assets/icons/bed.svg")
                 .to_string_lossy()
                 .into();
         }

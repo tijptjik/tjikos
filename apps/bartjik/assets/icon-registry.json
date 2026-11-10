@@ -1,0 +1,19 @@
+{
+  "wifi": "wi-fi",
+  "headphones": "headphones",
+  "volume_off": "volume-mute",
+  "volume_up": "volume",
+  "notifications": "bell",
+  "notifications_off": "bell-off",
+  "coffee": "coffee-hot",
+  "nightlight": "moon",
+  "light_mode": "brightness",
+  "desktop_windows": "computer",
+  "sports_esports": "game",
+  "shield": "shield",
+  "shield_lock": "shield-keyhole",
+  "vpn_lock": "shield-keyhole",
+  "play_arrow": "play",
+  "pause": "pause",
+  "stop": "record-stop"
+}

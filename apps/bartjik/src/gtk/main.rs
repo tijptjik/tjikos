@@ -1,4 +1,4 @@
-//! First opt-in bar slice. Provider policy remains in bartjik-core.
+//! Native desktop bar. Provider policy remains in bartjik-core.
 #[allow(dead_code)]
 #[path = "../config.rs"]
 mod config;
@@ -116,7 +116,7 @@ fn main() -> Result<()> {
         return request(action);
     }
     if action == "--help" {
-        println!("bartjik --gtk [serve [--reserve] [--demo]|status|panel|hide-panel|reload|quit]\nGTK desktop bar; use bartjik --quickshell for the legacy renderer. --reserve enables configured per-edge reservations.");
+        println!("bartjik [serve [--reserve] [--demo]|status|panel|hide-panel|reload|quit]\nGTK desktop bar. --reserve enables configured per-edge reservations.");
         return Ok(());
     }
     if action != "serve"

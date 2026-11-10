@@ -1,27 +1,25 @@
 # bartjik
 
-A configurable Quickshell bar with independent monitor layouts, transparent gaps,
+A configurable Rust + GTK4 bar with independent monitor layouts, transparent gaps,
 rounded islands and typed, individually interactive items. `bartjikctl` controls
 visibility and exposes configuration, provider data and resolved geometry.
 
-For the planned Rust + GTK frontend and shared compositor adapters, see the
-[GTK migration handoff](docs/gtk-migration-handoff.md).
+See [native acceptance and remaining checks](docs/gtk-remaining.md).
 
 | Rose-punk                                                           | Monochrome                                                            |
 | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | ![Rose-punk status islands](docs/rose-punk-status-bar.png)          | ![Monochrome status islands](docs/monochrome-status-bar.png)          |
 | ![Rose-punk workspaces and media](docs/rose-punk-workspace-bar.png) | ![Monochrome workspaces and media](docs/monochrome-workspace-bar.png) |
 
-These are actual QML captures containing synthetic data only. Screenshot crops show the
-rendered groups; the render test separately asserts their position within the screen
+These historical design references contain synthetic data only. Screenshot crops show
+the rendered groups; the render test separately asserts their position within the screen
 column. No desktop, account, SSID or usage records are captured.
 
 ## Install and run
 
-Requires Quickshell **0.3.2+**, Qt 6 Quick/Controls/Effects, the native Rust backend,
-and a Wayland compositor with layer-shell support. Hyprland workspace actions target the
-current **Lua** configuration interface. Bun/Turborepo are build tools, not runtime
-services.
+Requires GTK4, the bundled layer-shell library, the native Rust backend, and a Wayland
+compositor with layer-shell support. Hyprland workspace actions target the current
+**Lua** configuration interface. Bun/Turborepo are build tools, not runtime services.
 
 ```sh
 bun install
@@ -35,8 +33,8 @@ bartjik
 The installer does not start or enable services or overwrite configuration. Source entry
 points are `apps/bartjik/bin/{bartjik,bartjikctl}`.
 `bartjik --config /absolute/config.json` selects a file; set `BARTJIK_CONFIG` to the
-same file for offline `bartjikctl config --validate` or `init` operations.
-`bartjik --daemon` detaches; the foreground process suits the supplied user unit.
+same file for offline `bartjikctl config --validate` or `init` operations. `bartjik`
+stays in the foreground, as required by the supplied user unit.
 
 Safe synthetic preview:
 
@@ -46,11 +44,9 @@ dbus-run-session --config-file tests/bus.conf -- bin/bartjik --demo --config exa
 ```
 
 Demo does not start polling processes, native tray/MPRIS subscriptions, or actions. For
-simultaneous development instances copy `qml/` to a temporary directory and set
-`BARTJIK_QML` to it for both launcher and CLI. Quickshell identifies instances by QML
-path, independently of their JSON configuration path. Its IPC sockets/logs use
-`$XDG_RUNTIME_DIR/quickshell`; no separate writable state database is needed.
-Configuration lives at `$XDG_CONFIG_HOME/bartjik/config.json`.
+isolated test instances use separate `BARTJIK_GTK_SOCKET`, `BARTJIK_CONFIG` and private
+XDG directories. The native frontend owns its Unix control socket; test mutations must
+use synthetic providers on a private bus.
 
 ## Session setup
 
@@ -112,9 +108,9 @@ are shared by named bar across screens and last until restart.
 JSON, named-theme files, provider settings, action bindings, style and layout all reload
 within about one second. Invalid edits retain the last valid state and subscriptions.
 Impossible centre widths are rejected against connected screens; an invalid hotplug
-layout retains the prior valid model until corrected. QML, Backend binary updates,
-environment credentials and process-level Qt settings require a restart. A helper
-restart reconnects providers; it does not replay actions.
+layout retains the prior valid model until corrected. Frontend and backend binary
+updates, environment credentials and process-level GTK settings require a restart. A
+helper restart reconnects providers; it does not replay actions.
 
 ## Configuration and precedence
 
@@ -203,12 +199,12 @@ Each island has one background/border/radius/padding. `iconTextGap`, `itemGap`,
 `fontSize`, `iconSize`, `background`, `surface`, `border`, `text`, `muted`, `accent`,
 `radius`, `padding`, `paddingX`, `paddingY`, `borderWidth`, `minItemSize`,
 `maxTextWidth`. Per-part `style` can override font/size/color. State styles include
-active, focused, urgent, muted, disconnected, stale and hover. Qt falls back to
+active, focused, urgent, muted, disconnected, stale and hover. GTK falls back to
 installed fonts if `tijpset` or a glyph is unavailable. Material Symbols Rounded is
-vendored with Bartjik and registered by `qml/IconFonts.qml`; it needs no system font
+vendored with Bartjik and included in the licensed asset bundle; it needs no system font
 package or COPR repository. It is used only by `kind: "symbol"`; normal text does not
 use ligature icons. The pinned upstream revision, checksum and Apache-2.0 license are in
-`qml/fonts/`. Updates require the isolated bundled-font render test, which excludes the
+`assets/fonts/`. Updates require the bundled-font provenance check, which excludes the
 system Material Symbols font.
 
 `layer` is background/bottom/top/overlay. Default overlay behavior is `reserve:false`;
@@ -252,10 +248,10 @@ other compositors retain visible bars. The observer stops when no bar needs it.
 `fadeDuration:180`. The 140px distance bridges the offset and bar height. The single
 row's lower edge is 60 physical pixels above the screen bottom. The central span is 50%,
 side overflow is inward, and the row is 28 logical pixels high. Launch it using
-`bin/bartjik --config examples/comparison.json --daemon`. Touch the bottom edge for half
-a second to reveal, then move upward to the bars. All bars on the same activation edge
-reveal together, including their copies on other monitors by default. CLI hide disables
-the surface entirely; CLI show restores its configured auto-hide behavior.
+`bin/bartjik --config examples/comparison.json`. Touch the bottom edge for half a second
+to reveal, then move upward to the bars. All bars on the same activation edge reveal
+together, including their copies on other monitors by default. CLI hide disables the
+surface entirely; CLI show restores its configured auto-hide behavior.
 `bartjikctl toggle-reveal` holds the bars open until invoked again or until the pointer
 reaches their activation edge, which restores normal auto-hide. `show-reveal` and
 `hide-reveal` set those states explicitly for coordinated shortcuts.
@@ -265,7 +261,7 @@ reaches their activation edge, which restores normal auto-hide. `show-reveal` an
 | Provider       | Data/dependency                                                                     | Default actions and settings                                                                                                                                                                                                                                                                                                  |
 | -------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | workspaces     | One Hyprland event socket plus bounded JSON snapshot/reconnect; monitor-local views | Click absolute workspace; scroll previous/next within that screen. `special`, `scrollSpecial`, `persistent` map.                                                                                                                                                                                                              |
-| playerctl      | Native Quickshell MPRIS, dynamic discovery                                          | Click play/pause; scroll previous/next. `players` matches identity/desktop entry/bus suffix. Explicit preset right-click `player.quit` uses MPRIS Quit when supported. No matching player emits an empty array; empty islands disappear, including their spacing/input area.                                                  |
+| playerctl      | Native D-Bus MPRIS, dynamic discovery                                               | Click play/pause; scroll previous/next. `players` matches identity/desktop entry/bus suffix. Explicit preset right-click `player.quit` uses MPRIS Quit when supported. No matching player emits an empty array; empty islands disappear, including their spacing/input area.                                                  |
 | crypto         | CoinMarketCap HTTP; BTC/SOL/AR defaults                                             | Independent `SYMBOL/CURRENCY` IDs; asset icon/precision/display options, interval 600s. Example BTC icon opens CMC and text opens TradingView.                                                                                                                                                                                |
 | icontray       | Native SystemTray and DBusMenu                                                      | Activate, secondary activate, menu, scroll ±120; excludes Input Method. Native object lifetime IDs distinguish two instances with identical application IDs. See the documented unnamed-service limitation.                                                                                                                   |
 | network        | NetworkManager `nmcli`; optional `interface`                                        | SSID/signal/wired/offline; telemetry failure preserves connected state. Click `network.panel`.                                                                                                                                                                                                                                |
@@ -446,7 +442,7 @@ publish results or restart a polling loop.
 
 ### Native network and audio panels
 
-Network and audio use Bartjik's shared `DetailPanel`, alongside the clock, VPN, media
+Network and audio use Bartjik's shared GTK panel shell, alongside the clock, VPN, media
 and usage panels. They follow the pointer across the full icon/text/padding hover
 region, stay centred on it, clamp to the current monitor and open on the inward side of
 top, bottom, left or right bars. The source island, panel and 8px travel corridor remain
@@ -466,7 +462,7 @@ wheel/scrollbar controls keep their normal behavior. With the managed Hyprland
 `helpers.panel_aware_drag` binding, **Super + left-drag** also detaches an attached card
 from anywhere, including over controls. The shared panel shell publishes its rounded
 input bounds in `$XDG_RUNTIME_DIR/bartjik-panel-PID.rect`; the helper checks the
-matching live layer before passing the press to Qt. This prevents the compositor from
+matching live layer before passing the press to GTK. This prevents the compositor from
 dragging a window underneath the panel. Normal window dragging still uses Hyprland's
 native dispatcher.
 
@@ -493,8 +489,8 @@ hl.window_rule({ name = "bartjik-detached", float = true, border_size = 0,
 ```
 
 Detached cards remain visible when their source bar auto-hides; removing their source
-bar from configuration closes them. One detached card per shared panel (crypto, detail
-and workspace) is supported at a time. Audio's icon retains its separate output-route
+bar from configuration closes them. One detached card per provider is supported at a
+time; the VPN providers share a card. Audio's icon retains its separate output-route
 action, while its volume label opens the mixer.
 
 The built-in audio panel keeps master output, BRIO microphone, playback client
@@ -509,33 +505,15 @@ These bar controls and helpers ship with Bartjik. Theme, monitor selection, popu
 lifetime and hover tracking belong to the shared container. Tray menus retain native
 DBusMenu popups anchored to their item and screen.
 
-Synthetic acceptance (no real network/audio mutations):
-
-```sh
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/hover.py --connectivity-only
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/hover_motion.py
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/panel_crossing.py /tmp/bartjik-panel-crossing
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/native_panels.py /tmp/bartjik-native-panels
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/panel_resize.py /tmp/bartjik-panel-resize
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/detach.py /tmp/bartjik-detach
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/reposition.py /tmp/bartjik-reposition
-# Hyprland compositor opacity and surface-continuity check:
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/drag_frames.py /tmp/bartjik-drag-frames
-```
-
-The fixtures exercise real Qt mouse events, icon/value/padding hover, moving anchors,
-dwell cancellation, monitor changes, all four bar sides, gap traversal, dismissal,
-pinning and control clicks. Demo mode uses synthetic network/audio state and never
-starts traffic or meter helpers. Pointer motion is sampled at most once every 16ms;
-moving within a panel's current target preserves its selection and workspace capture
-model. The motion fixture checks 1,000-event bursts and cancellation on leave. The
-resize fixture samples 24 expand/shrink and panel-handoff cases, including a scrolled
-list that becomes shorter.
+Synthetic network/audio acceptance uses `tests/network_adapter.py` and
+`tests/audio_tools.py` with private executable fixtures. GTK unit tests cover controller
+reconciliation and stale-device behavior; card render fixtures use fixed synthetic rows.
+See [coverage and remaining physical checks](docs/gtk-remaining.md).
 
 ## Extending modules
 
-Rust providers live in `src/providers.rs`; native services live in `qml/Native.qml`.
-Renderers consume the same item contract:
+Rust providers live in `src/providers.rs`; native MPRIS/SNI services live in
+`src/native.rs`. Renderers consume the same item contract:
 
 ```json
 {
@@ -551,7 +529,7 @@ Renderers consume the same item contract:
 ```
 
 Types are icon/text/icon_text. Icon kinds: glyph, symbol (Material ligature), theme,
-image (absolute file path or file URL), native (Quickshell tray image). All Text uses
+image (absolute file path or file URL), native (SNI tray image). Text uses
 `Text.PlainText`; untrusted SSIDs/metadata never become markup. Arrays need unique,
 stable string IDs. Models reconcile by ID with moves/inserts/removals, retaining part
 objects during updates and reordering. A removed native object closes its own lifecycle;
@@ -559,7 +537,7 @@ an ID is not reused for a new tray process.
 
 Supported events: leftClick (`click` alias), rightClick, middleClick, doubleClick,
 hoverEnter, hoverLeave, scrollUp, scrollDown. With a double binding, single-left is
-delayed by `doubleClickInterval` (default Qt system setting), and double cancels it.
+delayed by `doubleClickInterval` (default desktop setting), and double cancels it.
 Without a double binding, left-click runs immediately. `hoverDelay` defaults to 250 ms;
 leave cancels a pending enter and fires once only after enter has fired.
 
@@ -606,36 +584,12 @@ parts rather than combined glyph/text strings.
 
 ## Validation
 
-```sh
-bun run --filter @tjikos/bartjik check
-bun run --filter @tjikos/bartjik test
-bun run --filter @tjikos/bartjik build
-cd apps/bartjik
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/render.py /tmp/bartjik-previews
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/native.py
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/interaction.py
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/nightlight_panel.py /tmp/bartjik-nightlight
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/monitor_panel.py /tmp/bartjik-displays
-python3 -B tests/live_readonly.py  # opt-in; performs read-only API/service queries
-```
-
-The native fixture additionally requires `/usr/bin/python3` with dbus-python and
-PyGObject. Mouse tests use QtTest; render/native tests require the active Wayland
-session. See [verification evidence and limitations](docs/verification.md) and
-[source inventory](docs/inventory.md). Static checks are not a claim of interactive
-desktop switch-over acceptance.
-
-### Edge activation acceptance
-
-`dbus-run-session --config-file tests/bus.conf -- python3 -B tests/edge.py` starts a
-temporary Wayland fixture with injected pointer samples. It verifies 500ms
-dwell/cancellation, foreign-monitor isolation, traversal to the 300px-offset bar, 1000ms
-hide delay, intermediate fade opacity/reversal, empty hidden input regions, zero-delay
-behavior, cross-monitor synchronization, opt-out, CLI visibility and live reload. It
-requires at least two screens and never moves the desktop pointer or invokes provider
-actions. Unit tests cover all four edges, scaled pixels, percentages, negative monitor
-origins, rotated monitors, failure/reconnect and one observer across multiple bars with
-reload cleanup. Automated edge gestures use the isolated fixture.
+Run builds and checks through `dev-check`. `bun run test` covers Rust contracts,
+isolated backend fixtures and retained algorithm oracles. `bun run test:native`
+exercises native MPRIS/SNI, network and audio protocols on private services.
+`bun run test:gtk` checks synthetic card transitions and hidden surface input release on
+workspace 7. These tests do not establish physical-device or IME acceptance. See
+[the acceptance record](docs/gtk-remaining.md).
 
 ### Compact comparison and crypto panel
 
@@ -649,7 +603,7 @@ quieter system controls. Default UI icons use ProIcons where available, with Mat
 Symbols Rounded as fallback (`style.iconSet` is `"proicons"` or `"material"`); crypto
 uses the circular Simple Icons Bitcoin logo and Web3 Icons mono (SOL/AR), and
 Codex/OpenRouter use simplified matching outline icons. Bundled artwork and licenses
-live in `qml/icons/`. Mullvad uses its connected country flag (`regionFlag:true`);
+live in `assets/icons/`. Mullvad uses its connected country flag (`regionFlag:true`);
 disable it for a shield. OpenRouter omits the dollar prefix by default
 (`currencySymbol:""`). Controls override active-state coloring in this preset; glyph
 changes still show DND/caffeine state. Font size, icon size and both padding axes remain
@@ -689,11 +643,6 @@ HTTP429 while retaining the last successful chart. There is no background histor
 polling. Default chart IDs are bitcoin, solana and arweave; custom assets can specify
 `chartId` using CoinGecko's ID. No new credentials are needed. Closing the application
 cancels pending async tasks (bounded HTTP threads can finish within their timeout).
-
-`tests/refined.py` captures both themes and all three chart selections on Wayland;
-`tests/native.py` checks MPRIS appearance/disappearance with actual empty-island
-geometry. Public live chart retrieval was verified for BTC, SOL and AR. The screenshots
-remain synthetic and contain no personal balances or usage records.
 
 ### Workspace hover previews
 
@@ -745,12 +694,6 @@ previews releases them and stops refresh timers. Hiding the source bar also clos
 attached preview; a detached preview stays open. Nothing is saved to disk. Do not use
 the demo screenshot IPC to record live workspace contents; it is explicitly limited to
 synthetic mode.
-
-Run
-`dbus-run-session --config-file tests/bus.conf -- python3 -B tests/preview.py /tmp/bartjik-preview`
-for synthetic Wayland timing, slide, stale-hover cancellation and cleanup acceptance.
-The recorded [workspace preview](docs/workspace-preview.png) contains synthetic content
-only. The [crypto panel](docs/crypto-panel.png) is synthetic too.
 
 ### Screen-edge gutters
 
@@ -890,11 +833,6 @@ place instead of being stretched into unrelated parts of the destination icon. N
 application tray artwork is not morphed. Runtime needs no animation library: precomputed
 vector coordinates are bundled. Regenerate them with
 `uv run --with svgpathtools python scripts/morphs.py` after editing the source SVGs.
-
-`tests/details.py`, `tests/hover.py`, `tests/morph.py` and `tests/native.py` exercise
-synthetic Wayland panels, continuous pointer handling, actual vector animation and
-isolated native services. Run each under the private bus as in the examples above. Only
-synthetic data is used in the documentation's panel captures.
 
 Tray artwork can be replaced with `modules.tray.iconOverrides`, an ordered object
 matching the StatusNotifier app ID, title or tooltip title case-insensitively. A
@@ -1071,10 +1009,10 @@ Previous restarts a seekable track after one second; within the first second it 
 the previous track. A player without position/seek support keeps native Previous
 behavior. These actions work from both the card and bar scrolling.
 
-Hovering either the volume icon or percentage opens the existing Quickshell audio mixer
-above that control using the bar's own anchor. Repeated hover keeps it open; the mixer
-retains its existing pinned-panel close behavior. Icon clicks still switch output,
-percentage clicks toggle the mixer, and scrolling changes volume.
+Hovering either the volume icon or percentage opens the native GTK audio mixer above
+that control using the bar's own anchor. Repeated hover keeps it open; the mixer retains
+its existing pinned-panel close behavior. Icon clicks still switch output, percentage
+clicks toggle the mixer, and scrolling changes volume.
 
 Workspace preview width follows the monitor aspect ratio at the shared card height, with
 a 10px border around the live desktop. Click a window thumbnail to focus that window and
@@ -1089,7 +1027,6 @@ indicated by pulsing chart gridlines, without a loading label.
 Artwork cache and transition acceptance (synthetic covers on a private bus):
 
 ```sh
-dbus-run-session --config-file tests/bus.conf -- python3 -B tests/artwork.py /tmp/bartjik-artwork-preview
 ```
 
 All hover-panel frames use `style.panelBorder`: `#393546` in rose-punk and `#353535` in
@@ -1112,91 +1049,48 @@ filter before closing. Groups expand on search; selected entries use the same fu
 renderer as Notjik. Active notifications retain their actions and dismissal; archived
 actions cannot be replayed.
 
-Notjik's standalone `notjikctl history` remains available. Both apps bundle the shared
-history view, model and card assets from `packages/notification-history`; installed UI
-files do not import another app. Bartjik reads history through its existing Notjik
-service connection and shows an unavailable state if that service is stopped. History
-exports hide content while locked and never export executable commands. Native
-process-local image handles fall back to portable artwork.
+Notjik's standalone `notjikctl history` remains available. Bartjik links Notjik's Rust
+GTK card renderer through `notjik-core` and bundles the required artwork from Notjik's
+native assets. There is no separate history UI package or runtime source import. Bartjik
+reads history through its existing Notjik service connection and shows an unavailable
+state if that service is stopped. History exports hide content while locked and never
+export executable commands. Native process-local image handles fall back to portable
+artwork.
 
 ## Native runtime
 
-All bundled providers, controller commands and QML process helpers run through
-`bartjik-core`. Build with Cargo through `bun run build`; Quickshell remains the Qt/QML
-renderer. `busctl` and `dbus-monitor` provide the tray adapter transport. Python is used
-only for development scripts, test drivers and the test-only migration oracle under
-`tests/reference`; none is installed with Bartjik. See
-[migration validation and measurements](docs/rust-migration.md).
+`bartjik` runs GTK4 and one Rust provider engine, with native MPRIS/SNI subscriptions
+and the shared `tjik-desktop` compositor adapter. `bartjikctl` sends requests to its
+Unix socket. GTK owns attached cards, detached workspace windows and all panel input.
+The bar does not claim the notification-server bus name; Notjik remains the authority.
 
-## Opt-in GTK bar
+Run `bartjik` for configured edge reservations, or `bartjik serve` for an explicitly
+unreserved surface. `--config PATH` selects a configuration; `--demo` selects synthetic
+providers. `--gtk` remains a compatibility alias. Use `bartjik status`, `reload` and
+`quit` to control the frontend. Do not run two reserving bars on the same edge.
 
-`bartjik --gtk serve` runs the GTK bar with an independent Rust provider engine, native
-MPRIS/SNI subscriptions and the shared `tjik-desktop` compositor adapter. The default
-launcher and service remain Quickshell. The shared attached-panel framework renders
-existing status rows. Specialized provider controls, notification history, workspace
-thumbnails and detachment remain separate migration slices.
+Bar input supports module/item/part action precedence, explicit null overrides,
+left/middle/right/double click, hover dwell and wheel/touchpad scroll. Time toggles to
+the configured date. Music scrolling selects previous/next; previous restarts a seekable
+track after one second. The merged VPN flag and Tailscale dots retain separate actions.
+Hover follows configured dwell, island gaps and the bar-to-card retention corridor.
+Dragging detaches a panel into a workspace-owned window; no drag-back docking is
+offered.
 
-Bar input uses the same module/item/part action precedence and explicit null overrides
-as Quickshell: left/middle/right/double click, hover dwell and wheel/touchpad scroll.
-Time toggles to the configured date; media scroll selects previous/next (previous
-restarts a seekable track after one second). The merged VPN flag and lower Tailscale
-dots retain separate configured actions. Panel actions use the shared GTK surface and
-pin the requested card. Hover uses configured dwell, nearest-item island gaps, and a
-bar-to-card retention corridor; `hide-panel` dismisses it. Provider-specific controls
-are still being ported.
+Unread dots indicate attention presence, not numeric message counts. Voice and screen
+recording helpers update independently of hidden cards. Tray insertion/removal animates.
+Auto-hide retains configured dwell, fade and output synchronization; unavailable pointer
+state keeps the bar visible and appears in status.
 
-GTK owns one `bartjik-gtk-core` plus read-only activity helpers. Native tray state
-reuses the current watcher, or owns the watcher when none exists; it never claims
-`org.freedesktop.Notifications`. Unread dots represent attention presence, not numeric
-message counts. Recording state arrives directly at the existing helper cadence (voice
-150ms, screen 250ms), without the mirror's extra sampling delay. Tray insertion and
-removal retain the 240ms transition.
-
-Use `bartjik --gtk status`, `reload`, and `quit` to control only GTK. The default
-reserves no edge space; `serve --reserve` enables configured reservations. Do not run
-two reserving bars on the same edge. Layer-shell is required. Auto-hide retains the
-configured dwell, retention, fade and monitor synchronization; unavailable pointer state
-keeps the bar visible and is reported in status.
-
-Build with `dev-check bun run build --filter=@tjikos/bartjik`. The supported
-`scripts/install.sh --gtk-only` installs GTK and its separate `bartjik-gtk-core`,
-bundled library and launcher without replacing the production core, QML or service
-policy.
-
-For the live workspace-7 GTK preview:
-
-```sh
-python3 apps/bartjik/scripts/gtk_compare.py start --native --workspace 7
-python3 apps/bartjik/scripts/gtk_compare.py status
-python3 apps/bartjik/scripts/gtk_compare.py stop
-```
-
-GTK stays visible on outputs displaying workspace 7 and disappears when they leave it.
-Quickshell retains its normal auto-hide behavior. The GTK bar sits above its position
-with an 8px gutter and no extra reservation. The supervisor restarts a crashed GTK
-process; stop it with the command above. Native mode uses real provider state and
-configured actions; only the bar you interact with executes that action. No automated
-real-device mutations are performed. Omit `--native` for the original read-only mirror
-and synthetic renderer tests. Stop before changing modes. Neither mode changes the
-default service or switches workspace/focus. Do not hold `dev-check` for this persistent
-viewer.
-
-`tests/native_services.py` uses a private bus for service actions and lifecycle tests.
-`tests/gtk_native.py` uses synthetic providers, fake compositor actions and a private
-bus in the prepared stacked geometry (close the comparison first). Its IPC intent checks
-do not substitute for physical pointer/keyboard acceptance. Run finite tests through
-`dev-check`. See [GTK progress and parity](docs/gtk-progress.md) for evidence and
-remaining acceptance work.
-
-The panel foundation is documented in [GTK progress](docs/gtk-progress.md).
-`tests/gtk_panels.py` exercises synthetic pointer paths and actual card allocation in
-the prepared stacked comparison layout. These synthetic visible fixtures require
-workspace-7 placement before launch; do not run them on another active workspace. Close
-the comparison first and run them through `dev-check`. It neither moves the host pointer
-nor launches a nested compositor.
+Build and validate through `dev-check bun run build --filter=@tjikos/bartjik` and
+`dev-check bun run check --filter=@tjikos/bartjik`. Use the supported installer;
+`TJIKUP_MANAGED_CONFIG=1` preserves managed service policy. Artwork lives in `assets/`.
+Tests use private providers and buses. Visible fixtures belong on workspace 7 silently,
+without changing focus or creating nested compositors. See
+[acceptance coverage and limitations](docs/gtk-remaining.md).
 
 ## License
 
-Application source by tijptjik is licensed under GPL-3.0-or-later; see `LICENSE`
-and `NOTICE`. Third-party source, assets and dependencies retain their existing licenses
-and notices.
+Application source by tijptjik is licensed under GPL-3.0-or-later; see `LICENSE` and
+`NOTICE`. Third-party source, assets and dependencies retain their existing licenses and
+notices.

@@ -32,7 +32,7 @@ fn divider() -> gtk::Separator {
 fn flag(country: &str, size: i32) -> gtk::Widget {
     if country.len() == 2 && country.bytes().all(|b| b.is_ascii_lowercase()) {
         let path = crate::util::root()
-            .join("qml/icons/flags")
+            .join("assets/icons/flags")
             .join(format!("{country}.svg"));
         if path.is_file() {
             if size <= 32 {
@@ -210,7 +210,7 @@ impl Card {
                 let header = row();
                 header.set_height_request(44);
                 let image =
-                    gtk::Image::from_file(crate::util::root().join("qml/icons/tailscale.svg"));
+                    gtk::Image::from_file(crate::util::root().join("assets/icons/tailscale.svg"));
                 image.set_pixel_size(22);
                 header.append(&image);
                 header.append(&label("Tailscale", "panel-heading"));

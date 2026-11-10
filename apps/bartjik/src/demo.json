@@ -206,7 +206,7 @@
         "artist": "Synthetic Artist",
         "title": "Evening light across the quiet harbour",
         "album": "Evening sessions",
-        "artwork": "@ROOT@/qml/icons/demo-album.png",
+        "artwork": "@ROOT@/assets/icons/demo-album.png",
         "playing": true,
         "canToggle": true,
         "canPrevious": true,
@@ -228,7 +228,7 @@
       "enabled": true,
       "icon": {
         "kind": "image",
-        "value": "@ROOT@/qml/icons/bitcoin.svg",
+        "value": "@ROOT@/assets/icons/bitcoin.svg",
         "style": {},
         "actions": {}
       },
@@ -255,7 +255,7 @@
       "enabled": true,
       "icon": {
         "kind": "image",
-        "value": "@ROOT@/qml/icons/solana.svg",
+        "value": "@ROOT@/assets/icons/solana.svg",
         "style": {},
         "actions": {}
       },
@@ -282,7 +282,7 @@
       "enabled": true,
       "icon": {
         "kind": "image",
-        "value": "@ROOT@/qml/icons/arweave.svg",
+        "value": "@ROOT@/assets/icons/arweave.svg",
         "style": {},
         "actions": {}
       },
@@ -313,7 +313,7 @@
       "enabled": true,
       "icon": {
         "kind": "image",
-        "value": "@ROOT@/qml/icons/tray/chatgpt.svg",
+        "value": "@ROOT@/assets/icons/tray/chatgpt.svg",
         "style": {},
         "actions": {}
       },
@@ -330,7 +330,7 @@
       "enabled": true,
       "icon": {
         "kind": "image",
-        "value": "@ROOT@/qml/icons/tray/telegram.svg",
+        "value": "@ROOT@/assets/icons/tray/telegram.svg",
         "style": {},
         "actions": {}
       },
@@ -347,7 +347,7 @@
       "enabled": true,
       "icon": {
         "kind": "image",
-        "value": "@ROOT@/qml/icons/tray/whatsapp.svg",
+        "value": "@ROOT@/assets/icons/tray/whatsapp.svg",
         "style": {},
         "actions": {}
       },
@@ -386,7 +386,7 @@
       "enabled": true,
       "icon": {
         "kind": "image",
-        "value": "@ROOT@/qml/icons/flags/jp.svg",
+        "value": "@ROOT@/assets/icons/flags/jp.svg",
         "style": {
           "greyscaleIcons": false,
           "monochromeIcon": false
@@ -626,7 +626,7 @@
       "enabled": true,
       "icon": {
         "kind": "image",
-        "value": "@ROOT@/qml/icons/codex.svg",
+        "value": "@ROOT@/assets/icons/codex.svg",
         "style": {},
         "actions": {"leftClick": "chatgpt.open"}
       },
@@ -733,7 +733,7 @@
       "enabled": true,
       "icon": {
         "kind": "image",
-        "value": "@ROOT@/qml/icons/openrouter.svg",
+        "value": "@ROOT@/assets/icons/openrouter.svg",
         "style": {},
         "actions": {}
       },

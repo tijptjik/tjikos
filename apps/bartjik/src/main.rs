@@ -48,11 +48,10 @@ async fn stdin_json(limit: u64) -> Result<Value> {
     Ok(serde_json::from_slice(&raw)?)
 }
 async fn ipc(request: &Value) -> Result<Value> {
-    // An explicit QML path still targets the legacy renderer for rollback/fixtures.
     let socket = std::env::var_os("BARTJIK_GTK_SOCKET")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| xdg("XDG_RUNTIME_DIR", "/tmp").join("bartjik-gtk.sock"));
-    if std::env::var_os("BARTJIK_QML").is_none() && socket.exists() {
+    {
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
         let mut stream = tokio::net::UnixStream::connect(&socket)
             .await
@@ -70,27 +69,6 @@ async fn ipc(request: &Value) -> Result<Value> {
         ensure!(value["ok"] == true, "{}", value["error"]);
         return Ok(value);
     }
-    let qml = std::env::var("BARTJIK_QML")
-        .unwrap_or_else(|_| root().join("qml").to_string_lossy().into_owned());
-    let raw = cmd(&[
-        "quickshell",
-        "ipc",
-        "--path",
-        &qml,
-        "call",
-        "bartjik",
-        "request",
-        &request.to_string(),
-    ])
-    .await
-    .context("bartjik is not running for this QML path")?;
-    let value: Value = serde_json::from_str(&raw).context("Invalid bartjik IPC response")?;
-    ensure!(
-        value["ok"] == true,
-        "{}",
-        value["error"].as_str().unwrap_or("IPC failed")
-    );
-    Ok(value)
 }
 async fn run() -> Result<()> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
@@ -101,8 +79,8 @@ async fn run() -> Result<()> {
     }
     let op = args.first().map(String::as_str).unwrap_or("--help");
     match op{
- "--help"|"-h"=>println!("bartjik [--config PATH] [--demo] [--daemon]\nbartjikctl [--config PATH] <status|monitors|bars|modules|reload|config --validate|show-workspaces|hide-workspaces|show|hide|toggle|toggle-reveal|show-reveal|hide-reveal|init|spotify>"),
- "launch"=>{use std::os::unix::process::CommandExt;for a in &args[1..]{ensure!(["--demo","--daemon","--help","-h"].contains(&a.as_str()),"unknown launch option");}if args.iter().any(|a|a=="--help"||a=="-h"){println!("bartjik [--config PATH] [--demo] [--daemon]");return Ok(());}if args.iter().any(|a|a=="--demo"){std::env::set_var("BARTJIK_DEMO","1");}config::load()?;let qml=std::env::var("BARTJIK_QML").unwrap_or_else(|_|root().join("qml").to_string_lossy().into_owned());let mut cmd=std::process::Command::new("quickshell");cmd.args(["--path",&qml,"--no-duplicate"]);if args.iter().any(|a|a=="--daemon"){cmd.arg("--daemonize");}return Err(cmd.exec().into());},
+ "--help"|"-h"=>println!("bartjik [--config PATH] [serve] [--demo] [--reserve]\nbartjikctl [--config PATH] <status|monitors|bars|modules|reload|config --validate|show-workspaces|hide-workspaces|show|hide|toggle|toggle-reveal|show-reveal|hide-reveal|init|spotify>"),
+
  "serve"=>engine::serve(args.iter().any(|a|a=="--demo")||std::env::var("BARTJIK_DEMO").as_deref()==Ok("1")).await?,
  "check-assets"=>{config::check_assets()?;println!("bartjik: configurations, themes and font provenance checked");},
  "spotify"=>emit(&spotify::configure(args.get(1).context("spotify requires login, logout or status")?)?),

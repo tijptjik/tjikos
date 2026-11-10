@@ -6,7 +6,7 @@ use crate::{
 use serde_json::Value;
 use std::collections::BTreeMap;
 use tjik_gtk::gtk::{self, prelude::*};
-/// Match Part.qml: hover cards/previews replace the raw provider tooltip.
+/// hover cards/previews replace the raw provider tooltip.
 fn tooltip<'a>(module: &Value, row: &'a Value) -> Option<&'a str> {
     let hover_action = ["item", "icon", "text", "artist", "track"]
         .iter()
