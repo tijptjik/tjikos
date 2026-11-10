@@ -1,52 +1,54 @@
 {
-  "status": "publication-pending; recorded candidate superseded; tjik-task-gtk internal until applications stabilise",
+  "status": "publication-authorized; blocked by crates.io account email verification; source tags published",
   "registry": "crates-io",
   "prefix": "tjik",
-  "source_commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72",
+  "source_commit": "a0c45a7029abd41a14d6bd61844f109adaf7603d",
   "receipt_created_at": "2026-11-10T08:12:27.785080+00:00",
   "packages": [
     {
       "name": "tjik-desktop",
       "version": "0.1.0",
-      "sha256": "d0eacf3205f1b4aefb1b422da2a9d8dc5062baf8f003c0873db48539ceec8d2b",
-      "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72"
+      "sha256": "a93f6ff8241f46fa8c15a9b9282a87a58f2c84acc2689a60224da6ef31da87d2",
+      "tag": "tjik-desktop-v0.1.0",
+      "commit": "a0c45a7029abd41a14d6bd61844f109adaf7603d",
+      "source_url": "https://github.com/tijptjik/tjikos/tree/tjik-desktop-v0.1.0",
+      "uploaded": false
     },
     {
       "name": "tjik-gtk",
       "version": "0.1.0",
-      "sha256": "1d5b4198e2e5b2e255206b40babc4af42ad4ce485e1e8c51d2a643e5bb79b077",
-      "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72"
-    },
-    {
-      "name": "tjik-task-gtk",
-      "version": "0.1.0",
-      "sha256": "5740e6e087e2bb1d0cc9c16fbd2095b23fd4602febff61c604778ff8d823e21d",
-      "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72",
-      "stage": "historical local-extracted-gtk validation; excluded from publication"
+      "sha256": "42ab14f7c978276f87ebffa7b17479f597968e94a5ac925dad3591d71ca8d9c6",
+      "tag": "tjik-gtk-v0.1.0",
+      "commit": "a0c45a7029abd41a14d6bd61844f109adaf7603d",
+      "source_url": "https://github.com/tijptjik/tjikos/tree/tjik-gtk-v0.1.0",
+      "uploaded": false
     }
   ],
   "names_at_preflight": "all three exact names returned crates.io HTTP 404",
   "validation": {
-    "clean_extracted_archives": "passed, all three crates",
-    "desktop_all_features": "passed",
-    "public_api_examples": "passed",
-    "runtjik_consumer_alias": "passed",
+    "clean_extracted_archives": "passed; desktop default/all-features, GTK and internal Tasktjik archive checks",
     "registry_dry_runs": [
       "tjik-desktop",
       "tjik-gtk"
-    ]
+    ],
+    "archive_source_and_legal_files": "matched clean source",
+    "source_tags": "pushed and verified",
+    "native_dependencies": "GTK 4.12+ and gtk4-layer-shell required separately"
   },
   "publication_attempt": {
     "package": "tjik-desktop",
-    "result": "Cargo stopped before upload: no token found",
-    "uploaded": false
+    "version": "0.1.0",
+    "uploaded": false,
+    "result": "crates.io HTTP 400: verified account email required",
+    "registry_readback": {
+      "tjik-desktop": 404,
+      "tjik-gtk": 404
+    }
   },
   "remaining": [
-    "regenerate and validate desktop and GTK candidates from updated source before publication",
-    "verify managed Cargo credentials in the clean release environment",
-    "recheck exact names and ownership/version availability",
-    "publish only independent desktop and GTK candidates from a newly validated clean source",
-    "read back published metadata and archive hashes"
+    "verify the crates.io account email at https://crates.io/settings/profile",
+    "retry both 0.1.0 publications from the validated clean source after email verification",
+    "read back registry metadata and archive hashes against validated candidates"
   ],
   "publication_targets": [
     "tjik-desktop",
@@ -63,7 +65,39 @@
     "dotjik_commit": "d8b1a01",
     "local_file": "~/.cargo/credentials.toml",
     "local_mode": "0600",
-    "remote_apply": false,
-    "publication_resumed": false
-  }
+    "remote_apply": true,
+    "publication_resumed": true,
+    "remote_verification": "Li exact-value proof and mode 0600 passed; Si server excluded"
+  },
+  "historical_candidate": {
+    "source_commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72",
+    "receipt_created_at": "2026-11-10T08:12:27.785080+00:00",
+    "packages": [
+      {
+        "name": "tjik-desktop",
+        "version": "0.1.0",
+        "sha256": "d0eacf3205f1b4aefb1b422da2a9d8dc5062baf8f003c0873db48539ceec8d2b",
+        "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72"
+      },
+      {
+        "name": "tjik-gtk",
+        "version": "0.1.0",
+        "sha256": "1d5b4198e2e5b2e255206b40babc4af42ad4ce485e1e8c51d2a643e5bb79b077",
+        "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72"
+      },
+      {
+        "name": "tjik-task-gtk",
+        "version": "0.1.0",
+        "sha256": "5740e6e087e2bb1d0cc9c16fbd2095b23fd4602febff61c604778ff8d823e21d",
+        "commit": "1791bfa8bce97236d0c60c2c0a8cc9023855dd72",
+        "stage": "historical local-extracted-gtk validation; excluded from publication"
+      }
+    ],
+    "publication_attempt": {
+      "package": "tjik-desktop",
+      "result": "Cargo stopped before upload: no token found",
+      "uploaded": false
+    }
+  },
+  "receipt_updated_at": "2026-11-10T11:02:50.483067+00:00"
 }

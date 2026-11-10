@@ -9,7 +9,8 @@ texts and notices have passed extracted-archive validation.
 Current publication scope is `tjik-desktop` and `tjik-gtk` only. The Tasktjik view
 library remains internal with `publish = false` until the applications have stabilised
 and the maintainer reconsiders. Historical three-crate release entries below are
-superseded by this decision; publication remains pending.
+superseded by this decision. Initial publication is now authorised, with clean source
+tags and dry runs complete; crates.io account email verification is the remaining gate.
 
 The shared core now has public adapter boundaries and bounded background work:
 `tjik-desktop` owns toolkit-independent state/actions; `tjik-gtk` owns presentation

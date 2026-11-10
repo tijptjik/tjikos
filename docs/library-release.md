@@ -12,19 +12,22 @@ The maintainer selected the `tjik` prefix. Public release targets are `tjik-desk
 not create an exclusive crate-name namespace. Local source directories and dependency
 aliases remain unchanged.
 
-Publication is pending at the maintainer's request. The historical candidate at
-`1791bfa8bce97236d0c60c2c0a8cc9023855dd72` passes extracted-archive checks for all three
-crates, public API examples and the Runtjik consumer check. Registry-resolved
-publication dry runs pass for `tjik-desktop` and `tjik-gtk`. The first upload command
-stopped at Cargo's authentication check because no crates.io token was configured;
-nothing was uploaded. See [the release receipt](library-release-receipt.json) for
-candidate hashes and the remaining publication steps. That candidate is superseded by
-author/README updates and the decision to keep Tasktjik views internal. The historical
-Tasktjik archive was validated against the extracted local GTK archive; it is excluded
-from publication.
+Initial publication is authorised. The clean source at
+`a0c45a7029abd41a14d6bd61844f109adaf7603d` passed extracted-archive tests and
+registry-resolved dry runs for both public crates. Source tags
+[`tjik-desktop-v0.1.0`](https://github.com/tijptjik/tjikos/tree/tjik-desktop-v0.1.0) and
+[`tjik-gtk-v0.1.0`](https://github.com/tijptjik/tjikos/tree/tjik-gtk-v0.1.0) are
+published. Candidate archives retain that exact clean Git revision; their source, README
+and legal files match the validated checkout.
 
-When the maintainer requests publication, provision Cargo credentials through Dotjik or
-authenticate locally with `cargo login`, then resume the following procedure:
+Crates.io rejected the first upload with HTTP 400 because the account email is not
+verified. Neither crate was uploaded; both exact names still returned HTTP 404 after the
+rejection. Verify the account email at <https://crates.io/settings/profile>, then retry
+publication from the clean tagged source. The managed Cargo token is already installed
+and verified on Fi and Li. See the [release receipt](library-release-receipt.json) for
+candidate hashes and the account gate. The earlier `1791bfa` candidate is historical.
+
+Resume the following procedure after the email is verified:
 
 1. Query crates.io for each exact name and version. An unused name is only an
    observation; it is not reserved until publication succeeds. If a name already exists,
@@ -71,5 +74,5 @@ check does not make it a publication target.
 
 The public `tjik-gtk` README contains a compilable consumer example, native dependency
 requirements and API/resource/lifecycle contracts. Release state and maintainer commands
-belong here instead of that README. The corrected source author is `tijptjik`; archived
-candidates recorded before this attribution update must be regenerated before upload.
+belong here instead of that README. The corrected source author is `tijptjik`; the
+tagged candidates include that attribution.
