@@ -31,10 +31,13 @@ or parse the model, retain list items, or rely on stable row IDs after recycling
 
 `images::set` resolves themed icons immediately and decodes local/embedded images on a
 worker. `images::set_picture` uses the same queue and limits for `GtkPicture`, leaving
-unsupported sources empty. Each GTK thread owns a queue of at most 64 pending requests
-and one in-flight decode. Recycling removes superseded queued requests; stale
-completions cannot update a rebound image. Queue saturation discards the oldest pending
-request and retains its fallback icon. No timers or network fetches are used.
+unsupported sources empty. Each GTK thread runs at most one decode. Pending work holds
+one weak request per live widget and reads the widget's current source only when it is
+admitted to the decoder. Rebinding coalesces requests, dead widgets are pruned on
+enqueue, and stale completions are rejected. Waiting requests retain no copied image
+strings or textures. The metadata bound is proportional to live widgets; there is no
+fixed queue cap that can silently discard a one-time grid bind. No timers or network
+fetches are used.
 
 Embedded source strings are limited to 128 KiB and local encoded files to 4 MiB. Decoded
 textures preserve aspect ratio, never enlarge small images, and fit within 256×256

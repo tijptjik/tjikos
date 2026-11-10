@@ -6,18 +6,14 @@ use std::{cell::RefCell, collections::VecDeque, io::Read};
 const MAX_SOURCE: usize = 131072;
 const MAX_FILE: u64 = 4 * 1024 * 1024;
 const EDGE: i32 = 256;
-const MAX_PENDING: usize = 64;
 
 type Cache = VecDeque<(String, Option<gdk::Texture>)>;
 struct Job {
     widget: glib::WeakRef<gtk::Widget>,
-    source: String,
 }
 impl Job {
     fn target(&self) -> Option<gtk::Widget> {
-        self.widget
-            .upgrade()
-            .filter(|image| image.widget_name() == self.source)
+        self.widget.upgrade()
     }
 }
 #[derive(Default)]
@@ -122,15 +118,14 @@ async fn drain() {
             job
         });
         let Some(job) = job else { return };
-        if job.target().is_none() {
-            continue;
-        }
+        let Some(target) = job.target() else { continue };
+        // Demand stays on the widget until admitted: waiting jobs contain only
+        // weak references, never another copy of an encoded source string.
+        let source = target.widget_name().to_string();
+        drop(target);
         let cached = LOADER.with(|loader| {
             let mut loader = loader.borrow_mut();
-            let at = loader
-                .cache
-                .iter()
-                .position(|(key, _)| key == &job.source)?;
+            let at = loader.cache.iter().position(|(key, _)| key == &source)?;
             let entry = loader.cache.remove(at).unwrap();
             let value = entry.1.clone();
             loader.cache.push_back(entry);
@@ -139,26 +134,29 @@ async fn drain() {
         let loaded = match cached {
             Some(value) => value,
             None => {
-                let source = job.source.clone();
-                let loaded = gio::spawn_blocking(move || decode(&source))
+                let input = source.clone();
+                let loaded = gio::spawn_blocking(move || decode(&input))
                     .await
                     .ok()
                     .flatten()
                     .map(texture);
                 // File contents can change at the same path: only embedded images are immutable.
-                if job.source.starts_with("data:image/") {
+                if source.starts_with("data:image/") {
                     LOADER.with(|loader| {
                         let mut loader = loader.borrow_mut();
                         if loader.cache.len() >= 32 {
                             loader.cache.pop_front();
                         }
-                        loader.cache.push_back((job.source.clone(), loaded.clone()));
+                        loader.cache.push_back((source.clone(), loaded.clone()));
                     });
                 }
                 loaded
             }
         };
-        if let (Some(image), Some(texture)) = (job.target(), loaded) {
+        if let (Some(image), Some(texture)) = (
+            job.target().filter(|widget| widget.widget_name() == source),
+            loaded,
+        ) {
             if let Some(image) = image.downcast_ref::<gtk::Image>() {
                 image.set_paintable(Some(&texture));
             } else if let Some(picture) = image.downcast_ref::<gtk::Picture>() {
@@ -175,7 +173,7 @@ pub fn set(image: &gtk::Image, source: &str, fallback: &str) {
         if source.len() > MAX_SOURCE {
             return;
         }
-        enqueue(image.upcast_ref(), source);
+        enqueue(image.upcast_ref());
     } else {
         image.set_icon_name(Some(if source.is_empty() || source.contains("://") {
             fallback
@@ -195,21 +193,20 @@ pub fn set_picture(picture: &gtk::Picture, source: &str) {
             || source.starts_with("file://")
             || source.starts_with("data:image/"))
     {
-        enqueue(picture.upcast_ref(), source);
+        enqueue(picture.upcast_ref());
     }
 }
-fn enqueue(widget: &gtk::Widget, source: &str) {
+fn enqueue(widget: &gtk::Widget) {
     let start = LOADER.with(|loader| {
         let mut loader = loader.borrow_mut();
         loader
             .pending
             .retain(|job| job.target().is_some_and(|target| target != *widget));
-        if loader.pending.len() >= MAX_PENDING {
-            loader.pending.pop_front();
-        }
+        // At most one weak demand per live widget, plus one active decode.
+        // Every enqueue removes dead/rebound demands. A burst never evicts
+        // another live widget, so a one-time bind cannot lose its icon.
         loader.pending.push_back(Job {
             widget: widget.downgrade(),
-            source: source.into(),
         });
         let start = !loader.running;
         loader.running = true;
@@ -276,5 +273,56 @@ mod tests {
             .unwrap();
         assert!(decode(path.to_str().unwrap()).is_none());
         std::fs::remove_file(path).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    #[test]
+    #[ignore = "requires GTK display"]
+    fn local_png_load_completes_without_mapping() {
+        gtk::init().unwrap();
+        let context = glib::MainContext::default();
+        context.block_on(async {
+            let p =
+                std::env::temp_dir().join(format!("tjik-icon-fixture-{}.png", std::process::id()));
+            let pixbuf =
+                gdk_pixbuf::Pixbuf::new(gdk_pixbuf::Colorspace::Rgb, true, 8, 32, 32).unwrap();
+            pixbuf.fill(0xff0000ff);
+            pixbuf.savev(&p, "png", &[]).unwrap();
+            // A GridView can bind more than 64 rows in one main-loop turn.
+            let images: Vec<_> = (0..100).map(|_| gtk::Image::new()).collect();
+            for image in &images {
+                for _ in 0..5 {
+                    set(image, p.to_str().unwrap(), "application-x-executable");
+                }
+            }
+            assert_eq!(
+                LOADER.with(|loader| loader.borrow().pending.len()),
+                images.len()
+            );
+            for _ in 0..200 {
+                let discarded = gtk::Image::new();
+                set(&discarded, p.to_str().unwrap(), "application-x-executable");
+            }
+            set(&images[0], p.to_str().unwrap(), "application-x-executable");
+            assert_eq!(
+                LOADER.with(|loader| loader.borrow().pending.len()),
+                images.len(),
+                "dead widgets and repeated binds must not accumulate demands"
+            );
+            for _ in 0..100 {
+                if images.iter().all(|image| image.paintable().is_some()) {
+                    break;
+                }
+                glib::timeout_future(std::time::Duration::from_millis(20)).await;
+            }
+            std::fs::remove_file(p).unwrap();
+            assert!(
+                images.iter().all(|image| image.paintable().is_some()),
+                "initial grid rows remained fallbacks"
+            );
+        });
     }
 }
