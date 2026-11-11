@@ -158,10 +158,10 @@ index 0e8cef2..57f0793 100644
  			return nil, fmt.Errorf("OpenAI API key required")
 diff --git a/internal/notify/errors_only_test.go b/internal/notify/errors_only_test.go
 new file mode 100644
-index 0000000..13f5c44
+index 0000000..1cc4df4
 --- /dev/null
 +++ b/internal/notify/errors_only_test.go
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,45 @@
 +package notify
 +
 +import (
@@ -185,34 +185,41 @@ index 0000000..13f5c44
 +		messages[def.Type] = Message{Title: def.DefaultTitle, Body: def.DefaultBody, IsError: def.IsError}
 +	}
 +	notifier := NewNotifier("errors", messages)
-+	for _, mt := range []MessageType{MsgRecordingStarted, MsgTranscribing, MsgLLMProcessing, MsgConfigReloaded, MsgOperationCancelled} {
++	for _, mt := range []MessageType{MsgRecordingStarted, MsgTranscribing, MsgLLMProcessing, MsgConfigReloaded, MsgOperationCancelled, MsgRecordingAborted, MsgInjectionAborted} {
 +		notifier.Send(mt)
 +	}
++	notifier.Error("Failed to stop transcriber during injection: transcription failed: codex transcription: context canceled")
 +	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
 +		t.Fatalf("routine state changes invoked notify-send: %v", err)
 +	}
-+	notifier.Send(MsgRecordingAborted)
-+	notifier.Send(MsgInjectionAborted)
 +	notifier.Error("Synthetic transcription failure")
 +	data, err := os.ReadFile(logPath)
 +	if err != nil {
 +		t.Fatal(err)
 +	}
 +	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-+	if len(lines) != 3 {
-+		t.Fatalf("got %d error notifications, want 3: %s", len(lines), data)
++	if len(lines) != 1 {
++		t.Fatalf("got %d error notifications, want 1: %s", len(lines), data)
 +	}
-+	for i, body := range []string{"Recording Aborted", "Injection Aborted", "Synthetic transcription failure"} {
++	for i, body := range []string{"Synthetic transcription failure"} {
 +		if !strings.Contains(lines[i], "-a Hyprvoice -u critical Hyprvoice Error "+body) {
 +			t.Fatalf("error notification %d lost critical urgency or body: %q", i, lines[i])
 +		}
 +	}
 +}
 diff --git a/internal/notify/notify.go b/internal/notify/notify.go
-index 617d3b0..ed8d48e 100644
+index 617d3b0..6bb8252 100644
 --- a/internal/notify/notify.go
 +++ b/internal/notify/notify.go
-@@ -15,6 +15,8 @@ func NewNotifier(notifType string, messages map[MessageType]Message) Notifier {
+@@ -3,6 +3,7 @@ package notify
+ import (
+ 	"log"
+ 	"os/exec"
++	"strings"
+ )
+ 
+ type Notifier interface {
+@@ -15,6 +16,8 @@ func NewNotifier(notifType string, messages map[MessageType]Message) Notifier {
  	switch notifType {
  	case "desktop":
  		return NewDesktop(messages)
@@ -221,7 +228,7 @@ index 617d3b0..ed8d48e 100644
  	case "log":
  		return NewLog(messages)
  	default:
-@@ -23,7 +25,8 @@ func NewNotifier(notifType string, messages map[MessageType]Message) Notifier {
+@@ -23,7 +26,8 @@ func NewNotifier(notifType string, messages map[MessageType]Message) Notifier {
  }
  
  type Desktop struct {
@@ -231,7 +238,18 @@ index 617d3b0..ed8d48e 100644
  }
  
  func NewDesktop(messages map[MessageType]Message) *Desktop {
-@@ -39,6 +42,9 @@ func (d *Desktop) Send(mt MessageType) {
+@@ -31,6 +35,10 @@ func NewDesktop(messages map[MessageType]Message) *Desktop {
+ }
+ 
+ func (d *Desktop) Send(mt MessageType) {
++	// Aborts are expected when the user cancels an operation.
++	if mt == MsgRecordingAborted || mt == MsgInjectionAborted {
++		return
++	}
+ 	msg, ok := d.messages[mt]
+ 	if !ok {
+ 		return
+@@ -39,10 +47,18 @@ func (d *Desktop) Send(mt MessageType) {
  		d.Error(msg.Body)
  		return
  	}
@@ -241,6 +259,15 @@ index 617d3b0..ed8d48e 100644
  	d.notify(msg.Title, msg.Body)
  }
  
+ func (d *Desktop) Error(msg string) {
++	// Wrapped transcription cancellation errors arrive as diagnostic text.
++	if strings.Contains(strings.ToLower(msg), "context canceled") {
++		log.Printf("Hyprvoice cancellation: %s", msg)
++		return
++	}
+ 	cmd := exec.Command("notify-send", "-a", "Hyprvoice", "-u", "critical", "Hyprvoice Error", msg)
+ 	if err := cmd.Run(); err != nil {
+ 		log.Printf("Failed to send error notification: %v", err)
 diff --git a/internal/provider/codex.go b/internal/provider/codex.go
 new file mode 100644
 index 0000000..7e84a13

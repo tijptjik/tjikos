@@ -29,9 +29,10 @@ configuration and its backups outside Git.
 
 Set `[notifications] type = "errors"` when Bartjik displays the Hyprvoice tray
 indicator. Routine recording, transcription, cleanup, cancellation and reload
-notifications stay quiet; aborted operations and actual pipeline errors still appear as
-critical desktop notifications. The daemon reloads configuration by stopping its current
-pipeline, so apply this setting while Hyprvoice is idle.
+notifications stay quiet. Aborted operations and wrapped `context canceled` errors also
+stay quiet; actual pipeline errors still appear as critical desktop notifications. The
+daemon reloads configuration by stopping its current pipeline, so apply this setting
+while Hyprvoice is idle.
 
 To smoke-test without recording a microphone or injecting text, generate a synthetic WAV
 with `espeak-ng`, convert it with ffmpeg to 16 kHz mono s16le PCM, and run
