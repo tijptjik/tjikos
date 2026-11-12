@@ -161,12 +161,9 @@ fn spotify_id(meta: &Value) -> String {
     String::new()
 }
 pub struct Card {
-    captures: RefCell<Option<async_channel::Sender<(String, tjik_desktop::WindowId, u32, u32)>>>,
+    captures: RefCell<crate::preview_capture::Previews>,
     thumbnails: RefCell<Vec<(tjik_desktop::WindowId, gtk::Picture)>>,
-    capture_pending: Cell<bool>,
     workspace_active: Cell<bool>,
-    capture_retry: Cell<std::time::Instant>,
-    capture_index: Cell<usize>,
     frames: RefCell<BTreeMap<String, gdk::MemoryTexture>>,
     provider: &'static str,
     body: gtk::Box,
@@ -199,12 +196,9 @@ impl Card {
         actions: async_channel::Sender<Action>,
     ) -> Rc<Self> {
         let c = Rc::new(Self {
-            captures: RefCell::new(None),
+            captures: RefCell::new(crate::preview_capture::Previews::default()),
             thumbnails: RefCell::new(Vec::new()),
-            capture_pending: Cell::new(false),
             workspace_active: Cell::new(true),
-            capture_retry: Cell::new(std::time::Instant::now()),
-            capture_index: Cell::new(0),
             frames: RefCell::new(BTreeMap::new()),
             provider,
             body: gtk::Box::new(gtk::Orientation::Vertical, 12),
@@ -249,6 +243,7 @@ impl Card {
         c.body.connect_unmap(move |_| {
             if let Some(c) = weak.upgrade() {
                 c.tokens.borrow_mut().clear();
+                c.captures.borrow_mut().clear();
                 c.frames.borrow_mut().clear();
                 for (_, picture) in c.thumbnails.borrow().iter() {
                     picture.set_paintable(gdk::Paintable::NONE);
@@ -261,6 +256,9 @@ impl Card {
         c
     }
     fn start_ticker(self: &Rc<Self>) {
+        if !self.workspace_active.get() {
+            return;
+        }
         if self.provider == "playerctl" && !self.show_lyrics.get() {
             if let Some(ticker) = self.ticker.borrow_mut().take() {
                 ticker.remove();
@@ -271,47 +269,21 @@ impl Card {
             return;
         }
         let weak = Rc::downgrade(self);
-        let ticker =
-            gtk::glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
+        let ticker = gtk::glib::timeout_add_local(
+            std::time::Duration::from_millis(if self.provider == "workspaces" {
+                10
+            } else {
+                100
+            }),
+            move || {
                 let Some(c) = weak.upgrade() else {
                     return gtk::glib::ControlFlow::Break;
                 };
                 if !c.workspace_active.get() {
                     return gtk::glib::ControlFlow::Continue;
                 }
-                if c.provider == "workspaces"
-                    && c.body.is_mapped()
-                    && !c.capture_pending.get()
-                    && std::time::Instant::now() >= c.capture_retry.get()
-                {
-                    let thumbs = c.thumbnails.borrow();
-                    if !thumbs.is_empty() {
-                        let i = c.capture_index.get() % thumbs.len();
-                        c.capture_index.set(i + 1);
-                        if let Some(tx) = c.captures.borrow().as_ref() {
-                            let picture = &thumbs[i].1;
-                            if picture.width() <= 0 || picture.height() <= 0 {
-                                return gtk::glib::ControlFlow::Continue;
-                            }
-                            let scale = picture
-                                .native()
-                                .and_then(|n| n.surface())
-                                .map_or(picture.scale_factor() as f64, |s| s.scale());
-                            let width = (picture.width() as f64 * scale).round().max(1.) as u32;
-                            let height = (picture.height() as f64 * scale).round().max(1.) as u32;
-                            if tx
-                                .try_send((
-                                    c.key.borrow().clone(),
-                                    thumbs[i].0.clone(),
-                                    width,
-                                    height,
-                                ))
-                                .is_ok()
-                            {
-                                c.capture_pending.set(true);
-                            }
-                        }
-                    }
+                if c.provider == "workspaces" && c.body.is_mapped() {
+                    c.refresh_captures();
                 }
                 if c.provider == "playerctl" && c.body.is_mapped() && c.show_lyrics.get() {
                     if c.clock_poll.borrow().elapsed().as_secs_f64() >= 1. {
@@ -321,41 +293,52 @@ impl Card {
                     c.highlight();
                 }
                 gtk::glib::ControlFlow::Continue
-            });
+            },
+        );
         *self.ticker.borrow_mut() = Some(ticker);
     }
-    pub fn set_workspace_active(&self, active: bool) {
+    pub fn set_workspace_active(self: &Rc<Self>, active: bool) {
         self.workspace_active.set(active);
+        if !active {
+            self.captures.borrow_mut().clear();
+            if let Some(ticker) = self.ticker.borrow_mut().take() {
+                ticker.remove();
+            }
+        } else if self.body.is_mapped() {
+            self.start_ticker();
+        }
     }
     pub fn capture_with(self: &Rc<Self>, desktop: std::sync::Arc<dyn tjik_desktop::Desktop>) {
-        let (tx, rx) = async_channel::bounded::<(String, tjik_desktop::WindowId, u32, u32)>(1);
-        let (results, incoming) = async_channel::bounded(1);
-        *self.captures.borrow_mut() = Some(tx);
-        std::thread::spawn(move || {
-            while let Ok((key, id, width, height)) = rx.recv_blocking() {
-                let frame = desktop
-                    .capture(&id)
-                    .map(|frame| crate::thumbnail::resample(frame, width, height));
-                if results.send_blocking((key, id, frame)).is_err() {
-                    break;
-                }
-            }
-        });
-        let weak = Rc::downgrade(self);
-        gtk::glib::spawn_future_local(async move {
-            while let Ok((key, id, result)) = incoming.recv().await {
-                let Some(c) = weak.upgrade() else {
-                    break;
-                };
-                c.capture_pending.set(false);
-                if !c.workspace_active.get() || !c.body.is_mapped() || *c.key.borrow() != key {
-                    continue;
-                }
-                if result.is_err() {
-                    c.capture_retry
-                        .set(std::time::Instant::now() + std::time::Duration::from_secs(2));
-                }
-                if let Ok(frame) = result {
+        self.captures.borrow_mut().attach(desktop);
+    }
+    fn refresh_captures(&self) {
+        let targets: Vec<_> = self
+            .thumbnails
+            .borrow()
+            .iter()
+            .map(|(id, picture)| {
+                let scale = picture
+                    .native()
+                    .and_then(|n| n.surface())
+                    .map_or(picture.scale_factor() as f64, |s| s.scale());
+                (
+                    id.clone(),
+                    (picture.width().max(0) as f64 * scale).round() as u32,
+                    (picture.height().max(0) as f64 * scale).round() as u32,
+                )
+            })
+            .collect();
+        let interval = self.context.borrow()["refreshInterval"]
+            .as_u64()
+            .unwrap_or(50)
+            .clamp(33, 5000);
+        let results = self
+            .captures
+            .borrow_mut()
+            .refresh(&targets, std::time::Duration::from_millis(interval));
+        for (id, result) in results {
+            match result {
+                Ok(frame) => {
                     let bytes = gtk::glib::Bytes::from_owned(frame.rgba);
                     let texture = gdk::MemoryTexture::new(
                         frame.width as i32,
@@ -364,16 +347,28 @@ impl Card {
                         &bytes,
                         frame.stride,
                     );
-                    c.frames.borrow_mut().insert(id.0.clone(), texture.clone());
-                    for (target, picture) in c.thumbnails.borrow().iter() {
+                    self.frames
+                        .borrow_mut()
+                        .insert(id.0.clone(), texture.clone());
+                    for (target, picture) in self.thumbnails.borrow().iter() {
                         if *target == id {
                             picture
                                 .set_paintable(Some(&crate::thumbnail::Thumbnail::new(&texture)));
+                            picture.set_tooltip_text(None);
+                        }
+                    }
+                }
+                Err(error) => {
+                    for (target, picture) in self.thumbnails.borrow().iter() {
+                        if *target == id {
+                            picture.set_tooltip_text(Some(&format!(
+                                "Preview paused; retrying: {error}"
+                            )));
                         }
                     }
                 }
             }
-        });
+        }
     }
     fn highlight(&self) {
         let (at, pos, rate) = *self.clock.borrow();
@@ -421,6 +416,7 @@ impl Card {
             *self.lyrics.borrow_mut() = Value::Null;
             self.tokens.borrow_mut().clear();
             self.frames.borrow_mut().clear();
+            self.captures.borrow_mut().clear();
             *self.clock.borrow_mut() = (std::time::Instant::now(), 0., 0.);
         }
         let redraw = changed
@@ -1369,4 +1365,115 @@ pub fn exercise(
         .insert("crypto".into(), "pending".into());
     c.body.set_visible(false);
     assert!(c.tokens.borrow().is_empty());
+}
+
+/// Exercise the real card, transport and texture replacement against only our own
+/// animated toplevel on workspace 7. No focus or workspace changes.
+#[cfg(test)]
+pub fn exercise_live_capture(preview: &gtk::Window) {
+    use std::time::{Duration, Instant};
+    fn pump(duration: Duration) {
+        let end = Instant::now() + duration;
+        while Instant::now() < end {
+            while gtk::glib::MainContext::default().pending() {
+                gtk::glib::MainContext::default().iteration(false);
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+    let source = gtk::Window::builder()
+        .title("Bartjik Panel Fixture Animation")
+        .default_width(480)
+        .default_height(320)
+        .build();
+    let drawing = gtk::DrawingArea::new();
+    let phase = Rc::new(Cell::new(0u32));
+    let color = phase.clone();
+    drawing.set_draw_func(move |_, cr, _, _| {
+        cr.set_source_rgb((color.get() % 60) as f64 / 60., 0.3, 0.6);
+        cr.paint().unwrap();
+    });
+    source.set_child(Some(&drawing));
+    source.present();
+    pump(Duration::from_millis(400));
+    let desktop = tjik_desktop::selected();
+    let mut snapshot = desktop.snapshot().unwrap();
+    snapshot.windows.retain(|w| {
+        w.pid == Some(std::process::id() as u64)
+            && w.title.as_deref() == Some("Bartjik Panel Fixture Animation")
+    });
+    assert_eq!(snapshot.windows.len(), 1);
+    let target = snapshot.windows[0].clone();
+    assert_eq!(
+        target.workspace.as_ref().unwrap().name.as_deref(),
+        Some("7")
+    );
+    let output = snapshot
+        .outputs
+        .iter()
+        .find(|o| Some(&o.id) == target.output.as_ref())
+        .unwrap();
+    assert_ne!(
+        output.workspace, target.workspace,
+        "test requires an inactive workspace 7"
+    );
+    let monitor = output.name.clone();
+    let (send, _events) = async_channel::bounded(32);
+    let (actions, _commands) = async_channel::bounded(32);
+    let card = Card::new("workspaces", send, actions);
+    card.capture_with(desktop.clone());
+    card.update(
+        json!({"id":"7"}),
+        json!({"monitor":monitor,"refreshInterval":50}),
+        json!({"previewHeight":360}),
+        Some(snapshot),
+    );
+    preview.set_child(Some(&card.body));
+    preview.set_default_size(640, 360);
+    pump(Duration::from_millis(200));
+    // GTK can defer layout on an inactive workspace. Allocate the real picture
+    // before measuring its capture footprint; capture itself must drive updates.
+    card.body.allocate(640, 360, -1, None);
+    let anim = drawing.clone();
+    let animation = gtk::glib::timeout_add_local(Duration::from_millis(25), move || {
+        phase.set(phase.get() + 1);
+        anim.queue_draw();
+        gtk::glib::ControlFlow::Continue
+    });
+    let end = Instant::now() + Duration::from_secs(3);
+    let mut colors = std::collections::BTreeSet::new();
+    while Instant::now() < end {
+        pump(Duration::from_millis(10));
+        if let Some(texture) = card.frames.borrow().get(&target.id.0) {
+            let stride = texture.width() as usize * 4;
+            let mut bytes = vec![0; stride * texture.height() as usize];
+            texture.download(&mut bytes, stride);
+            let middle = texture.height() as usize / 2 * stride + texture.width() as usize / 2 * 4;
+            colors.insert(bytes[middle..middle + 4].to_vec());
+        }
+    }
+    animation.remove();
+    eprintln!(
+        "Live inactive-workspace preview: {} distinct frames in 3s",
+        colors.len()
+    );
+    assert!(
+        colors.len() >= 12,
+        "animated source froze: {} colors",
+        colors.len()
+    );
+    card.set_workspace_active(false);
+    let stopped = card.frames.borrow()[&target.id.0].clone();
+    pump(Duration::from_millis(250));
+    assert_eq!(card.frames.borrow()[&target.id.0], stopped);
+    card.set_workspace_active(true);
+    pump(Duration::from_millis(250));
+    assert_ne!(
+        card.frames.borrow()[&target.id.0],
+        stopped,
+        "resume did not capture"
+    );
+    preview.set_child(gtk::Widget::NONE);
+    assert!(card.frames.borrow().is_empty(), "unmap retained textures");
+    source.close();
 }

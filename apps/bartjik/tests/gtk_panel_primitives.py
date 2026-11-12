@@ -29,7 +29,7 @@ def hypr(*args):
     return subprocess.check_output(['hyprctl', *args], text=True)
 
 rule = f'bartjik_panel_fixture_{os.getpid()}'
-result = hypr('eval', f'_G.{rule}=hl.window_rule({{name="{rule}",workspace="7 silent",float=true,no_initial_focus=true,no_focus=true,match={{initial_title="^Bartjik Panel Fixture$"}}}})')
+result = hypr('eval', f'_G.{rule}=hl.window_rule({{name="{rule}",workspace="7 silent",float=true,no_initial_focus=true,no_focus=true,match={{initial_title="^Bartjik Panel Fixture.*$"}}}})')
 assert 'error' not in result.lower(), result
 try:
     env = {**os.environ, 'BARTJIK_PANEL_ARTIFACT': f'/tmp/bartjik-{STEM}-primitives.png', 'BARTJIK_HOME': str(APP / 'dist'), 'GTK_A11Y': 'none', 'PKG_CONFIG_PATH': str(APP / '../../packages/tjik-gtk/target/native/lib/pkgconfig')}
@@ -44,7 +44,7 @@ try:
     while process.poll() is None:
         clients = json.loads(hypr('-j', 'clients'))
         for client in clients:
-            if client['title'] == 'Bartjik Panel Fixture':
+            if client['title'].startswith('Bartjik Panel Fixture'):
                 assert client['workspace']['id'] == 7, client
                 assert json.loads(hypr('-j', 'activewindow')).get('address') != client['address'], 'Fixture stole focus'
                 placed = True

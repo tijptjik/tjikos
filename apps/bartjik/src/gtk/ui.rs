@@ -1529,7 +1529,7 @@ impl Ui {
             })
             .show(&target, pinned, || {
                 if let Some(card) = self.left_cards.get(&target.provider) {
-            card.update(target.row.clone(), json!({"barKey":target.bar,"module":target.module,"item":target.item,"monitor":target.output,"maxWindows":target.options["maxWindows"],"previewWidth":target.options["width"]}), target.style.clone(), self.snapshot.borrow().clone());
+            card.update(target.row.clone(), json!({"barKey":target.bar,"module":target.module,"item":target.item,"monitor":target.output,"maxWindows":target.options["maxWindows"],"previewWidth":target.options["width"],"refreshInterval":target.options["refreshInterval"]}), target.style.clone(), self.snapshot.borrow().clone());
                     card.content()
                 } else if let Some(card) = self.system_cards.get(&target.provider) {
                     card.content()
@@ -1548,7 +1548,7 @@ impl Ui {
                 }
             });
         if let Some(card) = self.left_cards.get(&target.provider) {
-            card.update(target.row.clone(), json!({"barKey":target.bar,"module":target.module,"item":target.item,"monitor":target.output,"maxWindows":target.options["maxWindows"],"previewWidth":target.options["width"]}), target.style.clone(), self.snapshot.borrow().clone());
+            card.update(target.row.clone(), json!({"barKey":target.bar,"module":target.module,"item":target.item,"monitor":target.output,"maxWindows":target.options["maxWindows"],"previewWidth":target.options["width"],"refreshInterval":target.options["refreshInterval"]}), target.style.clone(), self.snapshot.borrow().clone());
         }
     }
     fn tracking_needed(&self) -> bool {

@@ -236,11 +236,10 @@ CLI-hidden and non-auto-hiding copies do not participate. For independent screen
 
 Recording activity temporarily reveals a small, separate indicator island immediately
 before the icon tray (to its left on horizontal bars), including while Hyprvoice
-processes the recording. The light stays steady during
-capture and pulses during processing. When activity finishes or becomes unavailable,
-the bar returns to its normal auto-hide state. Other islands stay transparent and
-click-through; a normal pointer or keyboard reveal
-restores the complete bar. This reveal does not propagate through
+processes the recording. The light stays steady during capture and pulses during
+processing. When activity finishes or becomes unavailable, the bar returns to its normal
+auto-hide state. Other islands stay transparent and click-through; a normal pointer or
+keyboard reveal restores the complete bar. This reveal does not propagate through
 `syncMonitors` or change an explicit CLI visibility setting.
 
 Hovering the bar or keeping its native tray menu open also prevents hiding. A shared
@@ -681,22 +680,22 @@ entire preview. It stays open at the dropped position and can be moved again, in
 across monitors. Its live thumbnails continue to show the original workspace; hovering
 another workspace does not replace them. The close button appears only after dropping.
 
-A shared native Hyprland service maps each workspace's windows to native toplevel
-handles; `ScreencopyView` uses `hyprland-toplevel-export-v1`. We verified capture of an
-inactive workspace on the installed compositor without switching workspaces. Thumbnails
-use GPU layers at twice their displayed physical pixel size, capped at the source
-resolution, with mipmap filtering for downscaling. Their bounds are snapped to physical
-pixels at the destination monitor scale. The default refresh interval is 50ms (20 fps);
-explicit intervals from 33 to 5000ms are supported. The additional filtering textures
-follow thumbnail size rather than full window size. This preserves application layout
-without resizing the apps. Thumbnails preserve logical window positions relative to
-their own monitor, including negative monitor origins and scale. Recent windows paint on
-top. Up to `maxWindows` most recently focused windows are captured; pinned windows on
-that monitor are included. The preview has no heading, repeated workspace number,
-monitor label or window frames. It has a neutral background: wallpaper and layer-shell
-panels are not captured. Apps may stop drawing while inactive; the preview shows their
-latest available buffer. Uncapturable windows fall back to their application name, and
-empty workspaces show a desktop icon.
+The native Hyprland adapter captures windows through `hyprland-toplevel-export-v1`,
+including inactive workspaces without switching to them. Each visible thumbnail has an
+independent capture worker with a persistent Wayland connection and reusable shared
+memory buffer. The default refresh interval is 50ms (up to 20 fps per window); explicit
+intervals from 33 to 5000ms are supported. A slow or failing window does not block other
+thumbnails. Failed streams retry after two seconds and expose their status in a
+thumbnail tooltip. Captures are resized to the thumbnail's physical display size on the
+worker before uploading the texture to GTK. Closing or hiding the preview stops its
+timer and releases its streams; reopening starts fresh captures. Thumbnails preserve
+logical window positions relative to their own monitor, including negative monitor
+origins and scale. Recent windows paint on top. Up to `maxWindows` most recently focused
+windows are captured; pinned windows on that monitor are included. The preview has no
+heading, repeated workspace number, monitor label or window frames. It has a neutral
+background: wallpaper and layer-shell panels are not captured. Apps may stop drawing
+while inactive; the preview shows their latest available buffer. Uncapturable windows
+fall back to their application name, and empty workspaces show a desktop icon.
 
 Only an open preview holds capture buffers. Closing it, removing its bar or disabling
 previews releases them and stops refresh timers. Hiding the source bar also closes an

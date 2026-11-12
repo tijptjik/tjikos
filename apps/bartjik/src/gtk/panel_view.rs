@@ -2003,6 +2003,9 @@ mod render_tests {
         if let Some(card) = network_card {
             crate::network_card::exercise_fixture(&card, &fake_network);
         }
+        if fixture == "workspaces" {
+            crate::left_card::exercise_live_capture(&window);
+        }
         window.close();
     }
 }

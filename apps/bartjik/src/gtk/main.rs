@@ -52,6 +52,7 @@ mod panel_reveal;
 mod panel_view;
 mod panels;
 mod pointer;
+mod preview_capture;
 #[path = "../profile.rs"]
 mod profile;
 mod recording;
