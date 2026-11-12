@@ -10,7 +10,7 @@ fi
 prefix="${1:-$HOME/.local}"
 # External native manifests may require features not visible to --check.
 "$app_dir/dist/tjikup" capabilities | jq -e '
-    .encrypted_credentials >= 1 and .bootstrap_archives >= 1 and
+    .native_file_review >= 1 and .encrypted_credentials >= 1 and .bootstrap_archives >= 1 and
     .native_commands >= 1 and .native_installers >= 1 and .native_maintenance >= 1 and
     .scheduled_telegram >= 1 and .scheduled_telegram_bws >= 1
 ' >/dev/null || {

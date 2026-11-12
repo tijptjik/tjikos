@@ -4,7 +4,7 @@
 set -euo pipefail
 app_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 binary="${1:-$app_dir/dist/tjikup}"
-"$binary" capabilities | jq -e '.scheduled_telegram >= 1 and .scheduled_telegram_bws >= 1' >/dev/null || {
+"$binary" capabilities | jq -e '.native_file_review >= 1 and .scheduled_telegram >= 1 and .scheduled_telegram_bws >= 1' >/dev/null || {
     echo 'Tjikup release lacks BWS-backed scheduled reporting; existing weekly runtime preserved.' >&2
     exit 1
 }
