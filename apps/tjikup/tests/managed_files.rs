@@ -616,3 +616,13 @@ fn adoption_refuses_symlinks_and_preflights_all_files() {
     );
     assert!(!f.path("state/fixture.json").exists());
 }
+
+#[test]
+fn interactive_conflict_review_through_recipe_terminal() {
+    let result = Command::new("python3")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/file_conflict_review.py"))
+        .env("TJIKUP_BINARY", env!("CARGO_BIN_EXE_tjikup"))
+        .output()
+        .expect("Python 3 is required for terminal integration fixtures");
+    success(&result);
+}

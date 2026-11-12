@@ -1,6 +1,6 @@
 //! Shared interface: Synctjik owns worker/lock checks; Tjikup owns file deployment.
 use anyhow::{Context, Result};
-use std::{path::Path, process::Command};
+use std::{io::IsTerminal, path::Path, process::Command};
 
 /// Wrap only an explicitly declared protection cutover. No policy is duplicated
 /// here, and a missing/incompatible Synctjik must fail closed before file writes.
@@ -39,6 +39,18 @@ pub(super) fn apply(
         command.arg("/usr/local/lib/tjikup/tjikup");
     } else {
         command.arg(std::env::current_exe()?);
+    }
+    // Synctjik supervises the native child in a separate process group. Grant
+    // that child review access only when this workflow actually owns the tty.
+    command.env_remove("TJIKUP_REVIEW_FOREGROUND_GROUP");
+    if std::io::stdin().is_terminal()
+        && std::io::stderr().is_terminal()
+        && unsafe { libc::tcgetpgrp(0) == libc::getpgrp() }
+    {
+        command.env(
+            "TJIKUP_REVIEW_FOREGROUND_GROUP",
+            unsafe { libc::getpgrp() }.to_string(),
+        );
     }
     let status = command.arg("files").args(native).status()
         .context("Protection migration unavailable; install a compatible Synctjik before applying protection files")?;

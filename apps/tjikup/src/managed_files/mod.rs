@@ -2,6 +2,7 @@
 mod credential_cache;
 mod disk;
 mod model;
+mod review;
 pub(crate) mod secrets;
 
 use anyhow::{bail, Context, Result};
@@ -9,7 +10,7 @@ use model::{Desired, Manifest, Snapshot};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
@@ -37,6 +38,8 @@ struct State {
     root: PathBuf,
     files: BTreeMap<PathBuf, Snapshot>,
     pending: Option<Pending>,
+    #[serde(default)]
+    kept_local: BTreeMap<PathBuf, Snapshot>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -121,6 +124,7 @@ fn load_state(path: &Path, id: &str, root: &Path) -> Result<(State, bool)> {
             root: root.into(),
             files: BTreeMap::new(),
             pending: None,
+            kept_local: BTreeMap::new(),
         }
     };
     if state.version != 1 || state.id != id || state.root != root {
@@ -172,10 +176,8 @@ fn adopt_identical(root: &Path, entries: &[Desired], state: &mut State) -> Resul
                 continue;
             }
         }
-        bail!(
-            "local changes require review before adopting {}",
-            entry.path.display()
-        );
+        // Non-identical paths are reviewed with the rest of the batch below.
+        // Do not turn adoption into a separate, earlier conflict failure.
     }
     state.files.extend(adopted);
     Ok(())
@@ -214,6 +216,8 @@ fn plan(root: &Path, entries: &[Desired], state: &State) -> Result<Vec<PlanEntry
                 || entry.create_only && current.snapshot != Snapshot::Absent
             {
                 "unchanged"
+            } else if state.kept_local.get(&entry.path) == Some(&entry.snapshot) {
+                "kept-local"
             } else if conflict(entry, &current.snapshot, state) {
                 "conflict"
             } else if entry.snapshot == Snapshot::Absent {
@@ -236,13 +240,13 @@ fn apply(
     root: &Path,
     entries: &[Desired],
     state_path: &Path,
-    mut state: State,
+    state: &mut State,
     restore_xattrs: Option<&BTreeMap<PathBuf, BTreeMap<String, Vec<u8>>>>,
 ) -> Result<usize> {
     let plans = plan(root, entries, &state)?;
     if let Some(entry) = plans.iter().find(|p| p.action == "conflict") {
         bail!(
-            "local changes or unmanaged existing file: {}; no files applied",
+            "local changes or unmanaged existing file: {}; no files applied. Run this apply in an interactive terminal to review, keep local, or use managed with a backup",
             entry.path.display()
         );
     }
@@ -449,7 +453,7 @@ fn run(args: Vec<String>) -> Result<i32> {
     let opts = options(args)?;
     let mut restored_attrs = None;
     let mut restore_expected = BTreeMap::new();
-    let (id, entries) = if let Some(path) = &opts.manifest {
+    let (id, mut entries) = if let Some(path) = &opts.manifest {
         let (manifest, entries) =
             Manifest::load(path, opts.context.as_deref(), opts.group.as_deref())?;
         (manifest.id, entries)
@@ -547,12 +551,20 @@ fn run(args: Vec<String>) -> Result<i32> {
     }
     let state_path = opts.state.join(format!("{id}.json"));
     let (mut state, recovered) = load_state(&state_path, &id, &opts.root)?;
+    if opts.command == "restore" {
+        for entry in &entries {
+            state.kept_local.remove(&entry.path);
+        }
+    }
     if opts.adopt_identical {
         adopt_identical(&opts.root, &entries, &mut state)?;
     }
     let plans = plan(&opts.root, &entries, &state)?;
     let conflicts = plans.iter().any(|p| p.action == "conflict");
-    let changed = plans.iter().filter(|p| p.action != "unchanged").count();
+    let changed = plans
+        .iter()
+        .filter(|p| !matches!(p.action, "unchanged" | "kept-local"))
+        .count();
     if !mutate {
         if opts.json {
             println!("{}", serde_json::to_string_pretty(&plans)?);
@@ -572,13 +584,43 @@ fn run(args: Vec<String>) -> Result<i32> {
     if recovered {
         atomic_json(&state_path, &state)?;
     }
+    let before_review = serde_json::to_vec(&state)?;
+    if opts.command == "apply"
+        && conflicts
+        && std::io::stdin().is_terminal()
+        && std::io::stderr().is_terminal()
+    {
+        review::resolve(&opts.root, &entries, &mut state)?;
+    }
+    let mut kept = 0;
+    if opts.command == "apply" {
+        entries.retain(|entry| {
+            if state.kept_local.get(&entry.path) == Some(&entry.snapshot) {
+                println!(
+                    "KEEP LOCAL {:?} (until managed version changes)",
+                    entry.path
+                );
+                kept += 1;
+                false
+            } else {
+                state.kept_local.remove(&entry.path);
+                true
+            }
+        });
+    }
     let changed = apply(
         &opts.root,
         &entries,
         &state_path,
-        state,
+        &mut state,
         restored_attrs.as_ref(),
     )?;
+    if serde_json::to_vec(&state)? != before_review {
+        atomic_json(&state_path, &state)?;
+    }
+    if kept > 0 {
+        println!("Kept local: {kept}; other files applied normally.");
+    }
     if std::env::var_os("TJIKUP_REPORT_FILE").is_some() {
         println!(
             "__stage_verb__:{}",
@@ -595,7 +637,7 @@ fn run(args: Vec<String>) -> Result<i32> {
 
 pub fn cli(args: Vec<String>) -> i32 {
     if args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h") {
-        println!("tjikup files <check|plan|apply> --manifest PATH --state-dir PATH [--root PATH] [--json]\ntjikup files restore --receipt PATH --state-dir PATH [--root PATH]\n\ncheck/plan: 0 current, 1 changes needed, 2 conflict/error; no deployment writes (encrypted cache may populate).\napply: track desired files, preserve local edits, back up replacements.\nrestore: verify and restore a private receipt; refuse later edits.\n--root remaps absolute destinations into an existing staging directory.\n--refresh-secrets bypasses cached Bitwarden values for this invocation.\nSee docs/native-files.md for the manifest schema and migration boundary.");
+        println!("tjikup files <check|plan|apply> --manifest PATH --state-dir PATH [--root PATH] [--json]\ntjikup files restore --receipt PATH --state-dir PATH [--root PATH]\n\ncheck/plan: 0 current, 1 changes needed, 2 conflict/error; no deployment writes (encrypted cache may populate).\napply: track desired files, preserve local edits, back up replacements. Interactive conflicts offer review, keep local until the managed version changes, use managed with backup, or cancel. Noninteractive unresolved conflicts fail closed.\nrestore: verify and restore a private receipt; refuse later edits.\n--root remaps absolute destinations into an existing staging directory.\n--refresh-secrets bypasses cached Bitwarden values for this invocation.\nSee docs/native-files.md for the manifest schema and migration boundary.");
         return 0;
     }
     match run(args) {

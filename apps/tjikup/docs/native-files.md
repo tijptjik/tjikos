@@ -81,6 +81,32 @@ complete before destination changes begin. Application-specific syntax validatio
 a separate recipe against an isolated staged root; it is not implicitly executed by a
 file manifest.
 
+### Reviewing local changes
+
+Interactive `apply` offers a choice for each conflicting path before writing any
+files: review the difference, keep local, use managed, or cancel (the default).
+Recipes invoking file apply must set `interactive: true` so the scheduler gives
+review exclusive foreground terminal access. Direct `tjikup config home apply`
+and `tjikup files apply` can also review conflicts.
+
+Keep local preserves that path and continues with unrelated files. The decision
+is stored privately against the exact desired content and metadata, not against
+the mutable local bytes. Later application edits stay local; a change to the
+managed version invalidates the decision and requests review again. `check` and
+`plan` report `KEPT-LOCAL` rather than claiming those files match the source.
+This choice preserves the whole file; it does not selectively merge managed keys.
+
+Use managed preserves the current file, permissions and extended attributes in
+the normal recovery receipt. Edits made while the prompt is open invalidate the
+approval before replacement. Cancel writes no destinations or review decisions.
+Sensitive content is displayed only after explicitly choosing review, directly
+on the controlling terminal, never in recipe stdout logs. Unattended applies
+never choose for the user: unresolved conflicts stop with interactive-recovery
+guidance. Existing keep-local decisions remain effective unattended.
+
+The `native_file_review: 1` capability covers this behavior and its persistent
+state. Keep a compatible runner when installing upgrades or scheduled runtimes.
+
 An explicit `--root /absolute/staging-directory` remaps destination paths into an
 existing directory for isolated application. Symlink targets retain their declared text;
 they are never dereferenced by the writer. State is bound to that root and manifest ID,
