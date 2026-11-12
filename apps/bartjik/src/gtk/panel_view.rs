@@ -1880,10 +1880,24 @@ mod render_tests {
             .build();
         window.present();
         let context = glib::MainContext::default();
-        let until = Instant::now() + std::time::Duration::from_secs(3);
+        let started = Instant::now();
+        let until = started + std::time::Duration::from_secs(3);
+        let mut midpoint_saved = false;
         while Instant::now() < until {
             while context.pending() {
                 context.iteration(false);
+            }
+            if fixture == "crypto" && !midpoint_saved && started.elapsed().as_millis() >= 450 {
+                card.allocate(440, window.height(), -1, None);
+                let snap = gtk::Snapshot::new();
+                window.snapshot_child(&card, &snap);
+                window
+                    .renderer()
+                    .unwrap()
+                    .render_texture(&snap.to_node().unwrap(), None)
+                    .save_to_png("/tmp/bartjik-crypto-midpoint.png")
+                    .unwrap();
+                midpoint_saved = true;
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }

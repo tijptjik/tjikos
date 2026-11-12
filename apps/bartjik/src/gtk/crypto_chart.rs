@@ -7,6 +7,7 @@ pub struct Trace {
     points: Vec<(f64, f64)>,
     previous: Vec<(f64, f64)>,
     started: Option<Instant>,
+    initial: bool,
 }
 impl Trace {
     fn update(&mut self, points: Vec<(f64, f64)>) {
@@ -15,18 +16,29 @@ impl Trace {
             return;
         }
         self.previous = std::mem::replace(&mut self.points, points);
-        // Initial history and corrections render immediately. Only newly appended,
-        // overlapping samples advance the existing time window.
-        self.started = self
-            .previous
-            .last()
-            .filter(|old| self.points.last().unwrap().0 > old.0 && self.points[0].0 <= old.0)
-            .map(|_| Instant::now());
+        self.initial = self.previous.is_empty();
+        // Start the first reveal when mapped, so data loaded before opening the
+        // panel still draws in. Subsequent overlapping samples slide as before.
+        self.started = if self.initial {
+            None
+        } else {
+            self.previous
+                .last()
+                .filter(|old| self.points.last().unwrap().0 > old.0 && self.points[0].0 <= old.0)
+                .map(|_| Instant::now())
+        };
+    }
+    fn duration(&self) -> f64 {
+        if self.initial {
+            1.0 / 1.5
+        } else {
+            0.5
+        }
     }
     fn progress(&self) -> f64 {
         self.started
-            .map(|t| (t.elapsed().as_secs_f64() / 0.5).min(1.))
-            .unwrap_or(1.)
+            .map(|t| (t.elapsed().as_secs_f64() / self.duration()).min(1.))
+            .unwrap_or(if self.initial { 0. } else { 1. })
     }
 }
 fn range(points: &[(f64, f64)]) -> (f64, f64) {
@@ -35,7 +47,13 @@ fn range(points: &[(f64, f64)]) -> (f64, f64) {
         points.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max),
     )
 }
-fn line(cr: &gtk::cairo::Context, state: &Trace, width: f64, height: f64, progress: f64) {
+fn line(
+    cr: &gtk::cairo::Context,
+    state: &Trace,
+    width: f64,
+    height: f64,
+    progress: f64,
+) -> (f64, f64) {
     let current = &state.points;
     let mut start = current[0].0;
     let mut end = current.last().unwrap().0;
@@ -58,28 +76,39 @@ fn line(cr: &gtk::cairo::Context, state: &Trace, width: f64, height: f64, progre
     }
     points.extend_from_slice(current);
     let span = (end - start).max(1.);
+    let reveal_end = if state.initial {
+        start + (end - start) * progress
+    } else {
+        end
+    };
+    let mut head = (0., 0.);
     for (i, &(time, value)) in points.iter().enumerate() {
-        let (time, value) = if time > end {
+        let (time, value) = if time > reveal_end {
             if i == 0 {
                 break;
             }
             let (x, y) = points[i - 1];
-            (end, y + (value - y) * ((end - x) / (time - x).max(0.00001)))
+            (
+                reveal_end,
+                y + (value - y) * ((reveal_end - x) / (time - x).max(0.00001)),
+            )
         } else {
             (time, value)
         };
         let x = (time - start) / span * width;
         let y = 8. + height - (value - lo) / (hi - lo).max(0.00001) * height;
+        head = (x, y);
         if i == 0 {
             cr.move_to(x, y);
         } else {
             cr.line_to(x, y);
         }
-        if time >= end {
+        if time >= reveal_end {
             break;
         }
     }
     let _ = cr.stroke();
+    head
 }
 
 pub fn widget(
@@ -118,8 +147,25 @@ pub fn widget(
             1.,
         );
         cr.set_line_width(2.);
-        line(cr, &state, width, height, progress);
+        let (x, y) = line(cr, &state, width, height, progress);
         let _ = cr.restore();
+        // The head follows the interpolated endpoint, never the unrevealed data.
+        cr.set_source_rgba(
+            accent.red() as f64,
+            accent.green() as f64,
+            accent.blue() as f64,
+            0.18,
+        );
+        cr.arc(x, y, 6., 0., std::f64::consts::TAU);
+        let _ = cr.fill();
+        cr.set_source_rgba(
+            accent.red() as f64,
+            accent.green() as f64,
+            accent.blue() as f64,
+            1.,
+        );
+        cr.arc(x, y, 2.8, 0., std::f64::consts::TAU);
+        let _ = cr.fill();
         let (lo, hi) = range(&state.points);
         cr.set_source_rgb(0.65, 0.63, 0.73);
         cr.set_font_size(10.);
@@ -129,13 +175,20 @@ pub fn widget(
         }
     });
     if state.borrow().progress() < 1. {
-        // Hidden workspaces may throttle the frame clock. Invalidate the final
-        // frame once even then, without an always-running background timer.
-        let weak = graph.downgrade();
-        glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
-            if let Some(graph) = weak.upgrade() {
-                graph.queue_draw();
+        let mapped_state = state.clone();
+        graph.connect_map(move |graph| {
+            let mut trace = mapped_state.borrow_mut();
+            if trace.initial && trace.started.is_none() {
+                trace.started = Some(Instant::now());
             }
+            let duration = trace.duration();
+            // Ensure the terminal frame is invalidated even on a throttled output.
+            let weak = graph.downgrade();
+            glib::timeout_add_local_once(std::time::Duration::from_secs_f64(duration), move || {
+                if let Some(graph) = weak.upgrade() {
+                    graph.queue_draw();
+                }
+            });
         });
         graph.add_tick_callback(move |graph, _| {
             graph.queue_draw();
@@ -154,11 +207,24 @@ pub fn widget(
 mod tests {
     use super::*;
     #[test]
+    fn initial_head_follows_the_revealed_segment_with_fixed_axes() {
+        let mut state = Trace::default();
+        state.update(vec![(0., 0.), (1., 10.), (2., 0.)]);
+        let surface =
+            gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, 220, 120).unwrap();
+        let cr = gtk::cairo::Context::new(&surface).unwrap();
+        assert_eq!(line(&cr, &state, 200., 100., 0.), (0., 108.));
+        assert_eq!(line(&cr, &state, 200., 100., 0.25), (50., 58.));
+        assert_eq!(line(&cr, &state, 200., 100., 0.5), (100., 8.));
+        assert_eq!(line(&cr, &state, 200., 100., 1.), (200., 108.));
+    }
+    #[test]
     fn refresh_retains_history_and_identical_responses_do_not_restart() {
         let mut state = Trace::default();
         let first = vec![(0., 3.), (1., 5.)];
         state.update(first.clone());
-        assert!(state.started.is_none(), "Initial history must not replay");
+        assert!(state.initial);
+        assert_eq!(state.progress(), 0., "First history waits for mapping");
         let started = state.started;
         state.update(vec![]);
         state.update(first.clone());
