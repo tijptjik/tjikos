@@ -676,21 +676,49 @@ impl Card {
                     .collect::<Vec<_>>()
                     .join("\n")
             } else {
-                match s(&lyrics["status"]) {
-                    "instrumental" => "Instrumental",
-                    "error" => "Lyrics unavailable",
-                    "ready" | "missing" | "not-found" => "No lyrics found",
-                    _ => "",
-                }
-                .into()
+                String::new()
             };
-            if text.is_empty() {
-                let placeholder = crate::panel_view::control_symbol("lyrics");
+            if text.trim().is_empty() {
+                let unavailable = matches!(
+                    s(&lyrics["status"]),
+                    "instrumental" | "error" | "ready" | "missing" | "not-found"
+                );
+                let placeholder = gtk::Overlay::new();
                 placeholder.set_widget_name("lyrics-placeholder");
                 placeholder.add_css_class("lyrics-placeholder");
                 placeholder.set_vexpand(true);
                 placeholder.set_halign(gtk::Align::Center);
                 placeholder.set_valign(gtk::Align::Center);
+                placeholder.update_property(&[gtk::accessible::Property::Label(if unavailable {
+                    "Lyrics unavailable"
+                } else {
+                    "Loading lyrics"
+                })]);
+                let icon = crate::panel_view::control_symbol("lyrics");
+                placeholder.set_child(Some(&icon));
+                if unavailable {
+                    let slash = gtk::DrawingArea::new();
+                    slash.set_widget_name("lyrics-unavailable-slash");
+                    slash.set_can_target(false);
+                    slash.set_draw_func(|area, cr, width, height| {
+                        let color = area.color();
+                        cr.set_source_rgba(
+                            color.red() as f64,
+                            color.green() as f64,
+                            color.blue() as f64,
+                            1.,
+                        );
+                        cr.set_line_width(5.);
+                        cr.set_line_cap(gtk::cairo::LineCap::Round);
+                        let size = f64::from(width.min(height));
+                        let x = (f64::from(width) - size) / 2.;
+                        let y = (f64::from(height) - size) / 2.;
+                        cr.move_to(x + size * 0.16, y + size * 0.16);
+                        cr.line_to(x + size * 0.84, y + size * 0.84);
+                        let _ = cr.stroke();
+                    });
+                    placeholder.add_overlay(&slash);
+                }
                 display.append(&placeholder);
             } else {
                 let scroll = gtk::ScrolledWindow::new();
@@ -1173,7 +1201,9 @@ pub fn fixture(
     }
     if provider == "playerctl" && std::env::var_os("BARTJIK_EMPTY_USAGE").is_some() {
         c.show_lyrics.set(true);
-        *c.lyrics.borrow_mut() = Value::Null;
+        *c.lyrics.borrow_mut() = std::env::var("BARTJIK_LYRICS_STATUS")
+            .map(|status| json!({"status": status}))
+            .unwrap_or(Value::Null);
     }
     c.render();
     c
@@ -1214,6 +1244,15 @@ pub fn exercise(
             );
             if c.show_lyrics.get() {
                 assert!(find(c.body.upcast_ref(), "lyrics-placeholder").is_some());
+                for status in ["instrumental", "error", "ready", "missing", "not-found"] {
+                    *c.lyrics.borrow_mut() = json!({"status": status});
+                    c.render();
+                    assert!(find(c.body.upcast_ref(), "lyrics-unavailable-slash").is_some());
+                    assert!(c.lyric_scroll.borrow().is_none());
+                }
+                *c.lyrics.borrow_mut() = Value::Null;
+                c.render();
+                assert!(find(c.body.upcast_ref(), "lyrics-unavailable-slash").is_none());
                 click("lyrics-toggle");
                 *c.lyrics.borrow_mut() = json!({"status":"ready","lines":[{"time":0,"text":"Evening light across the water"},{"time":5,"text":"Quiet footsteps on the quay"}]});
             }

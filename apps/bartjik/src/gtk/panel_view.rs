@@ -205,7 +205,8 @@ popover.workspace-tooltip label.workspace-tooltip-title {{font-family:"{font}";f
 .panel-card .music-controls button.music-button:disabled {{opacity:0.35;}}
 .panel-card .music-controls .music-button .panel-control-symbol {{font-size:18px;}}
 .panel-card .music-controls .music-transport .panel-control-symbol {{font-size:24px;}}
-.panel-card .panel-control-symbol.lyrics-placeholder {{font-size:96px;color:{muted};opacity:0.2;}}
+.panel-card .lyrics-placeholder {{color:{muted};opacity:0.2;}}
+.panel-card .lyrics-placeholder .panel-control-symbol {{font-size:96px;color:{muted};}}
 .panel-card .lyric-current {{color:{accent};font-weight:bold;}}
 .panel-card.panel-reveal-content {{background:transparent;border-color:transparent;}}
 .panel-card .panel-symbol {{font-family:"Material Symbols Rounded";}}
