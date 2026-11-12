@@ -133,7 +133,16 @@ pub struct CapturedFrame {
     pub stride: usize,
     pub rgba: Vec<u8>,
 }
+/// Persistent capture transport owned by one worker. Discard on error.
+pub trait CaptureStream: Send {
+    fn capture(&mut self) -> Result<CapturedFrame>;
+}
 pub trait WindowActions: Send + Sync {
+    /// Open a reusable capture stream, retaining the selected adapter and identity.
+    fn capture_stream(self: Arc<Self>, _target: &WindowId) -> Result<Box<dyn CaptureStream>> {
+        Err(DesktopError::Unsupported)
+    }
+
     /// Prepare an exact-title floating toplevel before mapping. No focus transfer.
     fn prepare_toplevel(
         &self,

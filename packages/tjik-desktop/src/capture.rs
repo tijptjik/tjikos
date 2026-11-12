@@ -104,25 +104,61 @@ wayland_client::delegate_noop!(State: ignore wl_buffer::WlBuffer);
 fn unavailable(e: impl std::fmt::Display) -> DesktopError {
     DesktopError::Unavailable(e.to_string())
 }
-pub fn capture(display: &std::path::Path, handle: u32) -> Result<CapturedFrame> {
-    use std::os::fd::AsRawFd;
-    let conn = Connection::from_socket(UnixStream::connect(display).map_err(unavailable)?)
-        .map_err(unavailable)?;
-    let mut queue = conn.new_event_queue();
-    let q = queue.handle();
-    let _registry = conn.display().get_registry(&q, ());
-    let _sync = conn.display().sync(&q, ());
-    let mut state = State::default();
-    let deadline = Instant::now() + Duration::from_millis(700);
-    let pump = |queue: &mut wayland_client::EventQueue<State>, state: &mut State| -> Result<()> {
-        queue.dispatch_pending(state).map_err(unavailable)?;
-        conn.flush().map_err(unavailable)?;
+/// A worker-owned connection and reusable shm buffer. Drop after any error: a
+/// timed-out compositor may still deliver events for the abandoned frame.
+pub struct Session {
+    conn: Connection,
+    queue: wayland_client::EventQueue<State>,
+    state: State,
+    buffer: Option<Buffer>,
+}
+struct Buffer {
+    layout: (wl_shm::Format, u32, u32, u32),
+    map: memmap2::MmapMut,
+    buffer: wl_buffer::WlBuffer,
+    pool: wl_shm_pool::WlShmPool,
+}
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        self.buffer.destroy();
+        self.pool.destroy();
+    }
+}
+impl Session {
+    pub fn new(display: &std::path::Path) -> Result<Self> {
+        let conn = Connection::from_socket(UnixStream::connect(display).map_err(unavailable)?)
+            .map_err(unavailable)?;
+        let queue = conn.new_event_queue();
+        let q = queue.handle();
+        conn.display().get_registry(&q, ());
+        conn.display().sync(&q, ());
+        let mut session = Self {
+            conn,
+            queue,
+            state: State::default(),
+            buffer: None,
+        };
+        let deadline = Instant::now() + Duration::from_millis(700);
+        while !session.state.synchronized {
+            session.pump(deadline)?;
+        }
+        if session.state.manager.is_none() || session.state.shm.is_none() {
+            return Err(DesktopError::Unsupported);
+        }
+        Ok(session)
+    }
+    fn pump(&mut self, deadline: Instant) -> Result<()> {
+        use std::os::fd::AsRawFd;
+        self.queue
+            .dispatch_pending(&mut self.state)
+            .map_err(unavailable)?;
+        self.conn.flush().map_err(unavailable)?;
         let remaining = deadline
             .checked_duration_since(Instant::now())
             .ok_or(DesktopError::Timeout)?;
-        if let Some(read) = conn.prepare_read() {
+        if let Some(read) = self.conn.prepare_read() {
             let mut fd = libc::pollfd {
-                fd: conn.as_fd().as_raw_fd(),
+                fd: self.conn.as_fd().as_raw_fd(),
                 events: libc::POLLIN,
                 revents: 0,
             };
@@ -135,66 +171,101 @@ pub fn capture(display: &std::path::Path, handle: u32) -> Result<CapturedFrame> 
             }
             read.read().map_err(unavailable)?;
         }
-        queue.dispatch_pending(state).map_err(unavailable)?;
+        self.queue
+            .dispatch_pending(&mut self.state)
+            .map_err(unavailable)?;
         Ok(())
-    };
-    while !state.synchronized {
-        pump(&mut queue, &mut state)?;
     }
-    if state.manager.is_none() || state.shm.is_none() {
-        return Err(DesktopError::Unsupported);
+    pub fn capture(&mut self, handle: u32) -> Result<CapturedFrame> {
+        self.state.format = None;
+        self.state.buffer_done = false;
+        self.state.done = false;
+        self.state.failed = false;
+        self.state.inverted = false;
+        let q = self.queue.handle();
+        let frame = self
+            .state
+            .manager
+            .as_ref()
+            .unwrap()
+            .capture_toplevel(0, handle, &q, ());
+        let result = self.copy_frame(&frame);
+        frame.destroy();
+        result
     }
-    let frame = state
-        .manager
-        .as_ref()
-        .unwrap()
-        .capture_toplevel(0, handle, &q, ());
-    while !state.buffer_done && !state.failed {
-        pump(&mut queue, &mut state)?;
+    fn copy_frame(
+        &mut self,
+        frame: &frame::HyprlandToplevelExportFrameV1,
+    ) -> Result<CapturedFrame> {
+        let deadline = Instant::now() + Duration::from_millis(700);
+        while !self.state.buffer_done && !self.state.failed {
+            self.pump(deadline)?;
+        }
+        if self.state.failed {
+            return Err(unavailable("Window capture failed"));
+        }
+        let layout @ (format, width, height, stride) =
+            self.state.format.ok_or(DesktopError::Unsupported)?;
+        if !matches!(format, wl_shm::Format::Argb8888 | wl_shm::Format::Xrgb8888)
+            || width == 0
+            || height == 0
+            || stride < width.saturating_mul(4)
+        {
+            return Err(DesktopError::Unsupported);
+        }
+        let size = (stride as usize)
+            .checked_mul(height as usize)
+            .filter(|n| *n <= 128 * 1024 * 1024)
+            .ok_or(DesktopError::Unsupported)?;
+        if self.buffer.as_ref().is_none_or(|b| b.layout != layout) {
+            self.buffer.take();
+            let file = tempfile::tempfile().map_err(unavailable)?;
+            file.set_len(size as u64).map_err(unavailable)?;
+            let map = unsafe { memmap2::MmapOptions::new().len(size).map_mut(&file) }
+                .map_err(unavailable)?;
+            let q = self.queue.handle();
+            let pool =
+                self.state
+                    .shm
+                    .as_ref()
+                    .unwrap()
+                    .create_pool(file.as_fd(), size as i32, &q, ());
+            let buffer = pool.create_buffer(
+                0,
+                width as i32,
+                height as i32,
+                stride as i32,
+                format,
+                &q,
+                (),
+            );
+            self.buffer = Some(Buffer {
+                layout,
+                map,
+                buffer,
+                pool,
+            });
+        }
+        frame.copy(&self.buffer.as_ref().unwrap().buffer, 1);
+        while !self.state.done && !self.state.failed {
+            self.pump(deadline)?;
+        }
+        if self.state.failed {
+            return Err(unavailable("Window capture failed"));
+        }
+        Ok(filtered_frame(
+            &self.buffer.as_ref().unwrap().map,
+            width,
+            height,
+            stride,
+            self.state.inverted,
+            3840,
+            2160,
+        ))
     }
-    let (format, width, height, stride) = state.format.ok_or(DesktopError::Unsupported)?;
-    if !matches!(format, wl_shm::Format::Argb8888 | wl_shm::Format::Xrgb8888)
-        || width == 0
-        || height == 0
-        || stride < width.saturating_mul(4)
-    {
-        return Err(DesktopError::Unsupported);
-    }
-    let size = (stride as usize)
-        .checked_mul(height as usize)
-        .filter(|n| *n <= 128 * 1024 * 1024)
-        .ok_or(DesktopError::Unsupported)?;
-    let file = tempfile::tempfile().map_err(unavailable)?;
-    file.set_len(size as u64).map_err(unavailable)?;
-    let map =
-        unsafe { memmap2::MmapOptions::new().len(size).map_mut(&file) }.map_err(unavailable)?;
-    let pool = state
-        .shm
-        .as_ref()
-        .unwrap()
-        .create_pool(file.as_fd(), size as i32, &q, ());
-    let buffer = pool.create_buffer(
-        0,
-        width as i32,
-        height as i32,
-        stride as i32,
-        format,
-        &q,
-        (),
-    );
-    frame.copy(&buffer, 1);
-    while !state.done && !state.failed {
-        pump(&mut queue, &mut state)?;
-    }
-    if state.failed {
-        return Err(DesktopError::Unavailable("Window capture failed".into()));
-    }
-    let result = filtered_frame(&map, width, height, stride, state.inverted, 3840, 2160);
-    frame.destroy();
-    buffer.destroy();
-    pool.destroy();
-    state.manager.unwrap().destroy();
-    Ok(result)
+}
+pub fn capture(display: &std::path::Path, handle: u32) -> Result<CapturedFrame> {
+    Session::new(display)?.capture(handle)
 }
 
 /// Retain supersampled detail for the preview. Average each source-pixel bucket

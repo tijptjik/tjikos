@@ -47,3 +47,10 @@ consumers must not parse them as numbers or substitute workspace names for ident
 Source by tijptjik in this package is licensed under MPL-2.0; see `LICENSE` and
 `NOTICE`. Standard MPL secondary-license compatibility is retained, allowing use in
 GPLv3 applications. Third-party components retain their own licenses and notices.
+
+For continuously refreshed thumbnails, call `Arc<dyn Desktop>::capture_stream(&id)` on a
+worker and retain the returned `CaptureStream`. Each `capture()` validates the window
+identity and returns RGBA8 pixels; the Hyprland implementation reuses its connection and
+shared memory buffer, reallocating on size or format changes. Discard the stream after
+an error and drop it when hidden. Unsupported adapters return
+`DesktopError::Unsupported`. The one-shot `capture(&id)` API remains available.

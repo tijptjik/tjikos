@@ -296,7 +296,37 @@ impl DesktopSession for Hyprland {
         })
     }
 }
+#[cfg(feature = "capture")]
+struct LiveCapture {
+    desktop: Arc<Hyprland>,
+    id: WindowId,
+    handle: u32,
+    transport: crate::capture::Session,
+}
+#[cfg(feature = "capture")]
+impl CaptureStream for LiveCapture {
+    fn capture(&mut self) -> Result<CapturedFrame> {
+        self.desktop.target(&self.id)?;
+        let frame = self.transport.capture(self.handle)?;
+        self.desktop.target(&self.id)?;
+        Ok(frame)
+    }
+}
 impl WindowActions for Hyprland {
+    #[cfg(feature = "capture")]
+    fn capture_stream(self: Arc<Self>, id: &WindowId) -> Result<Box<dyn CaptureStream>> {
+        let target = self.target(id)?;
+        let address = u64::from_str_radix(s(&target["address"]).trim_start_matches("0x"), 16)
+            .map_err(|_| DesktopError::StaleTarget)?;
+        let transport = crate::capture::Session::new(&self.display)?;
+        Ok(Box::new(LiveCapture {
+            desktop: self,
+            id: id.clone(),
+            handle: address as u32,
+            transport,
+        }))
+    }
+
     #[cfg(feature = "capture")]
     fn capture(&self, id: &WindowId) -> Result<CapturedFrame> {
         let target = self.target(id)?;

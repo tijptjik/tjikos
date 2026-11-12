@@ -294,6 +294,10 @@ impl DesktopSession for Session {
     }
 }
 impl WindowActions for Session {
+    fn capture_stream(self: Arc<Self>, id: &WindowId) -> Result<Box<dyn CaptureStream>> {
+        self.inner.backend()?.capture_stream(id)
+    }
+
     fn prepare_toplevel(&self, title: &str, workspace: &WorkspaceTarget, rect: Rect) -> Result<()> {
         self.inner
             .backend()?
