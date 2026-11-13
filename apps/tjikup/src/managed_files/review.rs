@@ -7,10 +7,10 @@ use super::{
 use anyhow::{bail, ensure, Context, Result};
 use std::{
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Write},
+    io::{Read, Write},
     os::fd::AsRawFd,
     path::Path,
-    process::Command,
+    process::{Command, Stdio},
 };
 
 // The protection supervisor isolates children in a process group. Only its
@@ -61,6 +61,60 @@ impl Drop for Foreground {
     }
 }
 
+// Keep single-key mode scoped to the prompt, restoring it before rendering or
+// returning an error. Handle Ctrl-C ourselves so cancellation also runs Drop.
+struct KeyMode {
+    tty: File,
+    previous: libc::termios,
+}
+
+impl KeyMode {
+    fn acquire(tty: &File) -> Result<Self> {
+        let owned_tty = tty.try_clone()?;
+        let mut previous = unsafe { std::mem::zeroed::<libc::termios>() };
+        if unsafe { libc::tcgetattr(tty.as_raw_fd(), &mut previous) } != 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        let mut mode = previous;
+        mode.c_lflag &= !(libc::ICANON | libc::ECHO | libc::ISIG);
+        mode.c_cc[libc::VMIN] = 1;
+        mode.c_cc[libc::VTIME] = 0;
+        if unsafe { libc::tcsetattr(tty.as_raw_fd(), libc::TCSANOW, &mode) } != 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        Ok(Self {
+            tty: owned_tty,
+            previous,
+        })
+    }
+}
+
+impl Drop for KeyMode {
+    fn drop(&mut self) {
+        unsafe {
+            libc::tcsetattr(self.tty.as_raw_fd(), libc::TCSANOW, &self.previous);
+        }
+    }
+}
+
+fn read_choice(tty: &mut File) -> Result<u8> {
+    let _mode = KeyMode::acquire(tty)?;
+    write!(
+        tty,
+        "[r] Review difference  [k] Keep local  [m] Use managed  [q] Cancel (default): "
+    )?;
+    tty.flush()?;
+    let mut key = [0];
+    tty.read_exact(&mut key)
+        .context("read conflict review key")?;
+    if key[0].is_ascii_graphic() {
+        writeln!(tty, "{}", char::from(key[0]))?;
+    } else {
+        writeln!(tty)?;
+    }
+    Ok(key[0].to_ascii_lowercase())
+}
+
 // Never send file contents to recipe logs: prompts and explicit previews use
 // the controlling terminal directly, including for sensitive manifests.
 fn preview(tty: &mut File, local: &[u8], managed: &[u8]) -> Result<()> {
@@ -82,16 +136,59 @@ fn preview(tty: &mut File, local: &[u8], managed: &[u8]) -> Result<()> {
     if !matches!(output.status.code(), Some(0 | 1)) {
         bail!("conflict preview failed");
     }
-    // Escaping terminal control characters prevents content from issuing terminal commands.
-    for ch in String::from_utf8_lossy(&output.stdout).chars() {
-        if ch.is_control() && ch != '\n' && ch != '\t' {
-            write!(tty, "{}", ch.escape_default())?;
-        } else {
-            write!(tty, "{ch}")?;
-        }
-    }
     if output.stdout.is_empty() {
         writeln!(tty, "Content is identical; file metadata differs.")?;
+        return Ok(());
+    }
+    // Sanitize before handing content to either renderer. Only renderer-generated
+    // ANSI escapes may reach the terminal.
+    let safe: String = String::from_utf8_lossy(&output.stdout)
+        .chars()
+        .flat_map(|ch| {
+            if ch.is_control() && ch != '\n' && ch != '\t' {
+                ch.escape_default().collect::<Vec<_>>()
+            } else {
+                vec![ch]
+            }
+        })
+        .collect();
+    let color = std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
+        && std::env::var("TERM").as_deref() != Ok("dumb");
+    if color {
+        let input = directory.path().join("preview.diff");
+        std::fs::write(&input, &safe)?;
+        // Disable user configuration and paging: review owns the terminal and
+        // must always return to the explicit conflict decision prompt.
+        let status = Command::new("delta")
+            .args(["--no-gitconfig", "--paging=never", "--line-numbers"])
+            .stdin(File::open(input)?)
+            .stdout(tty.try_clone()?)
+            .stderr(Stdio::null())
+            .status();
+        if status.is_ok_and(|status| status.success()) {
+            return Ok(());
+        }
+    }
+    for line in safe.split_inclusive('\n') {
+        let style = if line.starts_with("---") || line.starts_with("+++") {
+            "\x1b[1m"
+        } else if line.starts_with('+') {
+            "\x1b[32m"
+        } else if line.starts_with('-') {
+            "\x1b[31m"
+        } else if line.starts_with("@@") {
+            "\x1b[36m"
+        } else {
+            ""
+        };
+        if color && !style.is_empty() {
+            write!(tty, "{style}{}\x1b[0m", line.trim_end_matches('\n'))?;
+            if line.ends_with('\n') {
+                writeln!(tty)?;
+            }
+        } else {
+            write!(tty, "{line}")?;
+        }
     }
     Ok(())
 }
@@ -103,7 +200,6 @@ pub(super) fn resolve(root: &Path, entries: &[Desired], state: &mut State) -> Re
         .open("/dev/tty")
         .context("open terminal for conflict review")?;
     let _foreground = Foreground::acquire(&tty)?;
-    let mut input = BufReader::new(tty.try_clone()?);
     for entry in entries {
         let local = disk::read(root, &entry.path)?;
         if state.kept_local.get(&entry.path) == Some(&entry.snapshot)
@@ -127,17 +223,8 @@ pub(super) fn resolve(root: &Path, entries: &[Desired], state: &mut State) -> Re
             )?;
         }
         loop {
-            write!(
-                tty,
-                "[d] Review difference  [k] Keep local  [m] Use managed  [q] Cancel (default): "
-            )?;
-            tty.flush()?;
-            let mut choice = String::new();
-            if input.read_line(&mut choice)? == 0 {
-                bail!("conflict review cancelled; no files applied");
-            }
-            match choice.trim().to_ascii_lowercase().as_str() {
-                "d" => {
+            match read_choice(&mut tty)? {
+                b'r' => {
                     writeln!(
                         tty,
                         "Local: {:?}\nManaged: {:?}",
@@ -149,13 +236,13 @@ pub(super) fn resolve(root: &Path, entries: &[Desired], state: &mut State) -> Re
                         preview(&mut tty, &local.bytes, &entry.bytes)?;
                     }
                 }
-                "k" => {
+                b'k' => {
                     state
                         .kept_local
                         .insert(entry.path.clone(), entry.snapshot.clone());
                     break;
                 }
-                "m" => {
+                b'm' => {
                     // Only this observed version is approved. apply rechecks it before
                     // backup and atomic replacement; edits made during review still fail.
                     state.kept_local.remove(&entry.path);
@@ -164,8 +251,10 @@ pub(super) fn resolve(root: &Path, entries: &[Desired], state: &mut State) -> Re
                         .insert(entry.path.clone(), local.snapshot.clone());
                     break;
                 }
-                "" | "q" => bail!("conflict review cancelled; no files applied"),
-                _ => writeln!(tty, "Choose d, k, m, or q.")?,
+                b'\n' | b'\r' | b'q' | 3 | 4 | 27 => {
+                    bail!("conflict review cancelled; no files applied")
+                }
+                _ => writeln!(tty, "Choose r, k, m, or q.")?,
             }
         }
     }

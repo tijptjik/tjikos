@@ -84,7 +84,11 @@ file manifest.
 ### Reviewing local changes
 
 Interactive `apply` offers a choice for each conflicting path before writing any
-files: review the difference, keep local, use managed, or cancel (the default).
+files: **R** to review the difference, **K** to keep local, **M** to use managed,
+or **Q** to cancel (the default). Choices take effect immediately without Enter;
+Enter, Escape, Ctrl-C, and Ctrl-D cancel. Review uses delta when available, with line
+numbers and inline change highlighting, and falls back to a colored unified diff.
+Set `NO_COLOR` or `TERM=dumb` for plain output.
 Recipes invoking file apply must set `interactive: true` so the scheduler gives
 review exclusive foreground terminal access. Direct `tjikup config home apply`
 and `tjikup files apply` can also review conflicts.
