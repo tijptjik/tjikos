@@ -35,6 +35,8 @@ struct Ui {
     word_header: gtk::Box,
     provider_header: gtk::Box,
     word_key: RefCell<String>,
+    capture_key: RefCell<String>,
+    header_key: RefCell<String>,
     hidden_sources: Rc<RefCell<std::collections::HashSet<String>>>,
     message: gtk::Label,
     expansion_error: RefCell<Option<gtk::Label>>,
@@ -265,6 +267,38 @@ impl Ui {
     }
 
     fn update_provider_header(self: &Rc<Self>, value: &Value) {
+        // Active state changes must not replace focused controls or their layout.
+        let mut structure = value["header"].clone();
+        if let Some(actions) = structure["actions"].as_array_mut() {
+            for action in actions {
+                action.as_object_mut().unwrap().remove("active");
+            }
+        }
+        let key = structure.to_string();
+        if *self.header_key.borrow() == key {
+            self.provider_header
+                .set_visible(value["header"].is_object());
+            let mut child = self
+                .provider_header
+                .first_child()
+                .and_then(|w| w.next_sibling());
+            if let Some(actions) = value["header"]["actions"].as_array() {
+                for action in actions {
+                    if let Some(widget) = child {
+                        if let Some(toggle) = widget.downcast_ref::<gtk::ToggleButton>() {
+                            toggle.set_active(action["active"] == true);
+                        } else if action["active"] == true {
+                            widget.add_css_class("suggested-action");
+                        } else {
+                            widget.remove_css_class("suggested-action");
+                        }
+                        child = widget.next_sibling();
+                    }
+                }
+            }
+            return;
+        }
+        *self.header_key.borrow_mut() = key;
         while let Some(child) = self.provider_header.first_child() {
             self.provider_header.remove(&child);
         }
@@ -280,9 +314,36 @@ impl Ui {
         self.provider_header.append(&title);
         if let Some(actions) = header["actions"].as_array() {
             for action in actions {
-                let button = gtk::Button::with_label(s(action, "label"));
-                button.add_css_class("flat");
-                if action["active"] == true {
+                let button = if action["toggle"] == true {
+                    let toggle = gtk::ToggleButton::new();
+                    toggle.add_css_class("word-provider");
+                    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+                    let icon =
+                        gtk::Image::from_icon_name(if s(action, "mode") == "record-microphone" {
+                            "audio-input-microphone-symbolic"
+                        } else {
+                            "audio-volume-high-symbolic"
+                        });
+                    icon.set_pixel_size(20);
+                    row.append(&icon);
+                    row.append(&gtk::Label::new(Some(s(action, "label"))));
+                    toggle.set_child(Some(&row));
+                    toggle.set_tooltip_text(Some(if s(action, "mode") == "record-microphone" {
+                        "Record voice from the default microphone"
+                    } else {
+                        "Record system playback from the default output"
+                    }));
+                    toggle.set_active(action["active"] == true);
+                    toggle.add_css_class("recording-audio");
+                    toggle.set_widget_name(s(action, "mode"));
+                    toggle.upcast::<gtk::Button>()
+                } else {
+                    gtk::Button::with_label(s(action, "label"))
+                };
+                if action["toggle"] != true {
+                    button.add_css_class("flat");
+                }
+                if action["active"] == true && action["toggle"] != true {
                     button.add_css_class("suggested-action");
                 }
                 let weak = Rc::downgrade(self);
@@ -346,7 +407,7 @@ impl Ui {
         } else {
             vec![]
         };
-        json!({"lastActivation":self.last_activation.borrow().as_str(),"selectedBounds":selected_bounds,"desktop_sequence":self.desktop_sequence.get(),"pinAngle":self.mark.angle(),"captureUi":if self.demo {views::inspect(&self.word_header,&self.results,&self.window)}else{Value::Null},"resultGeometry":result_geometry,"wordUi": if self.demo { views::inspect(&self.word_header, &self.rich, &self.window) } else { Value::Null }, "scrollY":scroll_y,"rowPitch":row_pitch,"input":self.search.text().as_str(),"composing":self.composing.get(),"startup":self.startup.is_visible(),"renderer":"gtk4","content_view":self.stack.visible_child_name().map(|s|s.to_string()),"surface":if self.layer{"layer"}else{"window"},"running":true,"pid":std::process::id(),"ready":self.ready.get(),"visible":self.window.is_visible(),"focused":self.window.is_active(),"hovered":self.pointer.contains_pointer(),"busy":self.busy.get() || self.tasks.has_queued_updates(),"demo":self.demo,"query":self.query.borrow().as_str(),"resultQuery":self.display_query.borrow().as_str(),"total":self.total.get(),"indexed":self.indexed.get(),"view":self.view.borrow().as_str(),"columns":self.columns.get(),"pinned":self.pinned.get(),"app_state":self.tasks.state(),"rows":self.rows.borrow().clone(),"selected":self.selection.selected(),"backend_error":self.error.borrow().as_str(),"message":self.message.text().as_str()})
+        json!({"lastActivation":self.last_activation.borrow().as_str(),"selectedBounds":selected_bounds,"desktop_sequence":self.desktop_sequence.get(),"pinAngle":self.mark.angle(),"captureUi":if self.demo {views::inspect(&self.provider_header,&self.results,&self.window)}else{Value::Null},"resultGeometry":result_geometry,"wordUi": if self.demo { views::inspect(&self.word_header, &self.rich, &self.window) } else { Value::Null }, "scrollY":scroll_y,"rowPitch":row_pitch,"input":self.search.text().as_str(),"composing":self.composing.get(),"startup":self.startup.is_visible(),"renderer":"gtk4","content_view":self.stack.visible_child_name().map(|s|s.to_string()),"surface":if self.layer{"layer"}else{"window"},"running":true,"pid":std::process::id(),"ready":self.ready.get(),"visible":self.window.is_visible(),"focused":self.window.is_active(),"hovered":self.pointer.contains_pointer(),"busy":self.busy.get() || self.tasks.has_queued_updates(),"demo":self.demo,"query":self.query.borrow().as_str(),"resultQuery":self.display_query.borrow().as_str(),"total":self.total.get(),"indexed":self.indexed.get(),"view":self.view.borrow().as_str(),"columns":self.columns.get(),"pinned":self.pinned.get(),"app_state":self.tasks.state(),"rows":self.rows.borrow().clone(),"selected":self.selection.selected(),"backend_error":self.error.borrow().as_str(),"message":self.message.text().as_str()})
     }
     fn message(&self, text: &str) {
         if let Some(label) = self.expansion_error.borrow().as_ref() {
@@ -761,7 +822,8 @@ impl Ui {
             return;
         }
         let monitor_changed = self.settings.borrow()["ui"]["monitor"] != settings["ui"]["monitor"];
-        let changed = *self.settings.borrow() != *settings;
+        let changed = self.settings.borrow()["ui"] != settings["ui"]
+            || self.settings.borrow()["theme"] != settings["theme"];
         *self.settings.borrow_mut() = settings.clone();
         if reset {
             *self.view.borrow_mut() = settings["ui"]["view"].as_str().unwrap_or("grid").into();
@@ -886,6 +948,19 @@ impl Ui {
         .iter()
         .any(|p| q.trim() == *p);
         if capture {
+            self.columns
+                .set(if q.trim() == "/voice" || self.rows.borrow().len() >= 5 {
+                    2
+                } else {
+                    3
+                });
+            let key = json!([q, *self.rows.borrow()]).to_string();
+            if *self.capture_key.borrow() == key && self.results.child_by_name("capture").is_some()
+            {
+                self.results.set_visible_child_name("capture");
+                return;
+            }
+            *self.capture_key.borrow_mut() = key;
             if let Some(old) = self.results.child_by_name("capture") {
                 self.results.remove(&old);
             }
@@ -1538,6 +1613,8 @@ fn build(
         word_header,
         provider_header,
         word_key: RefCell::new(String::new()),
+        capture_key: RefCell::new(String::new()),
+        header_key: RefCell::new(String::new()),
         hidden_sources: Rc::new(RefCell::new(std::collections::HashSet::new())),
         message,
         expansion_error: RefCell::new(None),

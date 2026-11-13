@@ -44,7 +44,7 @@ def silent_compositor():
         print("Host workspace changed during test; synthetic window placement/focus checks passed")
 
 
-def main():
+def main(recording_only=False):
     with silent_compositor():
         root = Path(os.environ["XDG_RUNTIME_DIR"]).parent
         private_runtime = Path(os.environ["XDG_RUNTIME_DIR"])
@@ -194,10 +194,46 @@ def main():
                     bounds = layer()
                     subprocess.run(["grim", "-g", f'{bounds["x"]},{bounds["y"]} {bounds["w"]}x{bounds["h"]}', str(root / filename)], check=True)
                     if query == "/rec":
+                        def audio():
+                            return [w for w in status()["captureUi"] if w["class"] == "audio" and w["visible"]]
+                        assert len(audio()) == 2 and not any(w["active"] for w in audio()), audio()
+                        def stable_layout():
+                            return {key: layer()[key] for key in ["x", "y", "w", "h"]}, [
+                                (w["instance"], w["x"], w["y"], w["width"], w["height"])
+                                for w in status()["captureUi"] if w["visible"]]
+                        original_layout = stable_layout()
+                        for index in [0, 1, 0, 1]:
+                            time.sleep(.2)
+                            bounds = layer()
+                            control = audio()[index]
+                            previous = [w["active"] for w in audio()]
+                            pointer_event(f'm {int((bounds["x"]+control["x"]+15)*10)} {int((bounds["y"]+control["y"]+15)*10000/680)}')
+                            pointer_event("b 1"); pointer_event("b 0")
+                            expected = previous[:]
+                            expected[index] = not expected[index]
+                            wait_for(lambda: [w["active"] for w in audio()] == expected and not status()["busy"])
+                            time.sleep(.2)
+                            assert stable_layout() == original_layout, (original_layout, stable_layout())
+                        # Cross two automatic refresh intervals: widgets and geometry stay intact.
+                        deadline = time.monotonic() + 11
+                        while time.monotonic() < deadline:
+                            assert stable_layout() == original_layout, (original_layout, stable_layout())
+                            time.sleep(.2)
+                        run("test-query", "/rec screen"); settled("/rec screen")
+                        assert len(audio()) == 2, audio()
+                        run("test-query", "/rec history"); settled("/rec history")
+                        assert not audio(), audio()
+                        run("test-query", "/rec"); settled("/rec")
                         cards=[w for w in status()["captureUi"] if w["class"]=="sense" and w["visible"]]
                         assert len(cards)==6, cards
                         assert abs(cards[0]["y"]-cards[1]["y"])<1 and cards[2]["y"]>cards[0]["y"], cards
                         assert abs(cards[4]["width"]-cards[0]["width"])<1 and cards[4]["height"]>cards[0]["height"]*1.9, cards
+                        if recording_only:
+                            bounds = layer()
+                            subprocess.run(["grim", "-g", f'{bounds["x"]},{bounds["y"]} {bounds["w"]}x{bounds["h"]}', str(root / filename)], check=True)
+                            print("PASS: recording toggles and layout stable across clicks and two refresh intervals; target navigation and history visibility")
+                            print("Synthetic screenshot: " + str(root / filename))
+                            return
                         rows=status()["rows"][:-1]
                         run("test-response",json.dumps({"kind":"results","query":"/rec","results":rows,"total":len(rows)}))
                         time.sleep(.15)
@@ -427,4 +463,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--recording-only", action="store_true")
+    main(recording_only=parser.parse_args().recording_only)

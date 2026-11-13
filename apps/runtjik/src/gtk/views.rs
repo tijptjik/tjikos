@@ -505,9 +505,10 @@ pub fn inspect(
         if widget.has_css_class("word-provider")
             || widget.has_css_class("word-sense")
             || widget.has_css_class("capture-choice")
+            || widget.has_css_class("recording-audio")
         {
             let bounds = widget.compute_bounds(window);
-            output.push(serde_json::json!({"class": if widget.has_css_class("word-provider") {"provider"} else {"sense"}, "name": widget.widget_name().as_str(), "visible": widget.is_mapped(), "selected": widget.has_css_class("word-selected"), "active": widget.downcast_ref::<gtk::ToggleButton>().map(|t|t.is_active()), "x": bounds.as_ref().map(|b|b.x()), "y": bounds.as_ref().map(|b|b.y()), "width": bounds.as_ref().map(|b|b.width()), "height": bounds.as_ref().map(|b|b.height())}));
+            output.push(serde_json::json!({"instance": format!("{:p}", widget.as_ptr()), "class": if widget.has_css_class("recording-audio") {"audio"} else if widget.has_css_class("word-provider") {"provider"} else {"sense"}, "name": widget.widget_name().as_str(), "visible": widget.is_mapped(), "selected": widget.has_css_class("word-selected"), "active": widget.downcast_ref::<gtk::ToggleButton>().map(|t|t.is_active()), "x": bounds.as_ref().map(|b|b.x()), "y": bounds.as_ref().map(|b|b.y()), "width": bounds.as_ref().map(|b|b.width()), "height": bounds.as_ref().map(|b|b.height())}));
         }
         let mut child = widget.first_child();
         while let Some(w) = child {
