@@ -1479,11 +1479,28 @@ fn build(
     // Bubble phase leaves entries, tiles and buttons in control of their gestures.
     let drag = surface::draggable_with_async_position(&window, &root, desktop::pointer);
     let grab = Rc::new(Cell::new((0., 0.)));
+    let can_transfer = Rc::new(Cell::new(false));
+    let eligible = can_transfer.clone();
     let point = grab.clone();
     let weak = root.downgrade();
     let target = window.downgrade();
     drag.connect_drag_begin(move |_, x, y| {
+        eligible.set(false);
         if let (Some(root), Some(window)) = (weak.upgrade(), target.upgrade()) {
+            // A denied child-button gesture still emits drag-end. It must never
+            // trigger monitor transfer or reposition the launcher.
+            let mut picked = root.pick(x, y, gtk::PickFlags::DEFAULT);
+            while let Some(widget) = picked {
+                if widget.is::<gtk::Button>()
+                    || widget.is::<gtk::Entry>()
+                    || widget.is::<gtk::Text>()
+                    || widget.has_css_class("result")
+                {
+                    return;
+                }
+                picked = widget.parent();
+            }
+            eligible.set(true);
             if let Some(p) =
                 root.compute_point(&window, &gtk::graphene::Point::new(x as f32, y as f32))
             {
@@ -1492,7 +1509,10 @@ fn build(
         }
     });
     let weak = window.downgrade();
-    drag.connect_drag_end(move |_, _, _| {
+    drag.connect_drag_end(move |_, x, y| {
+        if !can_transfer.replace(false) || x.hypot(y) < 4. {
+            return;
+        }
         if let Some(window) = weak.upgrade() {
             desktop::transfer(&window, grab.get());
         }
