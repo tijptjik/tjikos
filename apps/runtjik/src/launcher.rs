@@ -407,14 +407,17 @@ impl Launcher {
                 Ok(rows) => rows,
                 Err(e) => return Ok(self.provider_error(capture_provider, display, e)),
             };
-            return Ok(self.provider_payload(
-                rows,
-                display,
-                offset,
-                limit,
-                self.captures.pending,
-                false,
-            ));
+            let mut value =
+                self.provider_payload(rows, display, offset, limit, self.captures.pending, false);
+            if capture_provider == "Recorder" && !q.split_whitespace().any(|part| part == "history")
+            {
+                let options = &self.settings["plugin_settings"]["Recorder"];
+                value["header"] = json!({"title":"RECORDING", "actions":[
+                    {"label":"Record voice", "id":q, "mode":"record-microphone", "toggle":true, "active":options["microphone"] == true},
+                    {"label":"Record system", "id":q, "mode":"record-audio", "toggle":true, "active":options["audio"] == true}
+                ]});
+            }
+            return Ok(value);
         }
         if enabled.iter().any(|s| s == "Clipboard") && command == "/cliphist" {
             let rows = match self.clipboard.query(q, &self.settings, self.demo) {
@@ -607,6 +610,19 @@ impl Launcher {
     fn activate(&mut self, req: Value) -> Result<Value> {
         let id = s(&req["id"]);
         let mode = req["mode"].as_str().unwrap_or("launch");
+        if ["record-microphone", "record-audio"].contains(&mode) {
+            let key = mode.strip_prefix("record-").unwrap();
+            let enabled = self.settings["plugin_settings"]["Recorder"][key] != true;
+            if self.demo {
+                self.settings["plugin_settings"]["Recorder"][key] = json!(enabled);
+            } else {
+                self.settings = crate::settings::save(
+                    &format!("plugin_settings.Recorder.{key}"),
+                    &enabled.to_string(),
+                )?;
+            }
+            return self.open_query(id);
+        }
         if id.starts_with("Expand:") {
             let entry = self
                 .current

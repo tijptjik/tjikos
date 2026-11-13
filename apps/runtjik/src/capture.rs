@@ -800,7 +800,11 @@ fn capture(data: &Value, options: &Value, rec: bool) -> Result<Value> {
     };
     for tool in std::iter::once(tool)
         .chain((mode == "region").then_some("slurp"))
-        .chain((rec && mode != "window" && options["audio"] == true).then_some("pactl"))
+        .chain(
+            (rec && mode != "window"
+                && (options["audio"] == true || options["microphone"] == true))
+                .then_some("pactl"),
+        )
     {
         ensure!(which(tool).is_some(), "Install {tool} to use this action");
     }

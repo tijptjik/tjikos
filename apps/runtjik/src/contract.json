@@ -153,6 +153,7 @@
       "Recorder": {
         "directory": "xdg:VIDEOS",
         "audio": false,
+        "microphone": false,
         "fps": 30,
         "max_results": 40,
         "gallery_columns": 3,
@@ -2857,6 +2858,7 @@
     "Recorder": [
       "directory",
       "audio",
+      "microphone",
       "fps",
       "max_results",
       "gallery_columns",

@@ -424,6 +424,84 @@ fn wait_for_picker(child: &mut std::process::Child, ipc: &Path) -> Result<bool> 
     }
 }
 
+// Modules belong to this worker only and are removed on success, failure or cancellation.
+#[derive(Default)]
+struct AudioCapture(Vec<String>);
+impl Drop for AudioCapture {
+    fn drop(&mut self) {
+        for id in self.0.iter().rev() {
+            let _ = command(&["pactl", "unload-module", id]);
+        }
+    }
+}
+impl AudioCapture {
+    fn load(&mut self, args: &[&str]) -> Result<()> {
+        let id = command(args)?.trim().to_owned();
+        ensure!(id.parse::<u32>().is_ok(), "Invalid audio module ID");
+        self.0.push(id);
+        Ok(())
+    }
+    fn prepare(spec: &mut Value) -> Result<Self> {
+        let mut capture = Self::default();
+        if spec["mode"] == "window" {
+            return Ok(capture);
+        }
+        let voice = spec["microphone"] == true;
+        let system = spec["audio"] == true;
+        let microphone = if voice {
+            command(&["pactl", "get-default-source"])?.trim().to_owned()
+        } else {
+            String::new()
+        };
+        let monitor = if system {
+            let sink = command(&["pactl", "get-default-sink"])?;
+            ensure!(
+                !sink.trim().is_empty(),
+                "No system audio output is available"
+            );
+            format!("{}.monitor", sink.trim())
+        } else {
+            String::new()
+        };
+        ensure!(
+            !voice || !microphone.is_empty(),
+            "No microphone is available"
+        );
+        let source = match (voice, system) {
+            (false, false) => return Ok(capture),
+            (true, false) => microphone,
+            (false, true) => monitor,
+            (true, true) => {
+                let sink = format!("runtjik_record_{}", std::process::id());
+                capture.load(&[
+                    "pactl",
+                    "load-module",
+                    "module-null-sink",
+                    &format!("sink_name={sink}"),
+                    "sink_properties=device.description=Runtjik_Recording",
+                    "rate=48000",
+                    "channels=2",
+                ])?;
+                for input in [&microphone, &monitor] {
+                    capture.load(&[
+                        "pactl",
+                        "load-module",
+                        "module-loopback",
+                        &format!("source={input}"),
+                        &format!("sink={sink}"),
+                        "source_dont_move=true",
+                        "sink_dont_move=true",
+                        "latency_msec=20",
+                    ])?;
+                }
+                format!("{sink}.monitor")
+            }
+        };
+        spec["audio_source"] = json!(source);
+        Ok(capture)
+    }
+}
+
 fn argv(spec: &Value) -> Result<Vec<String>> {
     if spec["mode"] == "window" {
         let mut a: Vec<String> = [
@@ -443,12 +521,13 @@ fn argv(spec: &Value) -> Result<Vec<String>> {
                 .into_iter()
                 .map(str::to_owned),
         );
-        if spec["audio"] == true {
-            a.extend(
-                ["-ac", "aac", "-a", "default_output"]
-                    .into_iter()
-                    .map(str::to_owned),
-            );
+        if spec["audio"] == true || spec["microphone"] == true {
+            let source = match (spec["audio"] == true, spec["microphone"] == true) {
+                (true, true) => "default_output|default_input",
+                (true, false) => "default_output",
+                _ => "default_input",
+            };
+            a.extend(["-ac", "aac", "-a", source].into_iter().map(str::to_owned));
         }
         a.extend(["-o".into(), s(&spec["file"]).into()]);
         return Ok(a);
@@ -459,13 +538,8 @@ fn argv(spec: &Value) -> Result<Vec<String>> {
         "-r".into(),
         spec["fps"].to_string(),
     ];
-    if spec["audio"] == true {
-        let sink = command(&["pactl", "get-default-sink"])?;
-        ensure!(
-            !sink.trim().is_empty(),
-            "No system audio output is available"
-        );
-        a.push(format!("--audio={}.monitor", sink.trim()));
+    if let Some(source) = spec["audio_source"].as_str() {
+        a.push(format!("--audio={source}"));
     }
     for (k, flag) in [("output", "-o"), ("area", "-g")] {
         if let Some(v) = spec[k].as_str().filter(|s| !s.is_empty()) {
@@ -475,7 +549,7 @@ fn argv(spec: &Value) -> Result<Vec<String>> {
     a.extend(["-f".into(), s(&spec["file"]).into()]);
     Ok(a)
 }
-pub fn serve(spec: Value) -> Result<()> {
+pub fn serve(mut spec: Value) -> Result<()> {
     unsafe {
         libc::umask(0o077);
         libc::signal(libc::SIGTERM, stop as *const () as usize);
@@ -501,6 +575,7 @@ pub fn serve(spec: Value) -> Result<()> {
             .truncate(true)
             .mode(0o600)
             .open(logdir.join("capture.log"))?;
+        let _audio = AudioCapture::prepare(&mut spec)?;
         let mut a = argv(&spec)?;
         // Keep the selected portal session alive, but start the saved video only
         // after countdown. Replay stays in RAM and is never saved.
