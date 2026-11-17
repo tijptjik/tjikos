@@ -570,6 +570,9 @@ fn run(args: Vec<String>) -> Result<i32> {
             println!("{}", serde_json::to_string_pretty(&plans)?);
         } else {
             for p in &plans {
+                if opts.command == "check" && matches!(p.action, "unchanged" | "kept-local") {
+                    continue;
+                }
                 println!("{} {}", p.action.to_uppercase(), p.path.display());
             }
         }
@@ -592,15 +595,9 @@ fn run(args: Vec<String>) -> Result<i32> {
     {
         review::resolve(&opts.root, &entries, &mut state)?;
     }
-    let mut kept = 0;
     if opts.command == "apply" {
         entries.retain(|entry| {
             if state.kept_local.get(&entry.path) == Some(&entry.snapshot) {
-                println!(
-                    "KEEP LOCAL {:?} (until managed version changes)",
-                    entry.path
-                );
-                kept += 1;
                 false
             } else {
                 state.kept_local.remove(&entry.path);
@@ -618,20 +615,18 @@ fn run(args: Vec<String>) -> Result<i32> {
     if serde_json::to_vec(&state)? != before_review {
         atomic_json(&state_path, &state)?;
     }
-    if kept > 0 {
-        println!("Kept local: {kept}; other files applied normally.");
-    }
     if std::env::var_os("TJIKUP_REPORT_FILE").is_some() {
         println!(
             "__stage_verb__:{}",
             if changed == 0 { "SKIP" } else { "APPLY" }
         );
     }
-    println!(
-        "{}: {changed} changed, {} unchanged",
-        if changed == 0 { "SKIP" } else { "APPLY" },
-        entries.len() - changed
-    );
+    if changed > 0 {
+        println!(
+            "APPLY: {changed} changed, {} unchanged",
+            entries.len() - changed
+        );
+    }
     Ok(0)
 }
 
