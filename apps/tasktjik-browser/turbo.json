@@ -1,0 +1,8 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/tasktjik/qml/Repeat.js", "$TURBO_ROOT$/apps/tasktjik/qml/Workflow.js", "$TURBO_ROOT$/apps/tasktjik/web/app.js"]
+    }
+  }
+}

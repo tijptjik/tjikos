@@ -49,6 +49,10 @@
       "name": "@tjikos/oo7-pam",
       "version": "0.1.0",
     },
+    "apps/tasktjik-browser": {
+      "name": "@tjikos/tasktjik-browser",
+      "version": "0.1.1",
+    },
     "apps/runtjik": {
       "name": "@tjikos/runtjik",
       "version": "0.8.3",
@@ -362,6 +366,8 @@
     "@tjikos/oo7-pam": ["@tjikos/oo7-pam@workspace:apps/oo7-pam"],
 
     "@tjikos/page-preview": ["@tjikos/page-preview@workspace:packages/page-preview"],
+
+    "@tjikos/tasktjik-browser": ["@tjikos/tasktjik-browser@workspace:apps/tasktjik-browser"],
 
     "@tjikos/runtjik": ["@tjikos/runtjik@workspace:apps/runtjik"],
 

@@ -1,0 +1,64 @@
+{
+  "manifest_version": 2,
+  "name": "Tasktjik",
+  "version": "0.1.1",
+  "description": "Save the current page to Tasktjik Reading, with a full sidebar editor.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "readtjik@tjikos.local",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "browsingActivity"
+        ]
+      }
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "nativeMessaging",
+    "storage",
+    "notifications"
+  ],
+  "incognito": "not_allowed",
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": true
+  },
+  "sidebar_action": {
+    "default_title": "Tasktjik",
+    "default_panel": "panel.html",
+    "default_icon": "icon.svg",
+    "open_at_install": false
+  },
+  "browser_action": {
+    "default_title": "Save to Reading\u2026",
+    "default_icon": "icon.svg"
+  },
+  "commands": {
+    "save-inbox": {
+      "suggested_key": {
+        "default": "Ctrl+S"
+      },
+      "description": "Save current page to Reading Inbox"
+    },
+    "save-panel": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S"
+      },
+      "description": "Open Reading save panel"
+    },
+    "_execute_sidebar_action": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+S"
+      },
+      "description": "Toggle Tasktjik Reading panel"
+    }
+  },
+  "icons": {
+    "48": "icon.svg",
+    "96": "icon.svg"
+  }
+}

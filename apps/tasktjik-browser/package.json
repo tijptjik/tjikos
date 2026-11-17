@@ -1,0 +1,11 @@
+{
+  "name": "@tjikos/tasktjik-browser",
+  "version": "0.1.1",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "build": "python3 -B scripts/build.py",
+    "check": "node --check extension/background.js && node --check extension/panel.js",
+    "test": "node tests/background.cjs && python3 -B tests/host.py"
+  }
+}

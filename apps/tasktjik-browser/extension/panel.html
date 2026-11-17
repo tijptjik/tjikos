@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tasktjik</title><link rel="stylesheet" href="panel.css"><script src="repeat.js" defer></script><script src="workflow.js" defer></script><script src="workflow-editor.js" defer></script><script src="panel.js" defer></script></head>
+<body><header><img src="icon.svg" width="36" height="36" alt=""><div><small>TJIKOS · READING</small><h1>Tasktjik</h1></div></header>
+<p id="status" role="status">Use Ctrl+Shift+S on a page to prepare a reading item.</p>
+<button id="retry-options" type="button" hidden>Reload editor choices</button>
+<form id="capture" hidden><fieldset id="fields">
+<label>Title<input name="title" required maxlength="4096"></label>
+<label>URL<input name="reference" type="url" required></label>
+<label>Domain<input name="group" list="domains" placeholder="Inbox"><datalist id="domains"></datalist></label>
+<details><summary>Organise</summary>
+<label>Tags<input name="tags" placeholder="Comma separated"></label>
+<label>Project<select name="project"><option value="">No project</option></select></label>
+<label>From template<select name="template"><option value="">No template</option></select></label>
+</details>
+<details><summary>Dates & reminders</summary>
+<label>Due date<input name="due" type="date"></label>
+<label>Repeat<input name="repeatText" placeholder="Every Monday, every 2 weeks…"></label><p id="repeat-hint"></p>
+<label class="check"><input name="notifyBeforeDue" type="checkbox" checked>Notify before due</label>
+<div class="pair"><label>Lead time<input name="notifyBeforeDueLeadValue" type="number" min="0" max="10000" value="1"></label><label>Unit<select name="notifyBeforeDueLeadUnit"><option>hours</option><option selected>days</option><option>weeks</option></select></label></div>
+</details>
+<details><summary>Subtasks & flows</summary><div id="workflow-editor"></div></details>
+<details><summary>More options</summary>
+<label>Plan<input name="plan" placeholder="Vault-relative Markdown path"></label>
+<label>Assignee<input name="assignee"></label>
+<label>Acceptance criteria<textarea name="acceptance" placeholder="One criterion per line"></textarea></label>
+<label class="check"><input name="onlyInProject" type="checkbox" checked>Only show in its project</label>
+</details>
+</fieldset><p id="error" role="alert"></p><div class="actions"><button id="discard" type="button">Discard</button><button id="save" type="submit">Save to Reading</button></div></form>
+<p class="hint">Ctrl+Alt+S toggles this panel.<br>Ctrl+S saves straight to Inbox.<br>Ctrl+Shift+S captures the current page.<br>Your tab stays open.</p>
+</body></html>
