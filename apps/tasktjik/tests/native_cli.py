@@ -8,6 +8,10 @@ import subprocess
 import tempfile
 import tomllib
 import unittest
+import http.server
+import socketserver
+import threading
+import time
 
 APP = Path(__file__).resolve().parents[1]
 
@@ -33,14 +37,14 @@ class NativeClientTests(unittest.TestCase):
         self.bin.mkdir()
         self.env["PATH"] = str(self.bin) + ":" + os.environ["PATH"]
 
-    def call(self, *args, body=None, check=True):
+    def call(self, *args, body=None, check=True, timeout=15):
         result = subprocess.run(
             [str(APP / "tasktjik-api"), *args],
             input=json.dumps(body) if body is not None else None,
             text=True,
             capture_output=True,
             env=self.env,
-            timeout=15,
+            timeout=timeout,
         )
         if check:
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -102,6 +106,34 @@ class NativeClientTests(unittest.TestCase):
         self.assertEqual(args[-1], ".local/lib/tasktjik/tasktjik-api serve")
         self.assertFalse(any("python" in arg for arg in args))
         self.assertIn("-oStrictHostKeyChecking=yes", args)
+
+    def test_slow_http_replica_finishes_after_old_deadline(self):
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(handler):
+                request = json.loads(handler.rfile.read(int(handler.headers["Content-Length"])))
+                self.assertEqual(request["action"], "list")
+                payload = json.dumps({"result": [], "padding": "x" * 1048576}).encode()
+                handler.send_response(200)
+                handler.send_header("Content-Length", str(len(payload)))
+                handler.end_headers()
+                handler.wfile.write(payload[:4096])
+                handler.wfile.flush()
+                time.sleep(13)
+                handler.wfile.write(payload[4096:])
+
+            def log_message(self, *args):
+                pass
+
+        socket = self.root / "http.sock"
+        with socketserver.UnixStreamServer(str(socket), Handler) as server:
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            self.config.write_text('[tasktjik]\nsocket=' + json.dumps(str(socket)) + '\n')
+            try:
+                self.assertEqual(self.call("request", body={"action": "list"}, timeout=20), [])
+            finally:
+                server.shutdown()
+                worker.join()
 
     def test_incremental_actions_return_only_the_acknowledged_change(self):
         saved = self.call("state", "--incremental", body={"action": "create", "fields": {"title": "Synthetic delta"}})

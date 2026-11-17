@@ -128,6 +128,12 @@ pub(crate) fn api(options: &Value, mut request: Value) -> Result<Value> {
         .context("Invalid Tasktjik response")
 }
 pub fn http(options: &Value, endpoint: &str, request: Option<&Value>) -> Result<Value> {
+    // Full replicas and images can be large on a slow tailnet link. Keep
+    // connection failures short without cutting off a progressing download.
+    let download = request
+        .is_some_and(|r| matches!(r["action"].as_str().unwrap_or("list"), "list" | "image-get"))
+        || (request.is_none() && endpoint == "tasks");
+    let transfer_timeout = if download { 120 } else { 30 };
     let mut args: Vec<String> = vec![
         "curl",
         "--disable",
@@ -135,8 +141,12 @@ pub fn http(options: &Value, endpoint: &str, request: Option<&Value>) -> Result<
         "--show-error",
         "--noproxy",
         "*",
-        "--max-time",
-        "10",
+        "--connect-timeout",
+        "5",
+        "--speed-limit",
+        "1",
+        "--speed-time",
+        "20",
         "--max-filesize",
         "8388608",
         "--request",
@@ -151,6 +161,7 @@ pub fn http(options: &Value, endpoint: &str, request: Option<&Value>) -> Result<
     .map(str::to_owned)
     .collect();
     args.push(format!("X-Tasktjik-Device: {}", device()?));
+    args.extend(["--max-time".into(), transfer_timeout.to_string()]);
     if request.is_some() {
         args.extend(["--data-binary".into(), "@-".into()]);
     }
@@ -170,7 +181,7 @@ pub fn http(options: &Value, endpoint: &str, request: Option<&Value>) -> Result<
         .unwrap_or_else(|| format!("http://localhost/api/v1/{endpoint}"));
     args.push(endpoint);
     let body = request.map(Value::to_string).unwrap_or_default();
-    let output = match run(&args, Some(&body), 12) {
+    let output = match run(&args, Some(&body), transfer_timeout + 2) {
         Ok(v) => v,
         Err(e) if parsed.is_some() && e.to_string().contains("(6)") => {
             let host = parsed.as_ref().unwrap().host_str().unwrap();
@@ -197,7 +208,7 @@ pub fn http(options: &Value, endpoint: &str, request: Option<&Value>) -> Result<
                     }
                 ),
             ]);
-            run(&args, Some(&body), 12)?
+            run(&args, Some(&body), transfer_timeout + 2)?
         }
         Err(e) => return Err(e),
     };
