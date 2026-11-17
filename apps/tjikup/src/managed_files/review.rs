@@ -97,11 +97,21 @@ impl Drop for KeyMode {
     }
 }
 
+fn color_enabled() -> bool {
+    std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
+        && std::env::var("TERM").as_deref() != Ok("dumb")
+}
+
 fn read_choice(tty: &mut File) -> Result<u8> {
     let _mode = KeyMode::acquire(tty)?;
+    let (local, managed) = if color_enabled() {
+        ("\x1b[31mlocal\x1b[0m", "\x1b[32mmanaged\x1b[0m")
+    } else {
+        ("local", "managed")
+    };
     write!(
         tty,
-        "[r] Review difference  [k] Keep local  [m] Use managed  [q] Cancel (default): "
+        "[r] Review difference  [k] Keep {local}  [m] Use {managed}  [q] Cancel (default): "
     )?;
     tty.flush()?;
     let mut key = [0];
@@ -152,8 +162,7 @@ fn preview(tty: &mut File, local: &[u8], managed: &[u8]) -> Result<()> {
             }
         })
         .collect();
-    let color = std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
-        && std::env::var("TERM").as_deref() != Ok("dumb");
+    let color = color_enabled();
     if color {
         let input = directory.path().join("preview.diff");
         std::fs::write(&input, &safe)?;
