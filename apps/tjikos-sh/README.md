@@ -165,8 +165,8 @@ Acceptance requires a fresh Fedora VM run through package installation, interact
 credential unlock and selected first apply. Local mock tests and a successful Worker
 deployment alone do not establish that acceptance.
 
-The published `tjikup-v0.2.0-bootstrap.9` release includes interactive native-file conflict
-review (`native_file_review: 1`) and BWS-backed weekly reporting. Bootstrap and fleet
-installation require those capabilities and provision the root-owned weekly runtime
-before enabling maintenance timers. `release.json` pins the verified
-executable and reviewed source revisions.
+The published `tjikup-v0.2.0-bootstrap.9` release includes interactive native-file
+conflict review (`native_file_review: 1`) and BWS-backed weekly reporting. Bootstrap and
+fleet installation require those capabilities and provision the root-owned weekly
+runtime before enabling maintenance timers. `release.json` pins the verified executable
+and reviewed source revisions.
