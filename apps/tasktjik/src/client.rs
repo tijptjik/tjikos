@@ -543,7 +543,7 @@ pub fn render_state(mut rows: Value, request: &Value, demo: bool) -> Result<Valu
         if !demo {
             dispatch(vec!["xdg-open".into(), url.into()], &json!({}))?;
         }
-        return Ok(json!({"message":"Opened reading reference"}));
+        return Ok(json!({}));
     }
     let mut groups = crate::groups::names(rows);
     let groups_revision = crate::groups::revision(rows);

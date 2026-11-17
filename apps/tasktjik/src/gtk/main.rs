@@ -72,16 +72,12 @@ fn main() -> glib::ExitCode {
             }
         });
         let commands = send.clone();
-        let close = window.downgrade();
         let view = tasktjik_gtk::TaskView::new(
             move |value| {
                 let _ = commands.try_send(value);
             },
-            move || {
-                if let Some(window) = close.upgrade() {
-                    window.close();
-                }
-            },
+            // Escape navigates within the app; only the window controls close it.
+            || {},
             if demo {
                 None
             } else {

@@ -66,8 +66,11 @@ def main():
                 key("Escape")
                 assert child.poll() is None, log.read_text()
                 key("Escape")
-                wait_for(lambda: not any(c["address"] == address for c in clients()))
-                assert child.wait(timeout=5) == 0, log.read_text()
+                assert child.poll() is None, "Standalone Escape must not exit"
+                assert any(c["address"] == address for c in clients()), "Standalone Escape must keep the window open"
+                # End only this synthetic instance after proving Escape kept it open.
+                child.terminate()
+                child.wait(timeout=5)
             finally:
                 if child.poll() is None:
                     child.terminate()
