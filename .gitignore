@@ -29,3 +29,6 @@ apps/runtjik/runtjik-gtk
 **/worker-configuration.d.ts
 
 apps/runtjik/lib/
+
+# Private wedding contribution workspace
+.wedding
