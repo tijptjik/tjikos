@@ -14,6 +14,7 @@ use whatsapp_rust_sqlite_storage::{
 };
 
 pub const SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS whatsover_history (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS whatsover_inbox (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
     chat TEXT NOT NULL, sender TEXT NOT NULL, message_id TEXT NOT NULL,
@@ -43,6 +44,37 @@ struct JsonRow {
 pub struct SqliteJournal(pub SharedSqlite);
 
 impl SqliteJournal {
+    pub async fn history_record(&self, id: &str, value: &serde_json::Value) -> Result<()> {
+        let id = id.to_owned();
+        let data = serde_json::to_string(value)?;
+        self.0.run(move |conn| diesel::sql_query("INSERT INTO whatsover_history(id,data) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data")
+            .bind::<Text,_>(id).bind::<Text,_>(data).execute(conn).map_err(db_error)).await?;
+        Ok(())
+    }
+    pub async fn history_result(&self, request_id: &str) -> Result<serde_json::Value> {
+        let id = request_id.to_owned();
+        let key = format!("request:{id}");
+        let rows = self.0.read(move |conn| diesel::sql_query("SELECT json_object('id',id,'request',CASE WHEN id = ? THEN json(data) ELSE NULL END,'report',json_extract(data,'$.report')) AS data FROM whatsover_history WHERE id = ? OR json_extract(data,'$.requestId') = ? OR json_extract(data,'$.report.requestId') = ?")
+            .bind::<Text,_>(&key).bind::<Text,_>(&key).bind::<Text,_>(&id).bind::<Text,_>(&id).load::<JsonRow>(conn).map_err(db_error)).await?;
+        let records = rows
+            .into_iter()
+            .map(|r| serde_json::from_str::<serde_json::Value>(&r.data))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(serde_json::json!({"requestId":request_id,"records":records,"historyComplete":false}))
+    }
+    pub async fn reserve_history_request(&self, id: &str, value: &serde_json::Value) -> Result<()> {
+        let id = format!("request:{id}");
+        let data = serde_json::to_string(value)?;
+        let now = wacore::time::now_millis();
+        self.0.run(move |conn| conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            let recent = diesel::sql_query("SELECT data FROM whatsover_history WHERE id LIKE 'request:%' AND CAST(json_extract(data,'$.requestedAtMs') AS INTEGER) > ? LIMIT 1")
+                .bind::<diesel::sql_types::BigInt,_>(now - 60_000).load::<JsonRow>(conn)?;
+            if !recent.is_empty() { return Err(diesel::result::Error::RollbackTransaction); }
+            diesel::sql_query("INSERT INTO whatsover_history(id,data) VALUES (?,?)").bind::<Text,_>(id).bind::<Text,_>(data).execute(conn)?;
+            Ok(())
+        }).map_err(db_error)).await.context("History requests require at least 60 seconds spacing; no request sent")?;
+        Ok(())
+    }
     pub async fn delivery_events(&self, message_id: &str) -> Result<Vec<serde_json::Value>> {
         let id = message_id.to_owned();
         let rows = self.0.read(move |conn| diesel::sql_query(

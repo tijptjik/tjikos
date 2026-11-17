@@ -1,4 +1,6 @@
-//! Direct desktop host. Uses its own linked device, never the Cloudflare service.
+#[path = "support/history.rs"]
+mod history;
+// Direct desktop host. Uses its own linked device, never the Cloudflare service.
 #[path = "support/contact_input.rs"]
 mod contact_input;
 #[path = "support/delivery.rs"]
@@ -48,6 +50,28 @@ enum Command {
         #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u64).range(1..))]
         seconds: u64,
     },
+    /// Request one bounded page of older messages from the primary phone.
+    History {
+        #[arg(long)]
+        to: String,
+        /// Oldest known cursor message; omit for a best-effort timestamp-only request.
+        #[arg(long, default_value = "")]
+        before_id: String,
+        #[arg(long)]
+        before_from_me: bool,
+        /// Cursor Unix timestamp in milliseconds; defaults to now.
+        #[arg(long, value_parser = clap::value_parser!(i64).range(1..))]
+        before_timestamp_ms: Option<i64>,
+        #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(i32).range(1..=50))]
+        count: i32,
+    },
+    /// Download media from a saved private inbound payload; never sends chat messages.
+    MediaDownload {
+        #[arg(long)]
+        payload: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Send once with a durable idempotency key; repeats return the saved result.
     Send {
         #[arg(long)]
@@ -73,6 +97,8 @@ enum Command {
         #[arg(long, default_value_t = 100)]
         limit: i64,
     },
+    /// Inspect a history request and captured-page reports offline.
+    HistoryResult { request_id: String },
     /// Inspect an earlier send without connecting to WhatsApp.
     Result { request_id: String },
 }
@@ -168,6 +194,12 @@ async fn main() -> Result<()> {
         ),
         _ => None,
     };
+    let media_input = if let Command::MediaDownload { payload, output } = &args.command {
+        anyhow::ensure!(!output.exists(), "output already exists");
+        let bytes = std::fs::read(payload)?;
+        anyhow::ensure!(bytes.len() <= 2 * 1024 * 1024, "payload too large");
+        Some(serde_json::from_slice::<whatsover_engine::content::StoredInbound>(&bytes)?)
+    } else { None };
     let directory = match args.state_dir {
         Some(path) => path,
         None => default_state_dir()?,
@@ -187,6 +219,10 @@ async fn main() -> Result<()> {
             for row in account.journal.inbox(after, limit).await? {
                 println!("{}", serde_json::to_string(&row)?);
             }
+            return Ok(());
+        }
+        Command::HistoryResult { request_id } => {
+            println!("{}", account.journal.history_result(&request_id).await?);
             return Ok(());
         }
         Command::Result { request_id } => {
@@ -220,10 +256,20 @@ async fn main() -> Result<()> {
             "no linked Rust session; run `whatsover login` in a terminal first"
         );
     }
+    let history = history::History::new(account.journal.clone());
+    let history_target = if let Command::History { to, .. } = &args.command {
+        Some(whatsover_engine::normalize_recipient(to)?)
+    } else {
+        None
+    };
+    let mut history_request_id: Option<String> = None;
+    let mut history_reports = Vec::new();
     let delivery_events = delivery::DeliveryEvents::default();
     let engine = Engine::start(
         Bot::builder()
             .with_backend(account.protocol.clone())
+            .with_history_sync_durability_hook(history.clone())
+            .with_event_handler(history.clone())
             .with_event_handler(delivery_events.clone())
             .with_device_props(
                 DevicePropsOverride::new()
@@ -240,6 +286,7 @@ async fn main() -> Result<()> {
         let mut observation_started = None;
         loop {
             delivery_events.flush(&account.journal).await?;
+            history_reports.extend(history.flush().await?);
             let status = engine.status.snapshot();
             if status.qr != previous_qr {
                 if let Some(qr) = &status.qr {
@@ -261,7 +308,61 @@ async fn main() -> Result<()> {
             if status.logged_out {
                 bail!("WhatsApp logged out this linked device");
             }
-            if let Some(request) = &request {
+            if let Command::History {
+                before_id,
+                before_from_me,
+                before_timestamp_ms,
+                count,
+                ..
+            } = &args.command
+            {
+                if status.connected && history_request_id.is_none() {
+                    engine
+                        .client
+                        .wait_for_startup_sync(Duration::from_secs(args.timeout_seconds))
+                        .await?;
+                    let id = engine.client.generate_message_id();
+                    let now = wacore::time::now_millis();
+                    let cursor = before_timestamp_ms.unwrap_or(now);
+                    account.journal.reserve_history_request(id.as_str(), &serde_json::json!({"requestedAtMs":now,"to":history_target,"beforeId":before_id,"beforeFromMe":before_from_me,"beforeTimestampMs":cursor,"count":count})).await?;
+                    history_request_id = Some(id.to_string());
+                    engine
+                        .client
+                        .fetch_message_history_with_id(
+                            &history_target.as_ref().unwrap().parse()?,
+                            before_id,
+                            *before_from_me,
+                            cursor,
+                            *count,
+                            &id,
+                        )
+                        .await?;
+                    eprintln!(
+                        "History request sent to primary phone; waiting for matching history response"
+                    );
+                }
+                if history_request_id.as_ref().is_some_and(|id| {
+                    history_reports
+                        .iter()
+                        .any(|r| r["requestId"].as_str() == Some(id.as_str()))
+                }) {
+                    println!(
+                        "{}",
+                        serde_json::json!({"requestId":history_request_id,"chunks":history_reports,"historyComplete":false})
+                    );
+                    return Ok(());
+                }
+            } else if let Command::MediaDownload { output, .. } = &args.command {
+                if status.connected {
+                    let bytes = whatsover_engine::media::download(&engine.client, &media_input.as_ref().unwrap().message).await?;
+                    use std::io::Write;
+                    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(output)?;
+                    file.write_all(&bytes)?;
+                    file.sync_all()?;
+                    println!("{}", serde_json::json!({"downloadedBytes":bytes.len(),"output":output,"newChatMessagesSent":0}));
+                    return Ok(());
+                }
+            } else if let Some(request) = &request {
                 if status.connected {
                     engine
                         .client
@@ -352,7 +453,11 @@ async fn main() -> Result<()> {
     let outcome = tokio::select! {
         result = work => result,
         _ = tokio::time::sleep(Duration::from_secs(args.timeout_seconds)), if !matches!(args.command, Command::Run) => {
-            Err(anyhow::anyhow!("operation timed out; inspect `result <request-id>` before retrying any send"))
+            if let Some(id) = &history_request_id {
+                Err(anyhow::anyhow!("history request timed out; inspect `whatsover history-result {id}`; no automatic retry was made"))
+            } else {
+                Err(anyhow::anyhow!("operation timed out; inspect `result <request-id>` before retrying any send"))
+            }
         },
         result = tokio::signal::ctrl_c() => {
             result?;
@@ -362,6 +467,7 @@ async fn main() -> Result<()> {
     };
     let report = engine.shutdown().await?;
     delivery_events.flush(&account.journal).await?;
+    history.flush().await?;
     if outcome.is_err() && !send_printed {
         if let Some(request) = &request {
             if let Some(result) = account.journal.outbound(&request.request_id).await? {

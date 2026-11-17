@@ -136,3 +136,29 @@ cargo test --manifest-path packages/whatsover-engine/Cargo.toml --locked
 
 Hosted Workers, WASM adapters and their qualification tests live in HYPE. This package
 builds and tests only the native desktop client.
+
+## Recover phone history
+
+`whatsover history --to +15555550100 --count 50 --timeout-seconds 90` requests
+one page from the primary phone and stores returned messages in the local inbox.
+Keep the phone online. It sends a protocol request to your own phone, not a chat
+message to the contact. Requests share a durable 60-second cooldown and are never
+automatically retried. A failed or timed-out request can still have been received.
+
+For pagination, pass a genuine oldest-message cursor with `--before-id ID`,
+`--before-timestamp-ms UNIX_MILLISECONDS`, and `--before-from-me` when appropriate.
+Without a cursor, it attempts a timestamp-only request at the current time; phone
+support for this is not guaranteed. Do not claim full coverage from one response.
+The result reports only a received page, always with `historyComplete: false`.
+Inspect a saved request offline with `whatsover history-result REQUEST_ID`; this
+shows capture metadata without revealing raw protocol credentials.
+
+Notifications, original compressed chunks and decoded history are stored privately
+in `whatsover_history` before their respective processing stages. Raw captures may
+contain credentials and private media keys. History messages are merged into the
+inbox; existing automation receipts are preserved. History-sync callbacks are now
+registered for normal receive sessions too. No pairing reset is needed.
+
+### Download a captured attachment
+
+`whatsover media-download --payload /private/saved-inbound.json --output /private/photo.jpg` downloads an attachment from a saved inbound payload through the authenticated SDK. It sends no chat message, refuses an existing output file and retains the original bytes. Payloads contain private media descriptors; keep them outside source control. The existing 8 MiB limit and view-once restriction apply.
