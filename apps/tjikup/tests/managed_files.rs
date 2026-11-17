@@ -84,8 +84,12 @@ fn first_apply_then_true_noop_preserves_inode_mtime_and_state() {
     let target = f.path("root/etc/example");
     let first = fs::metadata(&target).unwrap();
     let state = fs::metadata(f.path("state/fixture.json")).unwrap();
-    success(&f.run("apply"));
-    success(&f.run("check"));
+    for operation in ["apply", "check"] {
+        let output = f.run(operation);
+        success(&output);
+        assert!(output.stdout.is_empty(), "{operation}: {output:?}");
+    }
+    assert!(String::from_utf8_lossy(&f.run("plan").stdout).contains("UNCHANGED"));
     let second = fs::metadata(target).unwrap();
     assert_eq!(
         (first.ino(), first.mtime_nsec()),
