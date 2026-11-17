@@ -867,6 +867,9 @@ impl Ui {
         let was_tasks = self.stack.visible_child_name().as_deref() == Some("tasks");
         let app_mode = s(value, "app_mode") == "Todo";
         self.topbar.set_visible(!app_mode);
+        if app_mode {
+            self.message("");
+        }
         if let Some(shell) = self.stack.parent() {
             if app_mode {
                 shell.add_css_class("task-host");
@@ -1217,7 +1220,9 @@ impl Ui {
                         }
                     });
                 }
-                self.message(if s(&value, "kind") == "windows" {
+                self.message(if s(&value, "app_mode") == "Todo" {
+                    ""
+                } else if s(&value, "kind") == "windows" {
                     "Choose a window · Enter switches · Esc goes back"
                 } else if !s(&value, "message").is_empty() {
                     s(&value, "message")
@@ -1281,7 +1286,7 @@ impl Ui {
             }
             "app-state" => {
                 self.tasks.update(&value["app_state"]);
-                self.message(s(&value["app_state"], "message"));
+                self.message("");
                 self.schedule_refresh(1500);
             }
             "edit" => {
@@ -1404,7 +1409,7 @@ fn build(
             surface::keyboard(&window, true);
         }
     });
-    search.add_controller(click);
+    root.add_controller(click);
     topbar.append(&search);
     root.append(&topbar);
     let word_header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
