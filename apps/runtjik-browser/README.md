@@ -8,7 +8,7 @@ socket in `$XDG_RUNTIME_DIR/runtjik-browser`. Multiple browser profiles can coex
 ## Setup
 
 For the signed-release walkthrough, closed-browser history setup and common errors, see
-[installation and troubleshooting](../docs/browser-install.md).
+[installation and troubleshooting](docs/install.md).
 
 1. Build and install Runtjik using its normal install scripts.
 2. The installer registers the host automatically. To repair registration, run
@@ -25,8 +25,8 @@ For the signed-release walkthrough, closed-browser history setup and common erro
    browser start. Requires Firefox 142+ or a compatible Zen version. The ZIP produced by
    the local build is unsigned and is not a permanent-install artifact.
    Signing/publication requires the maintainer's AMO account; see
-   [release instructions](../browser-release/README.md). Do not disable browser
-   signature checks. Temporary loading is for extension development only.
+   [release instructions](release/README.md). Do not disable browser signature checks.
+   Temporary loading is for extension development only.
 4. Add `"Browser"` to your existing `[plugins].enabled` array in
    `~/.config/runtjik/runtjik.conf` and reopen Runtjik. Preserve other providers.
 
@@ -72,10 +72,11 @@ browser icon or title initial. Zen remote-image wrappers are unwrapped. Browsing
 metadata stays in memory, outside indexes and bridge logs, unless you explicitly save a
 reading item. The launcher may retain its last results while hidden. Existing
 command-history settings apply to filter text you type; disable `[history].enabled` if
-desired. See [privacy details](PRIVACY.md), including native offline history and favicon
-requests. Socket permissions restrict access to your user, not to a particular same-user
-process. Requests and native messages have size/time bounds. Browser restarts create new
-session IDs so old selections cannot target reused browser IDs.
+desired. See [privacy details](extension/PRIVACY.md), including native offline history
+and favicon requests. Socket permissions restrict access to your user, not to a
+particular same-user process. Requests and native messages have size/time bounds.
+Browser restarts create new session IDs so old selections cannot target reused browser
+IDs.
 
 No live-browser compatibility claim is implied by unit tests. Test duplicate page
 titles, multiple windows/profiles, minimized/special-workspace windows, Zen spaces, tab
@@ -128,3 +129,11 @@ still requires a running browser and connected extension. When any bridge sessio
 connected, live history is authoritative; offline profiles are not merged into that
 response. Remove `history_profiles` to disable offline access independently of the
 browser extension.
+
+## Workspace
+
+Source: `apps/runtjik-browser/extension`; package: `@tjikos/runtjik-browser`. Build with
+`bun run --cwd apps/runtjik-browser build`, then install the validated archive with
+`bash scripts/install.sh --from-build runtjik-browser`. The native host remains in
+`apps/runtjik/src/browser_host.rs`, compiled into `runtjik-core`. Existing extension IDs
+and native-host registrations are unchanged.

@@ -15,7 +15,8 @@
         "../../packages/tasktjik-gtk/NOTICE",
         "../../apps/tasktjik/LICENSE",
         "../../apps/tasktjik/NOTICE",
-        "../../packages/page-preview/**"
+        "../../packages/page-preview/**",
+        "$TURBO_ROOT$/apps/runtjik-browser/**"
       ]
     }
   }

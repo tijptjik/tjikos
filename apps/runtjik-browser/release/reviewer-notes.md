@@ -23,9 +23,9 @@ general launcher search requests tabs, not history. Results are bounded to 100 h
 entries.
 
 The required browsingActivity data declaration covers the metadata sent to the local
-application. See browser-extension/PRIVACY.md for full disclosure, including native
-favicon fetching and optional launcher command history. There is no extension telemetry
-or remote data service. The extension uses the browser installation consent on Firefox
+application. See extension/PRIVACY.md for full disclosure, including native favicon
+fetching and optional launcher command history. There is no extension telemetry or
+remote data service. The extension uses the browser installation consent on Firefox
 142+; older versions are excluded.
 
 The native application has a separate, explicitly configured read-only history fallback

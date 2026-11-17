@@ -12,8 +12,8 @@ fi
 # Validate all targets before installing any of them.
 for app in "$@"; do
     case "$app" in
-        gmailtjik|mailtjik|notjik|tjikup|synctjik|bartjik|greetjik|runtjik|tasktjik|tasktjik-browser|readtjik) ;;
-        *) printf 'Unknown app: %s (expected gmailtjik, mailtjik, notjik, tjikup, synctjik, bartjik, greetjik, runtjik, tasktjik or tasktjik-browser)\n' "$app" >&2; exit 2 ;;
+        gmailtjik|mailtjik|notjik|tjikup|synctjik|bartjik|greetjik|runtjik|tasktjik|tasktjik-browser|runtjik-browser|readtjik) ;;
+        *) printf 'Unknown app: %s (expected gmailtjik, mailtjik, notjik, tjikup, synctjik, bartjik, greetjik, runtjik, tasktjik, tasktjik-browser or runtjik-browser)\n' "$app" >&2; exit 2 ;;
     esac
 done
 for app in "$@"; do
@@ -26,6 +26,9 @@ for app in "$@"; do
             ;;
         tasktjik-browser|readtjik)
             python3 -B "$root_dir/apps/tasktjik-browser/scripts/install.py"
+            ;;
+        runtjik-browser)
+            python3 -B "$root_dir/apps/runtjik-browser/scripts/install.py"
             ;;
         runtjik)
             bash "$root_dir/apps/runtjik/scripts/install.sh"

@@ -8,8 +8,8 @@ From the repository root:
 
 ```sh
 bun install
-bun run --cwd apps/runtjik browser:build
-bun run --cwd apps/runtjik browser:dev
+bun run --cwd apps/runtjik-browser build
+bun run --cwd apps/runtjik-browser browser:dev
 ```
 
 `browser:dev` launches a separate temporary Zen profile and reloads edited extension
@@ -18,7 +18,7 @@ does not modify the normal browser profile and does not test signed-install perm
 or restart persistence.
 
 Builds lint with warnings treated as errors and package only manifest, background script
-and icon. Artifacts are in `apps/runtjik/browser-artifacts/` (ignored by Git and
+and icon. Artifacts are in `apps/runtjik-browser/browser-artifacts/` (ignored by Git and
 retained across native app builds). Normal native builds also create an unsigned
 extension ZIP. They never submit or sign it.
 
@@ -27,19 +27,18 @@ extension ZIP. They never submit or sign it.
 Version 0.3.0 passed Mozilla's automated screening and is publicly available as of
 2026-11-03; further review remains possible.
 [Mozilla submission](https://addons.mozilla.org/en-US/developers/addon/runtjik/versions/6645275).
-Follow the [installation and restart checklist](../docs/browser-install.md) using the
+Follow the [installation and restart checklist](../docs/install.md) using the
 [public listing](https://addons.mozilla.org/en-GB/firefox/addon/runtjik/). Keep the
 submitted package unchanged; prepare extension changes under a new version. The steps
 below describe the publication workflow for future releases.
 
 1. Sign into the [AMO Developer Hub](https://addons.mozilla.org/developers/). Complete
    its developer agreement yourself if prompted.
-2. Review `amo-metadata.json`, the privacy statement in
-   `../browser-extension/PRIVACY.md`, and `reviewer-notes.md`. The metadata
-   conservatively uses All Rights Reserved because this repository does not declare an
-   extension license; choose another license before submitting if desired. Do not
-   advertise Android or non-Linux compatibility. Disclose native Firefox/Zen, the
-   separate Runtjik installation, and Hyprland focus.
+2. Review `amo-metadata.json`, the privacy statement in `../extension/PRIVACY.md`, and
+   `reviewer-notes.md`. The metadata conservatively uses All Rights Reserved because
+   this repository does not declare an extension license; choose another license before
+   submitting if desired. Do not advertise Android or non-Linux compatibility. Disclose
+   native Firefox/Zen, the separate Runtjik installation, and Hyprland focus.
 3. Bump the manifest version and build the next release. Upload its ZIP from
    `browser-artifacts/`, choose listing on AMO, supply the metadata, privacy text and
    reviewer notes, and submit. This ZIP is not signed; installing it directly will not
@@ -56,9 +55,9 @@ or a mode-0600 file outside this repository. Supply them through `WEB_EXT_API_KE
 `WEB_EXT_API_SECRET`, then run:
 
 ```sh
-bun run --cwd apps/runtjik browser:sign:listed
+bun run --cwd apps/runtjik-browser browser:sign:listed
 # Or a signed development build, without updating the public release:
-bun run --cwd apps/runtjik browser:sign:unlisted
+bun run --cwd apps/runtjik-browser browser:sign:unlisted
 ```
 
 On the configured maintainer machine, Dotjik manages `~/.config/runtjik/amo.env` from
@@ -81,7 +80,7 @@ code or permissions requires a new signed release for normal permanent installat
 ## Validation
 
 ```sh
-bun run --cwd apps/runtjik browser:lint
+bun run --cwd apps/runtjik-browser check
 cargo test --release --locked --manifest-path apps/runtjik/Cargo.toml
 bun run --cwd apps/runtjik test:browser
 ```

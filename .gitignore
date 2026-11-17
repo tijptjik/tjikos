@@ -21,6 +21,7 @@ apps/runtjik/runtjik-gtk
 
 /apps/notjik/target
 /apps/runtjik/browser-artifacts/
+/apps/runtjik-browser/browser-artifacts/
 
 # Retained local state from messaging workers now owned by HYPE
 **/.wrangler/

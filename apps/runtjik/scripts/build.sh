@@ -13,9 +13,10 @@ cp "${CARGO_TARGET_DIR:-target}/release/runtjik-gtk" runtjik-gtk
 bash ../../packages/page-preview/scripts/build.sh
 rm -rf -- dist
 mkdir -p dist/helpers
-cp -RL bin assets examples docs browser-extension browser-release systemd dist/
+cp -RL bin assets examples docs systemd dist/
 cp README.md dist/
-rm -f dist/browser-extension/install-host.py
+cp -RL ../runtjik-browser/extension dist/browser-extension
+cp -RL ../runtjik-browser/release dist/browser-release
 cp runtjik-core dist/
 cp runtjik-gtk dist/
 cp -R lib dist/

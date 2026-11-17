@@ -21,12 +21,12 @@ These shortcuts replace browser actions when Firefox/Zen assigns them to Tasktji
 precedence in Zen still requires live verification; manifest validation alone does not
 prove it overrides Save Page or Screenshot.
 
-The source workspace is `apps/tasktjik-browser` (`@tjikos/tasktjik-browser`).
-Install it with `bash scripts/install.sh --from-build tasktjik-browser` after building.
-The old `readtjik` installer option remains an alias.
+The source workspace is `apps/tasktjik-browser` (`@tjikos/tasktjik-browser`). Install it
+with `bash scripts/install.sh --from-build tasktjik-browser` after building. The old
+`readtjik` installer option remains an alias.
 
-The separate [Runtjik Browser Bridge](../runtjik/docs/browser-install.md) provides
-Runtjik tab and history search; its source is in `apps/runtjik/browser-extension`.
+The separate [Runtjik Browser Bridge](../runtjik-browser/docs/install.md) provides
+Runtjik tab and history search; its source is in `apps/runtjik-browser/extension`.
 
 The original extension ID and native-host paths retain `readtjik` for upgrade
 compatibility. Updating the signed package preserves settings and drafts.
@@ -78,7 +78,7 @@ disappear if the extension is uninstalled or its storage is cleared.
 
 ```sh
 dev-check bash -c 'node apps/tasktjik-browser/tests/background.cjs && python3 -B apps/tasktjik-browser/tests/host.py'
-dev-check apps/runtjik/node_modules/.bin/web-ext lint --source-dir apps/tasktjik-browser/dist/extension --warnings-as-errors
+dev-check apps/runtjik-browser/node_modules/.bin/web-ext lint --source-dir apps/tasktjik-browser/dist/extension --warnings-as-errors
 ```
 
 The repository's existing `web-ext` installation is a development validator only; the

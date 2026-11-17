@@ -1,0 +1,16 @@
+{
+  "name": "@tjikos/runtjik-browser",
+  "version": "0.3.0",
+  "private": true,
+  "scripts": {
+    "build": "bash scripts/browser-extension.sh build",
+    "check": "bash scripts/browser-extension.sh lint",
+    "test": "node tests/browser_extension.cjs && node tests/browser_reconnect.cjs",
+    "browser:dev": "bash scripts/browser-extension.sh dev",
+    "browser:sign:listed": "bash scripts/browser-extension.sh sign-listed",
+    "browser:sign:unlisted": "bash scripts/browser-extension.sh sign-unlisted"
+  },
+  "devDependencies": {
+    "web-ext": "10.2.0"
+  }
+}

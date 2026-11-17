@@ -33,7 +33,7 @@ const context = vm.createContext({URL, setTimeout() {}, browser: {
         update: async (id, value) => tabUpdates.push([id, value])
     }
 }});
-vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../browser-extension/background.js'), 'utf8'), context);
+vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../extension/background.js'), 'utf8'), context);
 async function run(value) {
     context.input = value;
     return JSON.parse(JSON.stringify(await vm.runInContext('handle(input)', context)));
