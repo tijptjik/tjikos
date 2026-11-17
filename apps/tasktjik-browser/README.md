@@ -32,9 +32,11 @@ The extension ID is `tasktjik@tjikos.local` and the native host is
 
 ## Install
 
-Version 0.1.2 uses the Tasktjik extension identity and native-host registration. It
-requires a new Mozilla signature before permanent installation. The build produces an
-unsigned ZIP; no signed 0.1.2 release is included.
+Version 0.1.2 received Mozilla’s unlisted signature on 2026-11-18. It uses the Tasktjik
+extension identity and native-host registration. Install
+`~/.local/lib/tasktjik-browser/31c748c914694d1ba257-0.1.2.xpi` through Zen/Firefox’s
+`about:addons` → gear menu → **Install Add-on From File**. The local build ZIP remains
+unsigned; use the signed XPI for permanent installation.
 
 Firefox treats the changed extension identity as a new add-on. Existing browser-local
 settings and drafts are not transferred automatically. Finish pending saves in the
