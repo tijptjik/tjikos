@@ -42,8 +42,9 @@ Standalone window and shared authority, also accessible from Runtjik and Notjik.
 
 [Usage and agent API](apps/tasktjik/README.md)
 
-[Tasktjik browser companion](apps/tasktjik-browser/README.md) is the separate Firefox/Zen
-reading-capture extension, with a quick Inbox shortcut and a full sidebar save editor.
+[Tasktjik browser companion](apps/tasktjik-browser/README.md) is the separate
+Firefox/Zen reading-capture extension, with a quick Inbox shortcut and a full sidebar
+save editor.
 
 <h2><img src="docs/icons/runtjik.png" width="32" height="32" align="top" alt=""> Runtjik</h2>
 
@@ -55,6 +56,8 @@ scraps, grab screenshots, record the screen, or hunt down a word.
 [Overview and controls](apps/runtjik/README.md) ·
 [Memory and startup measurements](apps/runtjik/README.md#motivation-and-measurements) ·
 [Configuration](apps/runtjik/README.md#configuration) ·
+[Browser Bridge installation](apps/runtjik-browser/docs/install.md) ·
+[Browser extension source](apps/runtjik-browser/README.md) ·
 [Provider API and future ZenTabs](apps/runtjik/README.md#provider-api-v1-and-future-zentabs)
 
 <h2><img src="docs/icons/synctjik.png" width="32" height="32" align="top" alt=""> Synctjik</h2>

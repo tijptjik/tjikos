@@ -49,10 +49,6 @@
       "name": "@tjikos/oo7-pam",
       "version": "0.1.0",
     },
-    "apps/tasktjik-browser": {
-      "name": "@tjikos/tasktjik-browser",
-      "version": "0.1.1",
-    },
     "apps/runtjik": {
       "name": "@tjikos/runtjik",
       "version": "0.8.3",
@@ -63,6 +59,13 @@
         "@tjikos/tasktjik": "workspace:*",
         "@tjikos/tasktjik-gtk": "workspace:*",
       },
+      "devDependencies": {
+        "@tjikos/runtjik-browser": "workspace:*",
+      },
+    },
+    "apps/runtjik-browser": {
+      "name": "@tjikos/runtjik-browser",
+      "version": "0.3.0",
       "devDependencies": {
         "web-ext": "10.2.0",
       },
@@ -84,6 +87,10 @@
         "@tjikos/page-preview": "workspace:*",
         "@tjikos/tasktjik-gtk": "workspace:*",
       },
+    },
+    "apps/tasktjik-browser": {
+      "name": "@tjikos/tasktjik-browser",
+      "version": "0.1.1",
     },
     "apps/tjikos-sh": {
       "name": "@tjikos/sh",
@@ -367,15 +374,17 @@
 
     "@tjikos/page-preview": ["@tjikos/page-preview@workspace:packages/page-preview"],
 
-    "@tjikos/tasktjik-browser": ["@tjikos/tasktjik-browser@workspace:apps/tasktjik-browser"],
-
     "@tjikos/runtjik": ["@tjikos/runtjik@workspace:apps/runtjik"],
+
+    "@tjikos/runtjik-browser": ["@tjikos/runtjik-browser@workspace:apps/runtjik-browser"],
 
     "@tjikos/sh": ["@tjikos/sh@workspace:apps/tjikos-sh"],
 
     "@tjikos/synctjik": ["@tjikos/synctjik@workspace:apps/synctjik"],
 
     "@tjikos/tasktjik": ["@tjikos/tasktjik@workspace:apps/tasktjik"],
+
+    "@tjikos/tasktjik-browser": ["@tjikos/tasktjik-browser@workspace:apps/tasktjik-browser"],
 
     "@tjikos/tasktjik-gtk": ["@tjikos/tasktjik-gtk@workspace:packages/tasktjik-gtk"],
 
