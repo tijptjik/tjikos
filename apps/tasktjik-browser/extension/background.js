@@ -1,7 +1,7 @@
 'use strict';
 const captures = new Map();
 const native = async message => {
-    const result = await browser.runtime.sendNativeMessage('org.tjikos.readtjik', message);
+    const result = await browser.runtime.sendNativeMessage('org.tjikos.tasktjik', message);
     if (result.error) throw Object.assign(Error(result.error), {rejected: result.rejected === true});
     return result;
 };

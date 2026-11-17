@@ -90,7 +90,7 @@
     },
     "apps/tasktjik-browser": {
       "name": "@tjikos/tasktjik-browser",
-      "version": "0.1.1",
+      "version": "0.1.2",
     },
     "apps/tjikos-sh": {
       "name": "@tjikos/sh",

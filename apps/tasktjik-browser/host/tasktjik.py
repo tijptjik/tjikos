@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Readtjik's restricted Firefox native host; credentials stay with Tasktjik."""
+"""Tasktjik's restricted Firefox native host; credentials stay with Tasktjik."""
 import json
 import os
 from pathlib import Path
@@ -33,7 +33,7 @@ def request(message):
         request_id = str(uuid.UUID(message.get('request_id', '')))
         command, payload = 'request', {'action': 'create', 'request_id': request_id, 'fields': fields}
     else:
-        raise ValueError('Unknown Readtjik operation')
+        raise ValueError('Unknown Tasktjik operation')
     binary = Path.home() / '.local/lib/tasktjik/tasktjik-api'
     if not binary.is_file():
         raise ValueError('Install Tasktjik on this computer first')

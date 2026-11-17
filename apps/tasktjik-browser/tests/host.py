@@ -7,8 +7,8 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-path = Path(__file__).resolve().parents[1] / 'host/readtjik.py'
-spec = importlib.util.spec_from_file_location('readtjik', path)
+path = Path(__file__).resolve().parents[1] / 'host/tasktjik.py'
+spec = importlib.util.spec_from_file_location('tasktjik', path)
 host = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
 
@@ -68,7 +68,7 @@ class ModelIntegration(unittest.TestCase):
             return actual_run(argv if '--demo' in argv else [*argv, '--demo'], **kwargs)
 
         message = {'op': 'save', 'request_id': 'fdebd655-f41d-4c3f-98d5-a086a9c886f1', 'fields': {
-            'kind': 'reading', 'title': 'Synthetic Readtjik fixture', 'reference': 'https://example.test/read',
+            'kind': 'reading', 'title': 'Synthetic Tasktjik fixture', 'reference': 'https://example.test/read',
             'group': 'All', 'tags': ['fixture'], 'due': '2026-12-01', 'repeat': {'unit': 'weeks', 'value': 2},
             'notifyBeforeDue': True, 'notifyBeforeDueLeadValue': 2, 'notifyBeforeDueLeadUnit': 'days',
             'plan': 'synthetic.md', 'assignee': 'fixture', 'acceptance': ['Read the page'],

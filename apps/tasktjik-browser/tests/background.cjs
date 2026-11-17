@@ -9,8 +9,8 @@ const tab = {windowId: 7, id: 2, title: 'Synthetic page', url: 'https://example.
 const context = vm.createContext({URL, crypto: webcrypto, structuredClone, browser: {
     tabs: {query: async () => [tab]}, windows: {getAll: async () => [{id: tab.windowId}]},
     storage: {local: {get: async key => key === null ? {...stored} : {[key]: stored[key]}, set: async values => Object.assign(stored, structuredClone(values)), remove: async key => delete stored[key]}},
-    runtime: {getURL: p => 'moz-extension://readtjik/' + p, sendMessage: async () => {}, onMessage: {addListener: fn => listener = fn}, sendNativeMessage: async (host, value) => {
-        assert.equal(host, 'org.tjikos.readtjik');
+    runtime: {getURL: p => 'moz-extension://tasktjik/' + p, sendMessage: async () => {}, onMessage: {addListener: fn => listener = fn}, sendNativeMessage: async (host, value) => {
+        assert.equal(host, 'org.tjikos.tasktjik');
         saves.push(structuredClone(value));
         if (fail) throw Error('Lost reply');
         if (reject) return {error: 'Invalid title', rejected: true};
@@ -22,7 +22,7 @@ const context = vm.createContext({URL, crypto: webcrypto, structuredClone, brows
 }});
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../extension/background.js'), 'utf8'), context);
 const run = code => vm.runInContext(code, context);
-const sender = {url: 'moz-extension://readtjik/panel.html'};
+const sender = {url: 'moz-extension://tasktjik/panel.html'};
 (async () => {
     await Promise.all([run("command('save-inbox')"), run("command('save-inbox')")]);
     assert.equal(saves.length, 1);

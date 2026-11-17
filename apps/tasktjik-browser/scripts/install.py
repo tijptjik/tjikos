@@ -10,14 +10,14 @@ import zipfile
 
 root = Path(__file__).resolve().parents[1]
 dist = root / 'dist'
-target = Path.home() / '.local/lib/readtjik'
+target = Path.home() / '.local/lib/tasktjik-browser'
 manifest_dir = Path.home() / '.mozilla/native-messaging-hosts'
 if not (Path.home() / '.local/lib/tasktjik/tasktjik-api').is_file():
     raise SystemExit('Install Tasktjik first')
 target.mkdir(parents=True, exist_ok=True)
 manifest_dir.mkdir(parents=True, exist_ok=True)
 version = json.loads((root / 'extension/manifest.json').read_text())['version']
-sources = [dist / 'readtjik-host', dist / f'tasktjik-browser-{version}.zip']
+sources = [dist / 'tasktjik-host', dist / f'tasktjik-browser-{version}.zip']
 signed = sorted((dist / 'signed').glob(f'*-{version}.xpi'))
 if len(signed) > 1:
     raise SystemExit('Expected one signed package; retain older releases elsewhere')
@@ -39,14 +39,14 @@ for source in sources:
     fd, pending = tempfile.mkstemp(prefix='.install-', dir=target)
     os.close(fd)
     shutil.copyfile(source, pending)
-    os.chmod(pending, 0o700 if source.name == 'readtjik-host' else 0o600)
+    os.chmod(pending, 0o700 if source.name == 'tasktjik-host' else 0o600)
     os.replace(pending, target / source.name)
     assert hashlib.sha256(source.read_bytes()).digest() == hashlib.sha256((target / source.name).read_bytes()).digest()
-manifest = {'name': 'org.tjikos.readtjik', 'description': 'Tasktjik browser reading capture',
-            'path': str(target / 'readtjik-host'), 'type': 'stdio',
-            'allowed_extensions': ['readtjik@tjikos.local']}
-path = manifest_dir / 'org.tjikos.readtjik.json'
-fd, pending = tempfile.mkstemp(prefix='.readtjik-', dir=manifest_dir)
+manifest = {'name': 'org.tjikos.tasktjik', 'description': 'Tasktjik browser reading capture',
+            'path': str(target / 'tasktjik-host'), 'type': 'stdio',
+            'allowed_extensions': ['tasktjik@tjikos.local']}
+path = manifest_dir / 'org.tjikos.tasktjik.json'
+fd, pending = tempfile.mkstemp(prefix='.tasktjik-', dir=manifest_dir)
 with os.fdopen(fd, 'w') as output:
     json.dump(manifest, output, indent=2)
 os.replace(pending, path)

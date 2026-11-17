@@ -26,7 +26,7 @@ start = source.index('function newStep(')
 end = source.index('async function run(', start)
 editor = source[start:end].replace("host.hidden=!['todo','template'].includes(editingKind);if(host.hidden)return;", '')
 (extension / 'workflow-editor.js').write_text('// Generated from Tasktjik web/app.js for the Tasktjik browser companion.\n' + editor)
-shutil.copy2(root / 'host/readtjik.py', dist / 'readtjik-host')
+shutil.copy2(root / 'host/tasktjik.py', dist / 'tasktjik-host')
 with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as archive:
     for path in sorted(extension.iterdir()):
         archive.write(path, path.name)

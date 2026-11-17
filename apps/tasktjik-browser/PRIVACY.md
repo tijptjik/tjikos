@@ -21,5 +21,5 @@ Saved items follow Tasktjik's normal storage and retention behavior.
 
 Tasktjik has no analytics, advertising or independent cloud service. Removing the
 extension does not delete items already saved in Tasktjik. To remove the native helper,
-delete `~/.local/lib/readtjik` and
-`~/.mozilla/native-messaging-hosts/org.tjikos.readtjik.json`.
+delete `~/.local/lib/tasktjik-browser` and
+`~/.mozilla/native-messaging-hosts/org.tjikos.tasktjik.json`.

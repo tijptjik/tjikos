@@ -22,23 +22,23 @@ precedence in Zen still requires live verification; manifest validation alone do
 prove it overrides Save Page or Screenshot.
 
 The source workspace is `apps/tasktjik-browser` (`@tjikos/tasktjik-browser`). Install it
-with `bash scripts/install.sh --from-build tasktjik-browser` after building. The old
-`readtjik` installer option remains an alias.
+with `bash scripts/install.sh --from-build tasktjik-browser` after building.
 
 The separate [Runtjik Browser Bridge](../runtjik-browser/docs/install.md) provides
 Runtjik tab and history search; its source is in `apps/runtjik-browser/extension`.
 
-The original extension ID and native-host paths retain `readtjik` for upgrade
-compatibility. Updating the signed package preserves settings and drafts.
+The extension ID is `tasktjik@tjikos.local` and the native host is
+`org.tjikos.tasktjik`.
 
 ## Install
 
-Version 0.1.1 received Mozilla's unlisted signature on 2026-11-17. It adds Ctrl+Alt+S
-and the Tasktjik display name. Install
-`~/.local/lib/readtjik/tasktjik-browser-0.1.1.xpi` through Zen's `about:addons` → gear
-menu → **Install Add-on From File**. This updates the original Readtjik extension in
-place, retaining its ID, settings and drafts. The native helper is registered on this
-machine. Live Zen shortcut/sidebar verification remains pending.
+Version 0.1.2 uses the Tasktjik extension identity and native-host registration. It
+requires a new Mozilla signature before permanent installation. The build produces an
+unsigned ZIP; no signed 0.1.2 release is included.
+
+Firefox treats the changed extension identity as a new add-on. Existing browser-local
+settings and drafts are not transferred automatically. Finish pending saves in the
+previous extension before replacing it; saved Reading items remain in Tasktjik.
 
 Requires native Linux Firefox 142+ or compatible Zen, Python 3, and an installed,
 configured Tasktjik. Flatpak/Snap native-host paths are not covered.
@@ -51,7 +51,7 @@ python3 -B apps/tasktjik-browser/scripts/install.py
 ```
 
 The installer atomically installs and hash-checks the helper and extension archive in
-`~/.local/lib/readtjik`, then registers `org.tjikos.readtjik` under
+`~/.local/lib/tasktjik-browser`, then registers `org.tjikos.tasktjik` under
 `~/.mozilla/native-messaging-hosts`. It does not modify any browser profile.
 
 For development, load `dist/extension/manifest.json` through `about:debugging` → **This
