@@ -36,6 +36,16 @@ fn shortcut(label: &str) -> Result<chrono::DateTime<Local>, String> {
     local_time(day, hour, 0)
 }
 impl TaskView {
+    fn close_snooze(self: &Rc<Self>) {
+        self.stack
+            .set_visible_child_name(if self.collection.borrow().as_str() == "reading" {
+                "reading"
+            } else {
+                "tasks"
+            });
+        self.render();
+        self.focus();
+    }
     pub(crate) fn snooze(self: &Rc<Self>, task: Value) {
         let panel = gtk::Box::new(gtk::Orientation::Vertical, 8);
         panel.set_widget_name("snooze-picker");
@@ -75,7 +85,7 @@ impl TaskView {
                 if let Some(view) = weak.upgrade() {
                     match shortcut(label) {
                         Ok(until) => {
-                            view.stack.set_visible_child_name("tasks");
+                            view.close_snooze();
                             view.action("snooze", &task, json!({"until":until.to_rfc3339()}));
                         }
                         Err(message) => view.error(&message),
@@ -185,9 +195,7 @@ impl TaskView {
         let weak = Rc::downgrade(self);
         actions.append(&button("Cancel", move || {
             if let Some(view) = weak.upgrade() {
-                view.stack.set_visible_child_name("tasks");
-                view.render();
-                view.focus();
+                view.close_snooze();
             }
         }));
         let weak = Rc::downgrade(self);
@@ -216,7 +224,7 @@ impl TaskView {
                 });
             match chosen {
                 Ok(until) => {
-                    view.stack.set_visible_child_name("tasks");
+                    view.close_snooze();
                     view.action("snooze", &task, json!({"until":until.to_rfc3339()}));
                 }
                 Err(message) => {
@@ -276,6 +284,35 @@ mod tests {
         }
         assert!(local_time(Local::now().date_naive() - Duration::days(1), 9, 0).is_err());
     }
+    #[test]
+    #[ignore = "requires an isolated rendering display"]
+    fn reading_snooze_returns_to_reading_and_sends_selected_item() {
+        gtk::init().unwrap();
+        let sent = Rc::new(RefCell::new(Vec::<Value>::new()));
+        let requests = sent.clone();
+        let view = TaskView::new(move |r| requests.borrow_mut().push(r), || {}, None);
+        let task = json!({"id":"reading","kind":"reading","title":"Synthetic page","reference":"https://example.test","group":"All","revision":3});
+        view.update(&json!({"collection":"reading","tasks":[task]}));
+        view.snooze(task.clone());
+        view.close_snooze();
+        assert_eq!(view.stack.visible_child_name().as_deref(), Some("reading"));
+        view.snooze(task);
+        let date = named(view.root.upcast_ref(), "snooze-date")
+            .unwrap()
+            .downcast::<gtk::Entry>()
+            .unwrap();
+        date.set_text("2099-02-17");
+        let save = named(view.root.upcast_ref(), "snooze-save")
+            .unwrap()
+            .downcast::<gtk::Button>()
+            .unwrap();
+        save.emit_clicked();
+        assert_eq!(view.stack.visible_child_name().as_deref(), Some("reading"));
+        assert_eq!(sent.borrow()[0]["action"], "snooze");
+        assert_eq!(sent.borrow()[0]["id"], "reading");
+        assert_eq!(sent.borrow()[0]["revision"], 3);
+    }
+
     #[test]
     #[ignore = "requires an isolated rendering display"]
     fn snooze_calendar_selects_date_and_rejects_past_times() {

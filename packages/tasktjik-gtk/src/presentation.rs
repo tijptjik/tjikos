@@ -204,3 +204,26 @@ mod snooze_tests {
         assert_eq!(display_date(&task, now), "");
     }
 }
+
+/// Project inclusion uses the same date and status rules as its child tasks.
+pub(crate) fn matches_task_filters(
+    task: &serde_json::Value,
+    view: u32,
+    horizon: &str,
+    modes: [u8; 3],
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    let due = display_date(task, now);
+    (matches!(super::s(task, "kind"), "project" | "template")
+        || view == 0
+        || due.is_empty()
+        || due.as_str() <= horizon)
+        && super::status_filter::matches(
+            modes,
+            [
+                task["done"] == true,
+                super::s(task, "status") == "cancelled",
+                super::s(task, "status") == "blocked" || task["blocked"] == true,
+            ],
+        )
+}

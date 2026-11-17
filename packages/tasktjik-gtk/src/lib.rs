@@ -86,6 +86,27 @@ pub(crate) fn focus_within(widget: &impl IsA<gtk::Widget>) -> bool {
         .and_then(|w| gtk::prelude::GtkWindowExt::focus(&w))
         .is_some_and(|focus| focus == *widget.as_ref() || focus.is_ancestor(widget))
 }
+pub(crate) fn quiet_selector(dropdown: &gtk::DropDown) {
+    dropdown.add_css_class("quiet-selector");
+    let factory = gtk::SignalListItemFactory::new();
+    factory.connect_setup(|_, item| {
+        let item = item.downcast_ref::<gtk::ListItem>().unwrap();
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        row.append(&gtk::Label::new(None));
+        row.append(&gtk::Label::new(Some("↕")));
+        item.set_child(Some(&row));
+    });
+    factory.connect_bind(|_, item| {
+        let item = item.downcast_ref::<gtk::ListItem>().unwrap();
+        let value = item.item().and_downcast::<gtk::StringObject>().unwrap();
+        let row = item.child().and_downcast::<gtk::Box>().unwrap();
+        row.first_child()
+            .and_downcast::<gtk::Label>()
+            .unwrap()
+            .set_text(&value.string());
+    });
+    dropdown.set_factory(Some(&factory));
+}
 fn visual_tasks(value: &Value) -> Value {
     let mut value = value.clone();
     if let Some(rows) = value.as_array_mut() {
@@ -181,14 +202,15 @@ impl TaskView {
         let bar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let exit = Rc::new(exit);
         let titles = gtk::Box::new(gtk::Orientation::Vertical, 3);
-        titles.set_hexpand(true);
+        titles.set_hexpand(false);
+        titles.set_valign(gtk::Align::Center);
+        titles.add_css_class("task-header-title");
         let heading = gtk::Label::builder().label("Tasks").xalign(0.).build();
         heading.add_css_class("task-heading");
         let count = gtk::Label::builder().xalign(0.).build();
         count.add_css_class("muted");
         titles.append(&heading);
         titles.append(&count);
-        bar.append(&titles);
         bar.set_valign(gtk::Align::Start);
         let filter = gtk::Entry::builder()
             .placeholder_text("Filter tasks, groups or tags…")
@@ -210,11 +232,12 @@ impl TaskView {
         let navigation = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         let controls = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         controls.set_halign(gtk::Align::End);
+        controls.set_valign(gtk::Align::Center);
         options.insert(&navigation, -1);
         options.insert(&controls, -1);
         let collection = gtk::DropDown::from_strings(&["Todo", "Reading", "Projects", "Templates"]);
         collection.set_valign(gtk::Align::Center);
-        bar.insert_child_after(&collection, Some(&titles));
+        bar.prepend(&collection);
         let sort = gtk::DropDown::from_strings(&[
             "Due: soonest",
             "Due: latest",
@@ -228,7 +251,19 @@ impl TaskView {
         controls.append(&sort);
         let dates = gtk::DropDown::from_strings(&["All dates", "Today", "This week", "This month"]);
         dates.set_visible(false);
-        controls.append(&dates);
+        let compact_dates = gtk::DropDown::from_strings(&[
+            "All tasks",
+            "Today",
+            "This week",
+            "This month",
+            "Projects",
+        ]);
+        compact_dates.set_widget_name("compact-date-filter");
+        compact_dates.set_valign(gtk::Align::Center);
+        bar.insert_child_after(&compact_dates, Some(&collection));
+        for choice in [&collection, &compact_dates, &sort] {
+            quiet_selector(choice);
+        }
         let completed = status_filter::StatusFilter::new("Completed tasks", "completed");
         let cancelled = status_filter::StatusFilter::new("Cancelled tasks", "cancelled");
         let blocked = status_filter::StatusFilter::new("Blocked tasks", "blocked");
@@ -237,8 +272,8 @@ impl TaskView {
         controls.append(&blocked.button);
         let details = gtk::ToggleButton::new();
         details.set_child(Some(&icons::icon("details")));
-        details.set_tooltip_text(Some("Show task details"));
-        controls.append(&details);
+        details.set_tooltip_text(None);
+        details.add_css_class("icon-button");
         let undo = gtk::Button::with_label("↶");
         undo.set_child(Some(&icons::icon("undo")));
         undo.add_css_class("icon-button");
@@ -292,6 +327,7 @@ impl TaskView {
         edit_island.set_margin_bottom(16);
         task_surface.add_overlay(&edit_island);
         footer.append(&undo);
+        footer.append(&details);
         task_surface.add_overlay(&footer);
         let view = Rc::new(Self {
             column_count: Cell::new(2),
@@ -407,6 +443,11 @@ impl TaskView {
                             v.edit(task);
                         }
                     }
+                    "snooze" => {
+                        if !s(&task, "id").is_empty() {
+                            v.snooze(task);
+                        }
+                    }
                     "undo" => v.request(json!({"action":"undo"})),
                     action => {
                         if !s(&task, "id").is_empty() {
@@ -428,26 +469,14 @@ impl TaskView {
         edit_selected.add_css_class("icon-button");
         edit_selected.set_tooltip_text(Some("Edit selected task"));
         edit_island.append(&edit_selected);
-        let dates_help = gtk::MenuButton::new();
-        dates_help.set_child(Some(&icons::icon("details")));
-        dates_help.set_tooltip_text(Some("Due dates and snoozing"));
-        dates_help.add_css_class("icon-button");
-        let explanation = gtk::Label::new(Some(
-            "Dates show weekdays in the current week, then days, weeks, months or years.
-S opens snoozing for the selected task.",
-        ));
-        explanation.set_margin_top(12);
-        explanation.set_margin_bottom(12);
-        explanation.set_margin_start(12);
-        explanation.set_margin_end(12);
-        dates_help.set_popover(Some(&gtk::Popover::builder().child(&explanation).build()));
-        footer.append(&dates_help);
         let help = gtk::MenuButton::new();
         help.set_child(Some(&icons::icon("keyboard")));
         help.add_css_class("icon-button");
         let shortcuts = gtk::Label::new(Some(
             "N  New task     /  Search
 E  Edit     S  Snooze
+T then D/W/M/A/P  Time view
+M then T/R/P/B  Mode
 D  Complete     D D  Delete
 J / K  Navigate     Enter  Expand
 Ctrl+Z  Undo     Escape  Back",
@@ -471,6 +500,36 @@ Ctrl+Z  Undo     Escape  Back",
         view.filter.connect_changed(move |_| {
             if let Some(v) = weak.upgrade() {
                 v.render();
+            }
+        });
+        let weak = Rc::downgrade(&view);
+        compact_dates.connect_selected_notify(move |choice| {
+            if let Some(v) = weak.upgrade() {
+                if choice.selected() == 4 {
+                    v.selector.set_selected(2);
+                } else {
+                    if v.selector.selected() == 2 {
+                        v.selector.set_selected(0);
+                    }
+                    v.dates.set_selected(choice.selected());
+                }
+            }
+        });
+        let compact = compact_dates.clone();
+        view.dates.connect_selected_notify(move |date| {
+            if compact.selected() != date.selected() {
+                compact.set_selected(date.selected());
+            }
+        });
+        let compact = compact_dates.clone();
+        let weak = Rc::downgrade(&view);
+        collection.connect_selected_notify(move |collection| {
+            if let Some(v) = weak.upgrade() {
+                compact.set_selected(if collection.selected() == 2 {
+                    4
+                } else {
+                    v.dates.selected()
+                });
             }
         });
         let weak = Rc::downgrade(&view);
@@ -565,7 +624,9 @@ Ctrl+Z  Undo     Escape  Back",
                 }
             }
         });
-        controls.insert_child_after(&search_button, Some(&view.sort));
+        view.toolbar
+            .insert_child_after(&search_button, add.prev_sibling().as_ref());
+        search_button.add_css_class("icon-button");
         let weak = Rc::downgrade(&view);
         let projects_tab = button("Projects", move || {
             if let Some(v) = weak.upgrade() {
@@ -596,6 +657,19 @@ Ctrl+Z  Undo     Escape  Back",
             }
             glib::ControlFlow::Continue
         });
+        let controls_slot = options.child_at_index(1).unwrap();
+        compact_dates.set_visible(true);
+        navigation.set_visible(false);
+        controls_slot.set_visible(false);
+        controls_slot.set_child(None::<&gtk::Widget>);
+        view.toolbar
+            .insert_child_after(&controls, Some(&compact_dates));
+        controls.set_hexpand(true);
+        controls.set_halign(gtk::Align::End);
+        view.toolbar.prepend(&titles);
+        view.toolbar.add_css_class("unified-task-header");
+        view.root.add_css_class("compact-task-header");
+        view.options.set_visible(false);
         let weak = Rc::downgrade(&view);
         view.root.add_tick_callback(move |_, _| {
             if let Some(v) = weak.upgrade() {
@@ -634,6 +708,133 @@ Ctrl+Z  Undo     Escape  Back",
             }
         });
         view.scroll.add_controller(edge);
+        // Capture navigation prefixes before Reading or task rows consume the suffix.
+        let navigation_keys = gtk::EventControllerKey::new();
+        navigation_keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let prefix = Cell::new(None::<(char, std::time::Instant)>);
+        let weak = Rc::downgrade(&view);
+        navigation_keys.connect_key_pressed(move |_, key, _, mods| {
+            let Some(v) = weak.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
+            if v.is_editing()
+                && focus_within(&v.root)
+                && key == gdk::Key::v
+                && mods.contains(gdk::ModifierType::CONTROL_MASK)
+                && !mods.intersects(gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK)
+            {
+                let formats = v.root.clipboard().formats();
+                if formats.contains_type(gdk::Texture::static_type())
+                    || formats
+                        .mime_types()
+                        .iter()
+                        .any(|mime| mime.starts_with("image/"))
+                {
+                    let task = v
+                        .editor
+                        .borrow()
+                        .as_ref()
+                        .filter(|e| !e.saving.get())
+                        .map(|e| e.task.borrow().clone());
+                    if let Some(task) = task {
+                        if s(&task, "id").is_empty() {
+                            v.error("Save this task before attaching an image");
+                        } else {
+                            v.paste_image(task);
+                        }
+                    }
+                    return glib::Propagation::Stop;
+                }
+            }
+            let mut focus = v
+                .root
+                .root()
+                .and_downcast::<gtk::Window>()
+                .and_then(|w| gtk::prelude::GtkWindowExt::focus(&w));
+            let mut typing = false;
+            while let Some(widget) = focus {
+                typing |= widget.is::<gtk::Editable>() || widget.is::<gtk::TextView>();
+                focus = widget.parent();
+            }
+            if !focus_within(&v.root)
+                || typing
+                || !matches!(
+                    v.stack.visible_child_name().as_deref(),
+                    Some("tasks") | Some("reading")
+                )
+                || mods.intersects(
+                    gdk::ModifierType::CONTROL_MASK
+                        | gdk::ModifierType::ALT_MASK
+                        | gdk::ModifierType::SUPER_MASK,
+                )
+            {
+                prefix.set(None);
+                return glib::Propagation::Proceed;
+            }
+            if matches!(key, gdk::Key::BackSpace | gdk::Key::Back) && v.back_from_project() {
+                prefix.set(None);
+                return glib::Propagation::Stop;
+            }
+            let letter = key.to_unicode().map(|c| c.to_ascii_lowercase());
+            if let Some((first, when)) = prefix.take() {
+                if when.elapsed().as_secs_f32() < 2.0 {
+                    if first == 'm' {
+                        if let Some(index) = match letter {
+                            Some('t') => Some(0),
+                            Some('r') => Some(1),
+                            Some('p') => Some(2),
+                            Some('b') => Some(3),
+                            _ => None,
+                        } {
+                            v.selector.set_selected(index);
+                            v.focus();
+                        }
+                    } else if letter == Some('p') {
+                        v.selector.set_selected(2);
+                        v.focus();
+                    } else if let Some(index) = match letter {
+                        Some('a') => Some(0),
+                        Some('d') => Some(1),
+                        Some('w') => Some(2),
+                        Some('m') => Some(3),
+                        _ => None,
+                    } {
+                        if v.collection.borrow().as_str() == "reading" {
+                            v.reading.set_date_filter(index);
+                        } else {
+                            v.dates.set_selected(index);
+                        }
+                    }
+                    return glib::Propagation::Stop;
+                }
+            }
+            if matches!(letter, Some('t') | Some('m')) {
+                prefix.set(Some((letter.unwrap(), std::time::Instant::now())));
+                v.root.grab_focus();
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        view.root.connect_realize(move |root| {
+            if let Some(window) = root.root().and_downcast::<gtk::Window>() {
+                if let Some(owner) = navigation_keys.widget() {
+                    owner.remove_controller(&navigation_keys);
+                }
+                window.add_controller(navigation_keys.clone());
+            }
+        });
+        let back = gtk::GestureClick::new();
+        back.set_button(8);
+        back.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(&view);
+        back.connect_pressed(move |gesture, _, _, _| {
+            if let Some(view) = weak.upgrade() {
+                if view.back_from_project() {
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                }
+            }
+        });
+        view.root.add_controller(back);
         let keys = gtk::EventControllerKey::new();
         let weak = Rc::downgrade(&view);
         keys.connect_key_pressed(move |_, key, _, mods| {
@@ -703,8 +904,8 @@ Ctrl+Z  Undo     Escape  Back",
                 gdk::Key::N => v.dates.set_selected(1),
                 gdk::Key::l => v.dates.set_selected(0),
                 gdk::Key::w => v.dates.set_selected(2),
-                gdk::Key::m => v.dates.set_selected(3),
-                gdk::Key::e | gdk::Key::t | gdk::Key::g => {
+
+                gdk::Key::e => {
                     if let Some(t) = v.selected_task() {
                         v.edit(t);
                     }
@@ -729,8 +930,7 @@ Ctrl+Z  Undo     Escape  Back",
                 gdk::Key::Return | gdk::Key::KP_Enter => {
                     if let Some(t) = v.selected_task() {
                         if s(&t, "kind") == "project" {
-                            *v.project.borrow_mut() = s(&t, "id").into();
-                            v.render();
+                            v.open_project(s(&t, "id"));
                         } else {
                             v.toggle_subtasks(&t);
                         }
@@ -1020,11 +1220,7 @@ Ctrl+Z  Undo     Escape  Back",
         }
         self.recover
             .set_visible(!self.mutations.borrow().failed.is_empty());
-        let message = if s(value, "sync_message").is_empty() {
-            s(value, "message")
-        } else {
-            s(value, "sync_message")
-        };
+        let message = s(value, "sync_message");
         self.message.set_text(message);
         self.message.set_visible(!message.is_empty());
         self.animate_completions(&newly_completed);
@@ -1145,6 +1341,26 @@ Ctrl+Z  Undo     Escape  Back",
     }
     pub fn is_editing(&self) -> bool {
         self.stack.visible_child_name().as_deref() == Some("editor")
+    }
+    fn open_project(self: &Rc<Self>, id: &str) {
+        *self.project.borrow_mut() = id.into();
+        self.render();
+        self.focus();
+    }
+    fn back_from_project(self: &Rc<Self>) -> bool {
+        if self.stack.visible_child_name().as_deref() != Some("tasks")
+            || self.project.borrow().is_empty()
+        {
+            return false;
+        }
+        let project = self.project.take();
+        self.domain_order.borrow_mut().clear();
+        self.render();
+        self.focus_task(&project);
+        if !focus_within(&self.root) {
+            self.root.grab_focus();
+        }
+        true
     }
     pub fn focus(&self) {
         if self.collection.borrow().as_str() == "reading" {
@@ -1268,7 +1484,7 @@ Ctrl+Z  Undo     Escape  Back",
         *self.rendered.borrow_mut() = signature;
         let reading = self.collection.borrow().as_str() == "reading";
         self.toolbar.set_visible(!reading);
-        self.options.set_visible(!reading);
+        self.options.set_visible(false);
         if reading {
             self.reading.update(&self.state.borrow());
             self.stack.set_visible_child_name("reading");
@@ -1308,7 +1524,11 @@ Ctrl+Z  Undo     Escape  Back",
         let horizon = presentation::horizon(s(&state, "today"), self.dates.selected());
         for task in state["tasks"].as_array().into_iter().flatten() {
             let kind = s(task, "kind");
-            if kind != collection && !(collection == "todo" && kind == "project") {
+            if if self.project.borrow().is_empty() {
+                kind != collection && !(collection == "todo" && kind == "project")
+            } else {
+                kind != "todo"
+            } {
                 continue;
             }
             if !self.project.borrow().is_empty() {
@@ -1323,26 +1543,36 @@ Ctrl+Z  Undo     Escape  Back",
             {
                 continue;
             }
-            let due = presentation::display_date(task, now);
-            if kind != "project"
-                && kind != "template"
-                && self.dates.selected() > 0
-                && !due.is_empty()
-                && due.as_str() > horizon.as_str()
-            {
-                continue;
-            }
-            if !status_filter::matches(
-                [
-                    self.completed.mode(),
-                    self.cancelled.mode(),
-                    self.blocked.mode(),
-                ],
-                [
-                    task["done"] == true,
-                    s(task, "status") == "cancelled",
-                    s(task, "status") == "blocked" || task["blocked"] == true,
-                ],
+            let modes = [
+                self.completed.mode(),
+                self.cancelled.mode(),
+                self.blocked.mode(),
+            ];
+            if kind == "project" && self.dates.selected() > 0 {
+                if !state["tasks"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(|child| {
+                        s(child, "kind") == "todo"
+                            && child["project"] == task["id"]
+                            && presentation::matches_task_filters(
+                                child,
+                                self.dates.selected(),
+                                &horizon,
+                                modes,
+                                now,
+                            )
+                    })
+                {
+                    continue;
+                }
+            } else if !presentation::matches_task_filters(
+                task,
+                self.dates.selected(),
+                &horizon,
+                modes,
+                now,
             ) {
                 continue;
             }
@@ -1375,9 +1605,8 @@ Ctrl+Z  Undo     Escape  Back",
         }
         *self.heading.borrow_mut() = heading;
         self.count.set_text(&format!(
-            "{} tasks · {}",
-            groups.values().map(Vec::len).sum::<usize>(),
-            ["All dates", "Today", "This week", "This month"][self.dates.selected() as usize]
+            "{} tasks",
+            groups.values().map(Vec::len).sum::<usize>()
         ));
         self.toolbar.queue_draw();
         if groups.is_empty() {
@@ -1618,6 +1847,24 @@ Ctrl+Z  Undo     Escape  Back",
         }
     }
     fn drop_task(self: &Rc<Self>, task: &Value, group: &str, before: &str, project: Option<&str>) {
+        // A project accepts categorised tasks unchanged; only Inbox gets routed.
+        let group = if let Some(project) = project {
+            if matches!(s(task, "group"), "" | "All" | "Inbox") {
+                self.state.borrow()["tasks"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .find(|t| s(t, "id") == project)
+                    .and_then(|t| t["metadata"]["projectIncomingCategory"].as_str())
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or("All")
+                    .to_owned()
+            } else {
+                s(task, "group").to_owned()
+            }
+        } else {
+            group.to_owned()
+        };
         let before = if self.sort.selected() == 4 {
             before
         } else {
@@ -2159,9 +2406,7 @@ Ctrl+Z  Undo     Escape  Back",
                                 .cloned();
                             if let Some(task) = task {
                                 if s(&task, "kind") == "project" {
-                                    *v.project.borrow_mut() = id;
-                                    v.selector.set_selected(0);
-                                    v.render();
+                                    v.open_project(&id);
                                 } else {
                                     v.toggle_subtasks(&task);
                                 }

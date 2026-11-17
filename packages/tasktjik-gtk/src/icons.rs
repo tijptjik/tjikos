@@ -8,8 +8,29 @@ pub fn icon(name: &'static str) -> gtk::DrawingArea {
         .content_height(22)
         .build();
     area.add_css_class("stroke-icon");
+    area.connect_map(|area| {
+        let mut ancestor = area.parent();
+        let mut footer = false;
+        let mut launcher = false;
+        while let Some(widget) = ancestor {
+            footer |= widget.has_css_class("task-footer");
+            launcher |= widget.has_css_class("task-host");
+            ancestor = widget.parent();
+        }
+        let size = if footer {
+            16
+        } else if launcher {
+            18
+        } else {
+            22
+        };
+        area.set_content_width(size);
+        area.set_content_height(size);
+    });
     area.set_draw_func(move |area, c, width, height| {
-        c.translate((width as f64 - 22.) / 2., (height as f64 - 22.) / 2.);
+        let size = width.min(height) as f64;
+        c.translate((width as f64 - size) / 2., (height as f64 - size) / 2.);
+        c.scale(size / 22., size / 22.);
         let ink = area.color();
         c.set_source_rgba(
             ink.red() as f64,
@@ -79,14 +100,14 @@ pub fn icon(name: &'static str) -> gtk::DrawingArea {
                 c.line_to(16., 11.);
             }
             "settings" => {
-                c.arc(11., 11., 6., 0., std::f64::consts::TAU);
-                let _ = c.stroke();
-                c.arc(11., 11., 2.5, 0., std::f64::consts::TAU);
-                let _ = c.stroke();
-                for i in 0..8 {
-                    let angle = i as f64 * std::f64::consts::TAU / 8.;
-                    c.move_to(11. + 7. * angle.cos(), 11. + 7. * angle.sin());
-                    c.line_to(11. + 10. * angle.cos(), 11. + 10. * angle.sin());
+                for (y, knob) in [(5., 8.), (11., 15.), (17., 7.)] {
+                    c.move_to(3., y);
+                    c.line_to(knob - 2., y);
+                    c.move_to(knob + 2., y);
+                    c.line_to(19., y);
+                    let _ = c.stroke();
+                    c.arc(knob, y, 2., 0., std::f64::consts::TAU);
+                    let _ = c.stroke();
                 }
             }
             "keyboard" => {

@@ -1,6 +1,7 @@
 //! Tasktjik owns its palette, typography and spacing in every host. Launcher themes
 //! must not silently turn the embedded application into a different presentation.
 pub const CSS: &str = r#"
+.tjik .shell.task-host .tasktjik { padding-top: 12px; }
 .tjik .shell.task-host { padding: 0; background: #26233a; }
 .tjik .tasktjik { background: #26233a; color: #f5f5f7; padding: 32px 32px 0; border-radius: 12px; font-size: 14px; }
 .tjik .tasktjik * { font-family: sans-serif; }
@@ -22,10 +23,22 @@ pub const CSS: &str = r#"
 .tjik .tasktjik .pane { background: #26233a; padding: 0; }
 .tjik .tasktjik .task-editor-title { font-size: 18px; }
 .tjik .tasktjik .reading { padding: 0; }
-.tjik .tasktjik .reading-title { font-size: 16px; font-weight: bold; }
-.tjik .tasktjik .reading-card { background: #39354b; border: 1px solid #555169; border-radius: 12px; padding: 8px; }
-.tjik .tasktjik .reading-card.task-selected { border-color: #a8c7a0; }
+.tjik .tasktjik .reading-title { font-size: 15px; font-weight: 600; }
+.tjik .tasktjik .reading-card { background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 9px; }
+.tjik .tasktjik .reading-card.task-selected { background: #39354b; border-color: #747b70; }
+.tjik .tasktjik .reading-card:hover { background: #302c43; }
+.tjik .tasktjik .reading-card.task-selected:hover { background: #39354b; }
+.tjik .tasktjik .reading-card:focus { outline: none; }
+.tjik .tasktjik .reading-domain { color: #aaa5ba; font-size: 11px; }
+.tjik .tasktjik .reading-footer { border-top: 1px solid #39354b; padding: 6px 0; }
+.tjik .tasktjik .reading-footer button { min-height: 20px; padding: 3px 9px; color: #aaa5ba; }
 .tjik .tasktjik .reading-art { background: #26233a; border-radius: 8px; }
+.tjik .tasktjik.compact-task-header { padding: 22px 24px 0; }
+.tjik .tasktjik.compact-task-header button { padding: 5px 8px; }
+.tjik .tasktjik.compact-task-header .icon-button { min-width: 20px; padding: 5px; }
+.tjik .tasktjik .task-header-title { margin-right: 8px; }
+.tjik .tasktjik .task-header-title .task-heading { font-size: 18px; }
+.tjik .tasktjik .task-header-title .muted { font-size: 11px; }
 /* Original Tasktjik controls: quiet navigation and compact, unboxed rows. */
 .tjik .tasktjik button { min-height: 24px; padding: 6px 13px; font-size: 13px; font-weight: normal; border-radius: 10px; box-shadow: none; background-image: none; }
 .tjik .tasktjik button:hover { background: #39354b; border-color: #555169; }
@@ -36,7 +49,11 @@ pub const CSS: &str = r#"
 .tjik .tasktjik button.primary:disabled { opacity: .45; }
 .tjik .tasktjik button.flat { border-color: transparent; }
 .tjik .tasktjik button.flat:checked { border-color: #555169; background: #39354b; }
-.tjik .tasktjik dropdown > button { background: #39354b; min-width: 92px; }
+.tjik .tasktjik dropdown > button { background: transparent; border-color: #484459; min-width: 0; }
+.tjik .tasktjik dropdown.quiet-selector arrow { opacity: 0; min-width: 0; min-height: 0; -gtk-icon-size: 0; }
+.tjik .shell.task-host .tasktjik button { min-height: 20px; padding: 3px 6px; }
+.tjik .shell.task-host .tasktjik .icon-button { min-width: 18px; padding: 3px; }
+.tjik .shell.task-host .tasktjik .task-footer button { min-width: 18px; min-height: 18px; padding: 5px; }
 .tjik .tasktjik .icon-button { min-width: 24px; padding: 6px; border-color: transparent; border-radius: 8px; }
 .tjik .tasktjik .icon-button:hover { background: #555169; border-color: transparent; }
 .tjik .tasktjik .icon-button:checked { color: #a8c7a0; background: #39354b; }
@@ -54,8 +71,8 @@ pub const CSS: &str = r#"
 .tjik .tasktjik .drop-target { box-shadow: inset 0 2px #a8c7a0; }
 .tjik .tasktjik .task-footer { background: #26233a; border-radius: 12px; padding: 3px; }
 .tjik .tasktjik .task-footer menubutton { padding: 0; margin: 0; min-width: 0; min-height: 0; }
-.tjik .tasktjik .task-footer button { border: 0; outline: none; box-shadow: none; background: transparent; min-width: 22px; min-height: 22px; padding: 8px; margin: 0; border-radius: 8px; }
-.tjik .tasktjik .task-footer button:hover { background: #555169; }
+.tjik .tasktjik .task-footer button { color: #8e899e; border: 0; outline: none; box-shadow: none; background: transparent; min-width: 22px; min-height: 22px; padding: 8px; margin: 0; border-radius: 8px; }
+.tjik .tasktjik .task-footer button:hover { color: #f5f5f7; background: #555169; }
 .tjik .tasktjik .task-footer button:focus-visible { background: #39354b; color: #a8c7a0; }
 .tjik .tasktjik button.completion-marker, .tjik .tasktjik button.completion-marker:hover, .tjik .tasktjik button.completion-marker:active { min-width: 28px; min-height: 0; padding: 0; margin: 0; border: 0; background: transparent; box-shadow: none; }
 .tjik .tasktjik button.completion-marker:disabled { opacity: 1; }

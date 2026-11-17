@@ -130,6 +130,7 @@ impl TaskView {
     pub(crate) fn paste_image(self: &Rc<Self>, task: Value) {
         let weak = Rc::downgrade(self);
         let epoch = self.media_epoch.get();
+        let editor = self.editor.borrow().as_ref().map(|e| e.task.clone());
         self.root
             .clipboard()
             .read_texture_async(None::<&gtk::gio::Cancellable>, move |result| {
@@ -137,11 +138,27 @@ impl TaskView {
                 if view.media_epoch.get() != epoch || view.pending.get() {
                     return;
                 }
+                if editor.as_ref().is_some_and(|tracked| {
+                    !view.editor.borrow().as_ref().is_some_and(|e| {
+                        Rc::ptr_eq(&e.task, tracked) && !e.saving.get() && *e.task.borrow() == task
+                    })
+                }) {
+                    return;
+                }
                 match result {
                     Ok(Some(texture)) if texture.width() <= 8192 && texture.height() <= 8192 => {
                         view.media(
                             move || media::encode(&texture.save_to_png_bytes()),
                             move |view, data| {
+                                if editor.as_ref().is_some_and(|tracked| {
+                                    !view.editor.borrow().as_ref().is_some_and(|e| {
+                                        Rc::ptr_eq(&e.task, tracked)
+                                            && !e.saving.get()
+                                            && *e.task.borrow() == task
+                                    })
+                                }) {
+                                    return;
+                                }
                                 view.action("attach-image", &task, json!({"data":data}));
                             },
                         );

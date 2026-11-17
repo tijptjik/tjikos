@@ -243,7 +243,7 @@ fn task_application_keyboard_and_host_boundary() {
     };
     let key = |name: &str| {
         assert!(std::process::Command::new("wtype")
-            .args(["-k", name])
+            .args(["-k", name, "-s", "30"])
             .status()
             .unwrap()
             .success());
@@ -262,6 +262,30 @@ fn task_application_keyboard_and_host_boundary() {
         "the footer gap must pass input to task content: {}",
         picked.type_().name()
     );
+    view.focus();
+    let sequence = |letters: &str| {
+        assert!(std::process::Command::new("wtype")
+            .args(["-d", "100", letters])
+            .status()
+            .unwrap()
+            .success());
+        settle();
+    };
+    for (suffix, index) in [("td", 1), ("tw", 2), ("tm", 3), ("ta", 0)] {
+        sequence(suffix);
+        settle();
+        assert!(!view.is_editing());
+        assert_eq!(view.dates.selected(), index);
+    }
+    sequence("tp");
+    assert_eq!(view.selector.selected(), 2);
+    for (suffix, index) in [("mr", 1), ("mp", 2), ("mb", 3), ("mt", 0)] {
+        sequence(suffix);
+        assert_eq!(view.selector.selected(), index);
+    }
+    key("e");
+    assert!(view.is_editing());
+    key("Escape");
     view.focus();
     key("n");
     assert!(
@@ -302,7 +326,11 @@ fn task_application_keyboard_and_host_boundary() {
     view.root.grab_focus();
     key("Escape");
     assert_eq!(exits.get(), 1);
-    view.update(&json!({"collection":"reading"}));
+    view.update(&json!({"collection":"reading", "message":"Opened reading reference"}));
+    assert!(
+        !WidgetExt::is_visible(&view.message),
+        "Reading hides success statuses"
+    );
     view.focus();
     key("Escape");
     assert_eq!(
@@ -514,5 +542,347 @@ fn snooze_expires_without_server_refresh() {
         Some("Complete")
     );
     assert_eq!(view.state()["tasks"][0]["snoozedUntil"], until);
+    window.close();
+}
+
+#[test]
+#[ignore = "requires an isolated rendering display"]
+fn responsive_headers_and_reading_dates() {
+    gtk::init().unwrap();
+    let view = TaskView::new(|_| {}, || {}, None);
+    let window = gtk::Window::builder()
+        .title("Tasktjik task fixture")
+        .default_width(760)
+        .default_height(640)
+        .child(&view.root)
+        .build();
+    window.add_css_class("tjik");
+    let css = tjik_gtk::theme::provider();
+    tjik_gtk::theme::apply_with_css(
+        &css,
+        &Default::default(),
+        "sans-serif",
+        14,
+        super::style::CSS,
+    );
+    view.update(&json!({"today":"2026-11-17","collection":"todo","message":"Opened reading reference","tasks":[
+        {"id":"task","kind":"todo","title":"Prepare the neighbourhood guide","group":"Inbox","due":"2026-11-17"},
+        {"id":"page","kind":"reading","title":"A field guide to quieter interfaces","reference":"https://example.test/design","group":"All","due":"2026-11-17"},
+        {"id":"later","kind":"reading","title":"Reading for next month","reference":"https://example.test/later","group":"All","snoozedUntil":"2099-02-17T09:00:00+08:00"}
+    ]}));
+    window.present();
+    let settle = || {
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(350)))
+    };
+    settle();
+    assert!(view.root.has_css_class("compact-task-header"));
+    assert!(!WidgetExt::is_visible(&view.message));
+    assert!(!WidgetExt::is_visible(&view.options));
+    assert!(
+        view.heading.borrow().is_ancestor(&view.toolbar),
+        "Title belongs in the toolbar"
+    );
+    let sort = view.sort.compute_bounds(&view.toolbar).unwrap();
+    let selector = view.selector.compute_bounds(&view.toolbar).unwrap();
+    assert!(sort.x() > selector.x());
+    assert_eq!(sort.y(), selector.y());
+    let capture = |name: &str| {
+        if let Ok(directory) = std::env::var("TASKTJIK_LAYOUT_ARTIFACTS") {
+            std::fs::create_dir_all(&directory).unwrap();
+            std::process::Command::new("hyprctl")
+                .arg("dismissnotify")
+                .output()
+                .unwrap();
+            assert!(std::process::Command::new("grim")
+                .arg(format!("{directory}/{name}.png"))
+                .status()
+                .unwrap()
+                .success());
+        }
+    };
+    capture("tasks-compact");
+    view.selector.set_selected(1);
+    settle();
+    capture("reading-compact");
+    assert!(std::process::Command::new("hyprctl")
+        .args([
+            "eval",
+            "hl.monitor({output=\"GTK\",mode=\"1400x800@60\",position=\"0x0\",scale=1})"
+        ])
+        .status()
+        .unwrap()
+        .success());
+    window.set_child(None::<&gtk::Widget>);
+    window.close();
+    settle();
+    let window = gtk::Window::builder()
+        .title("Tasktjik task fixture")
+        .default_width(1200)
+        .default_height(640)
+        .child(&view.root)
+        .build();
+    window.set_size_request(1200, 640);
+    window.add_css_class("tjik");
+    window.present();
+    settle();
+    assert!(
+        view.root.has_css_class("compact-task-header"),
+        "window width {} root width {}",
+        window.width(),
+        view.root.width()
+    );
+    capture("reading-wide");
+    view.selector.set_selected(0);
+    settle();
+    assert!(!WidgetExt::is_visible(&view.options));
+    capture("tasks-wide");
+    assert!(std::process::Command::new("hyprctl")
+        .args([
+            "eval",
+            "hl.monitor({output=\"GTK\",mode=\"760x680@60\",position=\"0x0\",scale=1})"
+        ])
+        .status()
+        .unwrap()
+        .success());
+    window.set_child(None::<&gtk::Widget>);
+    window.close();
+    settle();
+    let window = gtk::Window::builder()
+        .title("Tasktjik task fixture")
+        .default_width(760)
+        .default_height(640)
+        .child(&view.root)
+        .build();
+    window.add_css_class("tjik");
+    window.present();
+    settle();
+    settle();
+    capture("tasks-narrow");
+    assert!(view.root.has_css_class("compact-task-header"));
+    assert!(!WidgetExt::is_visible(&view.options));
+    window.close();
+}
+
+#[test]
+#[ignore = "rendered clipboard interaction; scripts/test-reading.py"]
+fn task_editor_pastes_text_and_images() {
+    gtk::init().unwrap();
+    let sent = Rc::new(RefCell::new(Vec::new()));
+    let requests = sent.clone();
+    let view = TaskView::new(move |r| requests.borrow_mut().push(r), || {}, None);
+    let task =
+        json!({"id":"paste-fixture","title":"Original","kind":"todo","group":"All","revision":7});
+    view.update(&json!({"collection":"todo","tasks":[task.clone()]}));
+    let window = gtk::Window::builder()
+        .title("Tasktjik task fixture")
+        .default_width(760)
+        .default_height(640)
+        .child(&view.root)
+        .build();
+    window.present();
+    let settle = || {
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(350)))
+    };
+    settle();
+    view.edit(task.clone());
+    settle();
+    fn entry(widget: &gtk::Widget) -> Option<gtk::Entry> {
+        if widget.widget_name() == "Title" {
+            return widget.clone().downcast().ok();
+        }
+        let mut child = widget.first_child();
+        while let Some(w) = child {
+            if let Some(found) = entry(&w) {
+                return Some(found);
+            }
+            child = w.next_sibling();
+        }
+        None
+    }
+    let title = entry(view.root.upcast_ref()).unwrap();
+    title.grab_focus();
+    title.select_region(0, -1);
+    view.root
+        .clipboard()
+        .set_text("Pasted title https://example.test");
+    let paste = || {
+        assert!(std::process::Command::new("wtype")
+            .args(["-M", "ctrl", "-k", "v", "-m", "ctrl"])
+            .status()
+            .unwrap()
+            .success());
+        settle();
+    };
+    paste();
+    assert_eq!(title.text(), "Pasted title https://example.test");
+    assert!(
+        sent.borrow().is_empty(),
+        "text paste must not send an image mutation"
+    );
+    let texture = gdk::MemoryTexture::new(
+        1,
+        1,
+        gdk::MemoryFormat::R8g8b8a8,
+        &glib::Bytes::from_owned(vec![20u8, 40, 60, 255]),
+        4,
+    );
+    view.root.clipboard().set_texture(&texture);
+    paste();
+    assert_eq!(sent.borrow().len(), 1);
+    assert_eq!(sent.borrow()[0]["action"], "attach-image");
+    assert_eq!(sent.borrow()[0]["id"], "paste-fixture");
+    assert_eq!(sent.borrow()[0]["revision"], 7);
+    assert!(sent.borrow()[0]["data"]
+        .as_str()
+        .unwrap()
+        .starts_with("iVBOR"));
+    assert_eq!(title.text(), "Pasted title https://example.test");
+    assert!(view.is_editing(), "pasting must preserve the open draft");
+    window.close();
+}
+
+#[test]
+#[ignore = "rendered project navigation; scripts/test-reading.py"]
+fn projects_follow_filters_and_back_navigation() {
+    gtk::init().unwrap();
+    let view = TaskView::new(|_| {}, || {}, None);
+    view.update(&json!({"today":"2026-11-17","collection":"todo","tasks":[
+        {"id":"active","kind":"project","title":"Active","group":"Inbox","onlyInProject":true},
+        {"id":"finished","kind":"project","title":"Finished","group":"Inbox","onlyInProject":true},
+        {"id":"future","kind":"project","title":"Future","group":"Inbox","onlyInProject":true},
+        {"id":"empty","kind":"project","title":"Empty","group":"Inbox"},
+        {"id":"a","kind":"todo","project":"active","title":"Today","group":"Inbox","due":"2026-11-17"},
+        {"id":"b","kind":"todo","project":"finished","title":"Done","group":"Inbox","due":"2026-11-17","done":true},
+        {"id":"c","kind":"todo","project":"future","title":"Later","group":"Inbox","due":"2099-12-01"}
+    ]}));
+    let window = gtk::Window::builder()
+        .title("Tasktjik task fixture")
+        .default_width(760)
+        .default_height(640)
+        .child(&view.root)
+        .build();
+    window.present();
+    let settle = || {
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(350)))
+    };
+    settle();
+    let visible = |id: &str| view.order.borrow().iter().any(|(key, _, _)| key == id);
+    view.dates.set_selected(1);
+    settle();
+    assert!(visible("active"));
+    for id in ["finished", "future", "empty"] {
+        assert!(!visible(id), "Unexpected project {id}");
+    }
+    view.completed.button.emit_clicked();
+    settle();
+    assert!(visible("active") && visible("finished"));
+    view.completed.button.emit_clicked();
+    settle();
+    assert!(!visible("active") && visible("finished"));
+    view.completed.button.emit_clicked();
+    view.selector.set_selected(2);
+    view.focus_task("active");
+    assert!(std::process::Command::new("wtype")
+        .args(["-k", "Return"])
+        .status()
+        .unwrap()
+        .success());
+    settle();
+    assert_eq!(view.project.borrow().as_str(), "active");
+    assert!(visible("a"), "Projects mode must show the project's tasks");
+    assert!(std::process::Command::new("wtype")
+        .args(["-k", "BackSpace"])
+        .status()
+        .unwrap()
+        .success());
+    settle();
+    assert!(view.project.borrow().is_empty());
+    assert_eq!(view.selector.selected(), 2);
+    assert_eq!(view.dates.selected(), 1);
+    assert!(visible("active"));
+    *view.project.borrow_mut() = "active".into();
+    view.render();
+    let controllers = view.root.observe_controllers();
+    let back = (0..controllers.n_items())
+        .filter_map(|i| controllers.item(i).and_downcast::<gtk::GestureClick>())
+        .find(|g| g.button() == 8)
+        .expect("mouse Back controller");
+    back.emit_by_name::<()>("pressed", &[&1i32, &0f64, &0f64]);
+    assert!(view.project.borrow().is_empty());
+    view.dates.set_selected(0);
+    settle();
+    assert!(
+        visible("empty") && visible("future"),
+        "All dates retains the project directory"
+    );
+    window.close();
+}
+
+#[test]
+#[ignore = "rendered project settings; scripts/test-reading.py"]
+fn project_incoming_category_routes_only_inbox() {
+    gtk::init().unwrap();
+    for (source, default, expected) in [
+        ("All", "Work", "Work"),
+        ("Personal", "Work", "Personal"),
+        ("All", "", "All"),
+    ] {
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let requests = sent.clone();
+        let view = TaskView::new(move |r| requests.borrow_mut().push(r), || {}, None);
+        let task =
+            json!({"id":"task","kind":"todo","title":"Synthetic","group":source,"revision":3});
+        view.update(&json!({"collection":"todo","tasks":[task.clone(), {"id":"project","kind":"project","title":"Project","group":"Projects","metadata":{"projectIncomingCategory":default}}]}));
+        view.drop_task(&task, "Projects", "", Some("project"));
+        assert_eq!(sent.borrow()[0]["fields"]["group"], expected);
+        assert_eq!(sent.borrow()[0]["fields"]["project"], "project");
+        assert_eq!(sent.borrow()[0]["revision"], 3);
+    }
+    let sent = Rc::new(RefCell::new(Vec::new()));
+    let requests = sent.clone();
+    let view = TaskView::new(move |r| requests.borrow_mut().push(r), || {}, None);
+    let project = json!({"id":"project","kind":"project","title":"Project","group":"All","revision":4,"metadata":{"keep":"unchanged"}});
+    view.update(&json!({"collection":"project","groups":["All","Work"],"tasks":[project.clone()]}));
+    let window = gtk::Window::builder()
+        .title("Tasktjik task fixture")
+        .default_width(760)
+        .default_height(640)
+        .child(&view.root)
+        .build();
+    window.present();
+    view.edit(project);
+    fn find(widget: &gtk::Widget) -> Option<gtk::DropDown> {
+        if widget.widget_name() == "project-incoming-category" {
+            return widget.clone().downcast().ok();
+        }
+        let mut child = widget.first_child();
+        while let Some(w) = child {
+            if let Some(found) = find(&w) {
+                return Some(found);
+            }
+            child = w.next_sibling();
+        }
+        None
+    }
+    find(view.root.upcast_ref()).unwrap().set_selected(1);
+    let settle = || {
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(350)))
+    };
+    settle();
+    assert!(std::process::Command::new("wtype")
+        .args(["-M", "ctrl", "-k", "Return", "-m", "ctrl"])
+        .status()
+        .unwrap()
+        .success());
+    settle();
+    assert_eq!(
+        sent.borrow()[0]["fields"]["metadata"]["projectIncomingCategory"],
+        "Work"
+    );
+    assert_eq!(sent.borrow()[0]["fields"]["metadata"]["keep"], "unchanged");
     window.close();
 }

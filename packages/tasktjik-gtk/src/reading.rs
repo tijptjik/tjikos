@@ -36,14 +36,19 @@ pub struct Reading {
     categories: gtk::ToggleButton,
     completed: super::status_filter::StatusFilter,
     sort: gtk::DropDown,
+    dates: gtk::DropDown,
     state: RefCell<Value>,
     selected: RefCell<String>,
     previews: RefCell<HashMap<String, PagePreview>>,
     send: RefCell<Option<Rc<dyn Fn(&str, Value)>>>,
 }
 impl Reading {
+    pub fn set_date_filter(&self, index: u32) {
+        self.dates.set_selected(index);
+    }
+
     pub fn new(provider: Option<Rc<dyn PreviewProvider>>) -> Rc<Self> {
-        let root = gtk::Box::new(gtk::Orientation::Vertical, 16);
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
         root.set_vexpand(true);
         root.set_focusable(true);
         root.add_css_class("reading");
@@ -58,14 +63,43 @@ impl Reading {
         count.set_xalign(0.);
         count.add_css_class("muted");
         heading.append(&count);
-        header.append(&heading);
+        root.append(&heading);
+        let dates = gtk::DropDown::from_strings(&["All dates", "Today", "This week", "This month"]);
+        dates.set_widget_name("reading-date-filter");
+        dates.set_valign(gtk::Align::Center);
+        header.append(&dates);
+        let date_tabs = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        for (index, label) in ["All dates", "Today", "This week", "This month"]
+            .into_iter()
+            .enumerate()
+        {
+            let tab = gtk::ToggleButton::with_label(label);
+            tab.add_css_class("flat");
+            tab.set_active(index == 0);
+            let choice = dates.clone();
+            tab.connect_toggled(move |tab| {
+                if tab.is_active() {
+                    choice.set_selected(index as u32);
+                }
+            });
+            let weak = tab.downgrade();
+            dates.connect_selected_notify(move |choice| {
+                if let Some(tab) = weak.upgrade() {
+                    tab.set_active(choice.selected() == index as u32);
+                }
+            });
+            date_tabs.append(&tab);
+        }
         let options = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let list = gtk::ToggleButton::with_label("List");
         list.set_active(true);
         let grid = gtk::ToggleButton::with_label("Grid");
         grid.set_group(Some(&list));
-        options.append(&list);
-        options.append(&grid);
+        list.add_css_class("flat");
+        grid.add_css_class("flat");
+        let modes = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        modes.append(&list);
+        modes.append(&grid);
         let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         spacer.set_hexpand(true);
         options.append(&spacer);
@@ -75,6 +109,8 @@ impl Reading {
             "Site: A–Z",
             "Recently completed",
         ]);
+        super::quiet_selector(&dates);
+        super::quiet_selector(&sort);
         options.append(&sort);
         let search = gtk::ToggleButton::with_label("⌕");
         search.set_child(Some(&super::icons::icon("search")));
@@ -85,9 +121,14 @@ impl Reading {
         options.append(&completed.button);
         let categories = gtk::ToggleButton::with_label("☷");
         categories.set_tooltip_text(Some("Group by category"));
+        categories.add_css_class("icon-button");
         options.append(&categories);
         root.append(&header);
-        root.append(&options);
+        let secondary = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        secondary.append(&modes);
+        secondary.append(&date_tabs);
+        secondary.append(&options);
+        root.append(&secondary);
         let filter = gtk::SearchEntry::new();
         filter.set_visible(false);
         root.append(&filter);
@@ -105,7 +146,8 @@ impl Reading {
             .build();
         let viewport = super::viewport::Viewport::new(&scroll);
         root.append(&viewport);
-        let footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let footer = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        footer.add_css_class("reading-footer");
         root.append(&footer);
         let v = Rc::new(Self {
             cards: RefCell::new(vec![]),
@@ -125,6 +167,7 @@ impl Reading {
             categories,
             completed,
             sort,
+            dates: dates.clone(),
             state: RefCell::new(json!({})),
             selected: RefCell::new(String::new()),
             previews: RefCell::new(HashMap::new()),
@@ -161,26 +204,68 @@ impl Reading {
                 }
             }
         });
-        for (title, action) in [("Todo", "collection"), ("+ Save page", "new")] {
+        for (title, action) in [("← Todo", "collection"), ("+ Save page", "new")] {
             let weak = Rc::downgrade(&v);
             let control = button(title, move || {
                 if let Some(v) = weak.upgrade() {
                     v.emit(action, json!({}));
                 }
             });
+            control.set_valign(gtk::Align::Center);
             if action == "new" {
                 control.add_css_class("primary");
+            } else {
+                control.add_css_class("flat");
             }
-            header.append(&control);
+            if action == "collection" {
+                header.prepend(&control);
+            } else {
+                header.append(&control);
+            }
         }
         for (title, action) in [("Edit", "edit"), ("Mark read", "toggle"), ("Undo", "undo")] {
             let weak = Rc::downgrade(&v);
-            footer.append(&button(title, move || {
+            let control = button(title, move || {
                 if let Some(v) = weak.upgrade() {
                     v.emit_selected(action);
                 }
-            }));
+            });
+            control.add_css_class("flat");
+            footer.append(&control);
         }
+        let weak = Rc::downgrade(&v);
+        dates.connect_selected_notify(move |_| {
+            if let Some(v) = weak.upgrade() {
+                v.render();
+            }
+        });
+        let compact_state = Cell::new(None);
+        let weak = Rc::downgrade(&v);
+        v.root.add_tick_callback(move |_, _| {
+            if let Some(v) = weak.upgrade() {
+                let width = v
+                    .root
+                    .root()
+                    .and_downcast::<gtk::Window>()
+                    .map(|w| w.width())
+                    .unwrap_or(v.root.width());
+                let compact = width < 1080;
+                if compact_state.replace(Some(compact)) != Some(compact) {
+                    dates.set_visible(compact);
+                    date_tabs.set_visible(!compact);
+                    if compact {
+                        secondary.remove(&options);
+                        header.append(&options);
+                    } else {
+                        if options.parent().as_ref() == Some(header.upcast_ref()) {
+                            header.remove(&options);
+                            secondary.append(&options);
+                        }
+                    }
+                }
+            }
+            glib::ControlFlow::Continue
+        });
         let weak = Rc::downgrade(&v);
         v.completed.button.connect_clicked(move |_| {
             if let Some(v) = weak.upgrade() {
@@ -224,7 +309,7 @@ impl Reading {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         let weak = Rc::downgrade(&v);
-        keys.connect_key_pressed(move |_, key, _, _mods| {
+        keys.connect_key_pressed(move |_, key, _, mods| {
             let Some(v) = weak.upgrade() else {
                 return glib::Propagation::Proceed;
             };
@@ -237,14 +322,38 @@ impl Reading {
                 }
                 return glib::Propagation::Proceed;
             }
+            if mods
+                .intersects(gtk::gdk::ModifierType::ALT_MASK | gtk::gdk::ModifierType::SUPER_MASK)
+            {
+                return glib::Propagation::Proceed;
+            }
             match key {
-                gtk::gdk::Key::Return => v.emit_selected("open-reference"),
+                gtk::gdk::Key::Return | gtk::gdk::Key::KP_Enter => {
+                    let action = if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK) {
+                        "purge"
+                    } else if mods.contains(gtk::gdk::ModifierType::SHIFT_MASK) {
+                        "edit"
+                    } else {
+                        "open-reference"
+                    };
+                    v.emit_selected(action);
+                }
                 gtk::gdk::Key::n | gtk::gdk::Key::N => v.emit("new", json!({})),
                 gtk::gdk::Key::slash => {
                     v.filter.set_visible(true);
                     v.filter.grab_focus();
                 }
+                gtk::gdk::Key::d
+                    if !mods.intersects(
+                        gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SHIFT_MASK,
+                    ) =>
+                {
+                    v.emit_selected("toggle")
+                }
                 gtk::gdk::Key::e => v.emit_selected("edit"),
+                gtk::gdk::Key::s if !mods.contains(gtk::gdk::ModifierType::CONTROL_MASK) => {
+                    v.emit_selected("snooze")
+                }
                 gtk::gdk::Key::Escape => v.emit("exit", json!({})),
                 gtk::gdk::Key::Down
                 | gtk::gdk::Key::Up
@@ -374,18 +483,23 @@ impl Reading {
         }
     }
     fn render(self: &Rc<Self>) {
+        let had_focus = super::focus_within(&self.root);
         let anchor = self.visible_anchor();
         self.cards.borrow_mut().clear();
         self.preview_widgets.borrow_mut().clear();
         self.columns.set(self.column_count());
         let state = self.state.borrow();
         let query = self.filter.text().to_lowercase();
+        let now = chrono::Utc::now();
+        let horizon = super::presentation::horizon(s(&state, "today"), self.dates.selected());
         let mut sites: Vec<Value> = state["tasks"]
             .as_array()
             .into_iter()
             .flatten()
             .filter(|t| {
+                let due = super::presentation::display_date(t, now);
                 s(t, "kind") == "reading"
+                    && (self.dates.selected() == 0 || due.is_empty() || due <= horizon)
                     && s(t, "status") != "cancelled"
                     && self.completed.accepts(t["done"] == true)
                     && format!("{} {} {}", s(t, "title"), s(t, "reference"), t["tags"])
@@ -440,6 +554,10 @@ impl Reading {
         }
         *self.order.borrow_mut() = order;
         self.model.splice(0, self.model.n_items(), &rows);
+        // Replacing focused virtual rows must not strand focus in the host.
+        if had_focus && !super::focus_within(&self.root) {
+            self.root.grab_focus();
+        }
         if let Some(index) = anchor.and_then(|id| {
             self.order
                 .borrow()
@@ -487,7 +605,7 @@ impl Reading {
     }
     fn row(self: &Rc<Self>, row: &Row) -> gtk::Widget {
         let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-        content.set_margin_bottom(10);
+        content.set_margin_bottom(6);
         match row {
             Row::Empty => content.append(&gtk::Label::new(Some(
                 "No pages here yet\nSave a page or adjust your filters.",
@@ -544,7 +662,11 @@ impl Reading {
         let art = gtk::Overlay::new();
         art.add_css_class("reading-art");
         art.set_overflow(gtk::Overflow::Hidden);
-        art.set_size_request(if vertical { 240 } else { 156 }, 126);
+        art.set_size_request(
+            if vertical { 240 } else { 96 },
+            if vertical { 126 } else { 68 },
+        );
+        art.set_valign(gtk::Align::Center);
         let initial = gtk::Label::new(
             domain
                 .chars()
@@ -562,11 +684,12 @@ impl Reading {
             art.add_overlay(&picture);
         }
         card.append(&art);
-        let details = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        let details = gtk::Box::new(gtk::Orientation::Vertical, 3);
         details.set_hexpand(true);
+        details.set_valign(gtk::Align::Center);
         for (text, class) in [
-            (domain, "accent"),
             (s(task, "title"), "reading-title"),
+            (domain, "reading-domain"),
             (
                 if preview.description.as_str().is_empty() {
                     url.split_once(domain).map(|(_, path)| path).unwrap_or("/")
@@ -578,8 +701,9 @@ impl Reading {
         ] {
             let l = gtk::Label::new(Some(text));
             l.set_xalign(0.);
-            l.set_wrap(true);
-            l.set_lines(2);
+            l.set_wrap(vertical);
+            l.set_lines(if vertical { 2 } else { 1 });
+            l.set_max_width_chars(1);
             l.set_ellipsize(gtk::pango::EllipsizeMode::End);
             l.add_css_class(class);
             details.append(&l);
@@ -591,9 +715,18 @@ impl Reading {
                     .push((art.downgrade(), l.downgrade()));
             }
         }
-        let foot = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        foot.set_vexpand(true);
-        foot.set_valign(gtk::Align::End);
+        let due = super::presentation::display_date(task, chrono::Utc::now());
+        if !due.is_empty() {
+            let snoozed = super::presentation::active_snooze(task, chrono::Utc::now()).is_some();
+            let label = gtk::Label::new(Some(&format!(
+                "{} {}",
+                if snoozed { "Snoozed until" } else { "Due" },
+                due
+            )));
+            label.set_xalign(0.);
+            label.add_css_class("muted");
+            details.append(&label);
+        }
         let tags = task["tags"]
             .as_array()
             .into_iter()
@@ -602,19 +735,14 @@ impl Reading {
             .map(|t| format!("#{t}"))
             .collect::<Vec<_>>()
             .join("  ");
-        let tags = gtk::Label::new(Some(&tags));
-        tags.set_hexpand(true);
-        tags.set_xalign(0.);
-        tags.add_css_class("muted");
-        foot.append(&tags);
-        let weak = Rc::downgrade(self);
-        let item = task.clone();
-        foot.append(&button("Open page ↗", move || {
-            if let Some(v) = weak.upgrade() {
-                v.emit("open-reference", item.clone());
-            }
-        }));
-        details.append(&foot);
+        if !tags.is_empty() {
+            let label = gtk::Label::new(Some(&tags));
+            label.set_xalign(0.);
+            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            label.set_max_width_chars(1);
+            label.add_css_class("muted");
+            details.append(&label);
+        }
         card.append(&details);
         let weak = Rc::downgrade(self);
         let item = task.clone();
@@ -622,6 +750,7 @@ impl Reading {
         click.connect_released(move |_, n, _, _| {
             if let Some(v) = weak.upgrade() {
                 *v.selected.borrow_mut() = s(&item, "id").into();
+                v.root.grab_focus();
                 if n == 2 {
                     v.emit("open-reference", item.clone());
                 } else {
@@ -661,6 +790,110 @@ mod tests {
         pin::Pin,
         task::{Context, Poll, Waker},
     };
+
+    #[test]
+    #[ignore = "requires an isolated GTK display; scripts/test-reading.py"]
+    fn reading_keyboard_survives_rebuild_and_maps_enter_modifiers() {
+        gtk::init().unwrap();
+        let view = Reading::new(None);
+        let actions = Rc::new(RefCell::new(Vec::new()));
+        let sent = actions.clone();
+        view.connect(move |action, task| sent.borrow_mut().push((action.to_owned(), task)));
+        let window = gtk::Window::builder()
+            .title("Tasktjik reading fixture")
+            .default_width(860)
+            .default_height(680)
+            .child(&view.root)
+            .build();
+        let state = json!({"tasks":[
+            {"id":"one","kind":"reading","title":"One","reference":"https://example.test/one","createdAt":"2026-11-17"},
+            {"id":"two","kind":"reading","title":"Two","reference":"https://example.test/two","createdAt":"2026-11-16"}
+        ]});
+        view.update(&state);
+        window.present();
+        let settle = || {
+            glib::MainContext::default()
+                .block_on(glib::timeout_future(std::time::Duration::from_millis(150)))
+        };
+        let key = |args: &[&str]| {
+            assert!(std::process::Command::new("wtype")
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+            settle();
+        };
+        settle();
+        view.root.grab_focus();
+        key(&["-k", "Down"]);
+        assert_eq!(view.selected.borrow().as_str(), "two");
+        key(&["-k", "Return"]);
+        assert_eq!(actions.borrow().last().unwrap().0, "open-reference");
+        assert_eq!(actions.borrow().last().unwrap().1["id"], "two");
+        // A refresh after opening must preserve both selection and keyboard ownership.
+        view.update(&state);
+        settle();
+        assert!(super::super::focus_within(&view.root));
+        key(&["-k", "Up"]);
+        assert_eq!(view.selected.borrow().as_str(), "one");
+        key(&["-M", "shift", "-k", "Return", "-m", "shift"]);
+        assert_eq!(actions.borrow().last().unwrap().0, "edit");
+        key(&["-M", "ctrl", "-k", "Return", "-m", "ctrl"]);
+        assert_eq!(actions.borrow().last().unwrap().0, "purge");
+        key(&["-k", "KP_Enter"]);
+        assert_eq!(actions.borrow().last().unwrap().0, "open-reference");
+        key(&["-k", "d"]);
+        assert_eq!(actions.borrow().last().unwrap().0, "toggle");
+        let count = actions.borrow().len();
+        key(&["-M", "ctrl", "-k", "d", "-m", "ctrl"]);
+        assert_eq!(actions.borrow().len(), count);
+        key(&["-k", "slash"]);
+        let count = actions.borrow().len();
+        key(&["-k", "Return"]);
+        assert_eq!(actions.borrow().len(), count, "search owns Enter");
+        key(&["d"]);
+        assert_eq!(actions.borrow().len(), count, "search owns D");
+        key(&["-k", "Escape"]);
+        assert!(super::super::focus_within(&view.root));
+        window.close();
+        settle();
+    }
+
+    #[test]
+    #[ignore = "requires an isolated GTK display"]
+    fn reading_dates_include_due_and_snooze_horizons() {
+        gtk::init().unwrap();
+        let view = Reading::new(None);
+        let today = chrono::Local::now().date_naive();
+        let tomorrow = today + chrono::Duration::days(1);
+        let later = today + chrono::Duration::days(60);
+        let snooze = (chrono::Utc::now() + chrono::Duration::days(60)).to_rfc3339();
+        view.update(&json!({"today":today.to_string(),"tasks":[
+            {"id":"undated","kind":"reading","title":"Undated"},
+            {"id":"today","kind":"reading","due":today.to_string()},
+            {"id":"tomorrow","kind":"reading","due":tomorrow.to_string()},
+            {"id":"later","kind":"reading","due":later.to_string()},
+            {"id":"snoozed","kind":"reading","due":today.to_string(),"snoozedUntil":snooze}
+        ]}));
+        assert_eq!(view.order.borrow().len(), 5);
+        view.dates.set_selected(1);
+        let ids: Vec<_> = view
+            .order
+            .borrow()
+            .iter()
+            .map(|(id, _)| id.clone())
+            .collect();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&"today".into()) && ids.contains(&"undated".into()));
+        view.dates.set_selected(3);
+        assert!(!view
+            .order
+            .borrow()
+            .iter()
+            .any(|(id, _)| id == "snoozed" || id == "later"));
+        view.dates.set_selected(0);
+        assert_eq!(view.order.borrow().len(), 5);
+    }
 
     #[derive(Default)]
     struct Pending {

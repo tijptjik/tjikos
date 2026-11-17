@@ -327,6 +327,51 @@ impl TaskView {
                 s(&task, "group")
             },
         );
+        let mut incoming_categories = vec!["All".to_owned()];
+        for category in self.state.borrow()["groups"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            if !incoming_categories.iter().any(|name| name == category) {
+                incoming_categories.push(category.into());
+            }
+        }
+        let incoming = s(&task["metadata"], "projectIncomingCategory");
+        if !incoming.is_empty() && !incoming_categories.iter().any(|name| name == incoming) {
+            incoming_categories.push(incoming.into());
+        }
+        let incoming_category = gtk::DropDown::from_strings(
+            &incoming_categories
+                .iter()
+                .map(|name| {
+                    if name == "All" {
+                        "Inbox"
+                    } else {
+                        name.as_str()
+                    }
+                })
+                .collect::<Vec<_>>(),
+        );
+        incoming_category.set_widget_name("project-incoming-category");
+        incoming_category.set_selected(
+            incoming_categories
+                .iter()
+                .position(|name| name == incoming)
+                .unwrap_or(0) as u32,
+        );
+        if s(&task, "kind") == "project" {
+            let row = gtk::Box::new(gtk::Orientation::Vertical, 4);
+            let label = gtk::Label::builder()
+                .label("Default incoming category")
+                .xalign(0.)
+                .build();
+            label.add_css_class("muted");
+            row.append(&label);
+            row.append(&incoming_category);
+            form.append(&row);
+        }
         let tags = field(
             &form,
             "Tags (comma separated)",
@@ -607,7 +652,10 @@ impl TaskView {
             if repeat_text.text().as_str()!=input::repeat_label(&recurrence) {
                 recurrence=match input::repeat(repeat_text.text().as_str()) {Ok(rule)=>rule,Err(message)=>{view.error(&message);return;}};
             }
-            let fields=json!({"title":title.text().trim(),"plan":plan.text().as_str(),"assignee":assignee.text().as_str(),"acceptance":acceptance.text().split(';').map(str::trim).filter(|v|!v.is_empty()).collect::<Vec<_>>(),"kind":if s(&task,"kind").is_empty(){"todo"}else{s(&task,"kind")},"group":group.text().trim(),"tags":tags.text().split(',').map(str::trim).filter(|v|!v.is_empty()).collect::<Vec<_>>(),"due":date,"reference":reference.text().as_str(),"project":projects[project.selected()as usize]["id"],"onlyInProject":only_project.is_active(),"repeat":recurrence,"notifyBeforeDue":notify.is_active(),"notifyBeforeDueLeadValue":lead.value_as_int(),"notifyBeforeDueLeadUnit":lead_units[lead_unit.selected()as usize],"subtasks":nodes.value(),"workflow":sequential.is_active()});
+            let mut metadata = task["metadata"].clone();
+            if !metadata.is_object() { metadata = json!({}); }
+            if s(&task, "kind") == "project" { metadata["projectIncomingCategory"] = json!(incoming_categories[incoming_category.selected() as usize]); }
+            let fields=json!({"metadata":metadata,"title":title.text().trim(),"plan":plan.text().as_str(),"assignee":assignee.text().as_str(),"acceptance":acceptance.text().split(';').map(str::trim).filter(|v|!v.is_empty()).collect::<Vec<_>>(),"kind":if s(&task,"kind").is_empty(){"todo"}else{s(&task,"kind")},"group":group.text().trim(),"tags":tags.text().split(',').map(str::trim).filter(|v|!v.is_empty()).collect::<Vec<_>>(),"due":date,"reference":reference.text().as_str(),"project":projects[project.selected()as usize]["id"],"onlyInProject":only_project.is_active(),"repeat":recurrence,"notifyBeforeDue":notify.is_active(),"notifyBeforeDueLeadValue":lead.value_as_int(),"notifyBeforeDueLeadUnit":lead_units[lead_unit.selected()as usize],"subtasks":nodes.value(),"workflow":sequential.is_active()});
             let draft=s(&view.state.borrow(),"draft_id").to_owned();saving_clone.set(true);form_clone.set_sensitive(false);
             view.request(json!({"action":if !draft.is_empty(){"reading-save"}else if s(&task,"id").is_empty(){"create"}else{"edit"},"id":task["id"],"revision":tracked.borrow()["revision"],"draft_id":draft,"request_id":request_id,"fields":fields}));
         });
