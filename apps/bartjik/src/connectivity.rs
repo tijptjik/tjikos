@@ -26,6 +26,44 @@ pub fn parse_relays(raw: &str) -> Result<Value> {
     ensure!(truth(&result), "Relay locations unavailable");
     Ok(result)
 }
+fn account_device_name(output: &str) -> Option<&str> {
+    output.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("Device name:")
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+    })
+}
+
+pub async fn mullvad_device_name() -> Option<String> {
+    static CACHE: std::sync::OnceLock<tokio::sync::Mutex<(f64, Option<String>)>> =
+        std::sync::OnceLock::new();
+    let mut cache = CACHE.get_or_init(|| Default::default()).lock().await;
+    if now() >= cache.0 {
+        let name = cmd(&["mullvad", "account", "get"])
+            .await
+            .ok()
+            .and_then(|output| account_device_name(&output).map(str::to_owned));
+        *cache = (now() + if name.is_some() { 300. } else { 60. }, name);
+    }
+    cache.1.clone()
+}
+
+#[cfg(test)]
+mod device_name_tests {
+    use super::account_device_name;
+
+    #[test]
+    fn extracts_only_the_named_device() {
+        assert_eq!(
+            account_device_name("Account id: 1234\nDevice name: Quiet Otter\nExpires at: tomorrow"),
+            Some("Quiet Otter")
+        );
+        assert_eq!(account_device_name("Account id: 1234\nDevice name: "), None);
+        assert_eq!(account_device_name("Not logged in"), None);
+    }
+}
+
 pub async fn catalog() -> Value {
     static CACHE: std::sync::OnceLock<tokio::sync::Mutex<(f64, Value)>> =
         std::sync::OnceLock::new();

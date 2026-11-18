@@ -339,6 +339,11 @@ pub async fn poll(m: &Value) -> Result<Vec<Value>> {
                 m.get("quickCountries")
                     .unwrap_or(&json!(["nl", "jp", "sg"])),
             );
+            if truth(&m["panel"]["hover"]) {
+                if let Some(name) = connectivity::mullvad_device_name().await {
+                    row["panel"]["deviceName"] = json!(name);
+                }
+            }
             row
         }
         "tailscale" => {

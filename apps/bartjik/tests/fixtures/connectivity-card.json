@@ -10,6 +10,7 @@
       "row": {
         "panel": {
           "connection": "connected",
+          "deviceName": "Quiet Otter",
           "country": "Japan",
           "countryCode": "jp",
           "city": "Tokyo",

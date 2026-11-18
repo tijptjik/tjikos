@@ -247,19 +247,18 @@ impl Card {
         names.set_hexpand(true);
         let connected = info["connection"] == "connected";
         names.append(&label(
+            info["deviceName"]
+                .as_str()
+                .filter(|name| !name.is_empty())
+                .unwrap_or("This device"),
+            "network-title",
+        ));
+        names.append(&label(
             match s(&info["connection"]) {
                 "connected" => "Connected",
                 "connecting" => "Connecting…",
                 "disconnected" => "Disconnected",
                 _ => "Unavailable",
-            },
-            "network-title",
-        ));
-        names.append(&label(
-            if connected {
-                "Traffic protected by Mullvad"
-            } else {
-                "VPN connection"
             },
             "network-muted",
         ));
