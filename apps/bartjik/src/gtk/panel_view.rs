@@ -1585,6 +1585,16 @@ mod render_tests {
     #[ignore = "requires a display and the workspace-7 fixture runner"]
     fn panel_primitives_render() {
         gtk::init().unwrap();
+        for symbol in ["bolt", "format_bold"] {
+            let part = json!({"kind": "symbol", "value": symbol});
+            let icon = crate::icons::artwork(&part, &json!({"iconSet": "proicons"}), 18);
+            let label = icon.downcast::<gtk::Label>().unwrap();
+            let layout = label.layout();
+            assert_eq!(layout.unknown_glyphs_count(), 0);
+            let runs = layout.line(0).unwrap().runs();
+            assert_eq!(runs.len(), 1);
+            assert_eq!(runs[0].glyph_string().num_glyphs(), 1, "{symbol}");
+        }
         let style = json!({"background":"#1f1d2e","surface":"#26233a","text":"#e5e5e5","muted":"#a5a0ba","border":"#555169","font":"tijpset"});
         let css = gtk::CssProvider::new();
         css.load_from_string(&stylesheet(&style));

@@ -446,7 +446,18 @@ pub(crate) fn artwork(part: &Value, style: &Value, size: i32) -> gtk::Widget {
         v.set_pixel_size(size);
         v.upcast()
     } else {
-        gtk::Label::new(Some(value)).upcast()
+        let label = gtk::Label::new(Some(value));
+        if part["kind"] == "symbol" {
+            let attrs = gtk::pango::AttrList::new();
+            attrs.insert(gtk::pango::AttrString::new_family(
+                "Material Symbols Rounded",
+            ));
+            attrs.insert(gtk::pango::AttrSize::new_size_absolute(
+                size * gtk::pango::SCALE,
+            ));
+            label.set_attributes(Some(&attrs));
+        }
+        label.upcast()
     }
 }
 #[cfg(test)]
