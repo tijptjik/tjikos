@@ -20,13 +20,15 @@ pub enum State {
 #[derive(Debug)]
 pub struct DirtyRepository {
     pub files: u64,
+    pub paths: Vec<String>,
 }
 impl std::fmt::Display for DirtyRepository {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "dirty repository ({} files); commit or stash before synchronizing",
+            "working tree has {} changed files: {}",
             self.files
+            , self.paths.join(", ")
         )
     }
 }
@@ -87,6 +89,21 @@ fn dirty_file_count(status: &[u8]) -> u64 {
         }
     }
     count
+}
+
+fn dirty_file_paths(status: &[u8]) -> Vec<String> {
+    let mut records = status.split(|byte| *byte == 0);
+    let mut paths = Vec::new();
+    while let Some(record) = records.next() {
+        if record.len() < 4 { continue; }
+        paths.push(String::from_utf8_lossy(&record[3..]).into_owned());
+        if record[..2].iter().any(|byte| *byte == b'R' || *byte == b'C') {
+            if let Some(original) = records.next() {
+                paths.push(format!("{} (original name)", String::from_utf8_lossy(original)));
+            }
+        }
+    }
+    paths
 }
 
 pub const RETRY_BOUNDARY: &str = "__tjikup_credential_retry__";
@@ -325,12 +342,13 @@ impl Contextual<'_> {
                 bail!("unfinished Git operation ({state})");
             }
         }
-        let dirty_files = dirty_file_count(&self.git(
+        let status = self.git(
             repo,
             &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
-        )?);
+        )?;
+        let dirty_files = dirty_file_count(&status);
         if dirty_files > 0 {
-            return Err(DirtyRepository { files: dirty_files }.into());
+            return Err(DirtyRepository { files: dirty_files, paths: dirty_file_paths(&status) }.into());
         }
         let branch = self.git(repo, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
         let branch = std::str::from_utf8(&branch)?.trim();
