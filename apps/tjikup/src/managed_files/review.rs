@@ -1,6 +1,6 @@
 //! Explicit conflict decisions under the deployment lock, before any file writes.
 use super::{
-    conflict, disk,
+    capture, conflict, disk,
     model::{Desired, Snapshot},
     State,
 };
@@ -111,7 +111,7 @@ fn read_choice(tty: &mut File) -> Result<u8> {
     };
     write!(
         tty,
-        "[r] Review difference  [k] Keep {local}  [m] Use {managed}  [q] Cancel (default): "
+        "[D] Diff  [K] Keep {local}  [M] Use {managed}  [A] Add  [E] Edit  [Q] Cancel (default): "
     )?;
     tty.flush()?;
     let mut key = [0];
@@ -202,14 +202,23 @@ fn preview(tty: &mut File, local: &[u8], managed: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn resolve(root: &Path, entries: &[Desired], state: &mut State) -> Result<()> {
+pub(super) fn resolve(
+    root: &Path,
+    state_dir: &Path,
+    entries: &mut Vec<Desired>,
+    state: &mut State,
+    reload: impl Fn() -> Result<Vec<Desired>>,
+) -> Result<()> {
     let mut tty = OpenOptions::new()
         .read(true)
         .write(true)
         .open("/dev/tty")
         .context("open terminal for conflict review")?;
     let _foreground = Foreground::acquire(&tty)?;
-    for entry in entries {
+    let mut index = 0;
+    while index < entries.len() {
+        let entry = &entries[index];
+        index += 1;
         let local = disk::read(root, &entry.path)?;
         if state.kept_local.get(&entry.path) == Some(&entry.snapshot)
             || !conflict(entry, &local.snapshot, state)
@@ -231,9 +240,11 @@ pub(super) fn resolve(root: &Path, entries: &[Desired], state: &mut State) -> Re
                 "Sensitive file: preview may show secrets, only on this terminal."
             )?;
         }
+        writeln!(tty, "Add saves local content into the managed catalog; Edit opens its source. No Git staging or commit. Source saves remain if deployment is cancelled.")?;
+        let mut literal_confirmed = false;
         loop {
             match read_choice(&mut tty)? {
-                b'r' => {
+                b'd' => {
                     writeln!(
                         tty,
                         "Local: {:?}\nManaged: {:?}",
@@ -243,6 +254,34 @@ pub(super) fn resolve(root: &Path, entries: &[Desired], state: &mut State) -> Re
                         && matches!(entry.snapshot, Snapshot::File { .. } | Snapshot::Absent)
                     {
                         preview(&mut tty, &local.bytes, &entry.bytes)?;
+                    }
+                }
+                key @ (b'a' | b'e') => {
+                    match capture::update(
+                        capture::Request {
+                            root,
+                            state_dir,
+                            entry,
+                            local: &local,
+                            edit: key == b'e',
+                            literal_confirmed,
+                        },
+                        &mut tty,
+                        &reload,
+                    )? {
+                        capture::Outcome::ConfirmLiteral => {
+                            literal_confirmed = true;
+                        }
+                        capture::Outcome::Unchanged => {}
+                        capture::Outcome::Saved(refreshed) => {
+                            state.kept_local.remove(&entry.path);
+                            state
+                                .files
+                                .insert(entry.path.clone(), local.snapshot.clone());
+                            *entries = refreshed;
+                            index = 0;
+                            break;
+                        }
                     }
                 }
                 b'k' => {
@@ -263,7 +302,7 @@ pub(super) fn resolve(root: &Path, entries: &[Desired], state: &mut State) -> Re
                 b'\n' | b'\r' | b'q' | 3 | 4 | 27 => {
                     bail!("conflict review cancelled; no files applied")
                 }
-                _ => writeln!(tty, "Choose r, k, m, or q.")?,
+                _ => writeln!(tty, "Choose d, k, m, a, e, or q.")?,
             }
         }
     }

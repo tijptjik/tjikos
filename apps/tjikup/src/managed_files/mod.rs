@@ -1,4 +1,5 @@
 //! Native file deployment, deliberately independent of the recipe scheduler.
+mod capture;
 mod credential_cache;
 mod disk;
 mod model;
@@ -243,7 +244,7 @@ fn apply(
     state: &mut State,
     restore_xattrs: Option<&BTreeMap<PathBuf, BTreeMap<String, Vec<u8>>>>,
 ) -> Result<usize> {
-    let plans = plan(root, entries, &state)?;
+    let plans = plan(root, entries, state)?;
     if let Some(entry) = plans.iter().find(|p| p.action == "conflict") {
         bail!(
             "local changes or unmanaged existing file: {}; no files applied. Run this apply in an interactive terminal to review, keep local, or use managed with a backup",
@@ -272,7 +273,7 @@ fn apply(
     // replacement before the first write, including metadata and extended attrs.
     for (entry, planned) in entries.iter().zip(&plans) {
         let existing = disk::read(root, &entry.path)?;
-        if conflict(entry, &existing.snapshot, &state) {
+        if conflict(entry, &existing.snapshot, state) {
             bail!(
                 "destination changed during preparation: {}",
                 entry.path.display()
@@ -496,6 +497,7 @@ fn run(args: Vec<String>) -> Result<i32> {
             restore_expected.insert(change.path.clone(), current);
             attrs.insert(change.path.clone(), change.xattrs.clone());
             entries.push(Desired {
+                source: None,
                 path: change.path.clone(),
                 snapshot: change.before.clone(),
                 bytes,
@@ -593,7 +595,24 @@ fn run(args: Vec<String>) -> Result<i32> {
         && std::io::stdin().is_terminal()
         && std::io::stderr().is_terminal()
     {
-        review::resolve(&opts.root, &entries, &mut state)?;
+        review::resolve(&opts.root, &opts.state, &mut entries, &mut state, || {
+            let (manifest, refreshed) = Manifest::load(
+                opts.manifest.as_ref().unwrap(),
+                opts.context.as_deref(),
+                opts.group.as_deref(),
+            )?;
+            anyhow::ensure!(manifest.id == id, "manifest identity changed during review");
+            for entry in &refreshed {
+                let destination = opts.root.join(entry.path.strip_prefix("/")?);
+                anyhow::ensure!(
+                    !destination.starts_with(&opts.state)
+                        && !(opts.state.starts_with(&destination)
+                            && !matches!(entry.snapshot, Snapshot::Directory { .. })),
+                    "destination overlaps deployment state"
+                );
+            }
+            Ok(refreshed)
+        })?;
     }
     if opts.command == "apply" {
         entries.retain(|entry| {
@@ -632,7 +651,7 @@ fn run(args: Vec<String>) -> Result<i32> {
 
 pub fn cli(args: Vec<String>) -> i32 {
     if args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h") {
-        println!("tjikup files <check|plan|apply> --manifest PATH --state-dir PATH [--root PATH] [--json]\ntjikup files restore --receipt PATH --state-dir PATH [--root PATH]\n\ncheck/plan: 0 current, 1 changes needed, 2 conflict/error; no deployment writes (encrypted cache may populate).\napply: track desired files, preserve local edits, back up replacements. Interactive conflicts offer review, keep local until the managed version changes, use managed with backup, or cancel. Noninteractive unresolved conflicts fail closed.\nrestore: verify and restore a private receipt; refuse later edits.\n--root remaps absolute destinations into an existing staging directory.\n--refresh-secrets bypasses cached Bitwarden values for this invocation.\nSee docs/native-files.md for the manifest schema and migration boundary.");
+        println!("tjikup files <check|plan|apply> --manifest PATH --state-dir PATH [--root PATH] [--json]\ntjikup files restore --receipt PATH --state-dir PATH [--root PATH]\n\ncheck/plan: 0 current, 1 changes needed, 2 conflict/error; no deployment writes (encrypted cache may populate).\napply: track desired files, preserve local edits, back up replacements. Interactive conflicts offer D diff, K keep local, M use managed with backup, A add local to its source, E edit source, or Q cancel. Source saves remain if deployment is cancelled; no Git staging or commit is performed. Noninteractive unresolved conflicts fail closed.\nrestore: verify and restore a private receipt; refuse later edits.\n--root remaps absolute destinations into an existing staging directory.\n--refresh-secrets bypasses cached Bitwarden values for this invocation.\nSee docs/native-files.md for the manifest schema and migration boundary.");
         return 0;
     }
     match run(args) {

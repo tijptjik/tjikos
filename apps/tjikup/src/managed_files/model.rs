@@ -79,7 +79,15 @@ pub enum Snapshot {
     },
 }
 
+pub struct Source {
+    pub path: PathBuf,
+    pub bytes: Vec<u8>,
+    pub template: bool,
+    pub conditional: bool,
+}
+
 pub struct Desired {
+    pub source: Option<Source>,
     pub path: PathBuf,
     pub snapshot: Snapshot,
     pub bytes: Vec<u8>,
@@ -303,12 +311,26 @@ impl Manifest {
                     .used
                     .store(false, std::sync::atomic::Ordering::SeqCst);
             }
+            let mut managed_source = None;
             let (snapshot, bytes) = match &entry.content {
                 Content::File {
                     source: name,
                     template,
                 } => {
                     let mut bytes = source(base, name)?;
+                    if bytes.split(|b| *b == b'\n').any(|line| {
+                        line == b"<<<<<<< managed source (retain template logic)"
+                            || line == b">>>>>>> local (reconcile into the managed source)"
+                    }) {
+                        bail!("unfinished source reconciliation for {}; edit the source or restore its private backup", path.display());
+                    }
+                    managed_source = Some(Source {
+                        path: base.join(name).canonicalize()?,
+                        bytes: bytes.clone(),
+                        template: *template,
+                        conditional: entry.when.is_some()
+                            || (*template && bytes.windows(2).any(|w| w == b"{%")),
+                    });
                     if *template {
                         // Do not include template errors: they may quote secret context or source.
                         bytes = content_env.render_str(&String::from_utf8(bytes)?, &context)
@@ -369,6 +391,7 @@ impl Manifest {
                 }
             };
             result.push(Desired {
+                source: managed_source,
                 path,
                 snapshot,
                 bytes,

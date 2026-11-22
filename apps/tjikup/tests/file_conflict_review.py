@@ -117,6 +117,158 @@ class ReviewTests(unittest.TestCase):
         except ChildProcessError:
             pass
 
+    def nonsensitive(self, source='managed\n', local='local\n', template=False):
+        self.spec['entries'][0]['sensitive'] = False
+        self.spec['entries'][0]['template'] = template
+        self.spec['context'] = {'host': 'fi'}
+        self.source.write_text(source)
+        self.source.chmod(0o640)
+        self.target.write_text(local)
+        self.save()
+
+    def editor(self, replacement=None, code=0):
+        script = self.base / 'editor.py'
+        script.write_text('import pathlib, sys\n'
+            'p = pathlib.Path(sys.argv[1])\n'
+            'assert p.name == "source"\n'
+            + (f'p.write_text({replacement!r})\n' if replacement is not None else '')
+            + f'sys.exit({code})\n')
+        return {'VISUAL': f'python3 {script}'}
+
+    def test_add_plain_file_updates_catalog_and_state(self):
+        self.nonsensitive()
+        code, terminal = self.review(['A'])
+        self.assertEqual(code, 0, terminal)
+        self.assertEqual(self.source.read_text(), 'local\n')
+        self.assertEqual(self.target.read_text(), 'local\n')
+        self.assertEqual(self.source.stat().st_mode & 0o777, 0o640)
+        self.assertEqual(self.plain('check').returncode, 0)
+        backup = next((self.base / 'state/source-reviews').glob('review-*/original'))
+        self.assertEqual(backup.read_text(), 'managed\n')
+        self.assertEqual(backup.parent.stat().st_mode & 0o777, 0o700)
+
+    def test_add_template_preserves_expression(self):
+        self.nonsensitive('host={{ host }}\n\none\n', 'host=fi\n\ntwo\n', True)
+        code, terminal = self.review(['a'])
+        self.assertEqual(code, 0, terminal)
+        self.assertEqual(self.source.read_text(), 'host={{ host }}\n\ntwo\n')
+        self.assertEqual(self.plain('check').returncode, 0)
+        self.assertNotIn('Warning:', terminal)
+
+    def test_expression_replacement_warns_before_second_add(self):
+        self.nonsensitive('host={{ host }}\n', 'host=li\n', True)
+        code, terminal = self.review(['a', 'q'])
+        self.assertNotEqual(code, 0, terminal)
+        self.assertEqual(self.source.read_text(), 'host={{ host }}\n')
+        code, terminal = self.review(['a', 'a'])
+        self.assertEqual(code, 0, terminal)
+        self.assertIn('literal local values', terminal)
+        self.assertEqual(self.source.read_text(), 'host=li\n')
+
+    def test_conditional_requires_edit_and_retains_other_branch(self):
+        original = '{% if host == "fi" %}one{% else %}other{% endif %}\n'
+        revised = original.replace('one', 'two')
+        self.nonsensitive(original, 'two\n', True)
+        code, terminal = self.review(['a', 'e'], environment=self.editor(revised))
+        self.assertEqual(code, 0, terminal)
+        self.assertIn('requires manual reconciliation', terminal)
+        self.assertEqual(self.source.read_text(), revised)
+        self.assertEqual(self.target.read_text(), 'two\n')
+        self.assertEqual(self.plain('check').returncode, 0)
+
+    def test_entry_condition_also_requires_edit(self):
+        self.nonsensitive()
+        self.spec['entries'][0]['when'] = 'host == "fi"'
+        self.save()
+        code, terminal = self.review(['a', 'k'])
+        self.assertEqual(code, 0, terminal)
+        self.assertIn('requires manual reconciliation', terminal)
+        self.assertEqual(self.source.read_text(), 'managed\n')
+
+    def test_unresolved_edit_restores_original(self):
+        self.nonsensitive()
+        code, terminal = self.review(['e', 'k'], environment=self.editor())
+        self.assertEqual(code, 0, terminal)
+        self.assertIn('unresolved conflict markers', terminal)
+        self.assertEqual(self.source.read_text(), 'managed\n')
+        unfinished = next((self.base / 'state/source-reviews').glob('review-*/unfinished'))
+        self.assertIn('<<<<<<< managed source', unfinished.read_text())
+        self.assertIn('>>>>>>> local', unfinished.read_text())
+
+    def test_invalid_template_restores_original(self):
+        self.nonsensitive('host={{ host }}\n', 'local\n', True)
+        code, terminal = self.review(['e', 'k'], environment=self.editor('{% if broken'))
+        self.assertEqual(code, 0, terminal)
+        self.assertIn('validation/rendering failed', terminal)
+        self.assertEqual(self.source.read_text(), 'host={{ host }}\n')
+
+    def test_editor_failure_restores_original(self):
+        self.nonsensitive()
+        code, terminal = self.review(['e', 'k'], environment=self.editor('unfinished\n', 1))
+        self.assertEqual(code, 0, terminal)
+        self.assertEqual(self.source.read_text(), 'managed\n')
+
+    def test_sensitive_add_does_not_copy_secrets(self):
+        code, terminal = self.review(['a', 'k'])
+        self.assertEqual(code, 0, terminal)
+        self.assertIn('Sensitive content cannot be added', terminal)
+        self.assertEqual(self.source.read_text(), 'managed-secret\n')
+        self.assertFalse((self.base / 'state/source-reviews').exists())
+
+    def test_add_rejects_concurrent_local_or_source_change(self):
+        for changed in [self.target, self.source]:
+            with self.subTest(path=changed):
+                self.nonsensitive()
+                code, terminal = self.review(['a'], lambda: changed.write_text('concurrent\n'))
+                self.assertNotEqual(code, 0, terminal)
+                self.assertEqual(changed.read_text(), 'concurrent\n')
+                untouched = self.source if changed == self.target else self.target
+                self.assertEqual(untouched.read_text(), 'managed\n' if untouched == self.source else 'local\n')
+
+    def test_source_xattrs_survive_add_and_editor_metadata_changes(self):
+        self.nonsensitive()
+        os.setxattr(self.source, 'user.tjikup-test', b'original')
+        code, terminal = self.review(['a'])
+        self.assertEqual(code, 0, terminal)
+        self.assertEqual(os.getxattr(self.source, 'user.tjikup-test'), b'original')
+        self.nonsensitive()
+        script = self.base / 'metadata-editor.py'
+        script.write_text('import os, pathlib, sys\n'
+            'p = pathlib.Path(sys.argv[1])\n'
+            'p.write_text("edited\\n")\n'
+            'p.chmod(0o644)\n'
+            'os.setxattr(p, "user.tjikup-test", b"changed")\n')
+        code, terminal = self.review(['e'], environment={'VISUAL': f'python3 {script}'})
+        self.assertEqual(code, 0, terminal)
+        self.assertEqual(self.source.stat().st_mode & 0o777, 0o640)
+        self.assertEqual(os.getxattr(self.source, 'user.tjikup-test'), b'original')
+
+    def test_sensitive_edit_opens_source_without_rendered_local(self):
+        script = self.base / 'sensitive-editor.py'
+        script.write_text('import pathlib, sys\n'
+            'p = pathlib.Path(sys.argv[1])\n'
+            'assert p.read_text() == "managed-secret\\n"\n'
+            'p.write_text("new-managed-secret\\n")\n')
+        code, terminal = self.review(['e'], environment={'VISUAL': f'python3 {script}'})
+        self.assertEqual(code, 0, terminal)
+        self.assertEqual(self.source.read_text(), 'new-managed-secret\n')
+        self.assertNotIn('local-secret', self.log.read_text())
+
+    def test_interrupted_reconciliation_cannot_deploy(self):
+        self.nonsensitive('<<<<<<< managed source (retain template logic)\nmanaged\n=======\nlocal\n>>>>>>> local (reconcile into the managed source)\n')
+        result = self.plain()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('unfinished source reconciliation', result.stderr)
+        self.assertEqual(self.target.read_text(), 'local\n')
+
+    def test_shared_source_rerenders_other_destinations(self):
+        self.nonsensitive()
+        self.spec['entries'].append({**self.spec['entries'][0], 'path': '/new'})
+        self.save()
+        code, terminal = self.review(['a'])
+        self.assertEqual(code, 0, terminal)
+        self.assertEqual((self.base / 'root/new').read_text(), 'local\n')
+
     def test_keep_local_is_durable_until_managed_version_changes(self):
         code, terminal = self.review(['k'])
         self.assertEqual(code, 0, terminal)
@@ -135,7 +287,7 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(self.target.read_text(), 'new-managed-policy\n')
 
     def test_managed_has_restorable_backup_and_preview_stays_off_logs(self):
-        code, terminal = self.review(['R', 'm'], guarded=True)
+        code, terminal = self.review(['D', 'm'], guarded=True)
         self.assertEqual(code, 0, terminal)
         self.assertIn('local-secret', terminal)
         self.assertIn('managed-secret', terminal)
@@ -158,7 +310,7 @@ class ReviewTests(unittest.TestCase):
         delta = tools / 'delta'
         delta.write_text('#!/bin/sh\nexit 1\n')
         delta.chmod(0o700)
-        code, terminal = self.review(['r', 'q'], environment={
+        code, terminal = self.review(['d', 'q'], environment={
             'PATH': str(tools) + ':' + os.environ['PATH'],
             'TERM': 'xterm-256color', 'NO_COLOR': ''})
         self.assertNotEqual(code, 0)
@@ -174,7 +326,7 @@ class ReviewTests(unittest.TestCase):
         delta = tools / 'delta'
         delta.write_text('#!/bin/sh\nprintf "DELTA %s\\n" "$*"\ncat\n')
         delta.chmod(0o700)
-        code, terminal = self.review(['r', 'q'], environment={
+        code, terminal = self.review(['d', 'q'], environment={
             'PATH': str(tools) + ':' + os.environ['PATH'],
             'TERM': 'xterm-256color', 'NO_COLOR': ''})
         self.assertNotEqual(code, 0)
@@ -184,7 +336,7 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(self.target.read_text(), 'local-secret\n')
 
     def test_no_color_preview(self):
-        code, terminal = self.review(['r', 'q'], scheduled=False,
+        code, terminal = self.review(['d', 'q'], scheduled=False,
                                      environment={'NO_COLOR': '1'})
         self.assertNotEqual(code, 0)
         self.assertIn('-local-secret', terminal)
@@ -201,7 +353,7 @@ class ReviewTests(unittest.TestCase):
     def test_invalid_key_reprompts_without_enter(self):
         code, terminal = self.review(['x', 'K'])
         self.assertEqual(code, 0, terminal)
-        self.assertIn('Choose r, k, m, or q.', terminal)
+        self.assertIn('Choose d, k, m, a, e, or q.', terminal)
         self.assertEqual(self.target.read_text(), 'local-secret\n')
 
     def test_cancel_does_not_write_any_file_or_decision(self):

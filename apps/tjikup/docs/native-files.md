@@ -84,8 +84,8 @@ file manifest.
 ### Reviewing local changes
 
 Interactive `apply` offers a choice for each conflicting path before writing any
-files: **R** to review the difference, **K** to keep local, **M** to use managed,
-or **Q** to cancel (the default). Choices take effect immediately without Enter;
+deployed files: **D** for diff, **K** to keep local, **M** to use managed,
+**A** to add, **E** to edit, or **Q** to cancel (the default). Choices take effect immediately without Enter;
 Enter, Escape, Ctrl-C, and Ctrl-D cancel. Review uses delta when available, with line
 numbers and inline change highlighting, and falls back to a colored unified diff.
 Set `NO_COLOR` or `TERM=dumb` for plain output.
@@ -234,3 +234,32 @@ that group, before resolving any of its templates or secrets. `check` and `plan`
 the same selector; unknown groups fail. All groups retain the manifest's original ID,
 merge into its existing ownership state, and retain drift detection, receipts and
 backups. `restore` operates on a receipt and does not accept `--group`.
+
+### Capturing local changes during conflict review
+
+Use **D** for Diff, **K** for Keep local, **M** for Use managed, **A** for Add,
+**E** for Edit, or **Q** to cancel. Keys are case-insensitive and need no Enter.
+Add writes the local regular file back to its existing catalog source; it does
+not stage, commit, or push Git changes. Plain files are copied directly.
+For expression-only templates, a three-way merge uses the rendered managed file
+as the base and preserves untouched expressions. When changed lines overlap
+expressions, a warning requires a second A before replacing those lines with
+literal local values. E allows manual reconciliation instead.
+
+Templates containing control blocks, and entries with a `when` condition,
+require E. Edit replaces the managed source with a reconciliation document
+containing the complete template and local file between conflict markers.
+Reconcile it, retain the desired branches and expressions, remove the markers,
+then save and close the editor. `VISUAL`, then `EDITOR`, selects the command;
+the fallback is `zed --wait`. GUI editor commands must wait for the file to close.
+Sensitive files disable Add and open only their original source for editing;
+rendered secrets are never inserted into the catalog by this workflow.
+
+Source backups and unfinished edits live under the private deployment state
+`source-reviews/` directory. Editor failure, unresolved markers, or failed
+rendering restores the original source. Successful source saves remain even
+if a later conflict cancels deployment. All entries are rendered again before
+applying, and newly affected conflicts require review. Source metadata is
+preserved; local drift during review is rejected. The live file is not used as
+the editor scratch file. This workflow updates an existing source, not manifest
+registration for previously unmanaged paths.
