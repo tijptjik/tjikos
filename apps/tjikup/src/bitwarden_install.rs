@@ -66,6 +66,10 @@ fn recorded(tool: &str) -> Result<bool> {
 fn valid_digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
+fn valid_cli_asset(file: &str, version: &str) -> bool {
+    file == format!("bw-linux-{version}.zip")
+        || file == format!("bw-bit-linux-{version}.zip")
+}
 fn curl(url: &str, head: bool, github: bool) -> Result<Vec<u8>> {
     let mut cmd = Command::new("curl");
     cmd.args([
@@ -157,7 +161,7 @@ fn release(tool: &str) -> Result<(String, String, String)> {
         let (v, file) = rest
             .split_once('/')
             .context("invalid Bitwarden release URL")?;
-        if file != format!("bw-linux-{v}.zip") {
+        if !valid_cli_asset(file, v) {
             bail!("inconsistent Bitwarden release URL");
         }
         (
@@ -391,5 +395,12 @@ mod tests {
         assert!(version("1.2.3-dev").is_none());
         assert!(valid_digest(&"a".repeat(64)));
         assert!(!valid_digest(&"z".repeat(64)));
+    }
+    #[test]
+    fn accept_old_and_current_cli_archive_names() {
+        assert!(valid_cli_asset("bw-linux-2026.10.1.zip", "2026.10.1"));
+        assert!(valid_cli_asset("bw-bit-linux-2026.11.0.zip", "2026.11.0"));
+        assert!(!valid_cli_asset("bw-macos-2026.11.0.zip", "2026.11.0"));
+        assert!(!valid_cli_asset("bw-bit-linux-2026.10.1.zip", "2026.11.0"));
     }
 }
