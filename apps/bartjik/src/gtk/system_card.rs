@@ -910,7 +910,9 @@ impl Card {
             });
             presets.append(&b);
         }
-        self.body.append(&presets);
+        if info["powerOutput"].is_null() {
+            self.body.append(&presets);
+        }
         self.body.append(&self.map());
         self.body.append(&caption(
             "Select a display · drag to arrange · sizes reflect resolution and scaling",

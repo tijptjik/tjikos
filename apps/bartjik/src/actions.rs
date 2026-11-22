@@ -270,7 +270,11 @@ pub async fn execute(
                 crate::idle::action("toggle", "").await?;
             }
             "monitor.toggle" => {
-                crate::monitors::action("preset", "toggle", m).await?;
+                if let Some(output) = m["powerOutput"].as_str() {
+                    crate::monitors::toggle_power(output).await?;
+                } else {
+                    crate::monitors::action("preset", "toggle", m).await?;
+                }
             }
             _ => anyhow::bail!("native action must be handled by QML"),
         }

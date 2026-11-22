@@ -278,6 +278,26 @@ fn revision(rows: &[Value]) -> String {
     format!("{:x}", Sha256::digest(serde_json::to_vec(&value).unwrap()))
 }
 pub async fn snapshot(options: &Value) -> Result<Value> {
+    if let Some(output) = options["powerOutput"].as_str() {
+        let live = workspaces::query("monitors all").await?;
+        let off = panel_power_off(&live, output)?;
+        let mut row = item(
+            "layout",
+            None,
+            Some("desktop_windows"),
+            "symbol",
+            json!({"active":off}),
+            if off {
+                "Screen off · press a key to wake"
+            } else {
+                "Turn laptop screen off · press a key to wake"
+            },
+            json!({"leftClick":"monitor.toggle","rightClick":"monitor.panel","hoverEnter":"monitor.panel"}),
+        );
+        row["panel"] = data().await?;
+        row["panel"]["powerOutput"] = json!(output);
+        return Ok(row);
+    }
     let mut panel = data().await?;
     let tv = options["tv"].as_str().unwrap_or("HDMI-A-1");
     panel["tv"] = json!(tv);
@@ -300,6 +320,40 @@ pub async fn snapshot(options: &Value) -> Result<Value> {
     );
     row["panel"] = panel;
     Ok(row)
+}
+fn panel_power_off(live: &Value, output: &str) -> Result<bool> {
+    let monitor = arr(live)
+        .into_iter()
+        .find(|m| m["name"] == output)
+        .context("Laptop display is not connected")?;
+    Ok(!monitor["dpmsStatus"]
+        .as_bool()
+        .context("Display power state unavailable")?)
+}
+pub async fn toggle_power(output: &str) -> Result<()> {
+    let _lock = FileLock::acquire("bartjik-display-power.lock").await?;
+    let off = panel_power_off(&workspaces::query("monitors all").await?, output)?;
+    // Let the activating click finish before blanking the panel.
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    let response = cmd(&["hyprctl", "eval", &power_lua(output, off)?]).await?;
+    ensure!(
+        response.trim() == "ok",
+        "Hyprland rejected display power: {response}"
+    );
+    Ok(())
+}
+fn power_lua(output: &str, on: bool) -> Result<String> {
+    ensure!(
+        !output.is_empty()
+            && output
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b)),
+        "Invalid display connector"
+    );
+    Ok(format!(
+        "hl.dispatch(hl.dsp.dpms({{action=\"{}\",monitor=\"{output}\"}}))",
+        if on { "on" } else { "off" }
+    ))
 }
 fn settings_lua(settings: &Value) -> Result<String> {
     let mut out = format!("{PREFIX}{}\nreturn {{\n", serde_json::to_string(settings)?);
@@ -877,6 +931,25 @@ pub fn demo() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn panel_power_uses_lua_dispatch_and_scopes_connector() {
+        assert_eq!(
+            power_lua("eDP-1", false).unwrap(),
+            "hl.dispatch(hl.dsp.dpms({action=\"off\",monitor=\"eDP-1\"}))"
+        );
+        assert!(power_lua("eDP-1", true).unwrap().contains("action=\"on\""));
+        assert!(power_lua("eDP-1\"", false).is_err());
+        assert!(power_lua("", false).is_err());
+    }
+    #[test]
+    fn panel_power_tracks_only_target_and_requires_known_state() {
+        let live =
+            json!([{"name":"eDP-1","dpmsStatus":false},{"name":"HDMI-A-1","dpmsStatus":true}]);
+        assert!(panel_power_off(&live, "eDP-1").unwrap());
+        assert!(!panel_power_off(&live, "HDMI-A-1").unwrap());
+        assert!(panel_power_off(&live, "missing").is_err());
+        assert!(panel_power_off(&json!([{"name":"eDP-1"}]), "eDP-1").is_err());
+    }
     fn request(panel: &Value, edits: Value) -> Value {
         json!({"revision":panel["revision"],"edits":edits})
     }
