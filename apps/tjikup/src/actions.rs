@@ -27,8 +27,8 @@ impl std::fmt::Display for DirtyRepository {
         write!(
             f,
             "working tree has {} changed files: {}",
-            self.files
-            , self.paths.join(", ")
+            self.files,
+            self.paths.join(", ")
         )
     }
 }
@@ -95,11 +95,23 @@ fn dirty_file_paths(status: &[u8]) -> Vec<String> {
     let mut records = status.split(|byte| *byte == 0);
     let mut paths = Vec::new();
     while let Some(record) = records.next() {
-        if record.len() < 4 { continue; }
-        paths.push(String::from_utf8_lossy(&record[3..]).into_owned());
-        if record[..2].iter().any(|byte| *byte == b'R' || *byte == b'C') {
+        if record.len() < 4 {
+            continue;
+        }
+        paths.push(
+            String::from_utf8_lossy(&record[3..])
+                .escape_default()
+                .to_string(),
+        );
+        if record[..2]
+            .iter()
+            .any(|byte| *byte == b'R' || *byte == b'C')
+        {
             if let Some(original) = records.next() {
-                paths.push(format!("{} (original name)", String::from_utf8_lossy(original)));
+                paths.push(format!(
+                    "{} (original name)",
+                    String::from_utf8_lossy(original).escape_default()
+                ));
             }
         }
     }

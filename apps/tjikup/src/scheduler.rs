@@ -499,10 +499,9 @@ pub fn run(config: Config, cancelled: Arc<AtomicBool>) -> Result<(Receipt, PathB
         if let Some(outcome) = receipt.recipes.get(&recipe.id) {
             if outcome.state == State::Failed {
                 progress.diagnostic(&format!(
-                    "Failed: {} ({})\n  Log: {}",
+                    "Failed: {} ({})",
                     crate::report::plain(&recipe.label),
                     recipe.id,
-                    crate::report::plain(&outcome.log.display().to_string()),
                 ));
             }
         }

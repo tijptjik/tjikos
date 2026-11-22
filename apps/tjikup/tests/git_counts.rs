@@ -221,7 +221,7 @@ fn stale_tracking_ref_does_not_overcount_already_published_commits() {
 }
 
 #[test]
-fn dirty_count_handles_renames_and_newlines_with_separate_failure_logs() {
+fn dirty_count_handles_renames_and_newlines_with_public_path_summary() {
     let f = Fixture::new();
     git(&f.local, &["mv", "initial", "renamed"]);
     fs::write(f.local.join("new\nfile"), "fixture").unwrap();
@@ -235,7 +235,10 @@ fn dirty_count_handles_renames_and_newlines_with_separate_failure_logs() {
         .find(|line| line.contains("(3 files)"))
         .unwrap();
     assert!(!row.contains("Log:"), "{text}");
-    assert!(text.contains("Failed: pull (pull)\n  Log:"), "{text}");
+    assert!(text.contains("Failed: pull (pull)"), "{text}");
+    assert!(text.contains("renamed"), "{text}");
+    assert!(text.contains("new\\nfile"), "{text}");
+    assert!(text.contains("nested/untracked"), "{text}");
     assert!(!text.contains("commit or stash"), "{text}");
     assert_eq!(receipt["recipes"]["pull"]["dirty_files"], 3);
     assert!(receipt["recipes"]["pull"]["error"]

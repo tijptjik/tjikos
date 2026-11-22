@@ -299,7 +299,7 @@ fn repository_counts_reach_terminal_with_positive_and_zero_totals() {
 }
 
 #[test]
-fn dirty_repository_counts_stay_in_rows_with_failure_logs_below() {
+fn dirty_repository_counts_and_paths_stay_in_rows_without_log_paths() {
     for graphics in [false, true] {
         let dir = tempfile::tempdir().unwrap();
         fs::write(
@@ -356,9 +356,9 @@ fn dirty_repository_counts_stay_in_rows_with_failure_logs_below() {
         for hidden in ["commit or stash", "dirty repository"] {
             assert!(!visible.contains(hidden), "unexpected {hidden}: {visible}");
         }
-        assert!(visible.contains("Log:"), "{visible}");
-        assert!(visible.contains("dotjik:pull.log"), "{visible}");
-        assert!(visible.contains("tjikOS:pull.log"), "{visible}");
+        assert!(visible.contains("fixture-0"), "{visible}");
+        assert!(!visible.contains("Log:"), "{visible}");
+        assert!(!visible.contains(".log"), "{visible}");
         if graphics {
             assert_eq!(text.matches("a=T,f=32").count(), 2);
         }
