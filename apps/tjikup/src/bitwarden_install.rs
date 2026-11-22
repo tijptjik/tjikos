@@ -67,8 +67,7 @@ fn valid_digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 fn valid_cli_asset(file: &str, version: &str) -> bool {
-    file == format!("bw-linux-{version}.zip")
-        || file == format!("bw-bit-linux-{version}.zip")
+    file == format!("bw-linux-{version}.zip") || file == format!("bw-bit-linux-{version}.zip")
 }
 fn curl(url: &str, head: bool, github: bool) -> Result<Vec<u8>> {
     let mut cmd = Command::new("curl");

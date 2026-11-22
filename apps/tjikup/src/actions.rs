@@ -360,7 +360,11 @@ impl Contextual<'_> {
         )?;
         let dirty_files = dirty_file_count(&status);
         if dirty_files > 0 {
-            return Err(DirtyRepository { files: dirty_files, paths: dirty_file_paths(&status) }.into());
+            return Err(DirtyRepository {
+                files: dirty_files,
+                paths: dirty_file_paths(&status),
+            }
+            .into());
         }
         let branch = self.git(repo, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
         let branch = std::str::from_utf8(&branch)?.trim();
