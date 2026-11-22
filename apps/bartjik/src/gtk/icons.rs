@@ -370,7 +370,77 @@ impl DefaultColor for str {
         }
     }
 }
+fn battery_pips(percent: f64) -> (usize, &'static str) {
+    let percent = if percent.is_finite() {
+        percent.clamp(0., 100.)
+    } else {
+        0.
+    };
+    let count = if percent < 5. {
+        9
+    } else {
+        ((percent - 1.) / 10.).ceil().clamp(0., 9.) as usize
+    };
+    (
+        count,
+        if percent < 5. || count < 3 {
+            "#eb6f92"
+        } else if count < 6 {
+            "#f6c177"
+        } else {
+            "#9ccf7a"
+        },
+    )
+}
+
+fn draw_battery(cr: &gtk::cairo::Context, width: f64, height: f64, percent: f64, style: &Value) {
+    let (count, tone) = battery_pips(percent);
+    let key = if percent < 5. || count < 3 {
+        "batteryRed"
+    } else if count < 6 {
+        "batteryYellow"
+    } else {
+        "batteryGreen"
+    };
+    let ink = color(style, key, tone);
+    let empty = color(style, "muted", "#a5a0ba");
+    let size = width.min(height);
+    let _ = cr.save();
+    cr.translate((width - size) / 2., (height - size) / 2.);
+    cr.scale(size / 24., size / 24.);
+    for i in 0..9 {
+        let ink = if i < count { &ink } else { &empty };
+        cr.set_source_rgba(
+            ink.red() as f64,
+            ink.green() as f64,
+            ink.blue() as f64,
+            if i < count { 1. } else { 0.25 },
+        );
+        cr.arc(
+            5. + (i % 3) as f64 * 7.,
+            5. + (i / 3) as f64 * 7.,
+            1.65,
+            0.,
+            std::f64::consts::TAU,
+        );
+        let _ = cr.fill();
+    }
+    let _ = cr.restore();
+}
+
 pub(crate) fn artwork(part: &Value, style: &Value, size: i32) -> gtk::Widget {
+    if part["kind"] == "symbol" && part["value"] == "battery_grid" {
+        let percent = part["battery"]["percent"].as_f64().unwrap_or(0.);
+        let grid = gtk::DrawingArea::new();
+        grid.set_content_width(size);
+        grid.set_content_height(size);
+        let style = style.clone();
+        grid.set_draw_func(move |_, cr, width, height| {
+            draw_battery(cr, width as f64, height as f64, percent, &style);
+        });
+        return grid.upcast();
+    }
+
     if part["overlay"].is_array() || part["overlayName"].as_str().is_some_and(|s| !s.is_empty()) {
         let mut base = part.clone();
         base.as_object_mut().unwrap().remove("overlay");
@@ -463,6 +533,44 @@ pub(crate) fn artwork(part: &Value, style: &Value, size: i32) -> gtk::Widget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn battery_grid_thresholds() {
+        for (percent, count) in [
+            (0., 9),
+            (4.99, 9),
+            (5., 1),
+            (11., 1),
+            (12., 2),
+            (22., 3),
+            (51., 5),
+            (52., 6),
+            (82., 9),
+            (100., 9),
+        ] {
+            assert_eq!(battery_pips(percent).0, count, "{percent}%");
+        }
+        assert_eq!(battery_pips(0.).1, battery_pips(12.).1);
+        assert_ne!(battery_pips(22.).1, battery_pips(52.).1);
+        for percent in [4., 12., 35., 88.] {
+            let mut surface =
+                gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, 24, 24).unwrap();
+            {
+                let cr = gtk::cairo::Context::new(&surface).unwrap();
+                draw_battery(&cr, 24., 24., percent, &serde_json::json!({}));
+            }
+            surface.flush();
+            let stride = surface.stride() as usize;
+            let bytes = surface.data().unwrap();
+            for i in 0..9 {
+                let x = 5 + (i % 3) * 7;
+                let y = 5 + (i / 3) * 7;
+                let alpha = bytes[y * stride + x * 4 + 3];
+                assert_eq!(alpha, if i < battery_pips(percent).0 { 255 } else { 64 });
+            }
+            assert_eq!(bytes[3], 0, "outside grid must remain transparent");
+        }
+    }
+
     #[test]
     fn dots_order_and_reversal() {
         let on = dot_levels([0.; 3], true, 0.1);

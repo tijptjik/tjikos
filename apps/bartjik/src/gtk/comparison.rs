@@ -91,7 +91,13 @@ fn rows(
                 continue;
             }
             let separator = serde_json::json!({"value":"·"});
-            let part = if kind == "separator" {
+            let mut battery_icon = row["icon"].clone();
+            if kind == "icon" && row["battery"].is_object() {
+                battery_icon["battery"] = row["battery"].clone();
+            }
+            let part = if kind == "icon" {
+                &battery_icon
+            } else if kind == "separator" {
                 &separator
             } else {
                 &row[kind]
