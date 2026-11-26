@@ -77,7 +77,7 @@ fn replace(
     bytes: &[u8],
     previous: &disk::Existing,
     metadata: &disk::Existing,
-) -> Result<()> {
+) -> Result<Snapshot> {
     let Snapshot::File { mode, uid, gid, .. } = &metadata.snapshot else {
         bail!("source is not a regular file")
     };
@@ -104,22 +104,8 @@ fn replace(
                 xattrs: metadata.xattrs.clone(),
             },
             true,
-        )
-}
-
-fn reconciliation(source: &[u8], local: &[u8]) -> Vec<u8> {
-    let mut out = b"<<<<<<< managed source (retain template logic)\n".to_vec();
-    out.extend_from_slice(source);
-    if !out.ends_with(b"\n") {
-        out.push(b'\n');
-    }
-    out.extend_from_slice(b"=======\n");
-    out.extend_from_slice(local);
-    if !out.ends_with(b"\n") {
-        out.push(b'\n');
-    }
-    out.extend_from_slice(b">>>>>>> local (reconcile into the managed source)\n");
-    out
+        )?;
+    Ok(desired.snapshot)
 }
 
 pub(super) struct Request<'a> {
@@ -181,20 +167,33 @@ pub(super) fn update(
         return Ok(Outcome::Unchanged);
     }
     let candidate = if edit {
-        if entry.sensitive {
-            writeln!(tty, "Sensitive source: opening the template only; rendered secrets will not be written into the catalog.")?;
+        let text = |bytes| {
+            std::str::from_utf8(bytes)
+                .ok()
+                .filter(|s| !s.contains('\0'))
+        };
+        if let (Some(template), Some(rendered), Some(local_text)) =
+            (text(&source.bytes), text(&entry.bytes), text(&local.bytes))
+        {
+            super::reconciliation::document(
+                template,
+                rendered,
+                local_text,
+                entry.sensitive,
+                source.template,
+            )
+        } else if entry.sensitive {
+            writeln!(
+                tty,
+                "Binary content: editing a private copy of the managed source."
+            )?;
             source.bytes.clone()
         } else {
-            if std::str::from_utf8(&source.bytes).is_err()
-                || std::str::from_utf8(&local.bytes).is_err()
-            {
-                writeln!(
-                    tty,
-                    "Binary source: use Add for plain files; text reconciliation is unavailable."
-                )?;
-                return Ok(Outcome::Unchanged);
-            }
-            reconciliation(&source.bytes, &local.bytes)
+            writeln!(
+                tty,
+                "Binary source: use Add for plain files; text reconciliation is unavailable."
+            )?;
+            return Ok(Outcome::Unchanged);
         }
     } else if source.template {
         let (merged, conflicts) = merge(&source.bytes, &entry.bytes, &local.bytes, false)?;
@@ -236,70 +235,107 @@ pub(super) fn update(
         "Managed source: {:?}\nPrivate recovery: {:?}",
         source.path, recovery
     )?;
-    replace(&source.path, &candidate, &before, &before)?;
+    let draft = tempfile::Builder::new()
+        .prefix("edit-")
+        .tempdir_in(&recovery)?;
+    let edit_path = draft
+        .path()
+        .join(source.path.file_name().context("missing source name")?);
+    if edit {
+        write_private(&edit_path, &candidate)?;
+    }
+    let mut written = None;
     let result = (|| -> Result<Vec<Desired>> {
-        if edit {
-            writeln!(tty, "Reconcile the source, remove all conflict markers, then save and close the editor. Source saves remain if deployment is cancelled.")?;
+        let resolved = if edit {
+            writeln!(tty, "Resolve the marked changes in the private working file, then save and close the editor. Source saves remain if deployment is cancelled.")?;
+            if entry.sensitive {
+                writeln!(tty, "Keep credentials in template expressions. Lines marked 'private local reference' are for comparison and must be removed or rewritten.")?;
+            }
             let editor = std::env::var("VISUAL")
                 .or_else(|_| std::env::var("EDITOR"))
                 .unwrap_or_else(|_| "zed --wait".into());
             ensure!(!editor.trim().is_empty(), "editor is empty");
             let status = Command::new("sh")
                 .args(["-c", &format!("exec {editor} \"$1\""), "tjikup-editor"])
-                .arg(&source.path)
+                .arg(&edit_path)
                 .stdin(tty.try_clone()?)
                 .stdout(tty.try_clone()?)
                 .stderr(tty.try_clone()?)
                 .status()
                 .context("open managed source editor")?;
             ensure!(status.success(), "source editor failed");
-        }
-        let edited = disk::read(Path::new("/"), &source.path)?;
-        ensure!(
-            matches!(edited.snapshot, Snapshot::File { .. }),
-            "edited source is not a regular file"
-        );
-        ensure!(
-            !edit || !markers(&edited.bytes),
-            "unresolved conflict markers remain"
-        );
-        ensure!(
-            !edit || edited.bytes != source.bytes,
-            "source unchanged; no changes accepted"
-        );
+            let edited = disk::read(Path::new("/"), &edit_path)?;
+            ensure!(
+                matches!(edited.snapshot, Snapshot::File { .. }),
+                "edited source is not a regular file"
+            );
+            ensure!(
+                !markers(&edited.bytes),
+                "unresolved conflict markers remain"
+            );
+            ensure!(
+                candidate != source.bytes || edited.bytes != source.bytes,
+                "source unchanged; no changes accepted"
+            );
+            ensure!(
+                !entry.sensitive
+                    || !edited.bytes.split(|&b| b == b'\n').any(
+                        |line| line.starts_with(super::reconciliation::PRIVATE_LINE.as_bytes())
+                    ),
+                "private local reference lines remain"
+            );
+            if let Some(secrets) = &source.secrets {
+                secrets.check_source_edit(&source.bytes, &edited.bytes)?;
+            }
+            edited.bytes
+        } else {
+            candidate.clone()
+        };
         ensure!(
             disk::read(root, &entry.path)?.snapshot == local.snapshot,
             "local file changed during editing"
         );
+        let snapshot = if resolved == before.bytes {
+            before.snapshot.clone()
+        } else {
+            let snapshot = replace(&source.path, &resolved, &before, &before)?;
+            written = Some(snapshot.clone());
+            snapshot
+        };
         let refreshed =
             reload().map_err(|_| anyhow::anyhow!("source validation/rendering failed"))?;
         // All source content is rendered again before deployment; a GUI editor must
         // wait for close. Also reject concurrent catalog edits during validation.
         ensure!(
-            disk::read(Path::new("/"), &source.path)?.snapshot == edited.snapshot,
+            disk::read(Path::new("/"), &source.path)?.snapshot == snapshot,
             "source changed during validation"
         );
-        // Editors may replace the inode or alter metadata; retain original policy.
-        replace(&source.path, &edited.bytes, &edited, &before)?;
         Ok(refreshed)
     })();
     match result {
         Ok(refreshed) => {
             writeln!(
                 tty,
-                "Saved managed source; deployment will use the newly rendered content."
+                "Resolved source review; deployment will use the newly rendered content."
             )?;
             Ok(Outcome::Saved(refreshed))
         }
         Err(error) => {
-            let edited = disk::read(Path::new("/"), &source.path)?;
-            write_private(&recovery.join("unfinished"), &edited.bytes)?;
-            replace(&source.path, &before.bytes, &edited, &before)?;
-            writeln!(
-                tty,
-                "{error}; original source restored. Unfinished edits are in {:?}.",
-                recovery
-            )?;
+            let unfinished = if edit {
+                disk::read(Path::new("/"), &edit_path)?.bytes
+            } else {
+                candidate
+            };
+            write_private(&recovery.join("unfinished"), &unfinished)?;
+            if let Some(snapshot) = written {
+                let current = disk::read(Path::new("/"), &source.path)?;
+                ensure!(
+                    current.snapshot == snapshot,
+                    "source changed during validation; preserved concurrent edit"
+                );
+                replace(&source.path, &before.bytes, &current, &before)?;
+            }
+            writeln!(tty, "{error}. Unfinished edits are in {:?}.", recovery)?;
             Ok(Outcome::Unchanged)
         }
     }

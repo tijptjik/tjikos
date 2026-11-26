@@ -55,6 +55,33 @@ impl Secrets {
                 .unwrap_or(super::credential_cache::random_hex()?),
         })
     }
+    // A local edit can move a resolved credential into an otherwise literal hunk.
+    // Check the final source in memory, including the managed file quoting filters.
+    pub(super) fn check_source_edit(&self, original: &[u8], edited: &[u8]) -> Result<()> {
+        let cache = self
+            .cache
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Bitwarden cache unavailable"))?;
+        let original = String::from_utf8_lossy(original);
+        let edited = String::from_utf8_lossy(edited);
+        for value in cache.values().filter(|value| !value.is_empty()) {
+            let json = serde_json::to_string(value)?;
+            let compose = serde_json::to_string(&value.replace('$', "$$"))?;
+            let fish = fish_quote(value);
+            for literal in [
+                value.as_str(),
+                &json[1..json.len() - 1],
+                &compose[1..compose.len() - 1],
+                &fish[1..fish.len() - 1],
+            ] {
+                if edited.matches(literal).count() > original.matches(literal).count() {
+                    bail!("resolved credential in edited source; retain the template expression");
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn token(&self) -> Result<String> {
         if let Ok(token) = std::env::var("BWS_ACCESS_TOKEN") {
             if !token.trim().is_empty() {

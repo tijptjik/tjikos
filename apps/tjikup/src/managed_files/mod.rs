@@ -3,6 +3,7 @@ mod capture;
 mod credential_cache;
 mod disk;
 mod model;
+mod reconciliation;
 mod review;
 pub(crate) mod secrets;
 

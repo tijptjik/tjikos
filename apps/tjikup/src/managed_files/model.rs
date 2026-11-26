@@ -84,6 +84,7 @@ pub struct Source {
     pub bytes: Vec<u8>,
     pub template: bool,
     pub conditional: bool,
+    pub secrets: Option<std::sync::Arc<Secrets>>,
 }
 
 pub struct Desired {
@@ -328,6 +329,7 @@ impl Manifest {
                         path: base.join(name).canonicalize()?,
                         bytes: bytes.clone(),
                         template: *template,
+                        secrets: secrets.clone().filter(|_| entry.sensitive),
                         conditional: entry.when.is_some()
                             || (*template && bytes.windows(2).any(|w| w == b"{%")),
                     });

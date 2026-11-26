@@ -243,16 +243,70 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(self.source.stat().st_mode & 0o777, 0o640)
         self.assertEqual(os.getxattr(self.source, 'user.tjikup-test'), b'original')
 
-    def test_sensitive_edit_opens_source_without_rendered_local(self):
+    def test_sensitive_edit_resolves_separate_hunks_in_private_file(self):
+        original = 'key={{ host }}\nfont=12\nkeep\nold\nend\n'
+        self.nonsensitive(original, 'key=fi\nfont=14\nkeep\nnew\nend\n', True)
+        self.spec['entries'][0]['sensitive'] = True
+        self.save()
         script = self.base / 'sensitive-editor.py'
-        script.write_text('import pathlib, sys\n'
+        script.write_text(
+            'import pathlib, sys\n'
             'p = pathlib.Path(sys.argv[1])\n'
-            'assert p.read_text() == "managed-secret\\n"\n'
-            'p.write_text("new-managed-secret\\n")\n')
+            f'assert p.is_relative_to({str(self.base / "state/source-reviews")!r})\n'
+            'assert p.stat().st_mode & 0o777 == 0o600\n'
+            f'assert pathlib.Path({str(self.source)!r}).read_text() == {original!r}\n'
+            's = p.read_text()\n'
+            'assert s.startswith("key={{ host }}\\n<<<<<<< managed source")\n'
+            'assert "key=fi" not in s and s.count("<<<<<<<") == 2\n'
+            'import re\n'
+            'hunk = r"(?ms)^<<<<<<< [^\\n]*\\n(.*?)^=======\\n(.*?)^>>>>>>> [^\\n]*\\n"\n'
+            'p.write_text(re.sub(hunk, lambda m: m[2] if m[1] == "font=12\\n" else m[1], s))\n')
         code, terminal = self.review(['e'], environment={'VISUAL': f'python3 {script}'})
         self.assertEqual(code, 0, terminal)
-        self.assertEqual(self.source.read_text(), 'new-managed-secret\n')
-        self.assertNotIn('local-secret', self.log.read_text())
+        self.assertEqual(self.source.read_text(), original.replace('12', '14'))
+        self.assertEqual(self.target.read_text(), 'key=fi\nfont=14\nkeep\nold\nend\n')
+        self.assertEqual(self.plain('check').returncode, 0)
+
+    def test_resolving_all_hunks_to_managed_completes_review(self):
+        self.nonsensitive()
+        code, terminal = self.review(['e'], environment=self.editor('managed\n'))
+        self.assertEqual(code, 0, terminal)
+        self.assertEqual(self.target.read_text(), 'managed\n')
+        self.assertEqual(self.plain('check').returncode, 0)
+
+    def test_sensitive_expression_local_arm_requires_rewrite(self):
+        original = 'key={{ host }}\n'
+        self.nonsensitive(original, 'key=rotated-private-value\n', True)
+        self.spec['entries'][0]['sensitive'] = True
+        self.save()
+        script = self.base / 'incoming.py'
+        script.write_text(
+            'import pathlib, sys\n'
+            'p = pathlib.Path(sys.argv[1])\n'
+            'incoming = p.read_text().split("=======\\n")[1].split(">>>>>>>")[0]\n'
+            'assert "rotated-private-value" in incoming\n'
+            'p.write_text(incoming)\n')
+        code, terminal = self.review(['e', 'k'], environment={'VISUAL': f'python3 {script}'})
+        self.assertEqual(code, 0, terminal)
+        self.assertIn('private local reference lines remain', terminal)
+        self.assertEqual(self.source.read_text(), original)
+        self.assertNotIn('rotated-private-value', terminal + self.log.read_text())
+
+    def test_sensitive_edit_blocks_credential_copied_to_another_setting(self):
+        original = 'key={{ secret("11111111-2222-3333-4444-555555555555") | json_quote }}\nname=old\n'
+        credential = 'synthetic-"private"'
+        local = f'key={json.dumps(credential)}\nname={json.dumps(credential)}\n'
+        self.nonsensitive(original, local, True)
+        self.spec['entries'][0]['sensitive'] = True
+        self.spec['bitwarden'] = {'command': ['python3', '-c',
+            f'import json,sys; print(json.dumps(dict(id=sys.argv[3], value={credential!r})))']}
+        self.save()
+        editor = self.editor(original.replace('name=old', f'name={json.dumps(credential)}'))
+        code, terminal = self.review(['e', 'k'], environment={**editor, 'BWS_ACCESS_TOKEN': 'mock'})
+        self.assertEqual(code, 0, terminal)
+        self.assertIn('resolved credential in edited source', terminal)
+        self.assertEqual(self.source.read_text(), original)
+        self.assertNotIn('synthetic-', terminal + self.log.read_text())
 
     def test_interrupted_reconciliation_cannot_deploy(self):
         self.nonsensitive('<<<<<<< managed source (retain template logic)\nmanaged\n=======\nlocal\n>>>>>>> local (reconcile into the managed source)\n')

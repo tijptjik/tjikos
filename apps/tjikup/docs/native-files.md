@@ -247,13 +247,17 @@ expressions, a warning requires a second A before replacing those lines with
 literal local values. E allows manual reconciliation instead.
 
 Templates containing control blocks, and entries with a `when` condition,
-require E. Edit replaces the managed source with a reconciliation document
-containing the complete template and local file between conflict markers.
-Reconcile it, retain the desired branches and expressions, remove the markers,
-then save and close the editor. `VISUAL`, then `EDITOR`, selects the command;
-the fallback is `zed --wait`. GUI editor commands must wait for the file to close.
-Sensitive files disable Add and open only their original source for editing;
-rendered secrets are never inserted into the catalog by this workflow.
+require E. Edit opens a private working copy with a conflict block at each
+local change. Unchanged sections retain their original template expressions
+and branches. Choose the managed or local lines in each block, or edit them,
+then remove the markers and save and close. Tjikup uses `VISUAL`, then
+`EDITOR`, then `zed --wait`. GUI editor commands must wait for the file to close.
+
+Sensitive files disable Add. Their local changes are visible in the private
+editor. When a change overlaps a template expansion, or the sensitive source
+is a plain file, local lines carry a `[private local reference]` prefix.
+Keep the managed expression or write the appropriate source for those lines.
+Tjikup rejects unresolved references before copying the result to the catalog.
 
 Source backups and unfinished edits live under the private deployment state
 `source-reviews/` directory. Editor failure, unresolved markers, or failed
